@@ -8,7 +8,7 @@ import { AuthProvider } from './store/auth-context.jsx'
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
-      <RouterProvider router={router} future={{ v7_startTransition: true }} />
+      <RouterProvider router={router} />
     </AuthProvider>
   </React.StrictMode>
 )

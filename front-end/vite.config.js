@@ -37,10 +37,24 @@ export default defineConfig({
     // 分包策略：大型依赖独立成包，浏览器可长期缓存，业务代码更新不牵连
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-arco': ['@arco-design/web-react'],
-          'vendor-axios': ['axios'],
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        chunkFileNames: 'assets/js/chunks/[name]-[hash].js',
+        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+
+          const chunkMap = {
+            'vendor-arco': ['@arco-design/web-react'],
+            'vendor-react': ['react', 'react-dom', 'react-router-dom', 'scheduler'],
+            'vendor-axios': ['axios']
+          }
+
+          for (const [chunkName, deps] of Object.entries(chunkMap)) {
+            if (deps.some(dep => id.includes(`node_modules/${dep}`))) {
+              return chunkName;
+            }
+          }
+          return undefined
         },
       },
     },
