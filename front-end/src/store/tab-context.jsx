@@ -6,18 +6,18 @@ const HOME_PATH = '/'
 // 固定首页页签：禁止关闭
 const HOME_TAB = { path: HOME_PATH, title: '工作台', icon: 'home', closable: false }
 
-// 已知路由兜底元信息（菜单树未加载完成或未命中时使用）
-const STATIC_META = {
+// localStorage 缓存键：后端菜单树扁平化后的路由元信息
+const META_CACHE_KEY = 'rbac_route_meta_cache'
+
+// 非菜单路由（前端静态页面，不在后端菜单树中）的种子元信息，
+// 会与后端菜单数据合并后写入 localStorage，作为缓存的一部分
+const STATIC_ROUTES = {
   '/': { title: '工作台', icon: 'home' },
-  '/system/user': { title: '用户管理', icon: 'user' },
-  '/system/role': { title: '角色管理', icon: 'user' },
-  '/system/menu': { title: '菜单管理', icon: 'setting' },
-  '/system/dept': { title: '部门管理', icon: 'users' },
 }
 
 const TabContext = createContext(null)
 
-// 扁平化后端菜单树 -> Map<path, { title, icon }>
+// 扁平化后端菜单树 -> Map<path, { title, icon }>（运行时内存查询）
 function buildMetaMap(menus) {
   const map = new Map()
   const walk = (list) => {
@@ -34,6 +34,33 @@ function buildMetaMap(menus) {
   return map
 }
 
+// 扁平化菜单树 + 静态路由 -> 普通对象，用于写入 localStorage
+function buildCacheObject(menus) {
+  const cache = { ...STATIC_ROUTES }
+  const walk = (list) => {
+    for (const m of list || []) {
+      if (m?.path && m.type !== 3) {
+        cache[m.path] = { title: m.name, icon: m.icon }
+      }
+      if (m?.children) {
+        walk(m.children)
+      }
+    }
+  }
+  walk(menus)
+  return cache
+}
+
+// 从 localStorage 读取路由元信息缓存
+function readMetaCache() {
+  try {
+    const raw = localStorage.getItem(META_CACHE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch (e) {
+    return {}
+  }
+}
+
 export function TabProvider({ children }) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -44,14 +71,30 @@ export function TabProvider({ children }) {
   const tabsRef = useRef(tabs)
   tabsRef.current = tabs
 
-  // 菜单树（后端为准）-> 路由元信息映射
+  // 菜单树（后端为准）-> 路由元信息映射（内存，当前会话最新）
   const metaMap = useMemo(() => buildMetaMap(menus), [menus])
 
-  // 解析路由对应的标题与图标：菜单树 > 静态兜底 > 路径本身
+  // 菜单数据变化时，将路由元信息持久化到 localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(META_CACHE_KEY, JSON.stringify(buildCacheObject(menus)))
+    } catch (e) {
+      // localStorage 不可用时静默忽略
+    }
+  }, [menus])
+
+  // 解析路由对应的标题与图标：内存菜单树 > localStorage 缓存 > 路径本身
   const resolveMeta = useCallback(
     (path) => {
-      if (path === HOME_PATH) return STATIC_META[HOME_PATH]
-      return metaMap.get(path) || STATIC_META[path] || { title: path, icon: 'apps' }
+      if (path === HOME_PATH) return STATIC_ROUTES[HOME_PATH]
+      // 1. 当前会话已加载的菜单树（最权威）
+      const fromMenu = metaMap.get(path)
+      if (fromMenu) return fromMenu
+      // 2. localStorage 持久化缓存（刷新后菜单未加载时的兜底）
+      const cached = readMetaCache()
+      if (cached[path]) return cached[path]
+      // 3. 最终回退
+      return { title: path, icon: 'apps' }
     },
     [metaMap]
   )
@@ -65,6 +108,24 @@ export function TabProvider({ children }) {
       return [...prev, { path, title: meta.title, icon: meta.icon, closable: true }]
     })
   }, [location.pathname, resolveMeta])
+
+  // 菜单树加载完成后，修正刷新时因缓存未就绪而回退为路径的页签标题
+  useEffect(() => {
+    setTabs((prev) => {
+      let changed = false
+      const next = prev.map((t) => {
+        // 仅修正标题等于路径（最终回退态）的页签，且跳过固定首页
+        if (t.path === HOME_PATH || t.title !== t.path) return t
+        const meta = metaMap.get(t.path)
+        if (meta) {
+          changed = true
+          return { ...t, title: meta.title, icon: meta.icon }
+        }
+        return t
+      })
+      return changed ? next : prev
+    })
+  }, [metaMap])
 
   // 关闭单个页签；若关闭的是当前激活页签，跳转到相邻页签或首页
   const closeTab = useCallback(
@@ -106,7 +167,7 @@ export function TabProvider({ children }) {
 export function useTabs() {
   const ctx = useContext(TabContext)
   if (!ctx) {
-    throw new Error('useTabs 必须在 TabProvider 内使用')
+    throw new Error('useTabs 必须在 AuthProvider 内使用')
   }
   return ctx
 }
