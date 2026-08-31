@@ -48,6 +48,7 @@ type MySQLConfig struct {
 	Username        string        `yaml:"username"`
 	Password        string        `yaml:"password"`
 	DBName          string        `yaml:"dbname"`
+	TablePrefix     string        `yaml:"table_prefix"`
 	Charset         string        `yaml:"charset"`
 	Collation       string        `yaml:"collation"`
 	ParseTime       bool          `yaml:"parse_time"`
@@ -90,7 +91,7 @@ func defaultConfig() *Config {
 		},
 		MySQL: MySQLConfig{
 			Host: "127.0.0.1", Port: 3306,
-			Username: "root", Password: "", DBName: "test",
+			Username: "root", Password: "", DBName: "test", TablePrefix: "oa_",
 			Charset: "utf8mb4", Collation: "utf8mb4_general_ci",
 			ParseTime: true, Loc: "Local",
 			MaxOpenConns: 100, MaxIdleConns: 10,

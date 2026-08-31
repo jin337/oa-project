@@ -53,7 +53,7 @@ var migrations = []migration{
 	// 	Version: 2,
 	// 	Name:    "add_user_avatar",
 	// 	Up: func(db *gorm.DB) error {
-	// 		return db.Exec("ALTER TABLE users ADD COLUMN avatar varchar(255) DEFAULT '' COMMENT '头像'").Error
+	// 		return db.Exec("ALTER TABLE oa_users ADD COLUMN avatar varchar(255) DEFAULT '' COMMENT '头像'").Error
 	// 	},
 	// },
 }
@@ -155,23 +155,23 @@ func seedInitData(db *gorm.DB) error {
 	}
 
 	// 菜单树：目录 -> 页面菜单 -> 按钮/权限标识
-	dir := model.Menu{Name: "系统管理", Type: model.MenuTypeDir, Path: "/system", Icon: "setting", Sort: 1, Status: 1}
+	dir := model.Menu{Name: "系统管理", Type: model.MenuTypeDir, Path: "/system", Icon: "setting", Sort: 1, Status: 1, Hidden: 0}
 	if err := db.Create(&dir).Error; err != nil {
 		return err
 	}
 	menus := []model.Menu{
-		{ParentID: dir.ID, Name: "用户管理", Type: model.MenuTypeMenu, Path: "/system/user", Perm: "system:user:list", Sort: 1, Status: 1},
-		{ParentID: dir.ID, Name: "角色管理", Type: model.MenuTypeMenu, Path: "/system/role", Perm: "system:role:list", Sort: 2, Status: 1},
-		{ParentID: dir.ID, Name: "菜单管理", Type: model.MenuTypeMenu, Path: "/system/menu", Perm: "system:menu:list", Sort: 3, Status: 1},
-		{ParentID: dir.ID, Name: "部门管理", Type: model.MenuTypeMenu, Path: "/system/dept", Perm: "system:dept:list", Sort: 4, Status: 1},
+		{ParentID: dir.ID, Name: "用户管理", Type: model.MenuTypeMenu, Path: "/system/user", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: dir.ID, Name: "角色管理", Type: model.MenuTypeMenu, Path: "/system/role", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: dir.ID, Name: "菜单管理", Type: model.MenuTypeMenu, Path: "/system/menu", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: dir.ID, Name: "部门管理", Type: model.MenuTypeMenu, Path: "/system/dept", Sort: 4, Status: 1, Hidden: 0},
 	}
 	if err := db.Create(&menus).Error; err != nil {
 		return err
 	}
 	buttons := []model.Menu{
-		{ParentID: menus[0].ID, Name: "用户新增", Type: model.MenuTypeButton, Perm: "system:user:add", Sort: 1, Status: 1},
-		{ParentID: menus[0].ID, Name: "用户修改", Type: model.MenuTypeButton, Perm: "system:user:edit", Sort: 2, Status: 1},
-		{ParentID: menus[0].ID, Name: "用户删除", Type: model.MenuTypeButton, Perm: "system:user:remove", Sort: 3, Status: 1},
+		{ParentID: menus[0].ID, Name: "用户新增", Type: model.MenuTypeButton, Perm: "system:user:add", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: menus[0].ID, Name: "用户修改", Type: model.MenuTypeButton, Perm: "system:user:edit", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: menus[0].ID, Name: "用户删除", Type: model.MenuTypeButton, Perm: "system:user:remove", Sort: 3, Status: 1, Hidden: 0},
 	}
 	if err := db.Create(&buttons).Error; err != nil {
 		return err

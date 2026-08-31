@@ -11,6 +11,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
+	"gorm.io/gorm/schema"
 )
 
 var DB *gorm.DB
@@ -35,6 +36,10 @@ func Setup(cfg config.MySQLConfig) (*gorm.DB, error) {
 
 	// 2. 连接正式库
 	gormDB, err := gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{
+		// 全局表名前缀：所有表统一加 TablePrefix 前缀（含多对多关联表）
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix: cfg.TablePrefix + "_",
+		},
 		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 		// 自动迁移不创建物理外键约束（树形自关联/多对多表），
 		// 关联完整性由应用层维护，避免根节点 parent_id=0 插入失败
