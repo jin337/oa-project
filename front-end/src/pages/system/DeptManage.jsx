@@ -136,7 +136,16 @@ export default function DeptManage() {
   const sizeMenu = (
     <Menu onClickMenuItem={(key) => setTableSize(key)}>
       {SIZE_OPTIONS.map((o) => (
-        <MenuItem key={o.value}>{o.label}</MenuItem>
+        <MenuItem
+          key={o.value}
+          style={
+            o.value === tableSize
+              ? { color: 'rgb(var(--arcoblue-6))', backgroundColor: 'rgb(var(--arcoblue-1))' }
+              : undefined
+          }
+        >
+          {o.label}
+        </MenuItem>
       ))}
     </Menu>
   )

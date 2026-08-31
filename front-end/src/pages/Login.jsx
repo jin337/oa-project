@@ -26,7 +26,6 @@ const FEATURES = [
   },
 ]
 
-
 export default function Login() {
   const [loading, setLoading] = useState(false)
   const [remember, setRemember] = useState(false)
@@ -99,13 +98,8 @@ export default function Login() {
 
           <div className="mt-10 w-full space-y-6">
             {FEATURES.map((f) => (
-              <div
-                key={f.title}
-                className="mx-auto flex w-full max-w-sm items-start gap-4 text-left"
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 text-xl">
-                  {f.icon}
-                </div>
+              <div key={f.title} className="mx-auto flex w-full max-w-sm items-start gap-4 text-left">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 text-xl">{f.icon}</div>
                 <div>
                   <div className="font-medium">{f.title}</div>
                   <div className="mt-1 text-sm text-white/70">{f.desc}</div>
@@ -131,48 +125,26 @@ export default function Login() {
               rules={[
                 { required: true, message: '请输入用户名' },
                 { minLength: 2, message: '用户名至少 2 个字符' },
-              ]}
-            >
-              <Input
-                size="large"
-                prefix={<IconUser />}
-                placeholder="请输入用户名"
-                allowClear
-              />
+              ]}>
+              <Input size="large" prefix={<IconUser />} placeholder="请输入用户名" allowClear />
             </FormItem>
             <FormItem
               field="password"
               rules={[
                 { required: true, message: '请输入密码' },
                 { minLength: 6, message: '密码至少 6 个字符' },
-              ]}
-            >
-              <Input.Password
-                size="large"
-                prefix={<IconLock />}
-                placeholder="请输入密码"
-              />
+              ]}>
+              <Input.Password size="large" prefix={<IconLock />} placeholder="请输入密码" />
             </FormItem>
             <div className="mb-5 flex items-center justify-between text-sm">
               <Checkbox checked={remember} onChange={setRemember}>
                 记住密码
               </Checkbox>
-              <Button
-                type="text"
-                size="mini"
-                className="text-blue-600!"
-                onClick={() => Message.info('请联系系统管理员重置密码')}
-              >
+              <Button type="text" size="mini" className="text-blue-600!" onClick={() => Message.info('请联系系统管理员重置密码')}>
                 忘记密码？
               </Button>
             </div>
-            <Button
-              type="primary"
-              size="large"
-              long
-              htmlType="submit"
-              loading={loading}
-            >
+            <Button type="primary" size="large" long htmlType="submit" loading={loading}>
               登录
             </Button>
           </Form>

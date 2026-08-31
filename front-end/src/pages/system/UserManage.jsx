@@ -39,6 +39,15 @@ const SIZE_OPTIONS = [
   { label: '紧凑', value: 'small' },
 ]
 
+// 角色标签颜色池（Arco 预设色），按角色 ID 取模分配，保证同一角色颜色稳定
+const ROLE_COLORS = ['arcoblue', 'green', 'orangered', 'magenta', 'cyan', 'purple', 'lime', 'gold']
+
+function getRoleColor(role) {
+  const id = Number(role?.id)
+  const idx = Number.isFinite(id) ? id % ROLE_COLORS.length : 0
+  return ROLE_COLORS[idx]
+}
+
 // 部门树 -> Arco TreeSelect 数据
 function toTreeData(depts) {
   return (depts || []).map((d) => ({
@@ -214,7 +223,16 @@ export default function UserManage() {
   const sizeMenu = (
     <Menu onClickMenuItem={(key) => setTableSize(key)}>
       {SIZE_OPTIONS.map((o) => (
-        <MenuItem key={o.value}>{o.label}</MenuItem>
+        <MenuItem
+          key={o.value}
+          style={
+            o.value === tableSize
+              ? { color: 'rgb(var(--arcoblue-6))', backgroundColor: 'rgb(var(--arcoblue-1))' }
+              : undefined
+          }
+        >
+          {o.label}
+        </MenuItem>
       ))}
     </Menu>
   )
@@ -234,7 +252,7 @@ export default function UserManage() {
       dataIndex: 'roles',
       render: (roles) =>
         (roles || []).map((r) => (
-          <Tag key={r.id} color="arcoblue" className="mr-1">
+          <Tag key={r.id} color={getRoleColor(r)} className="mr-1">
             {r.name}
           </Tag>
         )),

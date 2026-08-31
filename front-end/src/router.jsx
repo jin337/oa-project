@@ -15,7 +15,7 @@ const NotFound = lazy(() => import('./pages/NotFound.jsx'))
 
 function PageLoading() {
   return (
-    <div className="h-full min-h-[200px] flex items-center justify-center">
+    <div className="flex min-h-50 items-center justify-center">
       <Spin />
     </div>
   )
@@ -98,6 +98,4 @@ const router = createBrowserRouter([
   },
 ])
 
-export default function App() {
-  return <RouterProvider router={router} future={{ v7_startTransition: true }} />
-}
+export { router, RouterProvider }
