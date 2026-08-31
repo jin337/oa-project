@@ -1,0 +1,53 @@
+# ============================================================
+# 生产环境配置（APP_ENV=prod 时加载）
+# 生产环境保守安全：迁移默认关闭、日志 info、跨域收紧
+# ============================================================
+
+server:
+  port: 8080
+  mode: release               # 生产使用 release 模式，关闭调试输出
+  request_timeout: 15
+
+  jwt:
+    secret: "prod-secret-must-be-changed"  # 上线前必须修改！
+    expire: 2
+
+  log:
+    level: info
+    path: "./logs/app-prod.log"
+
+  cors:
+    enable: true
+    allow_origins:            # 生产只放行自己的前端域名
+      - "https://example.com"
+    allow_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allow_headers:
+      - Origin
+      - Content-Type
+      - Authorization
+
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  username: root
+  password: "CHANGE_ME"       # 上线前必须修改！
+  dbname: rbac_prod
+  charset: utf8mb4
+  collation: utf8mb4_general_ci
+  parse_time: true
+  loc: Local
+  max_open_conns: 200
+  max_idle_conns: 20
+  conn_max_lifetime: 30
+  connect_timeout: 3
+
+  migrate:
+    enable: false             # 生产默认关闭自动迁移，防止误改数据
+    mode: incremental         # 如需开启，只允许安全增量更新
+    log_enable: true
+    log_path: "./logs/migrate-prod.log"

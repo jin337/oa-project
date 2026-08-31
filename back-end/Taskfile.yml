@@ -1,0 +1,87 @@
+# Taskfile（https://taskfile.dev）
+# 常用任务封装：安装 task 后，在项目目录执行 `task <任务名>` 即可
+# Windows 可执行 `winget install go-task.go-task` 或 `choco install go-task` 安装
+
+version: "3"
+
+vars:
+  BIN: server{{if eq OS "windows"}}.exe{{end}}
+  PACKAGE_BIN: bin/server{{if eq OS "windows"}}.exe{{end}}
+
+env:
+  # 默认使用开发环境，执行时可覆盖：APP_ENV=test task run
+  APP_ENV: '{{.APP_ENV | default "dev"}}'
+
+tasks:
+  default:
+    desc: 显示可用任务
+    cmds:
+      - task --list
+
+  deps:
+    desc: 下载并整理依赖（go mod tidy）
+    cmds:
+      - go mod tidy
+
+  build:
+    desc: 编译可执行文件
+    deps: [deps]
+    cmds:
+      - go build -o {{.BIN}} ./cmd/server
+    sources:
+      - cmd/**/*.go
+      - internal/**/*.go
+      - go.mod
+    generates:
+      - "{{.BIN}}"
+
+  run:
+    desc: 启动服务（默认 dev，APP_ENV=test task run 可切换）
+    cmds:
+      - go run ./cmd/server
+
+  run-dev:
+    desc: 启动开发环境服务
+    env:
+      APP_ENV: dev
+    cmds:
+      - go run ./cmd/server
+
+  run-test:
+    desc: 启动测试环境服务
+    env:
+      APP_ENV: test
+    cmds:
+      - go run ./cmd/server
+
+  run-prod:
+    desc: 启动生产环境服务（谨慎执行）
+    env:
+      APP_ENV: prod
+    cmds:
+      - go run ./cmd/server
+
+  package:
+    desc: 打包发布版到 bin/ 目录（裁剪符号表 -s -w + UPX 压缩）
+    deps: [deps]
+    cmds:
+      - mkdir -p bin
+      - go build -ldflags="-s -w" -o {{.PACKAGE_BIN}} ./cmd/server
+      - '{{if eq OS "windows"}}upx.exe --best --lzma {{.PACKAGE_BIN}}{{else}}command -v upx >/dev/null 2>&1 && upx --best --lzma {{.PACKAGE_BIN}} || echo upx 未安装，已跳过压缩{{end}}'
+
+  test:
+    desc: 运行单元测试
+    cmds:
+      - go test ./... -v
+
+  vet:
+    desc: 静态检查
+    cmds:
+      - go vet ./...
+
+  clean:
+    desc: 删除编译产物、bin 目录与日志目录
+    cmds:
+      - rm -f {{.BIN}}
+      - rm -rf bin
+      - rm -rf logs

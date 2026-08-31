@@ -1,0 +1,53 @@
+# ============================================================
+# 开发环境配置（APP_ENV=dev 时加载，默认）
+# 配置文件只分两大块：server（服务基础配置）、mysql（数据库+迁移配置）
+# ============================================================
+
+server:
+  port: 8180                  # 服务启动端口，避免冲突可自行修改
+  mode: debug                 # gin 运行模式：debug / release / test
+  request_timeout: 10         # 接口统一请求超时时间（秒）
+
+  jwt:
+    secret: "dev-secret-please-change-me"   # JWT 签名密钥，生产务必修改
+    expire: 24                              # token 有效期（小时）
+
+  log:
+    level: debug              # 日志级别：debug / info / warn / error
+    path: "./logs/app-dev.log"  # 日志保存路径，留空则只输出控制台
+
+  cors:
+    enable: true              # 跨域功能开关
+    allow_origins:            # 自定义放行来源，"*" 表示全部
+      - "*"
+    allow_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allow_headers:
+      - Origin
+      - Content-Type
+      - Authorization
+
+mysql:
+  host: 127.0.0.1             # 数据库 IP
+  port: 3306                  # 数据库端口
+  username: root              # 数据库账号
+  password: "Kzi493399hst"    # 数据库密码
+  dbname: test                # 库名（不存在时自动创建）
+  charset: utf8mb4            # 字符集
+  collation: utf8mb4_general_ci  # 排序规则
+  parse_time: true            # 是否把时间字段解析为 time.Time
+  loc: Local                  # 时区
+  max_open_conns: 100         # 连接池：最大连接数
+  max_idle_conns: 10          # 连接池：最大空闲连接数
+  conn_max_lifetime: 60       # 连接池：连接最大存活时间（分钟）
+  connect_timeout: 5          # 连接超时（秒）
+
+  migrate:
+    enable: true              # 自动迁移开关，生产环境建议关闭
+    mode: full                # full=全新环境全量建表+初始化数据；incremental=只增量加表/加字段
+    log_enable: true          # 迁移日志开关
+    log_path: "./logs/migrate-dev.log"  # 迁移日志自定义存储路径

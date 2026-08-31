@@ -1,0 +1,47 @@
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import { compression } from 'vite-plugin-compression2'
+
+// 前端开发服务：固定端口 8181，/api 请求代理到后端 Go 服务（默认 8180）
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+    // 构建产物压缩：10KB 以上的资源额外生成 .gz / .br 文件，供 Nginx 等静态服务器直接下发
+    compression({
+      algorithms: ['gzip', 'brotliCompress'],
+      threshold: 10240,
+    }),
+  ],
+  server: {
+    port: 8181,
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8180',
+        changeOrigin: true,
+      },
+      // 后端健康检查在根路径 GET /，映射到 /health 便于前端调用
+      '/health': {
+        target: 'http://localhost:8180',
+        changeOrigin: true,
+        rewrite: () => '/',
+      },
+    },
+  },
+  build: {
+    // arco 组件库本身体积较大（约 640KB），单独分包后已可长期缓存，提高警告阈值避免噪音
+    chunkSizeWarningLimit: 700,
+    // 分包策略：大型依赖独立成包，浏览器可长期缓存，业务代码更新不牵连
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-arco': ['@arco-design/web-react'],
+          'vendor-axios': ['axios'],
+        },
+      },
+    },
+  },
+})
