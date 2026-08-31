@@ -4,7 +4,6 @@ import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../store/auth-context'
 
-const Sider = Layout.Sider
 const Header = Layout.Header
 const Content = Layout.Content
 const MenuItem = Menu.Item
@@ -71,42 +70,44 @@ export default function MainLayout() {
 
   return (
     <Layout className="h-full">
-      <Sider breakpoint="xl" width={220} style={{ background: '#001529' }}>
-        <div className="h-16 flex items-center justify-center text-white text-lg font-semibold">RBAC 管理系统</div>
+      <Header className="flex items-center gap-8 border-b border-gray-200 bg-white px-6">
+        {/* 左侧：Logo + 系统标题，点击返回首页 */}
+        <div className="flex shrink-0 cursor-pointer items-center gap-2" onClick={() => navigate('/')}>
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#165dff] text-lg text-white">
+            <IconStorage />
+          </div>
+          <Typography.Text className="text-lg! font-semibold!">RBAC 管理系统</Typography.Text>
+        </div>
+
+        {/* 中间：水平菜单，自适应宽度 */}
         <Menu
-          theme="dark"
-          autoOpen
+          mode="horizontal"
           selectedKeys={[location.pathname]}
           onClickMenuItem={(key) => {
             if (typeof key === 'string' && key.startsWith('/')) {
               navigate(key)
             }
           }}
-          style={{ background: 'transparent' }}>
+          className="min-w-0 flex-1">
           <MenuItem key="/" icon={<IconHome />}>
             工作台
           </MenuItem>
           {menus && menus.length > 0 ? renderMenus(menus) : null}
         </Menu>
-      </Sider>
-      <Layout>
-        <Header className="flex items-center justify-between bg-white p-4 border-b border-gray-200">
-          <Typography.Title heading={6} style={{ margin: 0 }}>
-            后台管理
-          </Typography.Title>
-          <Dropdown droplist={profileMenu} position="br">
-            <Space className="cursor-pointer">
-              <Avatar size={32} style={{ backgroundColor: '#165dff' }}>
-                <IconUser />
-              </Avatar>
-              <Typography.Text>{user?.username || '加载中'}</Typography.Text>
-            </Space>
-          </Dropdown>
-        </Header>
-        <Content className="p-4 overflow-auto bg-gray-50">
-          <Outlet />
-        </Content>
-      </Layout>
+
+        {/* 右侧：用户信息 + 退出登录 */}
+        <Dropdown droplist={profileMenu} position="br">
+          <Space className="shrink-0 cursor-pointer">
+            <Avatar size={32} className="bg-[#165dff]!">
+              <IconUser />
+            </Avatar>
+            <Typography.Text>{user?.username || '加载中'}</Typography.Text>
+          </Space>
+        </Dropdown>
+      </Header>
+      <Content className="overflow-auto bg-gray-50 p-4">
+        <Outlet />
+      </Content>
     </Layout>
   )
 }

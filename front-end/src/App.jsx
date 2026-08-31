@@ -15,7 +15,7 @@ const NotFound = lazy(() => import('./pages/NotFound.jsx'))
 
 function PageLoading() {
   return (
-    <div className="h-full flex items-center justify-center" style={{ minHeight: 200 }}>
+    <div className="h-full min-h-[200px] flex items-center justify-center">
       <Spin />
     </div>
   )

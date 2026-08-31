@@ -259,7 +259,7 @@ export default function RoleManage() {
       <div className="flex justify-between mb-4">
         <Space wrap>
           <Input.Search
-            style={{ width: 220 }}
+            className="w-[220px]!"
             placeholder="按角色名称搜索"
             allowClear
             value={keyword}
@@ -309,7 +309,7 @@ export default function RoleManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        style={{ width: 520 }}
+        className="w-[520px]! max-w-[90vw]"
       >
         <Form
           form={form}
@@ -376,7 +376,7 @@ export default function RoleManage() {
         onOk={handleSaveMenus}
         onCancel={() => setMenuModal(null)}
         unmountOnExit
-        style={{ width: 480 }}
+        className="w-[480px]! max-w-[90vw]"
       >
         <Tree
           checkable
@@ -384,7 +384,7 @@ export default function RoleManage() {
           treeData={menuToTree(menuTree)}
           checkedKeys={checkedMenus}
           onCheck={(keys) => setCheckedMenus(keys)}
-          style={{ maxHeight: 400, overflow: 'auto' }}
+          className="max-h-[400px] overflow-auto"
         />
       </Modal>
 
@@ -394,7 +394,7 @@ export default function RoleManage() {
         onOk={handleSaveDepts}
         onCancel={() => setDeptModal(null)}
         unmountOnExit
-        style={{ width: 480 }}
+        className="w-[480px]! max-w-[90vw]"
       >
         <Tree
           checkable
@@ -402,7 +402,7 @@ export default function RoleManage() {
           treeData={deptToTree(deptTree)}
           checkedKeys={checkedDepts}
           onCheck={(keys) => setCheckedDepts(keys)}
-          style={{ maxHeight: 400, overflow: 'auto' }}
+          className="max-h-[400px] overflow-auto"
         />
       </Modal>
     </Card>

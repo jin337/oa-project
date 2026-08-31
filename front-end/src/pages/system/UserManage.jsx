@@ -220,7 +220,7 @@ export default function UserManage() {
       <div className="flex justify-between mb-4">
         <Space wrap>
           <Input.Search
-            style={{ width: 220 }}
+            className="w-[220px]!"
             placeholder="按用户名搜索"
             allowClear
             value={keyword}
@@ -231,7 +231,7 @@ export default function UserManage() {
             }}
           />
           <TreeSelect
-            style={{ width: 200 }}
+            className="w-[200px]!"
             placeholder="按部门筛选"
             allowClear
             treeData={toTreeData(deptTree)}
@@ -281,7 +281,7 @@ export default function UserManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        style={{ width: 520 }}
+        className="w-[520px]! max-w-[90vw]"
       >
         <Form form={form} layout="vertical" autoComplete="off">
           <FormItem

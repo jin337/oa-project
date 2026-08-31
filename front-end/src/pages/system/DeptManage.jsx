@@ -1,20 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
 import {
-  Table,
   Button,
-  Space,
-  Form,
-  Modal,
-  Select,
-  Tag,
-  Popconfirm,
-  Message,
   Card,
+  Form,
   Input,
   InputNumber,
+  Message,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
   TreeSelect,
 } from '@arco-design/web-react'
 import { IconPlus, IconRefresh } from '@arco-design/web-react/icon'
+import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from '../../api/dept'
 
 const FormItem = Form.Item
@@ -129,7 +129,7 @@ export default function DeptManage() {
     },
     {
       title: '操作',
-      width: 220,
+      width: 250,
       render: (_, record) => (
         <Space wrap>
           <Button size="mini" onClick={() => openCreate(record)}>
@@ -173,7 +173,7 @@ export default function DeptManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        style={{ width: 480 }}
+        className="w-120! max-w-[90vw]"
       >
         <Form form={form} layout="vertical" autoComplete="off">
           <FormItem label="上级部门" field="parent_id" triggerPropName="value">

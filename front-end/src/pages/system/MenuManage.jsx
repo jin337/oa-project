@@ -198,7 +198,7 @@ export default function MenuManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        style={{ width: 520 }}
+        className="w-[520px]! max-w-[90vw]"
       >
         <Form
           form={form}
