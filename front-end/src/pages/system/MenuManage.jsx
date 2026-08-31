@@ -1,48 +1,57 @@
-import { useCallback, useEffect, useState } from 'react'
 import {
-  Table,
   Button,
-  Space,
-  Form,
-  Modal,
-  Select,
-  Tag,
-  Popconfirm,
-  Message,
   Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
   Input,
   InputNumber,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Select,
+  Space,
+  Table,
+  Tag,
   TreeSelect,
 } from '@arco-design/web-react'
-import { IconPlus, IconRefresh } from '@arco-design/web-react/icon'
+import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
+import { useCallback, useEffect, useState } from 'react'
 import * as menuApi from '../../api/menu'
 
 const FormItem = Form.Item
+const Row = Grid.Row
+const Col = Grid.Col
+const MenuItem = Menu.Item
 
-// 菜单类型，与后端 type 字段对齐：1目录 2页面菜单 3按钮/权限标识
-const MENU_TYPES = [
-  { label: '目录', value: 1, color: 'arcoblue' },
-  { label: '页面菜单', value: 2, color: 'green' },
-  { label: '按钮/权限', value: 3, color: 'orange' },
+// 可配置列 key（操作列固定显示，不参与列设置）
+const ALL_COL_KEYS = ['name', 'type', 'path', 'perm', 'icon', 'sort', 'status']
+
+// 表格密度选项
+const SIZE_OPTIONS = [
+  { label: '宽松', value: 'large' },
+  { label: '默认', value: 'default' },
+  { label: '中等', value: 'middle' },
+  { label: '紧凑', value: 'small' },
 ]
 
-const TYPE_MAP = Object.fromEntries(MENU_TYPES.map((t) => [t.value, t]))
+const TYPE_MAP = { 1: '目录', 2: '菜单', 3: '按钮' }
 
-// 菜单树 -> TreeSelect 数据（选择父级用，排除按钮类型，按钮不能作为父级）
-function toParentOptions(menus) {
-  return (menus || [])
-    .filter((m) => m.type !== 3)
-    .map((m) => ({
-      key: String(m.id),
-      title: m.name,
-      value: m.id,
-      children: m.children ? toParentOptions(m.children) : undefined,
-    }))
+function toTreeData(menus) {
+  return (menus || []).map((m) => ({
+    key: String(m.id),
+    title: m.name,
+    value: m.id,
+    children: m.children ? toTreeData(m.children) : undefined,
+  }))
 }
 
 const EMPTY_FORM = {
-  parent_id: 0,
   name: '',
+  parent_id: undefined,
   type: 2,
   path: '',
   perm: '',
@@ -54,10 +63,15 @@ const EMPTY_FORM = {
 export default function MenuManage() {
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(false)
+
+  // 表格密度 & 列可见性
+  const [tableSize, setTableSize] = useState('default')
+  const [visibleCols, setVisibleCols] = useState(ALL_COL_KEYS)
+
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [menuType, setMenuType] = useState(2)
+  const [formType, setFormType] = useState(2)
   const [form] = Form.useForm()
 
   const fetchTree = useCallback(async () => {
@@ -76,18 +90,18 @@ export default function MenuManage() {
     fetchTree()
   }, [fetchTree])
 
-  const openCreate = (parent = null) => {
+  const openCreate = (parentId) => {
     setEditing(null)
-    form.setFieldsValue({ ...EMPTY_FORM, parent_id: parent ? parent.id : 0 })
-    setMenuType(EMPTY_FORM.type)
+    form.setFieldsValue({ ...EMPTY_FORM, parent_id: parentId || undefined })
+    setFormType(2)
     setModalVisible(true)
   }
 
   const openEdit = (record) => {
     setEditing(record)
     form.setFieldsValue({
-      parent_id: record.parent_id,
       name: record.name,
+      parent_id: record.parent_id || undefined,
       type: record.type,
       path: record.path,
       perm: record.perm,
@@ -95,7 +109,7 @@ export default function MenuManage() {
       sort: record.sort,
       status: record.status,
     })
-    setMenuType(record.type)
+    setFormType(record.type)
     setModalVisible(true)
   }
 
@@ -103,12 +117,11 @@ export default function MenuManage() {
     const values = await form.validate()
     setSaving(true)
     try {
-      const payload = { ...values, parent_id: values.parent_id || 0 }
       if (editing) {
-        await menuApi.updateMenu(editing.id, payload)
+        await menuApi.updateMenu(editing.id, values)
         Message.success('保存成功')
       } else {
-        await menuApi.createMenu(payload)
+        await menuApi.createMenu(values)
         Message.success('创建成功')
       }
       setModalVisible(false)
@@ -130,40 +143,53 @@ export default function MenuManage() {
     }
   }
 
+  // 表格密度下拉
+  const sizeMenu = (
+    <Menu onClickMenuItem={(key) => setTableSize(key)}>
+      {SIZE_OPTIONS.map((o) => (
+        <MenuItem key={o.value}>{o.label}</MenuItem>
+      ))}
+    </Menu>
+  )
+
   const columns = [
-    { title: '菜单名称', dataIndex: 'name', width: 220 },
+    { key: 'name', title: '菜单名称', dataIndex: 'name' },
     {
+      key: 'type',
       title: '类型',
       dataIndex: 'type',
-      width: 110,
-      render: (t) => {
-        const item = TYPE_MAP[t]
-        return item ? <Tag color={item.color}>{item.label}</Tag> : t
+      width: 80,
+      render: (type) => {
+        const color = type === 1 ? 'orangered' : type === 2 ? 'arcoblue' : 'gray'
+        return <Tag color={color}>{TYPE_MAP[type] || type}</Tag>
       },
     },
-    { title: '路由地址', dataIndex: 'path', render: (v) => v || '-' },
-    { title: '权限标识', dataIndex: 'perm', render: (v) => v || '-' },
-    { title: '图标', dataIndex: 'icon', width: 80, render: (v) => v || '-' },
-    { title: '排序', dataIndex: 'sort', width: 70 },
+    { key: 'path', title: '路由地址', dataIndex: 'path', render: (v) => v || '-' },
+    { key: 'perm', title: '权限标识', dataIndex: 'perm', render: (v) => v || '-' },
+    { key: 'icon', title: '图标', dataIndex: 'icon', render: (v) => v || '-' },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
     {
+      key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 80,
-      render: (status) =>
-        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
+      render: (status) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
     },
     {
+      key: 'action',
       title: '操作',
       width: 220,
       render: (_, record) => (
-        <Space wrap>
-          <Button size="mini" onClick={() => openCreate(record)}>
-            新增子项
-          </Button>
+        <Space>
+          {record.type !== 3 && (
+            <Button size="mini" onClick={() => openCreate(record.id)}>
+              新增子菜单
+            </Button>
+          )}
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          <Popconfirm focusLock title="确认删除该菜单？子菜单不会自动删除" onOk={() => handleDelete(record)}>
+          <Popconfirm focusLock title="确认删除该菜单？" onOk={() => handleDelete(record)}>
             <Button size="mini" status="danger">
               删除
             </Button>
@@ -173,24 +199,57 @@ export default function MenuManage() {
     },
   ]
 
+  // 列设置弹层内容
+  const colSettingsPopover = (
+    <Checkbox.Group value={visibleCols} onChange={setVisibleCols} direction="vertical">
+      {ALL_COL_KEYS.map((k) => {
+        const col = columns.find((c) => c.key === k)
+        return (
+          <Checkbox key={k} value={k}>
+            {col?.title || k}
+          </Checkbox>
+        )
+      })}
+    </Checkbox.Group>
+  )
+
+  const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
+
   return (
     <Card title="菜单管理">
-      <div className="flex justify-between mb-4">
-        <Button icon={<IconRefresh />} onClick={fetchTree}>
-          刷新
-        </Button>
+      {/* 表格工具栏 */}
+      <div className="mb-3 flex items-center justify-between">
         <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
           新增菜单
         </Button>
+        <Space>
+          <Button size="mini" icon={<IconRefresh />} onClick={fetchTree}>
+            刷新
+          </Button>
+          <Dropdown droplist={sizeMenu} position="br">
+            <Button size="mini" icon={<IconList />}>
+              密度
+            </Button>
+          </Dropdown>
+          <Popover content={colSettingsPopover} position="br" trigger="click">
+            <Button size="mini" icon={<IconSettings />}>
+              列设置
+            </Button>
+          </Popover>
+        </Space>
       </div>
+
       <Table
         rowKey="id"
-        columns={columns}
+        columns={visibleColumns}
         data={tree}
         loading={loading}
+        size={tableSize}
         pagination={false}
+        childrenKey="children"
         defaultExpandAllRows
       />
+
       <Modal
         title={editing ? '编辑菜单' : '新增菜单'}
         visible={modalVisible}
@@ -198,63 +257,77 @@ export default function MenuManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        className="w-[520px]! max-w-[90vw]"
-      >
+        className="w-160! max-w-[90vw]">
         <Form
           form={form}
           layout="vertical"
           autoComplete="off"
           onValuesChange={(changed) => {
             if (changed.type !== undefined) {
-              setMenuType(changed.type)
+              setFormType(changed.type)
             }
-          }}
-        >
-          <FormItem label="父级菜单" field="parent_id" triggerPropName="value">
-            <TreeSelect
-              placeholder="不选则为顶级菜单"
-              allowClear
-              treeData={toParentOptions(tree)}
-            />
-          </FormItem>
-          <FormItem
-            label="菜单名称"
-            field="name"
-            rules={[{ required: true, message: '请输入菜单名称' }]}
-          >
-            <Input placeholder="请输入菜单名称" />
-          </FormItem>
-          <FormItem label="类型" field="type" triggerPropName="value">
-            <Select>
-              {MENU_TYPES.map((t) => (
-                <Select.Option key={t.value} value={t.value}>
-                  {t.label}
-                </Select.Option>
-              ))}
-            </Select>
-          </FormItem>
-          {menuType !== 3 && (
-            <FormItem label="路由地址" field="path">
-              <Input placeholder="如 /system/user" />
-            </FormItem>
-          )}
-          <FormItem label="权限标识" field="perm">
-            <Input placeholder="如 system:user:list" />
-          </FormItem>
-          {menuType !== 3 && (
-            <FormItem label="图标" field="icon">
-              <Input placeholder="如 setting / user / apps" />
-            </FormItem>
-          )}
-          <FormItem label="排序" field="sort" triggerPropName="value">
-            <InputNumber min={0} placeholder="数字越小越靠前" />
-          </FormItem>
-          <FormItem label="状态" field="status" triggerPropName="value">
-            <Select>
-              <Select.Option value={1}>启用</Select.Option>
-              <Select.Option value={0}>停用</Select.Option>
-            </Select>
-          </FormItem>
+          }}>
+          <Row gutter={20}>
+            <Col span={12}>
+              <FormItem
+                label="菜单名称"
+                field="name"
+                rules={[
+                  { required: true, message: '请输入菜单名称' },
+                  { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
+                ]}>
+                <Input placeholder="如：用户管理" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="上级菜单" field="parent_id">
+                <TreeSelect placeholder="不选则为顶级菜单" allowClear treeData={toTreeData(tree)} />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="类型" field="type" triggerPropName="value">
+                <Select>
+                  <Select.Option value={1}>目录</Select.Option>
+                  <Select.Option value={2}>菜单</Select.Option>
+                  <Select.Option value={3}>按钮</Select.Option>
+                </Select>
+              </FormItem>
+            </Col>
+            {formType !== 3 && (
+              <Col span={12}>
+                <FormItem label="路由地址" field="path">
+                  <Input placeholder="如：/system/user" />
+                </FormItem>
+              </Col>
+            )}
+            {formType === 3 && (
+              <Col span={12}>
+                <FormItem label="权限标识" field="perm">
+                  <Input placeholder="如：system:user:add" />
+                </FormItem>
+              </Col>
+            )}
+            {formType !== 3 && (
+              <Col span={12}>
+                <FormItem label="图标" field="icon">
+                  <Input placeholder="如：IconUser" />
+                </FormItem>
+              </Col>
+            )}
+            <Col span={12}>
+              <FormItem label="排序" field="sort" triggerPropName="value">
+                <InputNumber min={0} placeholder="数字越小越靠前" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="状态" field="status" triggerPropName="value">
+                <Select>
+                  <Select.Option value={1}>启用</Select.Option>
+                  <Select.Option value={0}>停用</Select.Option>
+                </Select>
+              </FormItem>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </Card>

@@ -1,26 +1,46 @@
-import { useCallback, useEffect, useState } from 'react'
 import {
-  Table,
   Button,
-  Space,
+  Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
   Input,
   InputNumber,
-  Form,
-  Modal,
-  Select,
-  Tag,
-  Popconfirm,
+  Menu,
   Message,
-  Card,
-  Tree,
+  Modal,
+  Popconfirm,
+  Popover,
   Radio,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tree,
+  Typography,
 } from '@arco-design/web-react'
-import { IconPlus, IconRefresh } from '@arco-design/web-react/icon'
-import * as roleApi from '../../api/role'
-import * as menuApi from '../../api/menu'
+import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
+import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from '../../api/dept'
+import * as menuApi from '../../api/menu'
+import * as roleApi from '../../api/role'
 
 const FormItem = Form.Item
+const Row = Grid.Row
+const Col = Grid.Col
+const MenuItem = Menu.Item
+
+// 可配置列 key（操作列固定显示，不参与列设置）
+const ALL_COL_KEYS = ['id', 'name', 'code', 'data_scope', 'sort', 'status', 'remark']
+
+// 表格密度选项
+const SIZE_OPTIONS = [
+  { label: '宽松', value: 'large' },
+  { label: '默认', value: 'default' },
+  { label: '中等', value: 'middle' },
+  { label: '紧凑', value: 'small' },
+]
 
 // 数据范围枚举，与后端 data_scope 对齐
 const DATA_SCOPE_OPTIONS = [
@@ -63,7 +83,15 @@ export default function RoleManage() {
   const [page, setPage] = useState(1)
   const [size, setSize] = useState(10)
   const [loading, setLoading] = useState(false)
+
+  // 草稿筛选条件（变化不触发请求）
   const [keyword, setKeyword] = useState('')
+  // 已生效的筛选条件（点击「搜索」后更新）
+  const [appliedKeyword, setAppliedKeyword] = useState('')
+
+  // 表格密度 & 列可见性
+  const [tableSize, setTableSize] = useState('default')
+  const [visibleCols, setVisibleCols] = useState(ALL_COL_KEYS)
 
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -86,7 +114,7 @@ export default function RoleManage() {
       setLoading(true)
       try {
         const params = { page: p, size: s }
-        if (keyword) params.name = keyword
+        if (appliedKeyword) params.name = appliedKeyword
         const res = await roleApi.listRoles(params)
         setList(res.data.list || [])
         setTotal(res.data.total || 0)
@@ -96,12 +124,25 @@ export default function RoleManage() {
         setLoading(false)
       }
     },
-    [page, size, keyword]
+    [page, size, appliedKeyword],
   )
 
   useEffect(() => {
     fetchList()
   }, [page, size, fetchList])
+
+  // 搜索：生效草稿条件，回到第一页
+  const handleSearch = () => {
+    setAppliedKeyword(keyword)
+    setPage(1)
+  }
+
+  // 重置：清空草稿与已生效条件，回到第一页并刷新
+  const handleReset = () => {
+    setKeyword('')
+    setAppliedKeyword('')
+    setPage(1)
+  }
 
   const openCreate = () => {
     setEditing(null)
@@ -157,10 +198,7 @@ export default function RoleManage() {
   // 打开分配菜单：加载菜单树 + 角色详情拿到已分配菜单
   const openAssignMenus = async (record) => {
     try {
-      const [treeRes, detailRes] = await Promise.all([
-        menuApi.getMenuTree(),
-        roleApi.getRole(record.id),
-      ])
+      const [treeRes, detailRes] = await Promise.all([menuApi.getMenuTree(), roleApi.getRole(record.id)])
       const tree = treeRes.data || []
       setMenuTree(tree)
       const assigned = (detailRes.data.menus || []).map((m) => String(m.id))
@@ -188,10 +226,7 @@ export default function RoleManage() {
   // 打开绑定部门：加载部门树 + 角色详情拿到已绑定部门
   const openAssignDepts = async (record) => {
     try {
-      const [treeRes, detailRes] = await Promise.all([
-        deptApi.getDeptTree(),
-        roleApi.getRole(record.id),
-      ])
+      const [treeRes, detailRes] = await Promise.all([deptApi.getDeptTree(), roleApi.getRole(record.id)])
       setDeptTree(treeRes.data || [])
       setCheckedDepts((detailRes.data.depts || []).map((d) => String(d.id)))
       setDeptModal(record)
@@ -210,25 +245,42 @@ export default function RoleManage() {
     }
   }
 
+  // 表格密度下拉
+  const sizeMenu = (
+    <Menu onClickMenuItem={(key) => setTableSize(key)}>
+      {SIZE_OPTIONS.map((o) => (
+        <MenuItem key={o.value}>{o.label}</MenuItem>
+      ))}
+    </Menu>
+  )
+
   const columns = [
-    { title: 'ID', dataIndex: 'id', width: 70 },
-    { title: '角色名称', dataIndex: 'name' },
-    { title: '角色编码', dataIndex: 'code' },
+    { key: 'id', title: 'ID', dataIndex: 'id', width: 70 },
+    { key: 'name', title: '角色名称', dataIndex: 'name' },
+    { key: 'code', title: '角色编码', dataIndex: 'code' },
     {
+      key: 'data_scope',
       title: '数据范围',
       dataIndex: 'data_scope',
       render: (v) => DATA_SCOPE_MAP[v] || v,
     },
-    { title: '排序', dataIndex: 'sort', width: 80 },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
     {
+      key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 80,
-      render: (status) =>
-        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
+      render: (status) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
     },
-    { title: '备注', dataIndex: 'remark', render: (v) => v || '-' },
     {
+      key: 'remark',
+      title: '备注',
+      dataIndex: 'remark',
+      width: 200,
+      render: (v) => <Typography.Text ellipsis={{ showTooltip: true }}>{v || '-'}</Typography.Text>,
+    },
+    {
+      key: 'action',
       title: '操作',
       width: 260,
       render: (_, record) => (
@@ -254,41 +306,70 @@ export default function RoleManage() {
     },
   ]
 
+  // 列设置弹层内容
+  const colSettingsPopover = (
+    <Checkbox.Group value={visibleCols} onChange={setVisibleCols} direction="vertical">
+      {ALL_COL_KEYS.map((k) => {
+        const col = columns.find((c) => c.key === k)
+        return (
+          <Checkbox key={k} value={k}>
+            {col?.title || k}
+          </Checkbox>
+        )
+      })}
+    </Checkbox.Group>
+  )
+
+  const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
+
   return (
     <Card title="角色管理">
-      <div className="flex justify-between mb-4">
+      {/* 搜索区域 */}
+      <div className="mb-3">
         <Space wrap>
-          <Input.Search
-            className="w-[220px]!"
+          <Input
+            className="w-55!"
             placeholder="按角色名称搜索"
             allowClear
             value={keyword}
             onChange={setKeyword}
-            onSearch={() => {
-              setPage(1)
-              fetchList(1, size)
-            }}
+            onPressEnter={handleSearch}
           />
-          <Button
-            icon={<IconRefresh />}
-            onClick={() => {
-              setKeyword('')
-              setPage(1)
-              fetchList(1, size)
-            }}
-          >
-            重置
+          <Button type="primary" onClick={handleSearch}>
+            搜索
           </Button>
+          <Button onClick={handleReset}>重置</Button>
         </Space>
+      </div>
+
+      {/* 表格工具栏 */}
+      <div className="mb-3 flex items-center justify-between">
         <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
           新增角色
         </Button>
+        <Space>
+          <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
+            刷新
+          </Button>
+          <Dropdown droplist={sizeMenu} position="br">
+            <Button size="mini" icon={<IconList />}>
+              密度
+            </Button>
+          </Dropdown>
+          <Popover content={colSettingsPopover} position="br" trigger="click">
+            <Button size="mini" icon={<IconSettings />}>
+              列设置
+            </Button>
+          </Popover>
+        </Space>
       </div>
+
       <Table
         rowKey="id"
-        columns={columns}
+        columns={visibleColumns}
         data={list}
         loading={loading}
+        size={tableSize}
         pagination={{
           current: page,
           pageSize: size,
@@ -309,8 +390,7 @@ export default function RoleManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        className="w-[520px]! max-w-[90vw]"
-      >
+        className="w-160! max-w-[90vw]">
         <Form
           form={form}
           layout="vertical"
@@ -319,28 +399,31 @@ export default function RoleManage() {
             if (changed.data_scope !== undefined) {
               setDataScope(changed.data_scope)
             }
-          }}
-        >
-          <FormItem
-            label="角色名称"
-            field="name"
-            rules={[
-              { required: true, message: '请输入角色名称' },
-              { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-            ]}
-          >
-            <Input placeholder="如：运营专员" />
-          </FormItem>
-          <FormItem
-            label="角色编码"
-            field="code"
-            rules={[
-              { required: true, message: '请输入角色编码' },
-              { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-            ]}
-          >
-            <Input placeholder="如：operator" />
-          </FormItem>
+          }}>
+          <Row gutter={20}>
+            <Col span={12}>
+              <FormItem
+                label="角色名称"
+                field="name"
+                rules={[
+                  { required: true, message: '请输入角色名称' },
+                  { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
+                ]}>
+                <Input placeholder="如：运营专员" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem
+                label="角色编码"
+                field="code"
+                rules={[
+                  { required: true, message: '请输入角色编码' },
+                  { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
+                ]}>
+                <Input placeholder="如：operator" />
+              </FormItem>
+            </Col>
+          </Row>
           <FormItem label="数据范围" field="data_scope" triggerPropName="value">
             <Radio.Group>
               {DATA_SCOPE_OPTIONS.map((o) => (
@@ -351,19 +434,23 @@ export default function RoleManage() {
             </Radio.Group>
           </FormItem>
           {dataScope === 2 && (
-            <div className="mb-3 text-sm text-gray-500">
-              保存后请在列表中点击「绑定部门」为该角色选择自定义数据范围。
-            </div>
+            <div className="mb-3 text-sm text-gray-500">保存后请在列表中点击「绑定部门」为该角色选择自定义数据范围。</div>
           )}
-          <FormItem label="排序" field="sort" triggerPropName="value">
-            <InputNumber min={0} placeholder="数字越小越靠前" />
-          </FormItem>
-          <FormItem label="状态" field="status" triggerPropName="value">
-            <Select>
-              <Select.Option value={1}>启用</Select.Option>
-              <Select.Option value={0}>停用</Select.Option>
-            </Select>
-          </FormItem>
+          <Row gutter={20}>
+            <Col span={12}>
+              <FormItem label="排序" field="sort" triggerPropName="value">
+                <InputNumber min={0} placeholder="数字越小越靠前" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="状态" field="status" triggerPropName="value">
+                <Select>
+                  <Select.Option value={1}>启用</Select.Option>
+                  <Select.Option value={0}>停用</Select.Option>
+                </Select>
+              </FormItem>
+            </Col>
+          </Row>
           <FormItem label="备注" field="remark">
             <Input.TextArea maxLength={255} showWordLimit placeholder="选填" />
           </FormItem>
@@ -376,15 +463,14 @@ export default function RoleManage() {
         onOk={handleSaveMenus}
         onCancel={() => setMenuModal(null)}
         unmountOnExit
-        className="w-[480px]! max-w-[90vw]"
-      >
+        className="w-120! max-w-[90vw]">
         <Tree
           checkable
           defaultExpandAll
           treeData={menuToTree(menuTree)}
           checkedKeys={checkedMenus}
           onCheck={(keys) => setCheckedMenus(keys)}
-          className="max-h-[400px] overflow-auto"
+          className="max-h-100 overflow-auto"
         />
       </Modal>
 
@@ -394,15 +480,14 @@ export default function RoleManage() {
         onOk={handleSaveDepts}
         onCancel={() => setDeptModal(null)}
         unmountOnExit
-        className="w-[480px]! max-w-[90vw]"
-      >
+        className="w-120! max-w-[90vw]">
         <Tree
           checkable
           defaultExpandAll
           treeData={deptToTree(deptTree)}
           checkedKeys={checkedDepts}
           onCheck={(keys) => setCheckedDepts(keys)}
-          className="max-h-[400px] overflow-auto"
+          className="max-h-100 overflow-auto"
         />
       </Modal>
     </Card>

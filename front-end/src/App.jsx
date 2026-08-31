@@ -1,8 +1,8 @@
-import { lazy, Suspense } from 'react'
-import { createBrowserRouter, RouterProvider, redirect } from 'react-router-dom'
 import { Spin } from '@arco-design/web-react'
-import { getToken } from './utils/auth'
+import { lazy, Suspense } from 'react'
+import { createBrowserRouter, redirect, RouterProvider } from 'react-router-dom'
 import MainLayout from './components/layout.jsx'
+import { getToken } from './utils/auth'
 
 // 路由页面全部懒加载：每个页面单独分包，按需下载
 const Login = lazy(() => import('./pages/Login.jsx'))
@@ -99,5 +99,5 @@ const router = createBrowserRouter([
 ])
 
 export default function App() {
-  return <RouterProvider router={router} />
+  return <RouterProvider router={router} future={{ v7_startTransition: true }} />
 }

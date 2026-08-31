@@ -1,8 +1,10 @@
-import { Avatar, Dropdown, Layout, Menu, Space, Typography } from '@arco-design/web-react'
+import { Avatar, Breadcrumb, Dropdown, Layout, Menu, Space, Typography } from '@arco-design/web-react'
 import { IconApps, IconDesktop, IconHome, IconSettings, IconStorage, IconUser } from '@arco-design/web-react/icon'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../store/auth-context'
+import { TabProvider } from '../store/tab-context'
+import TabsBar from './tabs-bar'
 
 const Header = Layout.Header
 const Content = Layout.Content
@@ -51,6 +53,22 @@ function renderMenus(menus) {
     .filter(Boolean)
 }
 
+// 在菜单树中查找当前路径对应的层级链（目录 → 页面），用于面包屑
+function findMenuChain(menus, pathname, chain = []) {
+  for (const m of menus || []) {
+    if (m.status !== 1 || m.type === 3) continue
+    const nextChain = [...chain, m]
+    if (m.path === pathname) {
+      return nextChain
+    }
+    if (m.children?.length) {
+      const found = findMenuChain(m.children, pathname, nextChain)
+      if (found) return found
+    }
+  }
+  return null
+}
+
 export default function MainLayout() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -68,46 +86,77 @@ export default function MainLayout() {
     </Menu>
   )
 
+  // 根据当前路由与菜单树动态生成面包屑：根节点(首页图标) / 目录... / 当前页面
+  const breadcrumbItems = useMemo(() => {
+    // 根节点：系统首页，仅显示 IconHome 图标
+    const items = [{ title: '首页', path: '/', isRoot: true }]
+    if (location.pathname !== '/') {
+      const chain = findMenuChain(menus, location.pathname)
+      if (chain && chain.length) {
+        chain
+          // 排除首页（path=/），避免与根节点重复
+          .filter((m) => m.path !== '/')
+          .forEach((m) => items.push({ title: m.name, path: m.path || null }))
+      } else {
+        items.push({ title: location.pathname, path: null })
+      }
+    }
+    return items
+  }, [location.pathname, menus])
+
   return (
-    <Layout className="h-full">
-      <Header className="flex items-center gap-8 border-b border-gray-200 bg-white px-6">
-        {/* 左侧：Logo + 系统标题，点击返回首页 */}
-        <div className="flex shrink-0 cursor-pointer items-center gap-2" onClick={() => navigate('/')}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#165dff] text-lg text-white">
-            <IconStorage />
+    <TabProvider>
+      <Layout className="h-full">
+        <Header className="flex items-center gap-8 border-b border-gray-200 bg-white px-6">
+          {/* 左侧：Logo + 系统标题，点击返回首页 */}
+          <div className="flex shrink-0 cursor-pointer items-center gap-2" onClick={() => navigate('/')}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#165dff] text-lg text-white">
+              <IconStorage />
+            </div>
+            <Typography.Text className="text-lg! font-semibold!">RBAC 管理系统</Typography.Text>
           </div>
-          <Typography.Text className="text-lg! font-semibold!">RBAC 管理系统</Typography.Text>
-        </div>
 
-        {/* 中间：水平菜单，自适应宽度 */}
-        <Menu
-          mode="horizontal"
-          selectedKeys={[location.pathname]}
-          onClickMenuItem={(key) => {
-            if (typeof key === 'string' && key.startsWith('/')) {
-              navigate(key)
-            }
-          }}
-          className="min-w-0 flex-1">
-          <MenuItem key="/" icon={<IconHome />}>
-            工作台
-          </MenuItem>
-          {menus && menus.length > 0 ? renderMenus(menus) : null}
-        </Menu>
+          {/* 中间：水平菜单，自适应宽度 */}
+          <Menu
+            mode="horizontal"
+            selectedKeys={[location.pathname]}
+            onClickMenuItem={(key) => {
+              if (typeof key === 'string' && key.startsWith('/')) {
+                navigate(key)
+              }
+            }}
+            className="min-w-0 flex-1">
+            <MenuItem key="/" icon={<IconHome />}>
+              工作台
+            </MenuItem>
+            {menus && menus.length > 0 ? renderMenus(menus) : null}
+          </Menu>
 
-        {/* 右侧：用户信息 + 退出登录 */}
-        <Dropdown droplist={profileMenu} position="br">
-          <Space className="shrink-0 cursor-pointer">
-            <Avatar size={32} className="bg-[#165dff]!">
-              <IconUser />
-            </Avatar>
-            <Typography.Text>{user?.username || '加载中'}</Typography.Text>
-          </Space>
-        </Dropdown>
-      </Header>
-      <Content className="overflow-auto bg-gray-50 p-4">
-        <Outlet />
-      </Content>
-    </Layout>
+          {/* 右侧：用户信息 + 退出登录 */}
+          <Dropdown droplist={profileMenu} position="br">
+            <Space className="shrink-0 cursor-pointer">
+              <Avatar size={32} className="bg-[#165dff]!">
+                <IconUser />
+              </Avatar>
+              <Typography.Text>{user?.username || '加载中'}</Typography.Text>
+            </Space>
+          </Dropdown>
+        </Header>
+
+        {/* 页签栏 */}
+        <TabsBar />
+
+        <Content className="flex-1 overflow-auto bg-gray-50 p-4">
+          {breadcrumbItems.length > 1 && (
+            <Breadcrumb className="mb-3">
+              {breadcrumbItems.map((item, idx) => (
+                <Breadcrumb.Item key={item.path || item.title || idx}>{item.isRoot ? <IconHome /> : item.title}</Breadcrumb.Item>
+              ))}
+            </Breadcrumb>
+          )}
+          <Outlet />
+        </Content>
+      </Layout>
+    </TabProvider>
   )
 }

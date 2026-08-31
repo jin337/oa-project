@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite'
 import { compression } from 'vite-plugin-compression2'
 
 // 前端开发服务：固定端口 8181，/api 请求代理到后端 Go 服务（默认 8180）
@@ -16,6 +16,7 @@ export default defineConfig({
   ],
   server: {
     port: 8181,
+    open: true,
     strictPort: true,
     proxy: {
       '/api': {

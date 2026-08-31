@@ -1,24 +1,43 @@
-import { useCallback, useEffect, useState } from 'react'
 import {
-  Table,
   Button,
-  Space,
-  Input,
-  Form,
-  Modal,
-  Select,
-  TreeSelect,
-  Tag,
-  Popconfirm,
-  Message,
   Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Select,
+  Space,
+  Table,
+  Tag,
+  TreeSelect,
 } from '@arco-design/web-react'
-import { IconPlus, IconRefresh } from '@arco-design/web-react/icon'
-import * as userApi from '../../api/user'
+import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
+import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from '../../api/dept'
 import * as roleApi from '../../api/role'
+import * as userApi from '../../api/user'
 
 const FormItem = Form.Item
+const Row = Grid.Row
+const Col = Grid.Col
+const MenuItem = Menu.Item
+
+// 可配置列 key（操作列固定显示，不参与列设置）
+const ALL_COL_KEYS = ['id', 'username', 'dept', 'roles', 'email', 'phone', 'status', 'created_at']
+
+// 表格密度选项
+const SIZE_OPTIONS = [
+  { label: '宽松', value: 'large' },
+  { label: '默认', value: 'default' },
+  { label: '中等', value: 'middle' },
+  { label: '紧凑', value: 'small' },
+]
 
 // 部门树 -> Arco TreeSelect 数据
 function toTreeData(depts) {
@@ -64,39 +83,47 @@ export default function UserManage() {
   const [page, setPage] = useState(1)
   const [size, setSize] = useState(10)
   const [loading, setLoading] = useState(false)
+
+  // 草稿筛选条件（绑定输入控件，变化不触发请求）
   const [keyword, setKeyword] = useState('')
   const [deptFilter, setDeptFilter] = useState(undefined)
+  // 已生效的筛选条件（点击「搜索」后更新，驱动列表请求）
+  const [appliedFilters, setAppliedFilters] = useState({ keyword: '', deptFilter: undefined })
+
+  // 表格密度 & 列可见性
+  const [tableSize, setTableSize] = useState('default')
+  const [visibleCols, setVisibleCols] = useState(ALL_COL_KEYS)
 
   const [deptTree, setDeptTree] = useState([])
   const [allRoles, setAllRoles] = useState([])
 
   const [modalVisible, setModalVisible] = useState(false)
-  const [editing, setEditing] = useState(null) // null=新增
+  const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
 
-  const fetchList = useCallback(async (p = page, s = size) => {
-    setLoading(true)
-    try {
-      const params = { page: p, size: s }
-      if (keyword) params.username = keyword
-      if (deptFilter) params.dept_id = deptFilter
-      const res = await userApi.listUsers(params)
-      setList(res.data.list || [])
-      setTotal(res.data.total || 0)
-    } catch (e) {
-      // 错误已在请求层提示
-    } finally {
-      setLoading(false)
-    }
-  }, [page, size, keyword, deptFilter])
+  const fetchList = useCallback(
+    async (p = page, s = size) => {
+      setLoading(true)
+      try {
+        const params = { page: p, size: s }
+        if (appliedFilters.keyword) params.username = appliedFilters.keyword
+        if (appliedFilters.deptFilter) params.dept_id = appliedFilters.deptFilter
+        const res = await userApi.listUsers(params)
+        setList(res.data.list || [])
+        setTotal(res.data.total || 0)
+      } catch (e) {
+        // 错误已在请求层提示
+      } finally {
+        setLoading(false)
+      }
+    },
+    [page, size, appliedFilters],
+  )
 
   const fetchBase = useCallback(async () => {
     try {
-      const [deptRes, roleRes] = await Promise.all([
-        deptApi.getDeptTree(),
-        roleApi.listRoles({ page: 1, size: 200 }),
-      ])
+      const [deptRes, roleRes] = await Promise.all([deptApi.getDeptTree(), roleApi.listRoles({ page: 1, size: 200 })])
       setDeptTree(deptRes.data || [])
       setAllRoles(roleRes.data.list || [])
     } catch (e) {
@@ -111,6 +138,20 @@ export default function UserManage() {
   useEffect(() => {
     fetchList()
   }, [page, size, fetchList])
+
+  // 搜索：生效当前草稿条件，回到第一页
+  const handleSearch = () => {
+    setAppliedFilters({ keyword, deptFilter })
+    setPage(1)
+  }
+
+  // 重置：清空草稿与已生效条件，回到第一页并刷新
+  const handleReset = () => {
+    setKeyword('')
+    setDeptFilter(undefined)
+    setAppliedFilters({ keyword: '', deptFilter: undefined })
+    setPage(1)
+  }
 
   const openCreate = () => {
     setEditing(null)
@@ -169,15 +210,26 @@ export default function UserManage() {
     }
   }
 
+  // 表格密度下拉
+  const sizeMenu = (
+    <Menu onClickMenuItem={(key) => setTableSize(key)}>
+      {SIZE_OPTIONS.map((o) => (
+        <MenuItem key={o.value}>{o.label}</MenuItem>
+      ))}
+    </Menu>
+  )
+
   const columns = [
-    { title: 'ID', dataIndex: 'id', width: 70 },
-    { title: '用户名', dataIndex: 'username' },
+    { key: 'id', title: 'ID', dataIndex: 'id', width: 70 },
+    { key: 'username', title: '用户名', dataIndex: 'username' },
     {
+      key: 'dept',
       title: '部门',
       dataIndex: 'dept',
       render: (dept) => dept?.name || '-',
     },
     {
+      key: 'roles',
       title: '角色',
       dataIndex: 'roles',
       render: (roles) =>
@@ -187,17 +239,23 @@ export default function UserManage() {
           </Tag>
         )),
     },
-    { title: '邮箱', dataIndex: 'email', render: (v) => v || '-' },
-    { title: '手机号', dataIndex: 'phone', render: (v) => v || '-' },
+    { key: 'email', title: '邮箱', dataIndex: 'email', render: (v) => v || '-' },
+    { key: 'phone', title: '手机号', dataIndex: 'phone', render: (v) => v || '-' },
     {
+      key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 80,
-      render: (status) =>
-        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
+      render: (status) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
     },
-    { title: '创建时间', dataIndex: 'created_at', render: (v) => v?.slice(0, 19).replace('T', ' ') },
     {
+      key: 'created_at',
+      title: '创建时间',
+      dataIndex: 'created_at',
+      render: (v) => v?.slice(0, 19).replace('T', ' '),
+    },
+    {
+      key: 'action',
       title: '操作',
       width: 160,
       render: (_, record) => (
@@ -215,53 +273,79 @@ export default function UserManage() {
     },
   ]
 
+  // 列设置弹层内容
+  const colSettingsPopover = (
+    <Checkbox.Group value={visibleCols} onChange={setVisibleCols} direction="vertical">
+      {ALL_COL_KEYS.map((k) => {
+        const col = columns.find((c) => c.key === k)
+        return (
+          <Checkbox key={k} value={k}>
+            {col?.title || k}
+          </Checkbox>
+        )
+      })}
+    </Checkbox.Group>
+  )
+
+  // 操作列固定显示，其余按 visibleCols 过滤
+  const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
+
   return (
     <Card title="用户管理">
-      <div className="flex justify-between mb-4">
+      {/* 搜索区域 */}
+      <div className="mb-3">
         <Space wrap>
-          <Input.Search
-            className="w-[220px]!"
+          <Input
+            className="w-55!"
             placeholder="按用户名搜索"
             allowClear
             value={keyword}
             onChange={setKeyword}
-            onSearch={() => {
-              setPage(1)
-              fetchList(1, size)
-            }}
+            onPressEnter={handleSearch}
           />
           <TreeSelect
-            className="w-[200px]!"
+            className="w-50!"
             placeholder="按部门筛选"
             allowClear
             treeData={toTreeData(deptTree)}
             value={deptFilter}
-            onChange={(v) => {
-              setDeptFilter(v)
-              setPage(1)
-            }}
+            onChange={setDeptFilter}
           />
-          <Button
-            icon={<IconRefresh />}
-            onClick={() => {
-              setKeyword('')
-              setDeptFilter(undefined)
-              setPage(1)
-              fetchList(1, size)
-            }}
-          >
-            重置
+          <Button type="primary" onClick={handleSearch}>
+            搜索
           </Button>
+          <Button onClick={handleReset}>重置</Button>
         </Space>
+      </div>
+
+      {/* 表格工具栏 */}
+      <div className="mb-3 flex items-center justify-between">
         <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
           新增用户
         </Button>
+        <Space>
+          <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
+            刷新
+          </Button>
+          <Dropdown droplist={sizeMenu} position="br">
+            <Button size="mini" icon={<IconList />}>
+              密度
+            </Button>
+          </Dropdown>
+          <Popover content={colSettingsPopover} position="br" trigger="click">
+            <Button size="mini" icon={<IconSettings />}>
+              列设置
+            </Button>
+          </Popover>
+        </Space>
       </div>
+
       <Table
         rowKey="id"
-        columns={columns}
+        columns={visibleColumns}
         data={list}
         loading={loading}
+        size={tableSize}
         pagination={{
           current: page,
           pageSize: size,
@@ -281,64 +365,76 @@ export default function UserManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        className="w-[520px]! max-w-[90vw]"
-      >
+        className="w-160! max-w-[90vw]">
         <Form form={form} layout="vertical" autoComplete="off">
-          <FormItem
-            label="用户名"
-            field="username"
-            rules={[
-              { required: true, message: '请输入用户名' },
-              { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-            ]}
-          >
-            <Input placeholder="请输入用户名" />
-          </FormItem>
-          {!editing && (
-            <FormItem
-              label="密码"
-              field="password"
-              rules={[
-                { required: true, message: '请输入密码' },
-                { minLength: 6, maxLength: 64, message: '长度 6-64 个字符' },
-              ]}
-            >
-              <Input.Password placeholder="请输入密码" />
-            </FormItem>
-          )}
-          {editing && (
-            <FormItem
-              label="新密码（留空表示不修改）"
-              field="password"
-              rules={[{ minLength: 6, maxLength: 64, message: '长度 6-64 个字符' }]}
-            >
-              <Input.Password placeholder="留空表示不修改" />
-            </FormItem>
-          )}
-          <FormItem label="邮箱" field="email" rules={[{ type: 'email', message: '邮箱格式不正确' }]}>
-            <Input placeholder="请输入邮箱" />
-          </FormItem>
-          <FormItem label="手机号" field="phone">
-            <Input placeholder="请输入手机号" />
-          </FormItem>
-          <FormItem label="所属部门" field="dept_id">
-            <TreeSelect placeholder="请选择部门" allowClear treeData={toTreeData(deptTree)} />
-          </FormItem>
-          <FormItem label="角色" field="role_ids">
-            <Select mode="multiple" placeholder="请选择角色" allowClear>
-              {allRoles.map((r) => (
-                <Select.Option key={r.id} value={r.id}>
-                  {r.name}
-                </Select.Option>
-              ))}
-            </Select>
-          </FormItem>
-          <FormItem label="状态" field="status" triggerPropName="value">
-            <Select>
-              <Select.Option value={1}>启用</Select.Option>
-              <Select.Option value={0}>停用</Select.Option>
-            </Select>
-          </FormItem>
+          <Row gutter={20}>
+            <Col span={12}>
+              <FormItem
+                label="用户名"
+                field="username"
+                rules={[
+                  { required: true, message: '请输入用户名' },
+                  { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
+                ]}>
+                <Input placeholder="请输入用户名" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              {!editing && (
+                <FormItem
+                  label="密码"
+                  field="password"
+                  rules={[
+                    { required: true, message: '请输入密码' },
+                    { minLength: 6, maxLength: 64, message: '长度 6-64 个字符' },
+                  ]}>
+                  <Input.Password placeholder="请输入密码" />
+                </FormItem>
+              )}
+              {editing && (
+                <FormItem
+                  label="新密码（留空表示不修改）"
+                  field="password"
+                  rules={[{ minLength: 6, maxLength: 64, message: '长度 6-64 个字符' }]}>
+                  <Input.Password placeholder="留空表示不修改" />
+                </FormItem>
+              )}
+            </Col>
+            <Col span={12}>
+              <FormItem label="邮箱" field="email" rules={[{ type: 'email', message: '邮箱格式不正确' }]}>
+                <Input placeholder="请输入邮箱" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="手机号" field="phone">
+                <Input placeholder="请输入手机号" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="所属部门" field="dept_id">
+                <TreeSelect placeholder="请选择部门" allowClear treeData={toTreeData(deptTree)} />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="状态" field="status" triggerPropName="value">
+                <Select>
+                  <Select.Option value={1}>启用</Select.Option>
+                  <Select.Option value={0}>停用</Select.Option>
+                </Select>
+              </FormItem>
+            </Col>
+            <Col span={24}>
+              <FormItem label="角色" field="role_ids">
+                <Select mode="multiple" placeholder="请选择角色" allowClear>
+                  {allRoles.map((r) => (
+                    <Select.Option key={r.id} value={r.id}>
+                      {r.name}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </FormItem>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </Card>

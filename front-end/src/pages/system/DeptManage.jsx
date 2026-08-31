@@ -1,38 +1,55 @@
 import {
   Button,
   Card,
+  Checkbox,
+  Dropdown,
   Form,
+  Grid,
   Input,
   InputNumber,
+  Menu,
   Message,
   Modal,
   Popconfirm,
+  Popover,
   Select,
   Space,
   Table,
   Tag,
   TreeSelect,
 } from '@arco-design/web-react'
-import { IconPlus, IconRefresh } from '@arco-design/web-react/icon'
+import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from '../../api/dept'
 
 const FormItem = Form.Item
+const Row = Grid.Row
+const Col = Grid.Col
+const MenuItem = Menu.Item
 
-function toTreeData(depts, excludeId) {
-  return (depts || [])
-    .filter((d) => d.id !== excludeId)
-    .map((d) => ({
-      key: String(d.id),
-      title: d.name,
-      value: d.id,
-      children: d.children ? toTreeData(d.children, excludeId) : undefined,
-    }))
+// 可配置列 key（操作列固定显示，不参与列设置）
+const ALL_COL_KEYS = ['name', 'leader', 'sort', 'status', 'created_at']
+
+// 表格密度选项
+const SIZE_OPTIONS = [
+  { label: '宽松', value: 'large' },
+  { label: '默认', value: 'default' },
+  { label: '中等', value: 'middle' },
+  { label: '紧凑', value: 'small' },
+]
+
+function toTreeData(depts) {
+  return (depts || []).map((d) => ({
+    key: String(d.id),
+    title: d.name,
+    value: d.id,
+    children: d.children ? toTreeData(d.children) : undefined,
+  }))
 }
 
 const EMPTY_FORM = {
-  parent_id: 0,
   name: '',
+  parent_id: undefined,
   leader: '',
   sort: 0,
   status: 1,
@@ -41,6 +58,11 @@ const EMPTY_FORM = {
 export default function DeptManage() {
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(false)
+
+  // 表格密度 & 列可见性
+  const [tableSize, setTableSize] = useState('default')
+  const [visibleCols, setVisibleCols] = useState(ALL_COL_KEYS)
+
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -62,17 +84,17 @@ export default function DeptManage() {
     fetchTree()
   }, [fetchTree])
 
-  const openCreate = (parent = null) => {
+  const openCreate = (parentId) => {
     setEditing(null)
-    form.setFieldsValue({ ...EMPTY_FORM, parent_id: parent ? parent.id : 0 })
+    form.setFieldsValue({ ...EMPTY_FORM, parent_id: parentId || undefined })
     setModalVisible(true)
   }
 
   const openEdit = (record) => {
     setEditing(record)
     form.setFieldsValue({
-      parent_id: record.parent_id,
       name: record.name,
+      parent_id: record.parent_id || undefined,
       leader: record.leader,
       sort: record.sort,
       status: record.status,
@@ -84,12 +106,11 @@ export default function DeptManage() {
     const values = await form.validate()
     setSaving(true)
     try {
-      const payload = { ...values, parent_id: values.parent_id || 0 }
       if (editing) {
-        await deptApi.updateDept(editing.id, payload)
+        await deptApi.updateDept(editing.id, values)
         Message.success('保存成功')
       } else {
-        await deptApi.createDept(payload)
+        await deptApi.createDept(values)
         Message.success('创建成功')
       }
       setModalVisible(false)
@@ -111,28 +132,39 @@ export default function DeptManage() {
     }
   }
 
+  // 表格密度下拉
+  const sizeMenu = (
+    <Menu onClickMenuItem={(key) => setTableSize(key)}>
+      {SIZE_OPTIONS.map((o) => (
+        <MenuItem key={o.value}>{o.label}</MenuItem>
+      ))}
+    </Menu>
+  )
+
   const columns = [
-    { title: '部门名称', dataIndex: 'name', width: 240 },
-    { title: '负责人', dataIndex: 'leader', render: (v) => v || '-' },
-    { title: '排序', dataIndex: 'sort', width: 80 },
+    { key: 'name', title: '部门名称', dataIndex: 'name' },
+    { key: 'leader', title: '负责人', dataIndex: 'leader', render: (v) => v || '-' },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
     {
+      key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 80,
-      render: (status) =>
-        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
+      render: (status) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
     },
     {
+      key: 'created_at',
       title: '创建时间',
       dataIndex: 'created_at',
-      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
+      render: (v) => v?.slice(0, 19).replace('T', ' '),
     },
     {
+      key: 'action',
       title: '操作',
-      width: 250,
+      width: 220,
       render: (_, record) => (
-        <Space wrap>
-          <Button size="mini" onClick={() => openCreate(record)}>
+        <Space>
+          <Button size="mini" onClick={() => openCreate(record.id)}>
             新增子部门
           </Button>
           <Button size="mini" onClick={() => openEdit(record)}>
@@ -148,24 +180,57 @@ export default function DeptManage() {
     },
   ]
 
+  // 列设置弹层内容
+  const colSettingsPopover = (
+    <Checkbox.Group value={visibleCols} onChange={setVisibleCols} direction="vertical">
+      {ALL_COL_KEYS.map((k) => {
+        const col = columns.find((c) => c.key === k)
+        return (
+          <Checkbox key={k} value={k}>
+            {col?.title || k}
+          </Checkbox>
+        )
+      })}
+    </Checkbox.Group>
+  )
+
+  const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
+
   return (
     <Card title="部门管理">
-      <div className="flex justify-between mb-4">
-        <Button icon={<IconRefresh />} onClick={fetchTree}>
-          刷新
-        </Button>
+      {/* 表格工具栏 */}
+      <div className="mb-3 flex items-center justify-between">
         <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
           新增部门
         </Button>
+        <Space>
+          <Button size="mini" icon={<IconRefresh />} onClick={fetchTree}>
+            刷新
+          </Button>
+          <Dropdown droplist={sizeMenu} position="br">
+            <Button size="mini" icon={<IconList />}>
+              密度
+            </Button>
+          </Dropdown>
+          <Popover content={colSettingsPopover} position="br" trigger="click">
+            <Button size="mini" icon={<IconSettings />}>
+              列设置
+            </Button>
+          </Popover>
+        </Space>
       </div>
+
       <Table
         rowKey="id"
-        columns={columns}
+        columns={visibleColumns}
         data={tree}
         loading={loading}
+        size={tableSize}
         pagination={false}
+        childrenKey="children"
         defaultExpandAllRows
       />
+
       <Modal
         title={editing ? '编辑部门' : '新增部门'}
         visible={modalVisible}
@@ -173,35 +238,44 @@ export default function DeptManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        className="w-120! max-w-[90vw]"
-      >
+        className="w-160! max-w-[90vw]">
         <Form form={form} layout="vertical" autoComplete="off">
-          <FormItem label="上级部门" field="parent_id" triggerPropName="value">
-            <TreeSelect
-              placeholder="不选则为顶级部门"
-              allowClear
-              treeData={toTreeData(tree, editing?.id)}
-            />
-          </FormItem>
-          <FormItem
-            label="部门名称"
-            field="name"
-            rules={[{ required: true, message: '请输入部门名称' }]}
-          >
-            <Input placeholder="请输入部门名称" />
-          </FormItem>
-          <FormItem label="负责人" field="leader">
-            <Input placeholder="选填" />
-          </FormItem>
-          <FormItem label="排序" field="sort" triggerPropName="value">
-            <InputNumber min={0} placeholder="数字越小越靠前" />
-          </FormItem>
-          <FormItem label="状态" field="status" triggerPropName="value">
-            <Select>
-              <Select.Option value={1}>启用</Select.Option>
-              <Select.Option value={0}>停用</Select.Option>
-            </Select>
-          </FormItem>
+          <Row gutter={20}>
+            <Col span={12}>
+              <FormItem
+                label="部门名称"
+                field="name"
+                rules={[
+                  { required: true, message: '请输入部门名称' },
+                  { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
+                ]}>
+                <Input placeholder="如：技术部" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="上级部门" field="parent_id">
+                <TreeSelect placeholder="不选则为顶级部门" allowClear treeData={toTreeData(tree)} />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="负责人" field="leader">
+                <Input placeholder="选填" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="排序" field="sort" triggerPropName="value">
+                <InputNumber min={0} placeholder="数字越小越靠前" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="状态" field="status" triggerPropName="value">
+                <Select>
+                  <Select.Option value={1}>启用</Select.Option>
+                  <Select.Option value={0}>停用</Select.Option>
+                </Select>
+              </FormItem>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </Card>
