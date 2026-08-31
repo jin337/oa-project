@@ -11,6 +11,7 @@ const UserManage = lazy(() => import('./pages/system/UserManage.jsx'))
 const RoleManage = lazy(() => import('./pages/system/RoleManage.jsx'))
 const MenuManage = lazy(() => import('./pages/system/MenuManage.jsx'))
 const DeptManage = lazy(() => import('./pages/system/DeptManage.jsx'))
+const Profile = lazy(() => import('./pages/Profile.jsx'))
 const NotFound = lazy(() => import('./pages/NotFound.jsx'))
 
 function PageLoading() {
@@ -83,6 +84,14 @@ const router = createBrowserRouter([
         element: (
           <Page>
             <DeptManage />
+          </Page>
+        ),
+      },
+      {
+        path: 'profile',
+        element: (
+          <Page>
+            <Profile />
           </Page>
         ),
       },

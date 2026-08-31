@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../store/auth-context'
 import { TabProvider } from '../store/tab-context'
+import { APP_NAME } from '../config/app.js'
 import TabsBar from './tabs-bar'
 
 const Header = Layout.Header
@@ -27,10 +28,10 @@ function menuIcon(menu) {
   return ICON_MAP[menu.icon] || <IconApps />
 }
 
-// 把后端菜单树转成 Arco Menu 项（只渲染目录和页面菜单，按钮权限项跳过）
+// 把后端菜单树转成 Arco Menu 项（只渲染目录和页面菜单，按钮权限项跳过；hidden=1 的菜单不显示在导航栏）
 function renderMenus(menus) {
   return menus
-    .filter((m) => m.status === 1 && m.type !== 3)
+    .filter((m) => m.status === 1 && m.type !== 3 && m.hidden !== 1)
     .sort((a, b) => (a.sort || 0) - (b.sort || 0))
     .map((m) => {
       const children = m.children ? renderMenus(m.children) : []
@@ -81,7 +82,15 @@ export default function MainLayout() {
   }, [])
 
   const profileMenu = (
-    <Menu onClickMenuItem={(key) => key === 'logout' && logout()}>
+    <Menu
+      onClickMenuItem={(key) => {
+        if (key === 'logout') logout()
+        if (key === 'profile') navigate('/profile')
+      }}
+    >
+      <MenuItem key="profile" icon={<IconUser />}>
+        用户设置
+      </MenuItem>
       <MenuItem key="logout">退出登录</MenuItem>
     </Menu>
   )
@@ -113,7 +122,7 @@ export default function MainLayout() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#165dff] text-lg text-white">
               <IconStorage />
             </div>
-            <Typography.Text className="text-lg! font-semibold!">RBAC 管理系统</Typography.Text>
+            <Typography.Text className="text-lg! font-semibold!">{APP_NAME}</Typography.Text>
           </div>
 
           {/* 中间：水平菜单，自适应宽度 */}

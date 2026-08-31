@@ -2,12 +2,20 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { compression } from 'vite-plugin-compression2'
+import { APP_NAME } from './src/config/app.js'
 
 // 前端开发服务：固定端口 8181，/api 请求代理到后端 Go 服务（默认 8180）
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    // 将全局配置中的系统名称注入 index.html 的 <title>，确保标题与运行时一致
+    {
+      name: 'inject-app-title',
+      transformIndexHtml(html) {
+        return html.replace(/<title>.*<\/title>/, `<title>${APP_NAME}</title>`)
+      },
+    },
     // 构建产物压缩：10KB 以上的资源额外生成 .gz / .br 文件，供 Nginx 等静态服务器直接下发
     compression({
       algorithms: ['gzip', 'brotliCompress'],

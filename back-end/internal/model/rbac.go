@@ -37,9 +37,9 @@ type Role struct {
 
 // 数据范围常量
 const (
-	DataScopeAll         = 1 // 全部数据
-	DataScopeCustom      = 2 // 自定义部门
-	DataScopeDept        = 3 // 仅本部门
+	DataScopeAll          = 1 // 全部数据
+	DataScopeCustom       = 2 // 自定义部门
+	DataScopeDept         = 3 // 仅本部门
 	DataScopeDeptAndBelow = 4 // 本部门及下级
 )
 
@@ -54,6 +54,7 @@ type Menu struct {
 	Icon     string `gorm:"size:64;comment:图标" json:"icon"`
 	Sort     int    `gorm:"default:0;comment:排序" json:"sort"`
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
+	Hidden   int    `gorm:"default:0;comment:是否隐藏 1是 0否" json:"hidden"`
 
 	Children []*Menu `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
@@ -155,6 +156,7 @@ type MenuCreateReq struct {
 	Icon     string `json:"icon" validate:"omitempty,max=64" label:"图标"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Hidden   int    `json:"hidden" validate:"omitempty,oneof=0 1" label:"是否隐藏"`
 }
 
 type MenuUpdateReq struct {
@@ -166,6 +168,7 @@ type MenuUpdateReq struct {
 	Icon     string `json:"icon" validate:"omitempty,max=64" label:"图标"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Hidden   int    `json:"hidden" validate:"omitempty,oneof=0 1" label:"是否隐藏"`
 }
 
 type DeptCreateReq struct {

@@ -28,7 +28,7 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['name', 'type', 'path', 'perm', 'icon', 'sort', 'status']
+const ALL_COL_KEYS = ['name', 'type', 'path', 'perm', 'icon', 'sort', 'status', 'hidden']
 
 // 表格密度选项
 const SIZE_OPTIONS = [
@@ -58,6 +58,7 @@ const EMPTY_FORM = {
   icon: '',
   sort: 0,
   status: 1,
+  hidden: 0,
 }
 
 export default function MenuManage() {
@@ -108,6 +109,7 @@ export default function MenuManage() {
       icon: record.icon,
       sort: record.sort,
       status: record.status,
+      hidden: record.hidden,
     })
     setFormType(record.type)
     setModalVisible(true)
@@ -178,11 +180,19 @@ export default function MenuManage() {
     { key: 'icon', title: '图标', dataIndex: 'icon', render: (v) => v || '-' },
     { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
     {
+      key: 'hidden',
+      title: '是否隐藏',
+      dataIndex: 'hidden',
+      width: 90,
+      render: (hidden) => (hidden === 1 ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag>),
+    },
+    {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 80,
-      render: (status) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+      render: (status) =>
+        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },
     {
       key: 'action',
@@ -266,7 +276,8 @@ export default function MenuManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        className="w-160! max-w-[90vw]">
+        className="w-160! max-w-[90vw]"
+      >
         <Form
           form={form}
           layout="vertical"
@@ -275,7 +286,8 @@ export default function MenuManage() {
             if (changed.type !== undefined) {
               setFormType(changed.type)
             }
-          }}>
+          }}
+        >
           <Row gutter={20}>
             <Col span={12}>
               <FormItem
@@ -284,7 +296,8 @@ export default function MenuManage() {
                 rules={[
                   { required: true, message: '请输入菜单名称' },
                   { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-                ]}>
+                ]}
+              >
                 <Input placeholder="如：用户管理" />
               </FormItem>
             </Col>
@@ -320,6 +333,16 @@ export default function MenuManage() {
               <Col span={12}>
                 <FormItem label="图标" field="icon">
                   <Input placeholder="如：IconUser" />
+                </FormItem>
+              </Col>
+            )}
+            {formType !== 3 && (
+              <Col span={12}>
+                <FormItem label="是否隐藏" field="hidden" triggerPropName="value">
+                  <Select>
+                    <Select.Option value={1}>是</Select.Option>
+                    <Select.Option value={0}>否</Select.Option>
+                  </Select>
                 </FormItem>
               </Col>
             )}

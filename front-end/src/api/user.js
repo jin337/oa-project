@@ -29,3 +29,8 @@ export function deleteUser(id) {
 export function assignUserRoles(id, roleIds) {
   return request.put(`/users/${id}/roles`, { role_ids: roleIds })
 }
+
+// PUT /users/:id/password 修改密码
+export function updateUserPassword(id, data) {
+  return request.put(`/users/${id}/password`, data)
+}
