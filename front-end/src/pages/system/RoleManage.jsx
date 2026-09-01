@@ -291,7 +291,7 @@ export default function RoleManage() {
     {
       key: 'action',
       title: '操作',
-      width: 260,
+      width: 220,
       render: (_, record) => (
         <Space wrap>
           <Button size="mini" onClick={() => openEdit(record)}>
