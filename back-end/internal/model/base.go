@@ -34,11 +34,13 @@ func (r *BaseListReq) normalize() (page, size int) {
 	return page, size
 }
 
+// Offset 计算分页偏移量
 func (r *BaseListReq) Offset() int {
 	page, size := r.normalize()
 	return (page - 1) * size
 }
 
+// Limit 计算分页限制量
 func (r *BaseListReq) Limit() int {
 	_, size := r.normalize()
 	return size
