@@ -143,19 +143,6 @@ export default function Profile() {
           {/* 基础信息 */}
           <TabPane key="info" title="基础信息">
             <Form form={infoForm} layout="horizontal" autoComplete="off" className="max-w-md">
-              <FormItem label="用户名" field="username">
-                <Input disabled />
-              </FormItem>
-              <FormItem
-                label="邮箱"
-                field="email"
-                rules={[{ type: 'email', message: '邮箱格式不正确' }]}
-              >
-                <Input placeholder="请输入邮箱" allowClear />
-              </FormItem>
-              <FormItem label="手机号" field="phone">
-                <Input placeholder="请输入手机号" allowClear />
-              </FormItem>
               <FormItem
                 label="姓名"
                 field="nickname"
@@ -168,6 +155,16 @@ export default function Profile() {
                   <Radio value={1}>男</Radio>
                   <Radio value={2}>女</Radio>
                 </Radio.Group>
+              </FormItem>
+              <FormItem
+                label="邮箱"
+                field="email"
+                rules={[{ type: 'email', message: '邮箱格式不正确' }]}
+              >
+                <Input placeholder="请输入邮箱" allowClear />
+              </FormItem>
+              <FormItem label="手机号" field="phone">
+                <Input placeholder="请输入手机号" allowClear />
               </FormItem>
               <FormItem label="出生日期" field="birthday">
                 <DatePicker placeholder="请选择出生日期" allowClear className="w-full" />

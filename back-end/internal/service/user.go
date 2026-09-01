@@ -99,8 +99,8 @@ func UserUpdate(curUserID, id uint, req *model.UserUpdateReq) (*model.User, erro
 	if req.Phone != "" {
 		user.Phone = req.Phone
 	}
-	if req.Status == 0 || req.Status == 1 {
-		user.Status = req.Status
+	if req.Status != nil {
+		user.Status = *req.Status
 	}
 	if req.DeptID > 0 {
 		user.DeptID = req.DeptID

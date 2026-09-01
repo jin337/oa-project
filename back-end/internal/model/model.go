@@ -117,7 +117,7 @@ type UserUpdateReq struct {
 	Username string `json:"username" validate:"omitempty,min=2,max=64" label:"用户名"`
 	Email    string `json:"email" validate:"omitempty,email" label:"邮箱"`
 	Phone    string `json:"phone" validate:"omitempty,max=20" label:"手机号"`
-	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Status   *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	DeptID   uint   `json:"dept_id" validate:"omitempty" label:"部门ID"`
 	Password string `json:"password" validate:"omitempty,min=6,max=64" label:"密码"`
 }
