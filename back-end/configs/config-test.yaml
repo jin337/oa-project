@@ -10,6 +10,7 @@ server:
   jwt:
     secret: "test-secret-please-change-me"
     expire: 24
+    issuer: "back-end"                      # token 签发者
 
   log:
     level: info

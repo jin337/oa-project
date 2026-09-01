@@ -286,7 +286,7 @@ export default function RoleManage() {
       title: '备注',
       dataIndex: 'remark',
       width: 200,
-      render: (v) => <Typography.Text ellipsis={{ showTooltip: true }}>{v || '-'}</Typography.Text>,
+      render: (v) => <Typography.Text className="mb-0!" ellipsis={{ showTooltip: true }}>{v || '-'}</Typography.Text>,
     },
     {
       key: 'action',
@@ -429,7 +429,7 @@ export default function RoleManage() {
                   { required: true, message: '请输入角色编码' },
                   { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
                 ]}>
-                <Input placeholder="如：operator" />
+                <Input placeholder="如：operator" disabled={Boolean(editing)} />
               </FormItem>
             </Col>
           </Row>

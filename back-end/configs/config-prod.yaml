@@ -11,6 +11,7 @@ server:
   jwt:
     secret: "prod-secret-must-be-changed"  # 上线前必须修改！
     expire: 2
+    issuer: "back-end"                     # token 签发者
 
   log:
     level: info

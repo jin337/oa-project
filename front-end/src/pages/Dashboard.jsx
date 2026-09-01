@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Card, Descriptions, Tag, Grid, Typography, Spin } from '@arco-design/web-react'
+import { Card, Descriptions, Grid, Spin, Tag, Typography } from '@arco-design/web-react'
 import axios from 'axios'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../store/auth-context'
 
 const { Row, Col } = Grid
@@ -34,6 +34,7 @@ export default function Dashboard() {
             ) : health ? (
               <Descriptions
                 column={1}
+                labelStyle={{ textAlign: 'right', paddingRight: 20 }}
                 data={[
                   { label: '服务名', value: health.service },
                   { label: '运行环境', value: health.env },
@@ -57,14 +58,21 @@ export default function Dashboard() {
           <Card title="当前账号">
             <Descriptions
               column={1}
+              labelStyle={{ textAlign: 'right', paddingRight: 20 }}
               data={[
                 { label: '用户名', value: user?.username || '-' },
                 { label: '邮箱', value: user?.email || '-' },
-                { label: '状态', value: user?.status === 1 ? '启用' : '停用' },
+                {
+                  label: '状态',
+                  value: (
+                    <Tag color={user?.status === 1 ? 'green' : 'red'}>
+                      {user?.status === 1 ? '启用' : '停用'}
+                    </Tag>
+                  ),
+                },
                 {
                   label: '角色',
-                  value:
-                    (user?.roles || []).map((r) => r.name).join('、') || '-',
+                  value: (user?.roles || []).map((r) => r.name).join('、') || '-',
                 },
               ]}
             />

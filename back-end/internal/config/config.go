@@ -28,6 +28,7 @@ type ServerConfig struct {
 type JWTConfig struct {
 	Secret string `yaml:"secret"`
 	Expire int    `yaml:"expire"` // 小时
+	Issuer string `yaml:"issuer"` // token 签发者
 }
 
 type LogConfig struct {
@@ -80,7 +81,7 @@ func defaultConfig() *Config {
 			Port:           8080,
 			Mode:           "release",
 			RequestTimeout: 10,
-			JWT:            JWTConfig{Secret: "default-secret-change-me", Expire: 2},
+			JWT:            JWTConfig{Secret: "default-secret-change-me", Expire: 2, Issuer: "back-end"},
 			Log:            LogConfig{Level: "info", Path: ""},
 			Cors: CorsConfig{
 				Enable:       false,

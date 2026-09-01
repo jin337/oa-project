@@ -16,6 +16,7 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
@@ -179,11 +180,19 @@ export default function DeptManage() {
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          <Popconfirm focusLock title="确认删除该部门？" onOk={() => handleDelete(record)}>
-            <Button size="mini" status="danger">
-              删除
-            </Button>
-          </Popconfirm>
+          {record.children?.length > 0 ? (
+            <Tooltip content="存在子节点，请先删除子节点">
+              <Button size="mini" status="danger" disabled>
+                删除
+              </Button>
+            </Tooltip>
+          ) : (
+            <Popconfirm focusLock title="确认删除该部门？" onOk={() => handleDelete(record)}>
+              <Button size="mini" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
