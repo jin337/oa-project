@@ -48,6 +48,13 @@ var migrations = []migration{
 		},
 		Seed: seedInitData,
 	},
+	{
+		Version: 2,
+		Name:    "add_user_profile_table",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.UserProfile{})
+		},
+	},
 	// 示例：后续迭代追加增量迁移，只加表/加字段，不删数据
 	// {
 	// 	Version: 2,

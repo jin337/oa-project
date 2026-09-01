@@ -132,6 +132,46 @@ func UserUpdatePassword(c *gin.Context) {
 	response.OKMsg(c, "修改密码成功")
 }
 
+// UserProfileGet GET /api/v1/users/:id/profile 获取员工档案
+func UserProfileGet(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	profile, err := service.UserProfileGet(id)
+	if err != nil {
+		response.Fail(c, response.CodeNotFound, err.Error())
+		return
+	}
+	response.OK(c, profile)
+}
+
+// UserProfileUpdate PUT /api/v1/users/:id/profile 更新员工档案（仅本人或管理员）
+func UserProfileUpdate(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req model.UpdateProfileReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	profile, err := service.UserProfileUpdate(middleware.CurrentUserID(c), id, &req)
+	if err != nil {
+		code := response.CodeServerError
+		switch err.Error() {
+		case "无权更新他人档案":
+			code = response.CodeForbidden
+		case "用户不存在":
+			code = response.CodeNotFound
+		}
+		response.Fail(c, code, err.Error())
+		return
+	}
+	response.OK(c, profile)
+}
+
 // UserResetPassword PUT /api/v1/users/:id/reset-password 重置密码（管理员操作）
 func UserResetPassword(c *gin.Context) {
 	id, ok := parseID(c)

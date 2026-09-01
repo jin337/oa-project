@@ -19,6 +19,22 @@ type User struct {
 
 	Roles []*Role `gorm:"many2many:sys_user_role;" json:"roles,omitempty"`
 	Dept  *Dept   `gorm:"foreignKey:DeptID" json:"dept,omitempty"`
+	Profile *UserProfile `gorm:"foreignKey:UserID" json:"profile,omitempty"`
+}
+
+// UserProfile 员工档案：与用户一对一（1:1）关联，存储更丰富的个人信息
+type UserProfile struct {
+	BaseModel
+	UserID           uint   `gorm:"uniqueIndex;not null;comment:用户ID(1:1 外键)" json:"user_id"`
+	Nickname         string `gorm:"size:64;comment:姓名" json:"nickname"`
+	Avatar           string `gorm:"size:255;comment:头像" json:"avatar"`
+	Gender           int    `gorm:"default:1;comment:性别 1男 2女" json:"gender"`
+	Birthday         string `gorm:"size:10;comment:出生日期(YYYY-MM-DD)" json:"birthday"`
+	Address          string `gorm:"size:255;comment:联系地址" json:"address"`
+	JoinDate         string `gorm:"size:10;comment:入职日期(YYYY-MM-DD)" json:"join_date"`
+	EmergencyContact string `gorm:"size:64;comment:紧急联系人" json:"emergency_contact"`
+
+	User *User `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 // Role 角色
@@ -123,6 +139,16 @@ type UpdatePasswordReq struct {
 
 type ResetPasswordReq struct {
 	NewPassword string `json:"new_password" validate:"required,min=6,max=64" label:"新密码"`
+}
+
+type UpdateProfileReq struct {
+	Nickname         string `json:"nickname" validate:"omitempty,max=64" label:"姓名"`
+	Avatar           string `json:"avatar" validate:"omitempty,max=255" label:"头像"`
+	Gender           int    `json:"gender" validate:"omitempty,oneof=1 2" label:"性别"`
+	Birthday         string `json:"birthday" validate:"omitempty,max=10" label:"出生日期"`
+	Address          string `json:"address" validate:"omitempty,max=255" label:"联系地址"`
+	JoinDate         string `json:"join_date" validate:"omitempty,max=10" label:"入职日期"`
+	EmergencyContact string `json:"emergency_contact" validate:"omitempty,max=64" label:"紧急联系人"`
 }
 
 type RoleCreateReq struct {

@@ -35,6 +35,11 @@ export function updateUserPassword(id, data) {
   return request.put(`/users/${id}/password`, data)
 }
 
+// PUT /users/:id/profile 更新用户详细档案（UserProfile）
+export function updateUserProfile(id, data) {
+  return request.put(`/users/${id}/profile`, data)
+}
+
 // PUT /users/:id/reset-password 重置密码（管理员操作，无需旧密码）
 export function resetUserPassword(id, data) {
   return request.put(`/users/${id}/reset-password`, data)

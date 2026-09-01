@@ -8,6 +8,7 @@ import (
 	"back-end/internal/model"
 
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // UserList 用户分页列表：按当前操作者的数据范围过滤 dept_id
@@ -33,7 +34,7 @@ func UserList(curUserID uint, req *model.UserListReq) ([]model.User, int64, erro
 // UserDetail 用户详情
 func UserDetail(id uint) (*model.User, error) {
 	var user model.User
-	if err := database.DB.Preload("Roles").Preload("Dept").First(&user, id).Error; err != nil {
+	if err := database.DB.Preload("Roles").Preload("Dept").Preload("Profile").First(&user, id).Error; err != nil {
 		return nil, errors.New("用户不存在")
 	}
 	return &user, nil
@@ -170,6 +171,53 @@ func UserResetPassword(curUserID, id uint, req *model.ResetPasswordReq) error {
 		"password":   string(hash),
 		"updated_by": curUserID,
 	}).Error
+}
+
+// UserProfileGet 获取用户员工档案（1:1），不存在时返回空档案便于前端初始化
+func UserProfileGet(userID uint) (*model.UserProfile, error) {
+	var user model.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		return nil, errors.New("用户不存在")
+	}
+	var profile model.UserProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&profile).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &model.UserProfile{UserID: userID}, nil
+		}
+		return nil, err
+	}
+	return &profile, nil
+}
+
+// UserProfileUpdate 更新员工档案（upsert，不存在则自动创建）：仅本人或管理员可操作
+func UserProfileUpdate(curUserID, userID uint, req *model.UpdateProfileReq) (*model.UserProfile, error) {
+	if curUserID != userID && !isAdmin(curUserID) {
+		return nil, errors.New("无权更新他人档案")
+	}
+	var user model.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		return nil, errors.New("用户不存在")
+	}
+	var profile model.UserProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&profile).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		profile = model.UserProfile{UserID: userID}
+		profile.CreatedBy = curUserID
+	}
+	profile.Nickname = req.Nickname
+	profile.Avatar = req.Avatar
+	profile.Gender = req.Gender
+	profile.Birthday = req.Birthday
+	profile.Address = req.Address
+	profile.JoinDate = req.JoinDate
+	profile.EmergencyContact = req.EmergencyContact
+	profile.UpdatedBy = curUserID
+	if err := database.DB.Save(&profile).Error; err != nil {
+		return nil, err
+	}
+	return &profile, nil
 }
 
 // isAdmin 判断用户是否拥有管理员角色（code=admin）
