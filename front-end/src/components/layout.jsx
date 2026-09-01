@@ -1,5 +1,20 @@
-import { Avatar, Breadcrumb, Dropdown, Layout, Menu, Space, Typography } from '@arco-design/web-react'
-import { IconApps, IconDesktop, IconHome, IconSettings, IconStorage, IconUser } from '@arco-design/web-react/icon'
+import {
+  Avatar,
+  Breadcrumb,
+  Dropdown,
+  Layout,
+  Menu,
+  Space,
+  Typography,
+} from '@arco-design/web-react'
+import {
+  IconApps,
+  IconDesktop,
+  IconHome,
+  IconSettings,
+  IconStorage,
+  IconUser,
+} from '@arco-design/web-react/icon'
 import { useEffect, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { APP_NAME } from '../config/app.js'
@@ -116,7 +131,10 @@ export default function MainLayout() {
       <Layout className="h-full">
         <Header className="flex items-center gap-8 border-b border-gray-200 bg-white px-6">
           {/* 左侧：Logo + 系统标题，点击返回首页 */}
-          <div className="flex shrink-0 cursor-pointer items-center gap-2" onClick={() => navigate('/')}>
+          <div
+            className="flex shrink-0 cursor-pointer items-center gap-2"
+            onClick={() => navigate('/')}
+          >
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#165dff] text-lg text-white">
               <IconStorage />
             </div>
@@ -132,7 +150,8 @@ export default function MainLayout() {
                 navigate(key)
               }
             }}
-            className="min-w-0 flex-1">
+            className="min-w-0 flex-1"
+          >
             <MenuItem key="/" icon={<IconHome />}>
               工作台
             </MenuItem>
@@ -145,7 +164,9 @@ export default function MainLayout() {
               <Avatar size={32} className="bg-[#165dff]!">
                 <IconUser />
               </Avatar>
-              <Typography.Text>{user?.username || '加载中'}</Typography.Text>
+              <Typography.Text>
+                {user?.profile?.nickname || user?.username || '加载中'}
+              </Typography.Text>
             </Space>
           </Dropdown>
         </Header>
@@ -157,7 +178,9 @@ export default function MainLayout() {
           {breadcrumbItems.length > 1 && (
             <Breadcrumb className="mb-3">
               {breadcrumbItems.map((item, idx) => (
-                <Breadcrumb.Item key={item.path || item.title || idx}>{item.isRoot ? <IconHome /> : item.title}</Breadcrumb.Item>
+                <Breadcrumb.Item key={item.path || item.title || idx}>
+                  {item.isRoot ? <IconHome /> : item.title}
+                </Breadcrumb.Item>
               ))}
             </Breadcrumb>
           )}
