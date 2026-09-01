@@ -43,7 +43,6 @@ export function AuthProvider({ children }) {
     setMenus([])
     setPerms([])
     setMenusLoaded(false)
-    window.location.reload()
   }, [])
 
   // 判断是否拥有某个权限标识（按钮级权限）

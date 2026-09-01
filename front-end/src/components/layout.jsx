@@ -99,7 +99,10 @@ export default function MainLayout() {
   const profileMenu = (
     <Menu
       onClickMenuItem={(key) => {
-        if (key === 'logout') logout()
+        if (key === 'logout') {
+          logout()
+          navigate('/login', { replace: true })
+        }
         if (key === 'profile') navigate('/profile')
       }}
     >
