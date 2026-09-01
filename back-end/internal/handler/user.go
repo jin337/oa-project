@@ -103,3 +103,56 @@ func UserAssignRoles(c *gin.Context) {
 	}
 	response.OKMsg(c, "分配角色成功")
 }
+
+// UserUpdatePassword PUT /api/v1/users/:id/password 修改密码（仅限本人）
+func UserUpdatePassword(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req model.UpdatePasswordReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	err := service.UserUpdatePassword(middleware.CurrentUserID(c), id, &req)
+	if err != nil {
+		code := response.CodeServerError
+		switch err.Error() {
+		case "无权修改他人密码":
+			code = response.CodeForbidden
+		case "用户不存在":
+			code = response.CodeNotFound
+		case "旧密码错误":
+			code = response.CodeParamError
+		}
+		response.Fail(c, code, err.Error())
+		return
+	}
+	response.OKMsg(c, "修改密码成功")
+}
+
+// UserResetPassword PUT /api/v1/users/:id/reset-password 重置密码（管理员操作）
+func UserResetPassword(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req model.ResetPasswordReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	err := service.UserResetPassword(middleware.CurrentUserID(c), id, &req)
+	if err != nil {
+		code := response.CodeServerError
+		if err.Error() == "无权限：仅管理员可重置密码" {
+			code = response.CodeForbidden
+		} else if err.Error() == "用户不存在" {
+			code = response.CodeNotFound
+		}
+		response.Fail(c, code, err.Error())
+		return
+	}
+	response.OKMsg(c, "重置密码成功")
+}

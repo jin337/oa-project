@@ -116,6 +116,15 @@ type AssignRolesReq struct {
 	RoleIDs []uint `json:"role_ids" validate:"required,min=1" label:"角色ID列表"`
 }
 
+type UpdatePasswordReq struct {
+	OldPassword string `json:"old_password" validate:"required,min=6,max=64" label:"旧密码"`
+	NewPassword string `json:"new_password" validate:"required,min=6,max=64" label:"新密码"`
+}
+
+type ResetPasswordReq struct {
+	NewPassword string `json:"new_password" validate:"required,min=6,max=64" label:"新密码"`
+}
+
 type RoleCreateReq struct {
 	Name      string `json:"name" validate:"required,min=2,max=64" label:"角色名称"`
 	Code      string `json:"code" validate:"required,min=2,max=64" label:"角色编码"`

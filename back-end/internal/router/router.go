@@ -37,6 +37,8 @@ func Setup() *gin.Engine {
 		users.PUT("/:id", handler.UserUpdate)
 		users.DELETE("/:id", handler.UserDelete)
 		users.PUT("/:id/roles", handler.UserAssignRoles) // 用户-角色 多对多
+		users.PUT("/:id/password", handler.UserUpdatePassword)             // 修改密码（仅限本人）
+		users.PUT("/:id/reset-password", handler.UserResetPassword) // 重置密码（管理员操作）
 	}
 
 	// 角色管理

@@ -34,3 +34,8 @@ export function assignUserRoles(id, roleIds) {
 export function updateUserPassword(id, data) {
   return request.put(`/users/${id}/password`, data)
 }
+
+// PUT /users/:id/reset-password 重置密码（管理员操作，无需旧密码）
+export function resetUserPassword(id, data) {
+  return request.put(`/users/${id}/reset-password`, data)
+}

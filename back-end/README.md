@@ -93,6 +93,8 @@ task --list      # 查看全部任务
 | GET/POST | /api/v1/users | 用户分页列表（数据范围过滤）/ 新增 |
 | GET/PUT/DELETE | /api/v1/users/:id | 用户详情/修改/删除 |
 | PUT | /api/v1/users/:id/roles | 用户分配角色（多对多） |
+| PUT | /api/v1/users/:id/password | 修改密码（仅限本人，需校验旧密码） |
+| PUT | /api/v1/users/:id/reset-password | 重置密码（管理员操作，无需旧密码） |
 | GET/POST | /api/v1/roles | 角色分页列表 / 新增 |
 | GET/PUT/DELETE | /api/v1/roles/:id | 角色详情/修改/删除 |
 | PUT | /api/v1/roles/:id/menus | 角色分配菜单（多对多） |

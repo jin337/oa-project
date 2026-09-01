@@ -33,10 +33,10 @@ const ALL_COL_KEYS = ['id', 'username', 'dept', 'roles', 'email', 'phone', 'stat
 
 // 表格密度选项
 const SIZE_OPTIONS = [
-  { label: '宽松', value: 'large' },
   { label: '默认', value: 'default' },
   { label: '中等', value: 'middle' },
   { label: '紧凑', value: 'small' },
+  { label: '迷你', value: 'mini' },
 ]
 
 // 角色标签颜色池（Arco 预设色），按角色 ID 取模分配，保证同一角色颜色稳定
@@ -110,6 +110,12 @@ export default function UserManage() {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
+
+  // 重置密码弹窗
+  const [resetModalVisible, setResetModalVisible] = useState(false)
+  const [resetTarget, setResetTarget] = useState(null)
+  const [resetSaving, setResetSaving] = useState(false)
+  const [resetForm] = Form.useForm()
 
   const fetchList = useCallback(
     async (p = page, s = size) => {
@@ -219,6 +225,28 @@ export default function UserManage() {
     }
   }
 
+  // 打开重置密码弹窗
+  const openResetPassword = (record) => {
+    setResetTarget(record)
+    resetForm.setFieldsValue({ new_password: '' })
+    setResetModalVisible(true)
+  }
+
+  // 提交重置密码
+  const handleResetPassword = async () => {
+    const values = await resetForm.validate()
+    setResetSaving(true)
+    try {
+      await userApi.resetUserPassword(resetTarget.id, { new_password: values.new_password })
+      Message.success('重置密码成功')
+      setResetModalVisible(false)
+    } catch (e) {
+      // 错误已在请求层提示
+    } finally {
+      setResetSaving(false)
+    }
+  }
+
   // 表格密度下拉
   const sizeMenu = (
     <Menu onClickMenuItem={(key) => setTableSize(key)}>
@@ -275,11 +303,14 @@ export default function UserManage() {
     {
       key: 'action',
       title: '操作',
-      width: 160,
+      width: 220,
       render: (_, record) => (
         <Space>
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
+          </Button>
+          <Button size="mini" onClick={() => openResetPassword(record)}>
+            重置密码
           </Button>
           <Popconfirm focusLock title="确认删除该用户？" onOk={() => handleDelete(record)}>
             <Button size="mini" status="danger">
@@ -453,6 +484,27 @@ export default function UserManage() {
               </FormItem>
             </Col>
           </Row>
+        </Form>
+      </Modal>
+      {/* 重置密码弹窗 */}
+      <Modal
+        title={`重置密码 - ${resetTarget?.username || ''}`}
+        visible={resetModalVisible}
+        onOk={handleResetPassword}
+        confirmLoading={resetSaving}
+        onCancel={() => setResetModalVisible(false)}
+        unmountOnExit
+        className="w-110! max-w-[90vw]">
+        <Form form={resetForm} layout="vertical" autoComplete="off">
+          <FormItem
+            label="新密码"
+            field="new_password"
+            rules={[
+              { required: true, message: '请输入新密码' },
+              { minLength: 6, maxLength: 64, message: '长度 6-64 个字符' },
+            ]}>
+            <Input.Password placeholder="请输入新密码" />
+          </FormItem>
         </Form>
       </Modal>
     </Card>

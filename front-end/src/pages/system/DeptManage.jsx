@@ -32,10 +32,10 @@ const ALL_COL_KEYS = ['name', 'leader', 'sort', 'status', 'created_at']
 
 // 表格密度选项
 const SIZE_OPTIONS = [
-  { label: '宽松', value: 'large' },
   { label: '默认', value: 'default' },
   { label: '中等', value: 'middle' },
   { label: '紧凑', value: 'small' },
+  { label: '迷你', value: 'mini' },
 ]
 
 function toTreeData(depts) {

@@ -131,6 +131,61 @@ func UserAssignRoles(userID uint, roleIDs []uint) error {
 	return bindRoles(userID, roleIDs)
 }
 
+// UserUpdatePassword 修改密码（仅限本人）：校验旧密码后加密新密码入库
+func UserUpdatePassword(curUserID, id uint, req *model.UpdatePasswordReq) error {
+	if curUserID != id {
+		return errors.New("无权修改他人密码")
+	}
+	var user model.User
+	if err := database.DB.First(&user, id).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.OldPassword)); err != nil {
+		return errors.New("旧密码错误")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("密码加密失败")
+	}
+	return database.DB.Model(&user).Updates(map[string]interface{}{
+		"password":   string(hash),
+		"updated_by": curUserID,
+	}).Error
+}
+
+// UserResetPassword 重置密码（管理员操作）：无需校验旧密码，直接加密新密码入库
+func UserResetPassword(curUserID, id uint, req *model.ResetPasswordReq) error {
+	if !isAdmin(curUserID) {
+		return errors.New("无权限：仅管理员可重置密码")
+	}
+	var user model.User
+	if err := database.DB.First(&user, id).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("密码加密失败")
+	}
+	return database.DB.Model(&user).Updates(map[string]interface{}{
+		"password":   string(hash),
+		"updated_by": curUserID,
+	}).Error
+}
+
+// isAdmin 判断用户是否拥有管理员角色（code=admin）
+func isAdmin(userID uint) bool {
+	var user model.User
+	if err := database.DB.Preload("Roles").First(&user, userID).Error; err != nil {
+		return false
+	}
+	for _, r := range user.Roles {
+		if r.Code == "admin" {
+			return true
+		}
+	}
+	return false
+}
+
 func bindRoles(userID uint, roleIDs []uint) error {
 	var user model.User
 	if err := database.DB.First(&user, userID).Error; err != nil {
