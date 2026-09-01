@@ -23,7 +23,7 @@ export default function Dashboard() {
       <Card>
         <Typography.Title heading={6}>欢迎，{user?.username || '用户'}</Typography.Title>
         <Typography.Text type="secondary">
-          这是承接 Go + Gin RBAC 后端的前端工作台，左侧菜单由后端接口动态返回。
+          这是承接 Go + Gin 后端的前端工作台，顶部菜单由后端接口动态返回。
         </Typography.Text>
       </Card>
       <Row gutter={16}>
