@@ -9,6 +9,8 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [menus, setMenus] = useState([])
   const [perms, setPerms] = useState([])
+  // 菜单数据是否已从后端加载完成（用于路由权限校验，避免未加载时误判为无权限）
+  const [menusLoaded, setMenusLoaded] = useState(false)
 
   // 登录：保存 token 并拉取用户资料（含菜单树与权限标识）
   const login = useCallback(async (form) => {
@@ -18,15 +20,20 @@ export function AuthProvider({ children }) {
     setUser(res.data.user)
     await refreshProfile()
     return res.data
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 拉取当前用户资料：{ user, menus, perms }
   const refreshProfile = useCallback(async () => {
-    const res = await authApi.getProfile()
-    setUser(res.data.user)
-    setMenus(res.data.menus || [])
-    setPerms(res.data.perms || [])
-    return res.data
+    try {
+      const res = await authApi.getProfile()
+      setUser(res.data.user)
+      setMenus(res.data.menus || [])
+      setPerms(res.data.perms || [])
+      return res.data
+    } finally {
+      setMenusLoaded(true)
+    }
   }, [])
 
   const logout = useCallback(() => {
@@ -35,6 +42,7 @@ export function AuthProvider({ children }) {
     setUser(null)
     setMenus([])
     setPerms([])
+    setMenusLoaded(false)
     window.location.reload()
   }, [])
 
@@ -43,7 +51,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ token, user, menus, perms, login, logout, refreshProfile, hasPerm }}
+      value={{ token, user, menus, perms, menusLoaded, login, logout, refreshProfile, hasPerm }}
     >
       {children}
     </AuthContext.Provider>

@@ -21,6 +21,7 @@ import {
   Spin,
   Table,
   Tag,
+  Tooltip,
   TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
@@ -380,11 +381,19 @@ export default function UserManage() {
           <Button size="mini" onClick={() => openResetPassword(record)}>
             重置密码
           </Button>
-          <Popconfirm focusLock title="确认删除该用户？" onOk={() => handleDelete(record)}>
-            <Button size="mini" status="danger">
-              删除
-            </Button>
-          </Popconfirm>
+          {record.id === 1 ? (
+            <Tooltip content="内置管理员不可删除">
+              <Button size="mini" status="danger" disabled>
+                删除
+              </Button>
+            </Tooltip>
+          ) : (
+            <Popconfirm focusLock title="确认删除该用户？" onOk={() => handleDelete(record)}>
+              <Button size="mini" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },

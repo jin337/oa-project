@@ -17,6 +17,7 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Tree,
   Typography,
 } from '@arco-design/web-react'
@@ -305,11 +306,19 @@ export default function RoleManage() {
               绑定部门
             </Button>
           )}
-          <Popconfirm focusLock title="确认删除该角色？" onOk={() => handleDelete(record)}>
-            <Button size="mini" status="danger">
-              删除
-            </Button>
-          </Popconfirm>
+          {record.code === 'admin' ? (
+            <Tooltip content="超级管理员角色不可删除">
+              <Button size="mini" status="danger" disabled>
+                删除
+              </Button>
+            </Tooltip>
+          ) : (
+            <Popconfirm focusLock title="确认删除该角色？" onOk={() => handleDelete(record)}>
+              <Button size="mini" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },

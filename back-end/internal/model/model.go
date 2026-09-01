@@ -51,6 +51,11 @@ type Role struct {
 	Depts []*Dept `gorm:"many2many:sys_role_dept;" json:"depts,omitempty"` // 自定义数据范围绑定的部门
 }
 
+// 角色编码常量
+const (
+	RoleCodeAdmin = "admin" // 超级管理员角色编码
+)
+
 // 数据范围常量
 const (
 	DataScopeAll          = 1 // 全部数据

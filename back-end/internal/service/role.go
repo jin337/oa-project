@@ -115,7 +115,7 @@ func RoleDelete(id uint) error {
 	if err := database.DB.First(&role, id).Error; err != nil {
 		return errors.New("角色不存在")
 	}
-	if role.Code == "admin" {
+	if role.Code == model.RoleCodeAdmin {
 		return errors.New("内置管理员角色不可删除")
 	}
 	return database.DB.Delete(&model.Role{}, id).Error

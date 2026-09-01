@@ -155,7 +155,7 @@ func seedInitData(db *gorm.DB) error {
 	}
 
 	// 角色
-	adminRole := model.Role{Name: "超级管理员", Code: "admin", Sort: 1, Status: 1, DataScope: model.DataScopeAll, Remark: "拥有全部权限"}
+	adminRole := model.Role{Name: "超级管理员", Code: model.RoleCodeAdmin, Sort: 1, Status: 1, DataScope: model.DataScopeAll, Remark: "拥有全部权限"}
 	commonRole := model.Role{Name: "普通员工", Code: "common", Sort: 2, Status: 1, DataScope: model.DataScopeDept, Remark: "仅本部门数据"}
 	if err := db.Create([]*model.Role{&adminRole, &commonRole}).Error; err != nil {
 		return err

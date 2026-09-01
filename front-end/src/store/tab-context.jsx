@@ -6,6 +6,9 @@ const HOME_PATH = '/'
 // 固定首页页签：禁止关闭，元信息以此为唯一数据源
 const HOME_TAB = { path: HOME_PATH, title: '工作台', icon: 'home', closable: false }
 
+// 不生成页签的系统路径（如无权限错误页，仅作临时提示，无需页签切换）
+const NO_TAB_PATHS = new Set(['/403'])
+
 const TabContext = createContext(null)
 
 // 扁平化后端菜单树 -> Map<path, { title, icon }>
@@ -48,32 +51,59 @@ export function TabProvider({ children }) {
     [metaMap]
   )
 
-  // 自动捕获：路由变化时，新页面自动加入页签（已存在则跳过）
+  // 判断路径是否可访问：首页 / 用户菜单树中存在的路径
+  // 用于过滤被 RequirePermission 拦截的无权限路由，避免生成无效页签
+  const isPathAccessible = useCallback(
+    (path) => path === HOME_PATH || metaMap.has(path),
+    [metaMap]
+  )
+
+  // 自动捕获：路由变化时，可访问的新页面自动加入页签（已存在则跳过）
   useEffect(() => {
     const path = location.pathname
+    // 无权限路径不生成页签（RequirePermission 会将其重定向到 /403）
+    if (!isPathAccessible(path)) return
+    // 错误提示页（如 /403）不生成页签
+    if (NO_TAB_PATHS.has(path)) return
     setTabs((prev) => {
       if (prev.some((t) => t.path === path)) return prev
       const meta = resolveMeta(path)
       return [...prev, { path, title: meta.title, icon: meta.icon, closable: true }]
     })
-  }, [location.pathname, resolveMeta])
+  }, [location.pathname, resolveMeta, isPathAccessible])
 
-  // 菜单树加载完成后，修正刷新时因菜单未就绪而回退为路径的页签标题
+  // 菜单树变化时统一处理：
+  // 1) 清理无权限路径的无效页签（防止 RequirePermission 重定向前被误添加）
+  // 2) 修正刷新时因菜单未就绪而回退为路径的页签标题
   useEffect(() => {
     setTabs((prev) => {
       let changed = false
-      const next = prev.map((t) => {
-        if (t.path === HOME_PATH || t.title !== t.path) return t
-        const meta = metaMap.get(t.path)
-        if (meta) {
-          changed = true
-          return { ...t, title: meta.title, icon: meta.icon }
+      const next = []
+      for (const t of prev) {
+        // 固定首页始终保留
+        if (t.path === HOME_PATH) {
+          next.push(t)
+          continue
         }
-        return t
-      })
+        // 无权限路径的页签：清理
+        if (!isPathAccessible(t.path)) {
+          changed = true
+          continue
+        }
+        // 标题回退为路径的页签：尝试从菜单树修正
+        if (t.title === t.path) {
+          const meta = metaMap.get(t.path)
+          if (meta) {
+            changed = true
+            next.push({ ...t, title: meta.title, icon: meta.icon })
+            continue
+          }
+        }
+        next.push(t)
+      }
       return changed ? next : prev
     })
-  }, [metaMap])
+  }, [metaMap, isPathAccessible])
 
   // 关闭单个页签；若关闭的是当前激活页签，跳转到相邻页签或首页
   const closeTab = useCallback(

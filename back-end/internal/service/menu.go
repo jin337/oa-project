@@ -140,7 +140,7 @@ func checkMenuExists(id uint) error {
 // adminRole 查询超级管理员角色（code=admin）；不存在时返回 nil（如初始化前）
 func adminRole() *model.Role {
 	var role model.Role
-	if err := database.DB.Where("code = ?", "admin").First(&role).Error; err != nil {
+	if err := database.DB.Where("code = ?", model.RoleCodeAdmin).First(&role).Error; err != nil {
 		return nil
 	}
 	return &role

@@ -2,9 +2,9 @@ import { Avatar, Breadcrumb, Dropdown, Layout, Menu, Space, Typography } from '@
 import { IconApps, IconDesktop, IconHome, IconSettings, IconStorage, IconUser } from '@arco-design/web-react/icon'
 import { useEffect, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { APP_NAME } from '../config/app.js'
 import { useAuth } from '../store/auth-context'
 import { TabProvider } from '../store/tab-context'
-import { APP_NAME } from '../config/app.js'
 import TabsBar from './tabs-bar'
 
 const Header = Layout.Header
@@ -106,8 +106,6 @@ export default function MainLayout() {
           // 排除首页（path=/），避免与根节点重复
           .filter((m) => m.path !== '/')
           .forEach((m) => items.push({ title: m.name, path: m.path || null }))
-      } else {
-        items.push({ title: location.pathname, path: null })
       }
     }
     return items
