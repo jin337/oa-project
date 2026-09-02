@@ -294,7 +294,7 @@ export default function RoleManage() {
       title: '操作',
       width: 220,
       render: (_, record) => (
-        <Space wrap>
+        <Space>
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>

@@ -204,7 +204,7 @@ export default function ApplicationManage() {
       title: '操作',
       width: 390,
       render: (_, record) => (
-        <Space wrap>
+        <Space>
           <Button size="mini" onClick={() => openSubPage(record, 'tables', '表管理')}>
             表管理
           </Button>
