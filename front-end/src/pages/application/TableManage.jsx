@@ -3,6 +3,7 @@ import {
   Card,
   Checkbox,
   Dropdown,
+  Empty,
   Form,
   Grid,
   Input,
@@ -15,6 +16,8 @@ import {
   Space,
   Switch,
   Table,
+  Tabs,
+  Tooltip,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -26,6 +29,7 @@ const FormItem = Form.Item
 const Row = Grid.Row
 const Col = Grid.Col
 const MenuItem = Menu.Item
+const TabPane = Tabs.TabPane
 
 const MODULE_LABEL = '表管理'
 
@@ -70,10 +74,38 @@ const EMPTY_FORM = {
   comment: '',
 }
 
+// 系统保留字段：不可编辑、不可删除，提交时自动从 payload 中剔除
+const RESERVED_FIELDS = new Set([
+  'id',
+  'created_at',
+  'updated_at',
+  'created_by',
+  'updated_by',
+  'deleted_at',
+])
+
+function isReservedField(name) {
+  return RESERVED_FIELDS.has(String(name).toLowerCase())
+}
+
+// 解析应用的主表与子表：sub_table_name 可能为逗号分隔字符串
+function parseTables(app) {
+  const main = app?.table_name?.trim()
+  const subs = (app?.sub_table_name || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return main ? [main, ...subs] : subs
+}
+
 export default function TableManage() {
   const location = useLocation()
   const { id } = useParams()
   const { tabs, activeTab, addTab, updateTab } = useTabs()
+
+  // 多表管理：所有表名列表 + 当前选中表
+  const [tables, setTables] = useState([])
+  const [currentTable, setCurrentTable] = useState('')
 
   // 列表与分页
   const [list, setList] = useState([])
@@ -96,16 +128,21 @@ export default function TableManage() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
 
-  // 挂载时确保页签存在，并通过接口获取应用名后更新标题为「应用名 - 模块名」
+  // 挂载时：确保页签存在、获取应用详情（解析表名 + 更新页签标题）
   useEffect(() => {
     addTab({ path: location.pathname, title: MODULE_LABEL })
     let cancelled = false
     applicationApi
       .getApplication(id)
       .then((res) => {
-        if (!cancelled && res.data?.name) {
-          updateTab(location.pathname, { title: `${res.data.name} - ${MODULE_LABEL}` })
+        if (cancelled) return
+        const app = res.data
+        if (app?.name) {
+          updateTab(location.pathname, { title: `${app.name} - ${MODULE_LABEL}` })
         }
+        const parsed = parseTables(app)
+        setTables(parsed)
+        if (parsed.length) setCurrentTable(parsed[0])
       })
       .catch(() => {})
     return () => {
@@ -119,11 +156,12 @@ export default function TableManage() {
 
   const fetchList = useCallback(
     async (p = page, s = size) => {
+      if (!currentTable) return
       setLoading(true)
       try {
         const params = { page: p, size: s }
         if (appliedKeyword) params.name = appliedKeyword
-        const res = await applicationApi.listTableFields(id, params)
+        const res = await applicationApi.listTableFields(id, params, currentTable)
         setList(res.data.list || [])
         setTotal(res.data.total || 0)
       } catch (e) {
@@ -132,12 +170,21 @@ export default function TableManage() {
         setLoading(false)
       }
     },
-    [id, page, size, appliedKeyword],
+    [id, page, size, appliedKeyword, currentTable],
   )
 
+  // 切换表或分页变化时重新拉取
   useEffect(() => {
     fetchList()
   }, [page, size, fetchList])
+
+  // 切换表 Tab：回到第一页并清空搜索条件
+  const handleTableSwitch = (tableName) => {
+    setCurrentTable(tableName)
+    setKeyword('')
+    setAppliedKeyword('')
+    setPage(1)
+  }
 
   // 搜索：生效当前草稿条件，回到第一页
   const handleSearch = () => {
@@ -173,19 +220,23 @@ export default function TableManage() {
 
   const handleSave = async () => {
     const values = await form.validate()
+    // 提交净化：剔除系统保留字段，防止误传覆盖
+    const cleanValues = Object.fromEntries(
+      Object.entries(values).filter(([k]) => !isReservedField(k)),
+    )
     const payload = {
-      ...values,
-      not_null: values.not_null ? 1 : 0,
-      length: values.length ? Number(values.length) : undefined,
+      ...cleanValues,
+      not_null: cleanValues.not_null ? 1 : 0,
+      length: cleanValues.length ? Number(cleanValues.length) : undefined,
     }
     if (!payload.length) delete payload.length
     setSaving(true)
     try {
       if (editing) {
-        await applicationApi.updateTableField(id, editing.id, payload)
+        await applicationApi.updateTableField(id, editing.id, payload, currentTable)
         Message.success('保存成功')
       } else {
-        await applicationApi.createTableField(id, payload)
+        await applicationApi.createTableField(id, payload, currentTable)
         Message.success('创建成功')
       }
       setModalVisible(false)
@@ -199,7 +250,7 @@ export default function TableManage() {
 
   const handleDelete = async (record) => {
     try {
-      await applicationApi.deleteTableField(id, record.id)
+      await applicationApi.deleteTableField(id, record.id, currentTable)
       Message.success('删除成功')
       fetchList()
     } catch (e) {
@@ -228,7 +279,7 @@ export default function TableManage() {
   const columns = [
     { key: 'name', title: '字段名称', dataIndex: 'name' },
     { key: 'type', title: '类型', dataIndex: 'type' },
-    { key: 'length', title: '长度', dataIndex: 'length',  render: (v) => v || '-' },
+    { key: 'length', title: '长度', dataIndex: 'length', render: (v) => v || '-' },
     {
       key: 'not_null',
       title: '不可为空',
@@ -248,18 +299,37 @@ export default function TableManage() {
       key: 'action',
       title: '操作',
       width: 140,
-      render: (_, record) => (
-        <Space>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm focusLock title="确认删除该字段？" onOk={() => handleDelete(record)}>
-            <Button size="mini" status="danger">
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record) => {
+        const reserved = isReservedField(record.name)
+        return (
+          <Space>
+            {reserved ? (
+              <Tooltip content="系统保留字段，不可编辑">
+                <Button size="mini" disabled>
+                  编辑
+                </Button>
+              </Tooltip>
+            ) : (
+              <Button size="mini" onClick={() => openEdit(record)}>
+                编辑
+              </Button>
+            )}
+            {reserved ? (
+              <Tooltip content="系统保留字段，不可删除">
+                <Button size="mini" status="danger" disabled>
+                  删除
+                </Button>
+              </Tooltip>
+            ) : (
+              <Popconfirm focusLock title="确认删除该字段？" onOk={() => handleDelete(record)}>
+                <Button size="mini" status="danger">
+                  删除
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
+        )
+      },
     },
   ]
 
@@ -282,64 +352,84 @@ export default function TableManage() {
 
   return (
     <Card title={cardTitle}>
-      {/* 搜索区域 */}
-      <div className="mb-3">
-        <Space wrap>
-          <Input
-            className="w-55!"
-            placeholder="按字段名称搜索"
-            allowClear
-            value={keyword}
-            onChange={setKeyword}
-            onPressEnter={handleSearch}
+      {/* 多表切换 Tab 栏（隐藏内容区，仅作表选择器） */}
+      {tables.length > 0 && (
+        <Tabs
+          type="rounded"
+          activeTab={currentTable}
+          onChange={handleTableSwitch}
+          className="mb-3 [&_.arco-tabs-content]:hidden"
+        >
+          {tables.map((t, i) => (
+            <TabPane key={t} title={`${i === 0 ? '主表' : '子表'}：${t}`} />
+          ))}
+        </Tabs>
+      )}
+
+      {tables.length === 0 ? (
+        <Empty description="未配置数据表，请先在页面配置中设置主表或子表" />
+      ) : (
+        <>
+          {/* 搜索区域 */}
+          <div className="mb-3">
+            <Space wrap>
+              <Input
+                className="w-55!"
+                placeholder="按字段名称搜索"
+                allowClear
+                value={keyword}
+                onChange={setKeyword}
+                onPressEnter={handleSearch}
+              />
+              <Button type="primary" onClick={handleSearch}>
+                搜索
+              </Button>
+              <Button onClick={handleReset}>重置</Button>
+            </Space>
+          </div>
+
+          {/* 表格工具栏 */}
+          <div className="mb-3 flex items-center justify-between">
+            <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
+              新增字段
+            </Button>
+            <Space>
+              <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
+                刷新
+              </Button>
+              <Dropdown droplist={sizeMenu} position="br">
+                <Button size="mini" icon={<IconList />}>
+                  密度
+                </Button>
+              </Dropdown>
+              <Popover content={colSettingsPopover} position="br" trigger="click">
+                <Button size="mini" icon={<IconSettings />}>
+                  列设置
+                </Button>
+              </Popover>
+            </Space>
+          </div>
+
+          <Table
+            rowKey="id"
+            columns={visibleColumns}
+            data={list}
+            loading={loading}
+            size={tableSize}
+            pagination={{
+              current: page,
+              pageSize: size,
+              total,
+              showTotal: true,
+              sizeCanChange: true,
+              onChange: (p, s) => {
+                setPage(p)
+                setSize(s)
+              },
+            }}
           />
-          <Button type="primary" onClick={handleSearch}>
-            搜索
-          </Button>
-          <Button onClick={handleReset}>重置</Button>
-        </Space>
-      </div>
-
-      {/* 表格工具栏 */}
-      <div className="mb-3 flex items-center justify-between">
-        <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
-          新增字段
-        </Button>
-        <Space>
-          <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
-            刷新
-          </Button>
-          <Dropdown droplist={sizeMenu} position="br">
-            <Button size="mini" icon={<IconList />}>
-              密度
-            </Button>
-          </Dropdown>
-          <Popover content={colSettingsPopover} position="br" trigger="click">
-            <Button size="mini" icon={<IconSettings />}>
-              列设置
-            </Button>
-          </Popover>
-        </Space>
-      </div>
-
-      <Table
-        rowKey="id"
-        columns={visibleColumns}
-        data={list}
-        loading={loading}
-        size={tableSize}
-        pagination={{
-          current: page,
-          pageSize: size,
-          total,
-          showTotal: true,
-          sizeCanChange: true,
-          onChange: (p, s) => {
-            setPage(p)
-            setSize(s)
-          },
-        }}
-      />
+        </>
+      )}
 
       <Modal
         title={editing ? '编辑字段' : '新增字段'}

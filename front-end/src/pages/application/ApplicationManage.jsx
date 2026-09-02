@@ -250,7 +250,7 @@ export default function ApplicationManage() {
         <Space wrap>
           <Input
             className="w-55!"
-            placeholder="按页面名称 / 唯一标识搜索"
+            placeholder="按页面名称 / 页面编码搜索"
             allowClear
             value={keyword}
             onChange={setKeyword}

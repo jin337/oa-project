@@ -27,22 +27,26 @@ export function deleteApplication(id) {
 
 // ========== 表字段管理（/application/:appId/fields） ==========
 
-// GET /application/:appId/fields 字段列表
-export function listTableFields(appId, params) {
-  return request.get(`/application/${appId}/fields`, { params })
+// GET /application/:appId/fields?table_name=xxx 字段列表
+export function listTableFields(appId, params, tableName) {
+  return request.get(`/application/${appId}/fields`, {
+    params: { ...params, table_name: tableName },
+  })
 }
 
-// POST /application/:appId/fields 新增字段
-export function createTableField(appId, data) {
-  return request.post(`/application/${appId}/fields`, data)
+// POST /application/:appId/fields 新增字段（body 携带 table_name）
+export function createTableField(appId, data, tableName) {
+  return request.post(`/application/${appId}/fields`, { ...data, table_name: tableName })
 }
 
-// PUT /application/:appId/fields/:fieldId 修改字段
-export function updateTableField(appId, fieldId, data) {
-  return request.put(`/application/${appId}/fields/${fieldId}`, data)
+// PUT /application/:appId/fields/:fieldId 修改字段（body 携带 table_name）
+export function updateTableField(appId, fieldId, data, tableName) {
+  return request.put(`/application/${appId}/fields/${fieldId}`, { ...data, table_name: tableName })
 }
 
-// DELETE /application/:appId/fields/:fieldId 删除字段
-export function deleteTableField(appId, fieldId) {
-  return request.delete(`/application/${appId}/fields/${fieldId}`)
+// DELETE /application/:appId/fields/:fieldId?table_name=xxx 删除字段
+export function deleteTableField(appId, fieldId, tableName) {
+  return request.delete(`/application/${appId}/fields/${fieldId}`, {
+    params: { table_name: tableName },
+  })
 }
