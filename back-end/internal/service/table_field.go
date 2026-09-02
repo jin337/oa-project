@@ -48,16 +48,29 @@ func isValidFieldName(name string) bool {
 	return isValidTableName(name)
 }
 
-// getApplicationBizTable 校验页面配置存在并返回其物理业务表名（含配置表前缀）
-func getApplicationBizTable(appID uint) (string, error) {
+// containsTable 判断 tableName 是否在逗号分隔的表名列表中
+func containsTable(subTableName, tableName string) bool {
+	for _, s := range strings.Split(subTableName, ",") {
+		if strings.TrimSpace(s) == tableName {
+			return true
+		}
+	}
+	return false
+}
+
+// getApplicationBizTableBy 校验 tableName 属于该页面配置（主表或子表），返回带前缀物理表名
+func getApplicationBizTableBy(appID uint, tableName string) (string, error) {
+	if !isValidTableName(tableName) {
+		return "", errors.New("非法的表名")
+	}
 	app, err := ApplicationDetail(appID)
 	if err != nil {
 		return "", err
 	}
-	if app.TableName == "" {
-		return "", errors.New("页面配置未绑定业务表")
+	if app.TableName != tableName && !containsTable(app.SubTableName, tableName) {
+		return "", errors.New("表不属于该页面配置")
 	}
-	return bizTableName(app.TableName), nil
+	return bizTableName(tableName), nil
 }
 
 // columnExists 检查业务表列是否存在
@@ -126,13 +139,13 @@ func columnDefSQL(col *model.TableColumn) string {
 	return strings.Join(parts, " ")
 }
 
-// TableFieldList 查询物理业务表实际存在的列（含基础列与用户自定义列），支持按字段名模糊匹配与分页
-func TableFieldList(appID uint, req *model.TableFieldListReq) ([]model.TableColumn, int64, error) {
-	tableName, err := getApplicationBizTable(appID)
+// TableFieldList 查询指定物理业务表（主表或子表）实际存在的列，支持按字段名模糊匹配与分页
+func TableFieldList(appID uint, tableName string, req *model.TableFieldListReq) ([]model.TableColumn, int64, error) {
+	real, err := getApplicationBizTableBy(appID, tableName)
 	if err != nil {
 		return nil, 0, err
 	}
-	all, err := queryColumns(tableName)
+	all, err := queryColumns(real)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -154,9 +167,9 @@ func TableFieldList(appID uint, req *model.TableFieldListReq) ([]model.TableColu
 	return filtered[offset:end], total, nil
 }
 
-// TableFieldCreate 在物理业务表中新增列（ALTER TABLE ... ADD COLUMN）
-func TableFieldCreate(appID uint, req *model.TableFieldCreateReq) (*model.TableColumn, error) {
-	tableName, err := getApplicationBizTable(appID)
+// TableFieldCreate 在指定物理业务表（主表或子表）中新增列（ALTER TABLE ... ADD COLUMN）
+func TableFieldCreate(appID uint, tableName string, req *model.TableFieldCreateReq) (*model.TableColumn, error) {
+	real, err := getApplicationBizTableBy(appID, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +179,7 @@ func TableFieldCreate(appID uint, req *model.TableFieldCreateReq) (*model.TableC
 	if !validFieldTypes[strings.ToLower(req.Type)] {
 		return nil, errors.New("不支持的字段类型: " + req.Type)
 	}
-	if columnExists(tableName, req.Name) {
+	if columnExists(real, req.Name) {
 		return nil, errors.New("字段已存在")
 	}
 	colDef := columnDefSQL(&model.TableColumn{
@@ -176,19 +189,19 @@ func TableFieldCreate(appID uint, req *model.TableFieldCreateReq) (*model.TableC
 	if colDef == "" {
 		return nil, errors.New("不支持的字段类型: " + req.Type)
 	}
-	if err := database.DB.Exec("ALTER TABLE `" + tableName + "` ADD COLUMN " + colDef).Error; err != nil {
+	if err := database.DB.Exec("ALTER TABLE `" + real + "` ADD COLUMN " + colDef).Error; err != nil {
 		return nil, fmt.Errorf("创建数据库字段失败: %w", err)
 	}
-	return getTableColumn(tableName, req.Name)
+	return getTableColumn(real, req.Name)
 }
 
-// TableFieldUpdate 修改物理业务表列定义（ALTER TABLE ... CHANGE/MODIFY COLUMN）
-func TableFieldUpdate(appID uint, oldName string, req *model.TableFieldUpdateReq) (*model.TableColumn, error) {
-	tableName, err := getApplicationBizTable(appID)
+// TableFieldUpdate 修改指定物理业务表（主表或子表）列定义（ALTER TABLE ... CHANGE/MODIFY COLUMN）
+func TableFieldUpdate(appID uint, tableName, oldName string, req *model.TableFieldUpdateReq) (*model.TableColumn, error) {
+	real, err := getApplicationBizTableBy(appID, tableName)
 	if err != nil {
 		return nil, err
 	}
-	old, err := getTableColumn(tableName, oldName)
+	old, err := getTableColumn(real, oldName)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +212,7 @@ func TableFieldUpdate(appID uint, oldName string, req *model.TableFieldUpdateReq
 			return nil, errors.New("非法的字段名称")
 		}
 		if req.Name != oldName {
-			if columnExists(tableName, req.Name) {
+			if columnExists(real, req.Name) {
 				return nil, errors.New("字段已存在")
 			}
 		}
@@ -227,26 +240,26 @@ func TableFieldUpdate(appID uint, oldName string, req *model.TableFieldUpdateReq
 	}
 	var ddl string
 	if col.Name != oldName {
-		ddl = fmt.Sprintf("ALTER TABLE `%s` CHANGE COLUMN `%s` %s", tableName, oldName, colDef)
+		ddl = fmt.Sprintf("ALTER TABLE `%s` CHANGE COLUMN `%s` %s", real, oldName, colDef)
 	} else {
-		ddl = fmt.Sprintf("ALTER TABLE `%s` MODIFY COLUMN %s", tableName, colDef)
+		ddl = fmt.Sprintf("ALTER TABLE `%s` MODIFY COLUMN %s", real, colDef)
 	}
 	if err := database.DB.Exec(ddl).Error; err != nil {
 		return nil, fmt.Errorf("修改数据库字段失败: %w", err)
 	}
-	return getTableColumn(tableName, col.Name)
+	return getTableColumn(real, col.Name)
 }
 
-// TableFieldDelete 删除物理业务表列（ALTER TABLE ... DROP COLUMN，不可逆）
-func TableFieldDelete(appID uint, fieldName string) error {
-	tableName, err := getApplicationBizTable(appID)
+// TableFieldDelete 删除指定物理业务表（主表或子表）列（ALTER TABLE ... DROP COLUMN，不可逆）
+func TableFieldDelete(appID uint, tableName, fieldName string) error {
+	real, err := getApplicationBizTableBy(appID, tableName)
 	if err != nil {
 		return err
 	}
-	if !columnExists(tableName, fieldName) {
+	if !columnExists(real, fieldName) {
 		return errors.New("字段不存在")
 	}
-	if err := database.DB.Exec("ALTER TABLE `" + tableName + "` DROP COLUMN `" + fieldName + "`").Error; err != nil {
+	if err := database.DB.Exec("ALTER TABLE `" + real + "` DROP COLUMN `" + fieldName + "`").Error; err != nil {
 		return fmt.Errorf("删除数据库字段失败: %w", err)
 	}
 	return nil

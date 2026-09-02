@@ -281,6 +281,7 @@ type TableColumn struct {
 }
 
 type TableFieldCreateReq struct {
+	TableName    string `json:"table_name" validate:"required" label:"表名"` // 主表或子表
 	Name         string `json:"name" validate:"required,min=1,max=64" label:"字段名称"`
 	Type         string `json:"type" validate:"required" label:"字段类型"`
 	Length       int    `json:"length" validate:"omitempty,min=1,max=10000" label:"长度"`
@@ -290,6 +291,7 @@ type TableFieldCreateReq struct {
 }
 
 type TableFieldUpdateReq struct {
+	TableName    string `json:"table_name" validate:"required" label:"表名"` // 主表或子表
 	Name         string `json:"name" validate:"omitempty,min=1,max=64" label:"字段名称"`
 	Type         string `json:"type" validate:"omitempty" label:"字段类型"`
 	Length       int    `json:"length" validate:"omitempty,min=1,max=10000" label:"长度"`
@@ -300,5 +302,10 @@ type TableFieldUpdateReq struct {
 
 type TableFieldListReq struct {
 	BaseListReq
-	Name string `json:"name" form:"name" validate:"omitempty" label:"字段名称"`
+	Name      string `json:"name" form:"name" validate:"omitempty" label:"字段名称"`
+	TableName string `json:"table_name" form:"table_name" validate:"required" label:"表名"` // 主表或子表
+}
+
+type TableFieldDeleteReq struct {
+	TableName string `json:"table_name" form:"table_name" validate:"required" label:"表名"` // 主表或子表
 }

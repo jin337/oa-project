@@ -30,7 +30,7 @@ func TableFieldList(c *gin.Context) {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	list, total, err := service.TableFieldList(id, &req)
+	list, total, err := service.TableFieldList(id, req.TableName, &req)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
@@ -49,7 +49,7 @@ func TableFieldCreate(c *gin.Context) {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	col, err := service.TableFieldCreate(id, &req)
+	col, err := service.TableFieldCreate(id, req.TableName, &req)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
@@ -72,7 +72,7 @@ func TableFieldUpdate(c *gin.Context) {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	col, err := service.TableFieldUpdate(id, fieldName, &req)
+	col, err := service.TableFieldUpdate(id, req.TableName, fieldName, &req)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
@@ -81,6 +81,7 @@ func TableFieldUpdate(c *gin.Context) {
 }
 
 // TableFieldDelete DELETE /api/v1/application/:id/fields/:fieldId 删除物理业务表列
+// 前端以 query 参数传递 table_name（vtrans.Validate 对 DELETE 走 JSON 绑定，此处手动绑定 query）
 func TableFieldDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -90,7 +91,16 @@ func TableFieldDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := service.TableFieldDelete(id, fieldName); err != nil {
+	var req model.TableFieldDeleteReq
+	if err := c.ShouldBindQuery(&req); err != nil {
+		response.Fail(c, response.CodeParamError, "请求参数格式错误")
+		return
+	}
+	if req.TableName == "" {
+		response.Fail(c, response.CodeParamError, "表名不能为空")
+		return
+	}
+	if err := service.TableFieldDelete(id, req.TableName, fieldName); err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
