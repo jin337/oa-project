@@ -37,7 +37,7 @@ mysql:
   username: root
   password: "Kzi493399hst"
   dbname: rbac_test           # 测试环境独立库，与开发/生产隔离
-  table_prefix: oa
+  table_prefix: oa_
   charset: utf8mb4
   collation: utf8mb4_general_ci
   parse_time: true

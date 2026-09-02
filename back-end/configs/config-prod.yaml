@@ -38,7 +38,7 @@ mysql:
   username: root
   password: "CHANGE_ME"       # 上线前必须修改！
   dbname: rbac_prod
-  table_prefix: oa
+  table_prefix: oa_
   charset: utf8mb4
   collation: utf8mb4_general_ci
   parse_time: true

@@ -159,8 +159,8 @@ export default function ApplicationManage() {
   // 打开子页面：预添加独立页签并跳转，通过 state 传递应用名称
   const openSubPage = (record, module, label) => {
     const path = `/application/${record.id}/${module}`
-    addTab({ path, title: `${label} - ${record.name}`, icon: 'apps' })
-    navigate(path, { state: { appName: record.name } })
+    addTab({ path, title: `${record.name} - ${label}` })
+    navigate(path)
   }
 
   // 表格密度下拉

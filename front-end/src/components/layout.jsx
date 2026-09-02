@@ -69,20 +69,36 @@ function renderMenus(menus) {
     .filter(Boolean)
 }
 
-// 在菜单树中查找当前路径对应的层级链（目录 → 页面），用于面包屑
-function findMenuChain(menus, pathname, chain = []) {
-  for (const m of menus || []) {
-    if (m.status !== 1 || m.type === 3) continue
-    const nextChain = [...chain, m]
-    if (m.path === pathname) {
-      return nextChain
+// 动态子路由路径段 -> 显示名称映射（用于面包屑）
+const SUB_ROUTE_NAMES = {
+  tables: '表管理',
+  'form-elements': '表单元素',
+  layout: '布局管理',
+}
+
+// 在菜单树中查找当前路径对应的层级链（目录 → 页面），用于面包屑和菜单高亮
+// 支持动态子路由：精确匹配优先，未命中时回退到最长前缀匹配（如 /application/1/tables → /application）
+function findMenuChain(menus, pathname) {
+  let prefixMatch = null
+  const walk = (list, chain) => {
+    for (const m of list || []) {
+      if (m.status !== 1 || m.type === 3) continue
+      const nextChain = [...chain, m]
+      if (m.path === pathname) return nextChain
+      // 记录最长前缀匹配，供动态子路由回退
+      if (m.path && pathname.startsWith(m.path + '/')) {
+        if (!prefixMatch || m.path.length > prefixMatch[prefixMatch.length - 1].path.length) {
+          prefixMatch = nextChain
+        }
+      }
+      if (m.children?.length) {
+        const found = walk(m.children, nextChain)
+        if (found) return found
+      }
     }
-    if (m.children?.length) {
-      const found = findMenuChain(m.children, pathname, nextChain)
-      if (found) return found
-    }
+    return null
   }
-  return null
+  return walk(menus, []) || prefixMatch
 }
 
 export default function MainLayout() {
@@ -113,21 +129,36 @@ export default function MainLayout() {
     </Menu>
   )
 
+  // 当前路径对应的菜单链（精确匹配或最长前缀匹配）
+  const activeChain = useMemo(
+    () => findMenuChain(menus, location.pathname),
+    [menus, location.pathname],
+  )
+
+  // 顶部导航高亮的菜单 key：动态子路由时高亮其父级菜单项
+  const activeMenuKey = activeChain?.length ? activeChain[activeChain.length - 1].path : location.pathname
+
   // 根据当前路由与菜单树动态生成面包屑：根节点(首页图标) / 目录... / 当前页面
   const breadcrumbItems = useMemo(() => {
-    // 根节点：系统首页，仅显示 IconHome 图标
     const items = [{ title: '首页', path: '/', isRoot: true }]
-    if (location.pathname !== '/') {
-      const chain = findMenuChain(menus, location.pathname)
-      if (chain && chain.length) {
-        chain
-          // 排除首页（path=/），避免与根节点重复
-          .filter((m) => m.path !== '/')
-          .forEach((m) => items.push({ title: m.name, path: m.path || null }))
+    if (location.pathname === '/') return items
+
+    if (activeChain && activeChain.length) {
+      activeChain
+        .filter((m) => m.path !== '/')
+        .forEach((m) => items.push({ title: m.name, path: m.path || null }))
+
+      // 前缀匹配（动态子路由）：在父级菜单后追加当前子页面名称
+      const lastPath = activeChain[activeChain.length - 1]?.path
+      if (lastPath && location.pathname !== lastPath && location.pathname.startsWith(lastPath + '/')) {
+        const segment = location.pathname.split('/').pop()
+        items.push({ title: SUB_ROUTE_NAMES[segment] || segment, path: null })
       }
+    } else {
+      items.push({ title: location.pathname, path: null })
     }
     return items
-  }, [location.pathname, menus])
+  }, [location.pathname, activeChain])
 
   return (
     <TabProvider>
@@ -147,7 +178,7 @@ export default function MainLayout() {
           {/* 中间：水平菜单，自适应宽度 */}
           <Menu
             mode="horizontal"
-            selectedKeys={[location.pathname]}
+            selectedKeys={[activeMenuKey]}
             onClickMenuItem={(key) => {
               if (typeof key === 'string' && key.startsWith('/')) {
                 navigate(key)

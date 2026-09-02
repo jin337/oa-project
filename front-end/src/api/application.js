@@ -24,3 +24,25 @@ export function updateApplication(id, data) {
 export function deleteApplication(id) {
   return request.delete(`/application/${id}`)
 }
+
+// ========== 表字段管理（/application/:appId/fields） ==========
+
+// GET /application/:appId/fields 字段列表
+export function listTableFields(appId, params) {
+  return request.get(`/application/${appId}/fields`, { params })
+}
+
+// POST /application/:appId/fields 新增字段
+export function createTableField(appId, data) {
+  return request.post(`/application/${appId}/fields`, data)
+}
+
+// PUT /application/:appId/fields/:fieldId 修改字段
+export function updateTableField(appId, fieldId, data) {
+  return request.put(`/application/${appId}/fields/${fieldId}`, data)
+}
+
+// DELETE /application/:appId/fields/:fieldId 删除字段
+export function deleteTableField(appId, fieldId) {
+  return request.delete(`/application/${appId}/fields/${fieldId}`)
+}

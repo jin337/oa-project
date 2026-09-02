@@ -1,39 +1,40 @@
-import { Button, Card, Empty } from '@arco-design/web-react'
-import { IconLeft } from '@arco-design/web-react/icon'
+import { Card, Empty } from '@arco-design/web-react'
 import { useEffect } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
+import * as applicationApi from '../../api/application'
 import { useTabs } from '../../store/tab-context'
 
 const MODULE_LABEL = '布局管理'
 
 export default function LayoutManage() {
-  const navigate = useNavigate()
   const location = useLocation()
   const { id } = useParams()
-  const { addTab, updateTab } = useTabs()
+  const { tabs, activeTab, addTab, updateTab } = useTabs()
 
-  // 挂载时确保页签存在；仅在有 appName 时更新标题，避免页签切换时丢失应用名
+  // 挂载时确保页签存在，并通过接口获取应用名后更新标题为「应用名 - 模块名」
   useEffect(() => {
-    const appName = location.state?.appName
-    if (appName) {
-      const title = `${MODULE_LABEL} - ${appName}`
-      addTab({ path: location.pathname, title })
-      updateTab(location.pathname, { title })
-    } else {
-      // 页签切换 / 直接访问：仅确保页签存在，保留已有标题（addTab 幂等不覆盖）
-      addTab({ path: location.pathname, title: MODULE_LABEL })
+    addTab({ path: location.pathname, title: MODULE_LABEL })
+    let cancelled = false
+    applicationApi
+      .getApplication(id)
+      .then((res) => {
+        if (!cancelled && res.data?.name) {
+          const title = `${res.data.name} - ${MODULE_LABEL}`
+          updateTab(location.pathname, { title })
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
     }
-  }, [location.pathname, location.state, addTab, updateTab])
+  }, [id, location.pathname, addTab, updateTab])
+
+  // Card 标题与当前激活页签标题保持一致
+  const currentTab = tabs.find((t) => t.path === activeTab)
+  const cardTitle = currentTab?.title || MODULE_LABEL
 
   return (
-    <Card
-      title="布局管理"
-      extra={
-        <Button size="small" icon={<IconLeft />} onClick={() => navigate('/application')}>
-          返回列表
-        </Button>
-      }
-    >
+    <Card title={cardTitle}>
       <div className="mb-3 text-sm text-gray-500">
         页面配置 ID：<span className="font-mono">{id}</span>
       </div>

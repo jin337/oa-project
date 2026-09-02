@@ -267,3 +267,38 @@ type ApplicationListReq struct {
 	BaseListReq
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
 }
+
+// TableColumn 物理业务表列定义（来源：information_schema.columns）
+// ID 为列名，作为前端编辑/删除的路径标识
+type TableColumn struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	Length       int    `json:"length"`
+	NotNull      int    `json:"not_null"`
+	DefaultValue string `json:"default_value"`
+	Comment      string `json:"comment"`
+}
+
+type TableFieldCreateReq struct {
+	Name         string `json:"name" validate:"required,min=1,max=64" label:"字段名称"`
+	Type         string `json:"type" validate:"required" label:"字段类型"`
+	Length       int    `json:"length" validate:"omitempty,min=1,max=10000" label:"长度"`
+	NotNull      int    `json:"not_null" validate:"omitempty,oneof=0 1" label:"是否非空"`
+	DefaultValue string `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
+	Comment      string `json:"comment" validate:"omitempty,max=255" label:"字段注释"`
+}
+
+type TableFieldUpdateReq struct {
+	Name         string `json:"name" validate:"omitempty,min=1,max=64" label:"字段名称"`
+	Type         string `json:"type" validate:"omitempty" label:"字段类型"`
+	Length       int    `json:"length" validate:"omitempty,min=1,max=10000" label:"长度"`
+	NotNull      *int   `json:"not_null" validate:"omitempty,oneof=0 1" label:"是否非空"` // 指针区分未传与 0，避免零值覆盖
+	DefaultValue string `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
+	Comment      string `json:"comment" validate:"omitempty,max=255" label:"字段注释"`
+}
+
+type TableFieldListReq struct {
+	BaseListReq
+	Name string `json:"name" form:"name" validate:"omitempty" label:"字段名称"`
+}

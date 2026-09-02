@@ -38,7 +38,7 @@ func Setup(cfg config.MySQLConfig) (*gorm.DB, error) {
 	gormDB, err := gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{
 		// 全局表名前缀：所有表统一加 TablePrefix 前缀（含多对多关联表）
 		NamingStrategy: schema.NamingStrategy{
-			TablePrefix: cfg.TablePrefix + "_",
+			TablePrefix: cfg.TablePrefix,
 		},
 		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 		// 自动迁移不创建物理外键约束（树形自关联/多对多表），

@@ -87,6 +87,11 @@ func Setup() *gin.Engine {
 		applications.GET("/:id", handler.ApplicationDetail)
 		applications.PUT("/:id", handler.ApplicationUpdate)
 		applications.DELETE("/:id", handler.ApplicationDelete)
+		// 表字段管理
+		applications.GET("/:id/fields", handler.TableFieldList)
+		applications.POST("/:id/fields", handler.TableFieldCreate)
+		applications.PUT("/:id/fields/:fieldId", handler.TableFieldUpdate)
+		applications.DELETE("/:id/fields/:fieldId", handler.TableFieldDelete)
 	}
 
 	return r

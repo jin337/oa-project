@@ -7,9 +7,24 @@ import (
 	"strings"
 	"time"
 
+	"back-end/internal/config"
 	"back-end/internal/database"
 	"back-end/internal/model"
 )
+
+// bizTablePrefix 读取配置表前缀并规范化（确保以 _ 结尾，与系统表 oa_ 风格一致）
+func bizTablePrefix() string {
+	p := strings.TrimRight(config.Cfg.MySQL.TablePrefix, "_")
+	if p == "" {
+		return ""
+	}
+	return p + "_"
+}
+
+// bizTableName 给业务表名附加配置前缀
+func bizTableName(raw string) string {
+	return bizTablePrefix() + raw
+}
 
 // ApplicationList 页面配置分页列表：keyword 模糊匹配 name 或 code
 func ApplicationList(req *model.ApplicationListReq) ([]model.Application, int64, error) {
@@ -55,10 +70,14 @@ func isValidTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
 }
 
-// createBizTable 动态创建业务数据表（基础结构：主键 + 审计字段 + 软删除标记，与 BaseModel 对齐）
+// createBizTable 动态创建业务数据表（应用配置的表前缀，基础结构：主键 + 审计字段 + 软删除标记）
 func createBizTable(tableName string) error {
 	if !isValidTableName(tableName) {
 		return fmt.Errorf("非法的表名: %q", tableName)
+	}
+	real := bizTableName(tableName)
+	if !isValidTableName(real) {
+		return fmt.Errorf("表名附加前缀后不合法: %q", real)
 	}
 	createSQL := fmt.Sprintf(
 		"CREATE TABLE IF NOT EXISTS `%s` ("+
@@ -71,7 +90,7 @@ func createBizTable(tableName string) error {
 			"PRIMARY KEY (`id`),"+
 			"KEY `idx_deleted_at` (`deleted_at`)"+
 			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-		tableName)
+		real)
 	return database.DB.Exec(createSQL).Error
 }
 
