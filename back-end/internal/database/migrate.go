@@ -60,7 +60,7 @@ var migrations = []migration{
 	// 	Version: 2,
 	// 	Name:    "add_user_avatar",
 	// 	Up: func(db *gorm.DB) error {
-	// 		return db.Exec("ALTER TABLE oa_users ADD COLUMN avatar varchar(255) DEFAULT '' COMMENT '头像'").Error
+	// 		return db.AutoMigrate(&model.User{})
 	// 	},
 	// },
 }

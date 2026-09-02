@@ -45,7 +45,8 @@ tasks:
     env:
       APP_ENV: dev
     cmds:
-      - go run ./cmd/server
+      # - go run ./cmd/server
+      - air
 
   run-test:
     desc: 启动测试环境服务
