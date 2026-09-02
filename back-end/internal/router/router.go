@@ -78,5 +78,16 @@ func Setup() *gin.Engine {
 		depts.DELETE("/:id", handler.DeptDelete)
 	}
 
+	// 页面配置管理
+	applications := v1.Group("/application")
+	applications.Use(middleware.JWTAuth())
+	{
+		applications.GET("", handler.ApplicationList)
+		applications.POST("", handler.ApplicationCreate)
+		applications.GET("/:id", handler.ApplicationDetail)
+		applications.PUT("/:id", handler.ApplicationUpdate)
+		applications.DELETE("/:id", handler.ApplicationDelete)
+	}
+
 	return r
 }

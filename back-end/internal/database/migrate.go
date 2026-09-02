@@ -55,9 +55,23 @@ var migrations = []migration{
 			return db.AutoMigrate(&model.UserProfile{})
 		},
 	},
+	{
+		Version: 3,
+		Name:    "add_application",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.Application{})
+		},
+	},
+	{
+		Version: 4,
+		Name:    "add_application_layout",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.Application{})
+		},
+	},
 	// 示例：后续迭代追加增量迁移，只加表/加字段，不删数据
 	// {
-	// 	Version: 2,
+	// 	Version: 5,
 	// 	Name:    "add_user_avatar",
 	// 	Up: func(db *gorm.DB) error {
 	// 		return db.AutoMigrate(&model.User{})

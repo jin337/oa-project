@@ -12,9 +12,10 @@ const UserManage = lazy(() => import('./pages/system/UserManage.jsx'))
 const RoleManage = lazy(() => import('./pages/system/RoleManage.jsx'))
 const MenuManage = lazy(() => import('./pages/system/MenuManage.jsx'))
 const DeptManage = lazy(() => import('./pages/system/DeptManage.jsx'))
-const Profile = lazy(() => import('./pages/Profile.jsx'))
-const Forbidden = lazy(() => import('./pages/Forbidden.jsx'))
-const NotFound = lazy(() => import('./pages/NotFound.jsx'))
+const Profile = lazy(() => import('./pages/profile/Profile.jsx'))
+const ApplicationManage = lazy(() => import('./pages/application/ApplicationManage.jsx'))
+const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
+const NotFound = lazy(() => import('./pages/error/NotFound.jsx'))
 
 function PageLoading() {
   return (
@@ -144,6 +145,16 @@ const router = createBrowserRouter([
           <Page>
             <RequirePermission>
               <Profile />
+            </RequirePermission>
+          </Page>
+        ),
+      },
+      {
+        path: 'application',
+        element: (
+          <Page>
+            <RequirePermission>
+              <ApplicationManage />
             </RequirePermission>
           </Page>
         ),

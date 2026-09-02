@@ -12,8 +12,8 @@ import {
   Tag,
 } from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
-import * as userApi from '../api/user'
-import { useAuth } from '../store/auth-context'
+import * as userApi from '../../api/user'
+import { useAuth } from '../../store/auth-context'
 
 const FormItem = Form.Item
 const TabPane = Tabs.TabPane
