@@ -1,22 +1,10 @@
 import { Dropdown, Menu, Tabs } from '@arco-design/web-react'
-import { IconApps, IconDesktop, IconHome, IconMore, IconSettings, IconStorage, IconUser } from '@arco-design/web-react/icon'
+import { IconMore } from '@arco-design/web-react/icon'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTabs } from '../store/tab-context'
 
 const TabPane = Tabs.TabPane
 const MenuItem = Menu.Item
-
-// 页签图标映射（icon 字符串 -> Arco 图标组件）
-const ICON_MAP = {
-  home: <IconHome />,
-  user: <IconUser />,
-  users: <IconUser />,
-  setting: <IconSettings />,
-  safe: <IconSettings />,
-  storage: <IconStorage />,
-  apps: <IconApps />,
-  desktop: <IconDesktop />,
-}
 
 export default function TabsBar() {
   const navigate = useNavigate()
@@ -53,7 +41,8 @@ export default function TabsBar() {
             <IconMore />
           </div>
         </Dropdown>
-      }>
+      }
+    >
       {tabs.map((tab) => (
         <TabPane key={tab.path} closable={tab.closable} title={tab.title} />
       ))}

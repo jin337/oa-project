@@ -4,20 +4,20 @@ import { useAuth } from './auth-context'
 
 const HOME_PATH = '/'
 // 固定首页页签：禁止关闭，元信息以此为唯一数据源
-const HOME_TAB = { path: HOME_PATH, title: '工作台', icon: 'home', closable: false }
+const HOME_TAB = { path: HOME_PATH, title: '工作台', closable: false }
 
 // 不生成页签的系统路径（如无权限错误页，仅作临时提示，无需页签切换）
 const NO_TAB_PATHS = new Set(['/403'])
 
 const TabContext = createContext(null)
 
-// 扁平化后端菜单树 -> Map<path, { title, icon }>
+// 扁平化后端菜单树 -> Map<path, { title }>
 function buildMetaMap(menus) {
   const map = new Map()
   const walk = (list) => {
     for (const m of list || []) {
       if (m?.path && m.type !== 3) {
-        map.set(m.path, { title: m.name, icon: m.icon })
+        map.set(m.path, { title: m.name})
       }
       if (m?.children) {
         walk(m.children)
@@ -45,8 +45,8 @@ export function TabProvider({ children }) {
   // 解析路由对应的标题与图标：固定首页 > 菜单树 > 路径回退
   const resolveMeta = useCallback(
     (path) => {
-      if (path === HOME_PATH) return { title: HOME_TAB.title, icon: HOME_TAB.icon }
-      return metaMap.get(path) || { title: path, icon: 'apps' }
+      if (path === HOME_PATH) return { title: HOME_TAB.title }
+      return metaMap.get(path) || { title: path }
     },
     [metaMap]
   )
@@ -68,7 +68,7 @@ export function TabProvider({ children }) {
     setTabs((prev) => {
       if (prev.some((t) => t.path === path)) return prev
       const meta = resolveMeta(path)
-      return [...prev, { path, title: meta.title, icon: meta.icon, closable: true }]
+      return [...prev, { path, title: meta.title, closable: true }]
     })
   }, [location.pathname, resolveMeta, isPathAccessible])
 
@@ -85,6 +85,11 @@ export function TabProvider({ children }) {
           next.push(t)
           continue
         }
+        // 手动添加的页签（如动态子页面）不参与权限清理
+        if (t.manual) {
+          next.push(t)
+          continue
+        }
         // 无权限路径的页签：清理
         if (!isPathAccessible(t.path)) {
           changed = true
@@ -95,7 +100,7 @@ export function TabProvider({ children }) {
           const meta = metaMap.get(t.path)
           if (meta) {
             changed = true
-            next.push({ ...t, title: meta.title, icon: meta.icon })
+            next.push({ ...t, title: meta.title })
             continue
           }
         }
@@ -133,9 +138,22 @@ export function TabProvider({ children }) {
     navigate(HOME_PATH, { replace: true })
   }, [navigate])
 
+  // 手动添加页签（用于动态路由等不在菜单树中的页面，已存在则跳过）
+  const addTab = useCallback((tab) => {
+    setTabs((prev) => {
+      if (prev.some((t) => t.path === tab.path)) return prev
+      return [...prev, { closable: true, manual: true, ...tab }]
+    })
+  }, [])
+
+  // 更新指定页签的属性（标题、图标等）
+  const updateTab = useCallback((path, updates) => {
+    setTabs((prev) => prev.map((t) => (t.path === path ? { ...t, ...updates } : t)))
+  }, [])
+
   return (
     <TabContext.Provider
-      value={{ tabs, activeTab: location.pathname, closeTab, closeOthers, closeAll }}
+      value={{ tabs, activeTab: location.pathname, addTab, updateTab, closeTab, closeOthers, closeAll }}
     >
       {children}
     </TabContext.Provider>

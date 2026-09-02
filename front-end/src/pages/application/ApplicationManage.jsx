@@ -18,6 +18,8 @@ import {
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useTabs } from '../../store/tab-context'
 import * as applicationApi from '../../api/application'
 
 const FormItem = Form.Item
@@ -45,6 +47,8 @@ const EMPTY_FORM = {
 }
 
 export default function ApplicationManage() {
+  const navigate = useNavigate()
+  const { addTab } = useTabs()
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -152,6 +156,13 @@ export default function ApplicationManage() {
     }
   }
 
+  // 打开子页面：预添加独立页签并跳转，通过 state 传递应用名称
+  const openSubPage = (record, module, label) => {
+    const path = `/application/${record.id}/${module}`
+    addTab({ path, title: `${label} - ${record.name}`, icon: 'apps' })
+    navigate(path, { state: { appName: record.name } })
+  }
+
   // 表格密度下拉
   const sizeMenu = (
     <Menu onClickMenuItem={(key) => setTableSize(key)}>
@@ -191,9 +202,18 @@ export default function ApplicationManage() {
     {
       key: 'action',
       title: '操作',
-      width: 160,
+      width: 390,
       render: (_, record) => (
-        <Space>
+        <Space wrap>
+          <Button size="mini" onClick={() => openSubPage(record, 'tables', '表管理')}>
+            表管理
+          </Button>
+          <Button size="mini" onClick={() => openSubPage(record, 'form-elements', '表单元素')}>
+            表单元素管理
+          </Button>
+          <Button size="mini" onClick={() => openSubPage(record, 'layout', '布局管理')}>
+            布局管理
+          </Button>
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>

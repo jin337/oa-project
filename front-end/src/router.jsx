@@ -14,6 +14,9 @@ const MenuManage = lazy(() => import('./pages/system/MenuManage.jsx'))
 const DeptManage = lazy(() => import('./pages/system/DeptManage.jsx'))
 const Profile = lazy(() => import('./pages/profile/Profile.jsx'))
 const ApplicationManage = lazy(() => import('./pages/application/ApplicationManage.jsx'))
+const TableManage = lazy(() => import('./pages/application/TableManage.jsx'))
+const FormElementManage = lazy(() => import('./pages/application/FormElementManage.jsx'))
+const LayoutManage = lazy(() => import('./pages/application/LayoutManage.jsx'))
 const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
 const NotFound = lazy(() => import('./pages/error/NotFound.jsx'))
 
@@ -156,6 +159,30 @@ const router = createBrowserRouter([
             <RequirePermission>
               <ApplicationManage />
             </RequirePermission>
+          </Page>
+        ),
+      },
+      {
+        path: 'application/:id/tables',
+        element: (
+          <Page>
+            <TableManage />
+          </Page>
+        ),
+      },
+      {
+        path: 'application/:id/form-elements',
+        element: (
+          <Page>
+            <FormElementManage />
+          </Page>
+        ),
+      },
+      {
+        path: 'application/:id/layout',
+        element: (
+          <Page>
+            <LayoutManage />
           </Page>
         ),
       },
