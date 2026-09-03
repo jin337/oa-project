@@ -37,3 +37,18 @@ export const LOGIN_CONFIG = {
     },
   ],
 }
+
+// —— 表单元素类型配置 ——
+// value: 唯一标识；label: 下拉展示名；needDataSource: 是否需要配置数据源；needPlaceholder: 是否需要占位提示
+export const ELEMENT_TYPE_OPTIONS = [
+  { value: 'input', label: '单行输入', needDataSource: false, needPlaceholder: true },
+  { value: 'textarea', label: '多行文本', needDataSource: false, needPlaceholder: true },
+  { value: 'number', label: '数字输入', needDataSource: false, needPlaceholder: true },
+  { value: 'select', label: '下拉选择', needDataSource: true, needPlaceholder: true },
+  { value: 'radio', label: '单选框', needDataSource: true, needPlaceholder: false },
+  { value: 'checkbox', label: '多选框', needDataSource: true, needPlaceholder: false },
+  { value: 'datepicker', label: '日期选择', needDataSource: false, needPlaceholder: true },
+  { value: 'timepicker', label: '时间选择', needDataSource: false, needPlaceholder: true },
+  { value: 'switch', label: '开关', needDataSource: false, needPlaceholder: false },
+  { value: 'upload', label: '文件上传', needDataSource: false, needPlaceholder: false },
+]

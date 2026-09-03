@@ -2,6 +2,7 @@ import {
   Button,
   Card,
   Checkbox,
+  Collapse,
   Divider,
   Drawer,
   Dropdown,
@@ -21,12 +22,14 @@ import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
+import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 import { useTabs } from '../../store/tab-context'
 
 const FormItem = Form.Item
 const Row = Grid.Row
 const Col = Grid.Col
 const MenuItem = Menu.Item
+const CollapseItem = Collapse.Item
 
 const MODULE_LABEL = '表单元素'
 
@@ -50,19 +53,7 @@ const SIZE_OPTIONS = [
   { label: '迷你', value: 'mini' },
 ]
 
-// 元素类型选项
-const ELEMENT_TYPES = [
-  'input',
-  'textarea',
-  'number',
-  'select',
-  'radio',
-  'checkbox',
-  'datepicker',
-  'timepicker',
-  'switch',
-  'upload',
-]
+// 元素类型选项已迁移至 src/config/app.js（ELEMENT_TYPE_OPTIONS）
 
 const EMPTY_FORM = {
   label: '',
@@ -70,13 +61,16 @@ const EMPTY_FORM = {
   table_key: undefined,
   element_type: undefined,
   placeholder: '',
-  required: false,
+  required: true,
   default_value: '',
+  validation_rule: '',
   vis_list: true,
-  vis_search: false,
-  dynamic_states: '',
-  data_source: '',
-  actions: '',
+  vis_search: true,
+  disabled_if: '',
+  required_if: '',
+  visible_if: '',
+  data_source: {},
+  actions: { on_mount: [], on_change: [], on_blur: [] },
 }
 
 // 布尔值渲染为 Tag
@@ -105,6 +99,74 @@ function safeStringify(obj) {
   }
 }
 
+// 事件触发时机配置
+const ACTION_TRIGGERS = [
+  { key: 'on_mount', label: '初始化触发' },
+  { key: 'on_change', label: '值改变触发' },
+  { key: 'on_blur', label: '失焦触发' },
+]
+
+// Action 类型选项
+const ACTION_TYPE_OPTIONS = [
+  { value: 'set_value', label: '直接赋值' },
+  { value: 'fetch_and_fill', label: '请求并填充' },
+]
+
+const ACTION_TRIGGER_KEYS = ['on_mount', 'on_change', 'on_blur']
+
+// 后端 actions 对象 -> 表单结构（param_mapping 对象反序列化为 JSON 字符串）
+function normalizeActionsForForm(actions) {
+  const result = { on_mount: [], on_change: [], on_blur: [] }
+  for (const t of ACTION_TRIGGER_KEYS) {
+    const list = Array.isArray(actions?.[t]) ? actions[t] : []
+    result[t] = list.map((a) => {
+      const item = { ...a }
+      item.param_mapping =
+        item.param_mapping && typeof item.param_mapping === 'object'
+          ? JSON.stringify(item.param_mapping, null, 2)
+          : ''
+      if (!Array.isArray(item.target_mapping)) item.target_mapping = []
+      return item
+    })
+  }
+  return result
+}
+
+// 表单 actions 结构 -> 后端对象（按 action_type 只保留对应字段，过滤空项）
+function buildActionsFromValues(actions) {
+  const result = {}
+  for (const t of ACTION_TRIGGER_KEYS) {
+    const list = Array.isArray(actions?.[t]) ? actions[t] : []
+    const cleaned = list
+      .filter((a) => a && a.action_type)
+      .map((a) => {
+        const item = { action_type: a.action_type }
+        if (a.action_type === 'set_value') {
+          if (a.target) item.target = a.target
+          if (a.source) item.source = a.source
+        } else if (a.action_type === 'fetch_and_fill') {
+          if (a.api_url) item.api_url = a.api_url
+          if (a.method) item.method = a.method
+          if (a.param_mapping && String(a.param_mapping).trim()) {
+            try {
+              item.param_mapping = JSON.parse(a.param_mapping)
+            } catch (e) {
+              // 校验失败忽略
+            }
+          }
+          const tm = (Array.isArray(a.target_mapping) ? a.target_mapping : [])
+            .filter((m) => m && (m.source || m.target))
+            .map((m) => ({ source: m.source || '', target: m.target || '' }))
+          if (tm.length) item.target_mapping = tm
+        }
+        return item
+      })
+      .filter((a) => Object.keys(a).length > 1) // 至少含 action_type + 一个配置字段
+    if (cleaned.length) result[t] = cleaned
+  }
+  return result
+}
+
 export default function FormElementManage() {
   const location = useLocation()
   const { id } = useParams()
@@ -131,6 +193,19 @@ export default function FormElementManage() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
 
+  // 当前选中的元素类型（用于联动控制 placeholder / data_source 的显隐）
+  const [currentElementType, setCurrentElementType] = useState()
+  // 数据源类型（json / api）：使用 Form.useWatch 直接监听嵌套字段，避免 onValuesChange 扁平 key 问题
+  const dataSourceType = Form.useWatch('data_source.type', form)
+  // 事件驱动 actions：监听整个对象以联动渲染每条规则的 action_type 分支
+  const actionsWatch = Form.useWatch('actions', form)
+
+  // 事件面板默认展开：有规则的分区展开，无规则时全部展开
+  const defaultActiveKey = (() => {
+    const withRules = ACTION_TRIGGER_KEYS.filter((k) => (actionsWatch?.[k] || []).length > 0)
+    return withRules.length ? withRules : ACTION_TRIGGER_KEYS
+  })()
+
   // 级联选项：表列表 & 字段列表
   const [tableOptions, setTableOptions] = useState([])
   const [fieldOptions, setFieldOptions] = useState([])
@@ -156,6 +231,11 @@ export default function FormElementManage() {
   // Card 标题与当前激活页签标题保持一致
   const currentTab = tabs.find((t) => t.path === activeTab)
   const cardTitle = currentTab?.title || MODULE_LABEL
+
+  // 当前元素类型的配置元数据（用于联动控制 placeholder / data_source 显隐）
+  const typeConfig = ELEMENT_TYPE_OPTIONS.find((o) => o.value === currentElementType)
+  const showPlaceholder = typeConfig ? typeConfig.needPlaceholder : true
+  const showDataSource = typeConfig ? typeConfig.needDataSource : false
 
   const fetchList = useCallback(
     async (p = page, s = size) => {
@@ -250,8 +330,37 @@ export default function FormElementManage() {
     }
   }
 
+  // 数据源类型切换：清理另一类型的冗余字段，避免提交无效数据
+  const handleDataSourceTypeChange = (type) => {
+    if (type === 'json') {
+      form.setFieldsValue({
+        data_source: {
+          type: 'json',
+          options: [],
+          url: '',
+          method: undefined,
+          label: '',
+          value: '',
+        },
+      })
+    } else if (type === 'api') {
+      form.setFieldsValue({
+        data_source: {
+          type: 'api',
+          options: [],
+          url: '',
+          method: 'GET',
+          label: '',
+          value: '',
+          params: '',
+        },
+      })
+    }
+  }
+
   const openCreate = async () => {
     setEditing(null)
+    setCurrentElementType(undefined)
     form.setFieldsValue(EMPTY_FORM)
     setFieldOptions([])
     const app = await loadTableOptions()
@@ -264,6 +373,7 @@ export default function FormElementManage() {
 
   const openEdit = async (record) => {
     setEditing(record)
+    setCurrentElementType(record.element_type)
     setFieldOptions([])
     await loadTableOptions()
     form.setFieldsValue({
@@ -274,11 +384,18 @@ export default function FormElementManage() {
       placeholder: record.placeholder || '',
       required: Boolean(record.required),
       default_value: record.default_value || '',
+      validation_rule: record.validation_rule || '',
       vis_list: record.visibility?.list ?? true,
       vis_search: record.visibility?.search ?? false,
-      dynamic_states: safeStringify(record.dynamic_states),
-      data_source: safeStringify(record.data_source),
-      actions: safeStringify(record.actions),
+      disabled_if: record.dynamic_states?.disabled_if || '',
+      required_if: record.dynamic_states?.required_if || '',
+      visible_if: record.dynamic_states?.visible_if || '',
+      data_source: {
+        ...(record.data_source || {}),
+        // params 为对象结构，回填时反序列化为 JSON 字符串供 TextArea 展示
+        params: safeStringify(record.data_source?.params),
+      },
+      actions: normalizeActionsForForm(record.actions),
     })
     if (record.table_key) {
       await loadFieldOptions(record.table_key)
@@ -297,13 +414,46 @@ export default function FormElementManage() {
       placeholder: values.placeholder,
       required: values.required ? 1 : 0,
       default_value: values.default_value,
+      validation_rule: values.validation_rule || '',
       visibility: {
         list: values.vis_list ? 1 : 0,
         search: values.vis_search ? 1 : 0,
       },
-      dynamic_states: values.dynamic_states ? JSON.parse(values.dynamic_states) : {},
-      data_source: values.data_source ? JSON.parse(values.data_source) : {},
-      actions: values.actions ? JSON.parse(values.actions) : {},
+      dynamic_states: Object.fromEntries(
+        Object.entries({
+          disabled_if: values.disabled_if,
+          required_if: values.required_if,
+          visible_if: values.visible_if,
+        }).filter(([, v]) => v && String(v).trim() !== ''),
+      ),
+      // 数据源：按类型组装，过滤空值，避免提交冗余字段
+      data_source: (() => {
+        const ds = values.data_source || {}
+        if (ds.type === 'json') {
+          const options = (ds.options || []).filter((o) => o?.label || o?.value)
+          return options.length ? { type: 'json', options } : {}
+        }
+        if (ds.type === 'api') {
+          let params = {}
+          if (ds.params && String(ds.params).trim()) {
+            try {
+              params = JSON.parse(ds.params)
+            } catch (e) {
+              // params 为 JSON 字符串输入，校验失败时保持空对象
+            }
+          }
+          return {
+            type: 'api',
+            url: ds.url || '',
+            method: ds.method || 'GET',
+            label: ds.label || '',
+            value: ds.value || '',
+            params,
+          }
+        }
+        return {}
+      })(),
+      actions: buildActionsFromValues(values.actions),
     }
     setSaving(true)
     try {
@@ -503,7 +653,22 @@ export default function FormElementManage() {
         onCancel={() => setDrawerVisible(false)}
         unmountOnExit
       >
-        <Form form={form} layout="vertical" autoComplete="off">
+        <Form
+          form={form}
+          layout="vertical"
+          autoComplete="off"
+          onValuesChange={(changedValues) => {
+            if ('element_type' in changedValues) {
+              const val = changedValues.element_type
+              setCurrentElementType(val)
+              const cfg = ELEMENT_TYPE_OPTIONS.find((o) => o.value === val)
+              if (cfg && !cfg.needPlaceholder) form.setFieldsValue({ placeholder: '' })
+              if (cfg && !cfg.needDataSource) {
+                form.setFieldsValue({ data_source: {} })
+              }
+            }
+          }}
+        >
           <Row gutter={20}>
             {/* 字段分类 */}
             <Col span={12}>
@@ -563,13 +728,7 @@ export default function FormElementManage() {
                 field="element_type"
                 rules={[{ required: true, message: '请选择元素类型' }]}
               >
-                <Select placeholder="请选择类型" allowClear>
-                  {ELEMENT_TYPES.map((t) => (
-                    <Select.Option key={t} value={t}>
-                      {t}
-                    </Select.Option>
-                  ))}
-                </Select>
+                <Select placeholder="请选择类型" allowClear options={ELEMENT_TYPE_OPTIONS} />
               </FormItem>
             </Col>
             <Col span={12}>
@@ -578,68 +737,329 @@ export default function FormElementManage() {
               </FormItem>
             </Col>
             <Col span={12}>
-              <FormItem label="占位提示" field="placeholder">
-                <Input placeholder="如：请输入或选择" />
+              {showPlaceholder && (
+                <FormItem label="占位提示" field="placeholder">
+                  <Input placeholder="如：请输入或选择" />
+                </FormItem>
+              )}
+            </Col>
+            <Col span={24}>
+              <FormItem label="校验规则" field="validation_rule">
+                <Input.TextArea
+                  placeholder="请输入正则表达式或校验表达式"
+                  autoSize={{ minRows: 1, maxRows: 4 }}
+                />
               </FormItem>
             </Col>
-            <Col span={4}>
-              <FormItem field="required" triggerPropName="checked">
+            <Col span={24} className={'[&_.arco-checkbox]:mr-4 [&_.arco-checkbox]:pl-0!'}>
+              <FormItem field="required" triggerPropName="checked" noStyle>
                 <Checkbox>是否必填</Checkbox>
               </FormItem>
-            </Col>
-            <Col span={4}>
-              <FormItem field="vis_list" triggerPropName="checked">
+              <FormItem field="vis_list" triggerPropName="checked" noStyle>
                 <Checkbox>列表列显示</Checkbox>
               </FormItem>
-            </Col>
-            <Col span={4}>
-              <FormItem field="vis_search" triggerPropName="checked">
+              <FormItem field="vis_search" triggerPropName="checked" noStyle>
                 <Checkbox>搜索项显示</Checkbox>
               </FormItem>
             </Col>
           </Row>
 
-          {/* 高级配置：JSON 结构 */}
-          <Divider orientation="left">高级配置</Divider>
+          <Divider>动态状态控制</Divider>
 
-          <FormItem
-            label="动态状态控制（dynamic_states）"
-            field="dynamic_states"
-            rules={[{ validator: validateJson }]}
-            extra='支持 visible_if / disabled_if / required_if 表达式，如 {"visible_if":"${form.department}===\"IT\""}'
-          >
+          {/* 动态状态控制：拆解为 3 个独立表达式输入框 */}
+          <FormItem label="动态显隐" field="visible_if">
             <Input.TextArea
-              placeholder='{"visible_if":"...","disabled_if":"...","required_if":"..."}'
-              autoSize={{ minRows: 3, maxRows: 8 }}
+              autoSize={{ minRows: 1, maxRows: 5 }}
               style={{ fontFamily: 'monospace' }}
+              placeholder='${form.field_name} === "value"'
             />
           </FormItem>
 
-          <FormItem
-            label="数据源配置（data_source）"
-            field="data_source"
-            rules={[{ validator: validateJson }]}
-            extra="type: json(静态 options) / api(动态)，支持 url / method / label / value 表达式"
-          >
+          <FormItem label="动态禁用/只读" field="disabled_if">
             <Input.TextArea
-              placeholder='{"type":"api","url":"/api/user/list","method":"GET","label":"...","value":"..."}'
-              autoSize={{ minRows: 3, maxRows: 8 }}
+              autoSize={{ minRows: 1, maxRows: 5 }}
               style={{ fontFamily: 'monospace' }}
+              placeholder='${form.field_name} === "value"'
             />
           </FormItem>
 
-          <FormItem
-            label="事件驱动与联动（actions）"
-            field="actions"
-            rules={[{ validator: validateJson }]}
-            extra="支持 on_mount / on_change / on_blur 事件，配置 action_type 及联动参数"
-          >
+          <FormItem label="动态必填" field="required_if">
             <Input.TextArea
-              placeholder='{"on_mount":[...],"on_change":[...],"on_blur":[...]}'
-              autoSize={{ minRows: 3, maxRows: 8 }}
+              autoSize={{ minRows: 1, maxRows: 5 }}
               style={{ fontFamily: 'monospace' }}
+              placeholder="${form.field_name} === true"
             />
           </FormItem>
+
+          {showDataSource && (
+            <>
+              <Divider>数据源配置</Divider>
+              <Row gutter={20}>
+                <Col span={24}>
+                  <FormItem
+                    label="数据类型"
+                    field="data_source.type"
+                    rules={[{ required: true, message: '请选择数据类型' }]}
+                  >
+                    <Select placeholder="请选择" onChange={handleDataSourceTypeChange}>
+                      <Select.Option value="json">静态数据（json）</Select.Option>
+                      <Select.Option value="api">动态接口（api）</Select.Option>
+                    </Select>
+                  </FormItem>
+                </Col>
+              </Row>
+              {/* 静态数据：选项列表，支持动态增删 */}
+              {dataSourceType === 'json' && (
+                <Form.List field="data_source.options">
+                  {(fields, { add, remove }) => (
+                    <div>
+                      {fields.length > 0 && (
+                        <div className="mb-3 rounded border border-gray-200 bg-white p-3">
+                          {fields.map((item, index) => (
+                            <div
+                              key={item.key}
+                              className={`${index === 0 ? '' : 'mt-2'} flex items-center gap-2`}
+                            >
+                              <FormItem
+                                field={item.field + '.label'}
+                                noStyle
+                                className="mb-0! flex-1"
+                              >
+                                <Input placeholder="显示标签，如：男" />
+                              </FormItem>
+                              <FormItem
+                                field={item.field + '.value'}
+                                noStyle
+                                className="mb-0! flex-1"
+                              >
+                                <Input placeholder="提交值，如：1" />
+                              </FormItem>
+                              <Button size="mini" status="danger" onClick={() => remove(index)}>
+                                删除
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <Button type="outline" onClick={() => add({ label: '', value: '' })}>
+                        + 添加选项
+                      </Button>
+                    </div>
+                  )}
+                </Form.List>
+              )}
+
+              {/* 动态接口：url / method / params / label / value 表达式 */}
+              {dataSourceType === 'api' && (
+                <Row gutter={20}>
+                  <Col span={16}>
+                    <FormItem
+                      label="接口地址"
+                      field="data_source.url"
+                      rules={[{ required: true, message: '请输入接口地址' }]}
+                    >
+                      <Input placeholder="/api/user/list" />
+                    </FormItem>
+                  </Col>
+                  <Col span={8}>
+                    <FormItem label="请求方法" field="data_source.method">
+                      <Select>
+                        <Select.Option value="GET">GET</Select.Option>
+                        <Select.Option value="POST">POST</Select.Option>
+                        <Select.Option value="PUT">PUT</Select.Option>
+                        <Select.Option value="DELETE">DELETE</Select.Option>
+                      </Select>
+                    </FormItem>
+                  </Col>
+                  <Col span={24}>
+                    <FormItem
+                      label="请求参数"
+                      field="data_source.params"
+                      rules={[{ validator: validateJson }]}
+                    >
+                      <Input.TextArea
+                        placeholder='{"user_id":"${current_value}","page":1}'
+                        autoSize={{ minRows: 1, maxRows: 5 }}
+                        style={{ fontFamily: 'monospace' }}
+                      />
+                    </FormItem>
+                  </Col>
+                  <Col span={12}>
+                    <FormItem label="显示标签表达式" field="data_source.label">
+                      <Input placeholder="${data.name}" />
+                    </FormItem>
+                  </Col>
+                  <Col span={12}>
+                    <FormItem label="提交值表达式" field="data_source.value">
+                      <Input placeholder="${data.id}" />
+                    </FormItem>
+                  </Col>
+                </Row>
+              )}
+            </>
+          )}
+
+          <Divider>事件驱动与联动</Divider>
+
+          {/* 三个触发时机分区：on_mount / on_change / on_blur（折叠面板） */}
+          <Collapse defaultActiveKey={defaultActiveKey} className="mb-4">
+            {ACTION_TRIGGERS.map((trigger) => (
+              <CollapseItem
+                key={trigger.key}
+                name={trigger.key}
+                header={trigger.label}
+                className={'[&_.arco-collapse-item-content-box]:pl-3.25!'}
+              >
+                <Form.List field={`actions.${trigger.key}`}>
+                  {(fields, { add, remove }) => (
+                    <>
+                      {fields.length === 0 && (
+                        <div className="mb-2 text-xs text-gray-400">暂无规则，点击下方按钮添加</div>
+                      )}
+                      {fields.map((item, index) => {
+                        // 从 watch 结果获取当前规则的 action_type，联动显示对应配置字段
+                        const actionType = actionsWatch?.[trigger.key]?.[index]?.action_type
+                        return (
+                          <div
+                            key={item.key}
+                            className="mb-3 rounded border border-gray-200 bg-white p-3"
+                          >
+                            <div className="mb-2 flex items-center justify-between">
+                              <span className="text-xs font-medium text-gray-500">
+                                规则 {index + 1}
+                              </span>
+                              <Button size="mini" status="danger" onClick={() => remove(index)}>
+                                删除
+                              </Button>
+                            </div>
+                            <FormItem
+                              label="动作类型"
+                              field={item.field + '.action_type'}
+                              rules={[{ required: true, message: '请选择动作类型' }]}
+                            >
+                              <Select placeholder="请选择动作类型" options={ACTION_TYPE_OPTIONS} />
+                            </FormItem>
+
+                            {/* set_value：直接赋值 */}
+                            {actionType === 'set_value' && (
+                              <Row gutter={16}>
+                                <Col span={12}>
+                                  <FormItem
+                                    label="目标字段"
+                                    field={item.field + '.target'}
+                                    rules={[{ required: true, message: '请输入目标字段' }]}
+                                  >
+                                    <Input placeholder="如：create_time" />
+                                  </FormItem>
+                                </Col>
+                                <Col span={12}>
+                                  <FormItem
+                                    label="赋值来源"
+                                    field={item.field + '.source'}
+                                    rules={[{ required: true, message: '请输入赋值来源' }]}
+                                  >
+                                    <Input placeholder="如：new Date().toISOString()" />
+                                  </FormItem>
+                                </Col>
+                              </Row>
+                            )}
+
+                            {/* fetch_and_fill：请求并填充 */}
+                            {actionType === 'fetch_and_fill' && (
+                              <>
+                                <Row gutter={16}>
+                                  <Col span={16}>
+                                    <FormItem
+                                      label="接口地址"
+                                      field={item.field + '.api_url'}
+                                      rules={[{ required: true, message: '请输入接口地址' }]}
+                                    >
+                                      <Input placeholder="/api/user/salary-detail" />
+                                    </FormItem>
+                                  </Col>
+                                  <Col span={8}>
+                                    <FormItem label="请求方法" field={item.field + '.method'}>
+                                      <Select>
+                                        <Select.Option value="GET">GET</Select.Option>
+                                        <Select.Option value="POST">POST</Select.Option>
+                                        <Select.Option value="PUT">PUT</Select.Option>
+                                        <Select.Option value="DELETE">DELETE</Select.Option>
+                                      </Select>
+                                    </FormItem>
+                                  </Col>
+                                  <Col span={24}>
+                                    <FormItem
+                                      label="请求参数"
+                                      field={item.field + '.param_mapping'}
+                                      rules={[{ validator: validateJson }]}
+                                    >
+                                      <Input.TextArea
+                                        placeholder='{"user_id":"${current_value}"}'
+                                        autoSize={{ minRows: 1, maxRows: 5 }}
+                                        style={{ fontFamily: 'monospace' }}
+                                      />
+                                    </FormItem>
+                                  </Col>
+                                </Row>
+                                <div className="mb-2 text-xs text-gray-500">目标字段映射</div>
+                                <Form.List field={item.field + '.target_mapping'}>
+                                  {(tmFields, { add: addTm, remove: removeTm }) => (
+                                    <>
+                                      {tmFields.map((tm, tmIndex) => (
+                                        <div key={tm.key} className="mb-2 flex items-center gap-2">
+                                          <FormItem
+                                            field={tm.field + '.source'}
+                                            noStyle
+                                            className="mb-0! flex-1"
+                                          >
+                                            <Input placeholder="来源表达式，如 ${data.base_salary}" />
+                                          </FormItem>
+                                          <span className="text-gray-400">→</span>
+                                          <FormItem
+                                            field={tm.field + '.target'}
+                                            noStyle
+                                            className="mb-0! flex-1"
+                                          >
+                                            <Input placeholder="目标字段，如 net_salary" />
+                                          </FormItem>
+                                          <Button
+                                            size="mini"
+                                            status="danger"
+                                            onClick={() => removeTm(tmIndex)}
+                                          >
+                                            删除
+                                          </Button>
+                                        </div>
+                                      ))}
+                                      <Button
+                                        size="small"
+                                        type="outline"
+                                        onClick={() => addTm({ source: '', target: '' })}
+                                      >
+                                        + 添加目标映射
+                                      </Button>
+                                    </>
+                                  )}
+                                </Form.List>
+                              </>
+                            )}
+                          </div>
+                        )
+                      })}
+                      <Button
+                        size="small"
+                        type="outline"
+                        icon={<IconPlus />}
+                        onClick={() => add({ action_type: undefined })}
+                      >
+                        添加规则
+                      </Button>
+                    </>
+                  )}
+                </Form.List>
+              </CollapseItem>
+            ))}
+          </Collapse>
         </Form>
       </Drawer>
     </Card>
