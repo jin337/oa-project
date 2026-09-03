@@ -14,7 +14,6 @@ import {
   Popover,
   Select,
   Space,
-  Switch,
   Table,
   Tag,
 } from '@arco-design/web-react'
@@ -401,7 +400,12 @@ export default function FormElementManage() {
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          <Popconfirm position="rb" focusLock title="确认删除该表单元素？" onOk={() => handleDelete(record)}>
+          <Popconfirm
+            position="rb"
+            focusLock
+            title="确认删除该表单元素？"
+            onOk={() => handleDelete(record)}
+          >
             <Button size="mini" status="danger">
               删除
             </Button>
@@ -493,7 +497,7 @@ export default function FormElementManage() {
       <Drawer
         title={editing ? '编辑表单元素' : '新增表单元素'}
         visible={drawerVisible}
-        width="50%"
+        width="55%"
         onOk={handleSave}
         confirmLoading={saving}
         onCancel={() => setDrawerVisible(false)}
@@ -569,34 +573,34 @@ export default function FormElementManage() {
               </FormItem>
             </Col>
             <Col span={12}>
-              <FormItem label="占位提示" field="placeholder">
-                <Input placeholder="如：请输入或选择" />
-              </FormItem>
-            </Col>
-            <Col span={12}>
               <FormItem label="默认值" field="default_value">
                 <Input placeholder="支持表达式，如 ${current_user.name}" />
               </FormItem>
             </Col>
             <Col span={12}>
-              <FormItem label="是否必填" field="required" triggerPropName="checked">
-                <Switch />
+              <FormItem label="占位提示" field="placeholder">
+                <Input placeholder="如：请输入或选择" />
               </FormItem>
             </Col>
-            <Col span={12}>
-              <FormItem label="列表列显示" field="vis_list" triggerPropName="checked">
-                <Switch />
+            <Col span={4}>
+              <FormItem field="required" triggerPropName="checked">
+                <Checkbox>是否必填</Checkbox>
               </FormItem>
             </Col>
-            <Col span={12}>
-              <FormItem label="搜索项显示" field="vis_search" triggerPropName="checked">
-                <Switch />
+            <Col span={4}>
+              <FormItem field="vis_list" triggerPropName="checked">
+                <Checkbox>列表列显示</Checkbox>
+              </FormItem>
+            </Col>
+            <Col span={4}>
+              <FormItem field="vis_search" triggerPropName="checked">
+                <Checkbox>搜索项显示</Checkbox>
               </FormItem>
             </Col>
           </Row>
 
           {/* 高级配置：JSON 结构 */}
-          <Divider orientation="left">高级配置（JSON）</Divider>
+          <Divider orientation="left">高级配置</Divider>
 
           <FormItem
             label="动态状态控制（dynamic_states）"
