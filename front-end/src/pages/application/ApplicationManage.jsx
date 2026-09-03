@@ -19,8 +19,8 @@ import {
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTabs } from '../../store/tab-context'
 import * as applicationApi from '../../api/application'
+import { useTabs } from '../../store/tab-context'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -197,7 +197,8 @@ export default function ApplicationManage() {
       title: '状态',
       dataIndex: 'status',
       width: 80,
-      render: (status) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+      render: (status) =>
+        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },
     {
       key: 'action',
@@ -217,7 +218,13 @@ export default function ApplicationManage() {
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          <Popconfirm focusLock title="确认删除该页面配置？" onOk={() => handleDelete(record)}>
+          <Popconfirm
+            position="rb"
+            focusLock
+            title="确认删除该页面配置？"
+            content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
+            onOk={() => handleDelete(record)}
+          >
             <Button size="mini" status="danger">
               删除
             </Button>
@@ -328,7 +335,7 @@ export default function ApplicationManage() {
               </FormItem>
             </Col>
             <Col span={12}>
-              <FormItem label="页面编码" field="code" >
+              <FormItem label="页面编码" field="code">
                 <Input placeholder="由系统自动生成" disabled />
               </FormItem>
             </Col>

@@ -17,8 +17,8 @@ type User struct {
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	DeptID   uint   `gorm:"index;comment:所属部门ID(属于 dept_id)" json:"dept_id"`
 
-	Roles []*Role `gorm:"many2many:sys_user_role;" json:"roles,omitempty"`
-	Dept  *Dept   `gorm:"foreignKey:DeptID" json:"dept,omitempty"`
+	Roles   []*Role      `gorm:"many2many:sys_user_role;" json:"roles,omitempty"`
+	Dept    *Dept        `gorm:"foreignKey:DeptID" json:"dept,omitempty"`
 	Profile *UserProfile `gorm:"foreignKey:UserID" json:"profile,omitempty"`
 }
 
@@ -308,4 +308,54 @@ type TableFieldListReq struct {
 
 type TableFieldDeleteReq struct {
 	TableName string `json:"table_name" form:"table_name" validate:"required" label:"表名"` // 主表或子表
+}
+
+// FormElement 表单元素配置：绑定页面配置（Application）对应的物理表字段，用于低代码表单渲染
+type FormElement struct {
+	BaseModel
+	AppID         uint                   `gorm:"column:app_id;index;not null;comment:所属页面配置ID" json:"app_id"`
+	Label         string                 `gorm:"size:64;not null;comment:字段标签" json:"label"`
+	FieldKey      string                 `gorm:"size:64;not null;comment:关联物理表列名" json:"field_key"`
+	TableKey      string                 `gorm:"size:64;not null;comment:关联物理表" json:"table_key"`
+	ElementType   string                 `gorm:"size:32;not null;comment:元素类型" json:"element_type"`
+	Placeholder   string                 `gorm:"size:255;comment:占位提示" json:"placeholder"`
+	Required      int                    `gorm:"default:0;comment:是否必填 1是 0否" json:"required"`
+	DefaultValue  string                 `gorm:"size:255;comment:默认值" json:"default_value"`
+	Visibility    map[string]interface{} `gorm:"serializer:json;type:json;comment:列表与搜索行为" json:"visibility"`
+	DynamicStates map[string]interface{} `gorm:"serializer:json;type:json;comment:动态状态控制" json:"dynamic_states"`
+	DataSource    map[string]interface{} `gorm:"serializer:json;type:json;comment:数据源配置" json:"data_source"`
+	Actions       map[string]interface{} `gorm:"serializer:json;type:json;comment:事件驱动配置" json:"actions"`
+}
+
+type FormElementCreateReq struct {
+	Label         string                 `json:"label" validate:"required,min=1,max=64" label:"名称"`
+	FieldKey      string                 `json:"field_key" validate:"required,min=1,max=64" label:"对应字段"`
+	TableKey      string                 `json:"table_key" validate:"required,min=1,max=64" label:"分类表"`
+	ElementType   string                 `json:"element_type" validate:"required" label:"元素类型"`
+	Placeholder   string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
+	Required      int                    `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"`
+	DefaultValue  string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
+	Visibility    map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
+	DynamicStates map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
+	DataSource    map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
+	Actions       map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
+}
+
+type FormElementUpdateReq struct {
+	Label         string                 `json:"label" validate:"omitempty,min=1,max=64" label:"名称"`
+	FieldKey      string                 `json:"field_key" validate:"omitempty,min=1,max=64" label:"对应字段"`
+	TableKey      string                 `json:"table_key" validate:"omitempty,min=1,max=64" label:"分类表"`
+	ElementType   string                 `json:"element_type" validate:"omitempty" label:"元素类型"`
+	Placeholder   string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
+	Required      *int                   `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"` // 指针区分未传与 0
+	DefaultValue  string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
+	Visibility    map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
+	DynamicStates map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
+	DataSource    map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
+	Actions       map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
+}
+
+type FormElementListReq struct {
+	BaseListReq
+	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
 }

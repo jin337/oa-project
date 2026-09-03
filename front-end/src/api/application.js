@@ -50,3 +50,25 @@ export function deleteTableField(appId, fieldId, tableName) {
     params: { table_name: tableName },
   })
 }
+
+// ========== 表单元素管理（/application/:appId/formelement） ==========
+
+// GET /application/:appId/formelement 表单元素列表
+export function listFormElements(appId, params) {
+  return request.get(`/application/${appId}/formelement`, { params })
+}
+
+// POST /application/:appId/formelement 新增表单元素
+export function createFormElement(appId, data) {
+  return request.post(`/application/${appId}/formelement`, data)
+}
+
+// PUT /application/:appId/formelement/:id 修改表单元素
+export function updateFormElement(appId, elementId, data) {
+  return request.put(`/application/${appId}/formelement/${elementId}`, data)
+}
+
+// DELETE /application/:appId/formelement/:id 删除表单元素
+export function deleteFormElement(appId, elementId) {
+  return request.delete(`/application/${appId}/formelement/${elementId}`)
+}

@@ -92,6 +92,11 @@ func Setup() *gin.Engine {
 		applications.POST("/:id/fields", handler.TableFieldCreate)
 		applications.PUT("/:id/fields/:fieldId", handler.TableFieldUpdate)
 		applications.DELETE("/:id/fields/:fieldId", handler.TableFieldDelete)
+		// 表单元素管理（FormElementManage.jsx）
+		applications.GET("/:id/formelement", handler.FormElementList)
+		applications.POST("/:id/formelement", handler.FormElementCreate)
+		applications.PUT("/:id/formelement/:elementId", handler.FormElementUpdate)
+		applications.DELETE("/:id/formelement/:elementId", handler.FormElementDelete)
 	}
 
 	return r

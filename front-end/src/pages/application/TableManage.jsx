@@ -82,6 +82,7 @@ const RESERVED_FIELDS = new Set([
   'created_by',
   'updated_by',
   'deleted_at',
+  'parent_id'
 ])
 
 function isReservedField(name) {
@@ -321,7 +322,7 @@ export default function TableManage() {
                 </Button>
               </Tooltip>
             ) : (
-              <Popconfirm focusLock title="确认删除该字段？" onOk={() => handleDelete(record)}>
+              <Popconfirm position="rb" focusLock title="确认删除该字段？" onOk={() => handleDelete(record)}>
                 <Button size="mini" status="danger">
                   删除
                 </Button>

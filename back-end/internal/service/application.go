@@ -70,8 +70,9 @@ func isValidTableName(name string) bool {
 	return tableNamePattern.MatchString(name)
 }
 
-// createBizTable 动态创建业务数据表（应用配置的表前缀，基础结构：主键 + 审计字段 + 软删除标记）
-func createBizTable(tableName string) error {
+// createBizTable 动态创建业务数据表（应用配置的表前缀）。
+// 基础结构：主键 + 审计字段 + 软删除标记；withParent 为 true（子表）时额外添加 parent_id 关联主表。
+func createBizTable(tableName string, withParent bool) error {
 	if !isValidTableName(tableName) {
 		return fmt.Errorf("非法的表名: %q", tableName)
 	}
@@ -79,24 +80,30 @@ func createBizTable(tableName string) error {
 	if !isValidTableName(real) {
 		return fmt.Errorf("表名附加前缀后不合法: %q", real)
 	}
-	createSQL := fmt.Sprintf(
-		"CREATE TABLE IF NOT EXISTS `%s` ("+
-			"`id` bigint unsigned NOT NULL AUTO_INCREMENT,"+
-			"`created_at` datetime(3) DEFAULT NULL,"+
-			"`updated_at` datetime(3) DEFAULT NULL,"+
-			"`created_by` bigint unsigned DEFAULT NULL,"+
-			"`updated_by` bigint unsigned DEFAULT NULL,"+
-			"`deleted_at` datetime(3) DEFAULT NULL,"+
-			"PRIMARY KEY (`id`),"+
-			"KEY `idx_deleted_at` (`deleted_at`)"+
-			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-		real)
-	return database.DB.Exec(createSQL).Error
+	var b strings.Builder
+	b.WriteString("CREATE TABLE IF NOT EXISTS `")
+	b.WriteString(real)
+	b.WriteString("` (")
+	b.WriteString("`id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',")
+	b.WriteString("`created_at` datetime(3) DEFAULT NULL COMMENT '创建时间',")
+	b.WriteString("`updated_at` datetime(3) DEFAULT NULL COMMENT '更新时间',")
+	b.WriteString("`created_by` bigint unsigned DEFAULT NULL COMMENT '创建人',")
+	b.WriteString("`updated_by` bigint unsigned DEFAULT NULL COMMENT '更新人',")
+	b.WriteString("`deleted_at` datetime(3) DEFAULT NULL COMMENT '删除时间',")
+	if withParent {
+		// 子表：额外添加关联主表的外键字段
+		b.WriteString("`parent_id` bigint unsigned DEFAULT NULL COMMENT '关联主表ID',")
+	}
+	b.WriteString("PRIMARY KEY (`id`),")
+	b.WriteString("KEY `idx_deleted_at` (`deleted_at`)")
+	b.WriteString(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
+	return database.DB.Exec(b.String()).Error
 }
 
-// createBizTables 按逗号分隔的多个表名逐个建表（自动跳过空白项）
+// createBizTables 按逗号分隔的多个表名逐个建表（自动跳过空白项）：
+// 主表不添加 parent_id，子表添加 parent_id 关联主表
 func createBizTables(tableName, subTableName string) error {
-	if err := createBizTable(tableName); err != nil {
+	if err := createBizTable(tableName, false); err != nil {
 		return fmt.Errorf("创建业务表失败: %w", err)
 	}
 	for _, sub := range strings.Split(subTableName, ",") {
@@ -104,7 +111,7 @@ func createBizTables(tableName, subTableName string) error {
 		if sub == "" {
 			continue
 		}
-		if err := createBizTable(sub); err != nil {
+		if err := createBizTable(sub, true); err != nil {
 			return fmt.Errorf("创建子表失败: %w", err)
 		}
 	}
@@ -171,7 +178,46 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 	return &app, nil
 }
 
-// ApplicationDelete 删除页面配置（软删除）
+// ApplicationDelete 删除页面配置（软删除），并级联物理删除关联的业务数据表：
+//  1. 先按 id 查询配置记录，获取主表 TableName 与子表 SubTableName（逗号分隔多个）
+//  2. 提取主表与拆分后的所有子表，经 bizTableName 拼接前缀，并经 isValidTableName 校验合法性（防 SQL 注入）
+//  3. 遍历所有合法表名执行 DROP TABLE IF EXISTS 物理删除
+//  4. 所有关联物理表删除成功后再软删除配置记录
+//  5. 查询不到配置记录或物理删表失败均中断并返回错误
 func ApplicationDelete(id uint) error {
+	var app model.Application
+	if err := database.DB.First(&app, id).Error; err != nil {
+		return errors.New("页面配置不存在")
+	}
+
+	// 收集主表 + 子表（逗号分隔，去空白、跳过空项）待删除的表名
+	names := []string{app.TableName}
+	for _, sub := range strings.Split(app.SubTableName, ",") {
+		if sub = strings.TrimSpace(sub); sub != "" {
+			names = append(names, sub)
+		}
+	}
+
+	// 拼接配置前缀并校验表名合法性，仅收集合法表名执行删除（非法表名视为脏配置跳过）
+	var realNames []string
+	for _, name := range names {
+		if !isValidTableName(name) {
+			continue
+		}
+		real := bizTableName(name)
+		if !isValidTableName(real) {
+			continue
+		}
+		realNames = append(realNames, real)
+	}
+
+	// 物理删除所有关联业务数据表
+	for _, real := range realNames {
+		if err := database.DB.Exec("DROP TABLE IF EXISTS `" + real + "`").Error; err != nil {
+			return fmt.Errorf("删除业务数据表 %s 失败: %w", real, err)
+		}
+	}
+
+	// 物理表全部删除成功后，再软删除配置记录
 	return database.DB.Delete(&model.Application{}, id).Error
 }

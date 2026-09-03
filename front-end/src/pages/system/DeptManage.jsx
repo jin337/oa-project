@@ -187,7 +187,7 @@ export default function DeptManage() {
               </Button>
             </Tooltip>
           ) : (
-            <Popconfirm focusLock title="确认删除该部门？" onOk={() => handleDelete(record)}>
+            <Popconfirm position="rb" focusLock title="确认删除该部门？" onOk={() => handleDelete(record)}>
               <Button size="mini" status="danger">
                 删除
               </Button>
