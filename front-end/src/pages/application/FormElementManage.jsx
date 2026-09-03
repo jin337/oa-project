@@ -126,6 +126,13 @@ function normalizeActionsForForm(actions) {
           ? JSON.stringify(item.param_mapping, null, 2)
           : ''
       if (!Array.isArray(item.target_mapping)) item.target_mapping = []
+      if (a.action_type === 'set_value') {
+        if (Array.isArray(a.value)) {
+          item.value = a.value.map((v) => ({ ...v }))
+        } else {
+          item.value = []
+        }
+      }
       return item
     })
   }
@@ -142,8 +149,10 @@ function buildActionsFromValues(actions) {
       .map((a) => {
         const item = { action_type: a.action_type }
         if (a.action_type === 'set_value') {
-          if (a.target) item.target = a.target
-          if (a.source) item.source = a.source
+          const value = (Array.isArray(a.value) ? a.value : [])
+            .filter((v) => v && (v.source || v.target))
+            .map((v) => ({ source: v.source || '', target: v.target || '' }))
+          if (value.length) item.value = value
         } else if (a.action_type === 'fetch_and_fill') {
           if (a.api_url) item.api_url = a.api_url
           if (a.method) item.method = a.method
@@ -340,7 +349,7 @@ export default function FormElementManage() {
           url: '',
           method: undefined,
           label: '',
-          value: '',
+          value: [],
         },
       })
     } else if (type === 'api') {
@@ -351,7 +360,7 @@ export default function FormElementManage() {
           url: '',
           method: 'GET',
           label: '',
-          value: '',
+          value: [],
           params: '',
         },
       })
@@ -392,6 +401,8 @@ export default function FormElementManage() {
       visible_if: record.dynamic_states?.visible_if || '',
       data_source: {
         ...(record.data_source || {}),
+        // value 兼容旧数据：旧版为字符串表达式，统一初始化为数组结构
+        value: Array.isArray(record.data_source?.value) ? record.data_source.value : [],
         // params 为对象结构，回填时反序列化为 JSON 字符串供 TextArea 展示
         params: safeStringify(record.data_source?.params),
       },
@@ -442,12 +453,15 @@ export default function FormElementManage() {
               // params 为 JSON 字符串输入，校验失败时保持空对象
             }
           }
+          const value = (Array.isArray(ds.value) ? ds.value : [])
+            .filter((v) => v && (v.source || v.target))
+            .map((v) => ({ source: v.source || '', target: v.target || '' }))
           return {
             type: 'api',
             url: ds.url || '',
             method: ds.method || 'GET',
             label: ds.label || '',
-            value: ds.value || '',
+            value,
             params,
           }
         }
@@ -884,15 +898,40 @@ export default function FormElementManage() {
                       />
                     </FormItem>
                   </Col>
-                  <Col span={12}>
-                    <FormItem label="显示标签表达式" field="data_source.label">
-                      <Input placeholder="${data.name}" />
+                  <Col span={24}>
+                    <FormItem label="显示标签" field="data_source.label">
+                      <Input placeholder="支持表达式：${data.name}" />
                     </FormItem>
                   </Col>
-                  <Col span={12}>
-                    <FormItem label="提交值表达式" field="data_source.value">
-                      <Input placeholder="${data.id}" />
-                    </FormItem>
+                  <Col span={24}>
+                    <div className="mb-2 text-xs text-gray-500">提交值映射（value）</div>
+                    <Form.List field="data_source.value">
+                      {(fields, { add, remove }) => (
+                        <>
+                          {fields.map((item, index) => (
+                            <div key={item.key} className="mb-2 flex items-center gap-2">
+                              <FormItem field={item.field + '.source'} noStyle className="mb-0! flex-1">
+                                <Input placeholder="来源表达式，如 ${data.base_salary}" />
+                              </FormItem>
+                              <span className="text-gray-400">→</span>
+                              <FormItem field={item.field + '.target'} noStyle className="mb-0! flex-1">
+                                <Input placeholder="目标字段，如 net_salary" />
+                              </FormItem>
+                              <Button size="mini" status="danger" onClick={() => remove(index)}>
+                                删除
+                              </Button>
+                            </div>
+                          ))}
+                          <Button
+                            size="small"
+                            type="outline"
+                            onClick={() => add({ source: '', target: '' })}
+                          >
+                            + 添加提交值映射
+                          </Button>
+                        </>
+                      )}
+                    </Form.List>
                   </Col>
                 </Row>
               )}
@@ -940,28 +979,42 @@ export default function FormElementManage() {
                               <Select placeholder="请选择动作类型" options={ACTION_TYPE_OPTIONS} />
                             </FormItem>
 
-                            {/* set_value：直接赋值 */}
+                            {/* set_value：直接赋值（多字段映射） */}
                             {actionType === 'set_value' && (
-                              <Row gutter={16}>
-                                <Col span={12}>
-                                  <FormItem
-                                    label="目标字段"
-                                    field={item.field + '.target'}
-                                    rules={[{ required: true, message: '请输入目标字段' }]}
-                                  >
-                                    <Input placeholder="如：create_time" />
-                                  </FormItem>
-                                </Col>
-                                <Col span={12}>
-                                  <FormItem
-                                    label="赋值来源"
-                                    field={item.field + '.source'}
-                                    rules={[{ required: true, message: '请输入赋值来源' }]}
-                                  >
-                                    <Input placeholder="如：new Date().toISOString()" />
-                                  </FormItem>
-                                </Col>
-                              </Row>
+                              <>
+                                <div className="mb-2 text-xs text-gray-500">赋值映射（value）</div>
+                                <Form.List field={item.field + '.value'}>
+                                  {(valueFields, { add: addValue, remove: removeValue }) => (
+                                    <>
+                                      {valueFields.map((vf, vfIndex) => (
+                                        <div key={vf.key} className="mb-2 flex items-center gap-2">
+                                          <FormItem field={vf.field + '.source'} noStyle className="mb-0! flex-1">
+                                            <Input placeholder="赋值来源，如 new Date().toISOString()" />
+                                          </FormItem>
+                                          <span className="text-gray-400">→</span>
+                                          <FormItem field={vf.field + '.target'} noStyle className="mb-0! flex-1">
+                                            <Input placeholder="目标字段，如 create_time" />
+                                          </FormItem>
+                                          <Button
+                                            size="mini"
+                                            status="danger"
+                                            onClick={() => removeValue(vfIndex)}
+                                          >
+                                            删除
+                                          </Button>
+                                        </div>
+                                      ))}
+                                      <Button
+                                        size="small"
+                                        type="outline"
+                                        onClick={() => addValue({ source: '', target: '' })}
+                                      >
+                                        + 添加赋值映射
+                                      </Button>
+                                    </>
+                                  )}
+                                </Form.List>
+                              </>
                             )}
 
                             {/* fetch_and_fill：请求并填充 */}
