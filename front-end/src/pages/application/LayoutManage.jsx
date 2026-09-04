@@ -138,6 +138,7 @@ export default function LayoutManage() {
             label: item.label || item.field_key || '未命名元素',
             fieldKey: item.field_key,
             tableKey: item.table_key || '',
+            required: Boolean(item.required),
           })),
         )
       })
@@ -181,7 +182,7 @@ export default function LayoutManage() {
       type: libItem.type,
       label: libItem.label || libItem.type,
       width: 12,
-      required: false,
+      required: Boolean(libItem.required),
     }
     const next = [...elements]
     if (index == null || index === -1) next.push(el)
