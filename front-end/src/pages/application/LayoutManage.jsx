@@ -117,6 +117,10 @@ export default function LayoutManage() {
   const [activePanel, setActivePanel] = useState('form')
   const [saving, setSaving] = useState(false)
 
+  // 子表字段缓存（表格列级联选择）：{ [tableKey]: fields[] } + 各表加载中状态
+  const [tableFieldsMap, setTableFieldsMap] = useState({})
+  const [fieldLoadingKeys, setFieldLoadingKeys] = useState({})
+
   // 拖拽状态
   const dragType = useRef(null) // 'new' | 'move'
   const dragNewItem = useRef(null)
@@ -305,8 +309,9 @@ export default function LayoutManage() {
 
   const genColumn = (cols) => ({
     id: `col_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    table_key: selectedElement?.table_key || '',
     title: `列${(cols || []).length + 1}`,
-    dataIndex: `col_${(cols || []).length + 1}`,
+    dataIndex: null,
   })
 
   const updateSelectedElementColumns = (fn) => {
@@ -334,6 +339,44 @@ export default function LayoutManage() {
     updateSelectedElementColumns((cols) =>
       cols.map((c) => (c.id === colId ? { ...c, ...patch } : c)),
     )
+
+  // 加载指定表下的字段列表（表单元素接口，按 table_key 过滤），并缓存
+  const loadTableFields = async (tableKey) => {
+    if (!tableKey) return
+    setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: true }))
+    try {
+      const res = await applicationApi.listFormElements(id, {
+        page: 1,
+        size: 9999,
+        table_key: tableKey,
+      })
+      const list = (res.data?.list || []).filter((f) => !tableKey || f.table_key === tableKey)
+      setTableFieldsMap((prev) => ({ ...prev, [tableKey]: list }))
+    } catch (e) {
+      setTableFieldsMap((prev) => ({ ...prev, [tableKey]: [] }))
+    } finally {
+      setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: false }))
+    }
+  }
+
+  // 全局关联子表：保存到表格元素层级，并联动加载字段缓存
+  const handleTableKeyChange = (tableKey) => {
+    updateSelectedElement({ table_key: tableKey })
+    if (tableKey && !tableFieldsMap[tableKey]) {
+      loadTableFields(tableKey)
+    }
+  }
+
+  // 选择字段：自动将字段的 label 赋给 title、field_key 赋给 dataIndex
+  const handleColumnFieldChange = (colId, tableKey, fieldKey) => {
+    if (!tableKey) return
+    const fields = tableFieldsMap[tableKey] || []
+    const field = fields.find((f) => f.field_key === fieldKey || String(f.id) === fieldKey)
+    updateColumn(colId, {
+      dataIndex: field?.field_key || fieldKey,
+      title: field?.label || field?.name || fieldKey,
+    })
+  }
 
   // 切换表单页 / 详情页（重置选中与面板状态）
   const handlePageChange = (page) => {
@@ -401,7 +444,14 @@ export default function LayoutManage() {
           dataIndex: col.dataIndex || `col_${i + 1}`,
         }))
         return columns.length ? (
-          <Table size="small" border pagination={false} columns={columns} data={[{ key: 1 }]} />
+          <Table
+            size="small"
+            rowKey={el.element_id}
+            border
+            pagination={false}
+            columns={columns}
+            data={[]}
+          />
         ) : (
           <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
             表格（未配置列）
@@ -461,7 +511,7 @@ export default function LayoutManage() {
       {/* ========== 中间：预览画布（自定义 Header，标题靠左 / 按钮靠右） ========== */}
       <div className="min-w-0 flex-1 self-stretch border-y border-gray-200 bg-white">
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
-          <div className="text-sm font-medium text-gray-800 w-60">预览画布</div>
+          <div className="w-60 text-sm font-medium text-gray-800">预览画布</div>
           {/* 表单页 / 详情页切换 */}
           <Radio.Group
             type="button"
@@ -470,7 +520,7 @@ export default function LayoutManage() {
             onChange={handlePageChange}
             options={PAGE_OPTIONS}
           />
-          <div className="flex items-center gap-2 w-60 justify-end">
+          <div className="flex w-60 items-center justify-end gap-2">
             {/* 详情页编辑时：一键将表单页布局同步到详情页 */}
             {activePage === 'detail' && (
               <Button size="mini" icon={<IconSync />} onClick={handleSyncLayout}>
@@ -688,42 +738,56 @@ export default function LayoutManage() {
                   <div>
                     <div className="mb-2 flex items-center justify-between">
                       <div className="text-sm text-gray-600">表格列配置</div>
-                      <Button size="mini" icon={<IconPlus />} onClick={addColumn}>
+                      <Button
+                        size="mini"
+                        icon={<IconPlus />}
+                        disabled={!selectedElement.table_key}
+                        onClick={addColumn}
+                      >
                         添加列
                       </Button>
+                    </div>
+                    <div className="mb-3">
+                      <div className="mb-1 text-xs text-gray-500">关联子表</div>
+                      <Select
+                        size="small"
+                        placeholder="选择关联子表"
+                        value={selectedElement.table_key}
+                        onChange={handleTableKeyChange}
+                        options={appTables.subTables.map((tb) => ({ label: tb, value: tb }))}
+                      />
                     </div>
                     {(selectedElement.columns || []).map((col, idx) => (
                       <div
                         key={col.id}
-                        className="mb-2 rounded border border-gray-200 bg-gray-50 p-2"
+                        className="mb-2 flex items-center justify-between gap-1"
                       >
-                        <div className="mb-1 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">列 {idx + 1}</span>
-                          <Button
-                            size="mini"
-                            status="danger"
-                            icon={<IconDelete />}
-                            onClick={() => removeColumn(col.id)}
-                          />
-                        </div>
-                        <Input
+                        <div className="text-xs whitespace-nowrap text-gray-500">列 {idx + 1}</div>
+                        <Select
                           size="small"
-                          placeholder="列标题"
-                          value={col.title}
-                          onChange={(v) => updateColumn(col.id, { title: v })}
-                        />
-                        <Input
-                          size="small"
-                          className="mt-1"
-                          placeholder="字段名 (dataIndex)"
+                          placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
                           value={col.dataIndex}
-                          onChange={(v) => updateColumn(col.id, { dataIndex: v })}
+                          disabled={!selectedElement.table_key}
+                          loading={Boolean(fieldLoadingKeys[selectedElement.table_key])}
+                          options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => ({
+                            label: f.label || f.name || f.field_key,
+                            value: f.field_key || f.name || String(f.id),
+                          }))}
+                          onChange={(v) =>
+                            handleColumnFieldChange(col.id, selectedElement.table_key, v)
+                          }
+                        />
+                        <Button
+                          size="mini"
+                          status="danger"
+                          icon={<IconDelete />}
+                          onClick={() => removeColumn(col.id)}
                         />
                       </div>
                     ))}
                     {!(selectedElement.columns || []).length && (
                       <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
-                        暂无列，点击"添加列"开始配置
+                        {selectedElement.table_key ? '点击"添加列"开始配置' : '请先选择关联子表'}
                       </div>
                     )}
                   </div>
