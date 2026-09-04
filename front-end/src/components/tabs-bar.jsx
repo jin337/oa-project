@@ -34,7 +34,7 @@ export default function TabsBar() {
       }}
       onDeleteTab={(key) => closeTab(key)}
       overflow="scroll"
-      className="shrink-0 border-b border-gray-200 bg-white px-2 [&_.arco-tabs-content]:hidden"
+      className="shrink-0 border-b border-gray-200 bg-white px-2 [&_.arco-tabs-content]:hidden [&_.arco-tabs-header-nav::before]:hidden!"
       extra={
         <Dropdown droplist={opsMenu} position="br" trigger="hover">
           <div className="mx-1 flex h-8 cursor-pointer items-center rounded px-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">

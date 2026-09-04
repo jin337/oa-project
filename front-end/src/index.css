@@ -17,11 +17,6 @@ strong {
 }
 
 /* —— Arco Tabs 样式覆盖 —— */
-/* 移除 header-nav 底部默认边框线（::before 伪元素） */
-.arco-tabs-header-nav::before {
-  display: none;
-}
-
 /* 还原 card-gutter 模式下激活页签的底边框色与背景色（含 hover 态） */
 .arco-tabs-header-nav-card-gutter .arco-tabs-header-title-active,
 .arco-tabs-header-nav-card-gutter .arco-tabs-header-title-active:hover {

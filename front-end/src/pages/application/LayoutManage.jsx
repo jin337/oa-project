@@ -169,10 +169,6 @@ export default function LayoutManage() {
     return groups
   }, [library, appTables])
 
-  // Card 标题与当前激活页签标题保持一致
-  const currentTab = tabs.find((t) => t.path === activeTab)
-  const cardTitle = currentTab?.title || MODULE_LABEL
-
   const selectedElement = elements.find((e) => e.id === selectedId) || null
   const panelKey = selectedElement ? activePanel : 'form'
 
@@ -185,6 +181,7 @@ export default function LayoutManage() {
       type: libItem.type,
       label: libItem.label || libItem.type,
       width: 12,
+      required: false,
     }
     const next = [...elements]
     if (index == null || index === -1) next.push(el)
@@ -307,7 +304,7 @@ export default function LayoutManage() {
     <div className="flex items-start">
       {/* ========== 左侧：组件库（按表分组，两列网格） ========== */}
       <div className="w-56 shrink-0 self-stretch border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 px-4 py-3 text-sm font-medium text-gray-800">
+        <div className="border-b border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-800">
           组件库
         </div>
         <div className="max-h-[calc(100vh-220px)] overflow-y-auto p-3">
@@ -477,7 +474,7 @@ export default function LayoutManage() {
 
       {/* ========== 右侧：属性配置面板（Tabs 作为顶部导航） ========== */}
       <div className="w-80 shrink-0 self-stretch border border-gray-200 bg-white">
-        <Tabs activeTab={panelKey} onChange={setActivePanel} className="px-3 pt-2">
+        <Tabs activeTab={panelKey} onChange={setActivePanel} className="[&_.arco-tabs-content]:px-3 py-px">
           {/* 表单全局设置 */}
           <TabPane key="form" title="表单设置">
             <div className="flex flex-col gap-4 py-2">
