@@ -783,22 +783,21 @@ export default function LayoutManage() {
                       </Button>
                     </div>
                     <div className="mb-4">
-                      <div className="mb-1 text-xs text-gray-500">关联子表</div>
                       <Select
                         size="small"
                         placeholder="选择关联子表"
-                        value={selectedElement.table_key}
+                        value={selectedElement.table_key || undefined}
                         onChange={handleTableKeyChange}
                         options={appTables.subTables.map((tb) => ({ label: tb, value: tb }))}
                       />
                     </div>
                     {(selectedElement.columns || []).map((col, idx) => (
                       <div key={col.id} className="mb-2 flex items-center justify-between gap-1">
-                        <div className="text-xs whitespace-nowrap text-gray-500">列 {idx + 1}</div>
+                        <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
                         <Select
                           size="small"
                           placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
-                          value={col.dataIndex}
+                          value={col.dataIndex || undefined}
                           disabled={!selectedElement.table_key}
                           loading={Boolean(fieldLoadingKeys[selectedElement.table_key])}
                           options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => ({
@@ -810,7 +809,7 @@ export default function LayoutManage() {
                           }
                         />
                         <Button
-                          size="mini"
+                          size="small"
                           status="danger"
                           icon={<IconDelete />}
                           onClick={() => removeColumn(col.id)}
