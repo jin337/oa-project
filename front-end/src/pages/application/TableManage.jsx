@@ -490,7 +490,7 @@ export default function TableManage() {
             <Input placeholder="可选" />
           </FormItem>
           <FormItem label="注释" field="comment">
-            <Input.TextArea placeholder="字段说明" autoSize={{ minRows: 2, maxRows: 4 }} />
+            <Input placeholder="字段说明" />
           </FormItem>
         </Form>
       </Modal>
