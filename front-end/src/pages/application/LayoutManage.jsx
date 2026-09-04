@@ -445,9 +445,9 @@ export default function LayoutManage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-160px)] items-stretch bg-white">
+    <div className="flex h-[calc(100vh-160px)] items-stretch border border-gray-200 bg-white">
       {/* ========== 左侧：组件库（按表分组，两列网格） ========== */}
-      <div className="flex w-56 shrink-0 flex-col border border-gray-200">
+      <div className="flex w-56 shrink-0 flex-col">
         <div className="shrink-0 border-b border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-800">
           组件库
         </div>
@@ -488,7 +488,7 @@ export default function LayoutManage() {
       </div>
 
       {/* ========== 中间：预览画布（自定义 Header，标题靠左 / 按钮靠右） ========== */}
-      <div className="flex min-w-0 flex-1 flex-col border-y border-gray-200">
+      <div className="flex min-w-0 flex-1 flex-col border-x border-gray-200">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
           <div className="w-60 text-sm font-medium text-gray-800">预览画布</div>
           {/* 表单页 / 详情页切换 */}
@@ -632,7 +632,7 @@ export default function LayoutManage() {
       </div>
 
       {/* ========== 右侧：属性配置面板（Tabs 作为顶部导航） ========== */}
-      <div className="flex w-80 shrink-0 flex-col overflow-hidden border border-gray-200">
+      <div className="flex w-80 shrink-0 flex-col overflow-hidden">
         <Tabs
           activeTab={panelKey}
           onChange={setActivePanel}
