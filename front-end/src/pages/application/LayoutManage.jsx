@@ -17,6 +17,7 @@ import {
   Tabs,
   Tag,
   TimePicker,
+  Upload,
 } from '@arco-design/web-react'
 import {
   IconDelete,
@@ -146,10 +147,19 @@ export default function LayoutManage() {
           .filter(Boolean)
         setAppTables({ tableName: data?.table_name || '', subTables })
         // 分别回填表单页 / 详情页的布局配置
+        const formLayout = parseLayoutJson(data?.form_layout_json)
+        const detailLayout = parseLayoutJson(data?.detail_layout_json)
         setLayouts((prev) => ({
-          form: parseLayoutJson(data?.form_layout_json) || prev.form,
-          detail: parseLayoutJson(data?.detail_layout_json) || prev.detail,
+          form: formLayout || prev.form,
+          detail: detailLayout || prev.detail,
         }))
+        // 收集所有表格组件已配置的关联子表，自动加载字段缓存（保证重进/刷新后列配置可回显）
+        const tableKeys = [...(formLayout?.elements || []), ...(detailLayout?.elements || [])]
+          .filter((el) => el.type === 'table' && el.table_key)
+          .map((el) => el.table_key)
+        new Set(tableKeys).forEach((tk) => {
+          if (tk) loadTableFields(tk)
+        })
       })
       .catch(() => {})
     return () => {
@@ -367,6 +377,14 @@ export default function LayoutManage() {
     }
   }
 
+  // 选中表格元素时：若关联子表字段未缓存则自动加载（兜底，覆盖初始化回填后的懒加载场景）
+  useEffect(() => {
+    const tk = selectedElement?.table_key
+    if (selectedElement?.element_type === 'table' && tk && !tableFieldsMap[tk]) {
+      loadTableFields(tk)
+    }
+  }, [selectedElement, tableFieldsMap])
+
   // 选择字段：自动将字段的 label 赋给 title、field_key 赋给 dataIndex
   const handleColumnFieldChange = (colId, tableKey, fieldKey) => {
     if (!tableKey) return
@@ -435,7 +453,7 @@ export default function LayoutManage() {
       case 'switch':
         return <Switch disabled />
       case 'upload':
-        return <Input {...disabledProps} placeholder="点击上传" />
+        return <Upload action="/" {...disabledProps} />
       case 'divider':
         return <Divider />
       case 'table': {
@@ -443,13 +461,23 @@ export default function LayoutManage() {
           title: col.title || col.dataIndex || `列${i + 1}`,
           dataIndex: col.dataIndex || `col_${i + 1}`,
         }))
+        const action = {
+          key: 'action',
+          title: '操作',
+          width: 140,
+          render: () => (
+            <Button size="mini" status="danger">
+              删除
+            </Button>
+          ),
+        }
         return columns.length ? (
           <Table
             size="small"
             rowKey={el.element_id}
             border
             pagination={false}
-            columns={columns}
+            columns={[...columns, action]}
             data={[]}
           />
         ) : (
@@ -611,7 +639,7 @@ export default function LayoutManage() {
                       >
                         {/* 使用 Form.Item 展示字段名称（label）与必填星号，布局/标签宽度/对齐由 Form 统一控制 */}
                         <FormItem
-                          label={el.label}
+                          label={el?.key?.includes('base_') ? ' ' : el.label}
                           required={Boolean(el.required)}
                           className="mb-0!"
                         >
@@ -633,7 +661,7 @@ export default function LayoutManage() {
                               shape="circle"
                               icon={<IconDelete />}
                               title="删除元素"
-                              className="absolute! -top-2 -right-2 shadow"
+                              className="absolute! -top-2 -right-2 z-2 shadow"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 removeElement(el.id)
@@ -705,34 +733,38 @@ export default function LayoutManage() {
           {selectedElement && (
             <TabPane key="element" title="元素属性">
               <div className="flex flex-col gap-4 py-2">
-                <div>
-                  <div className="mb-2 text-sm text-gray-600">元素类型</div>
-                  <Tag color="arcoblue" size="medium">
-                    {getTypeLabel(selectedElement.element_type)}
-                  </Tag>
-                </div>
-                <div>
-                  <div className="mb-2 text-sm text-gray-600">字段名称</div>
-                  <Input
-                    value={selectedElement.label}
-                    onChange={(v) => updateSelectedElement({ label: v })}
-                    placeholder="请输入字段名称"
-                  />
-                </div>
-                <div>
-                  <div className="mb-2 text-sm text-gray-600">宽度占比</div>
-                  <Radio.Group
-                    type="button"
-                    value={selectedElement.width}
-                    onChange={(v) => updateSelectedElement({ width: v })}
-                  >
-                    {WIDTH_OPTIONS.map((opt) => (
-                      <Radio key={opt.value} value={opt.value}>
-                        {opt.tip}
-                      </Radio>
-                    ))}
-                  </Radio.Group>
-                </div>
+                {!selectedElement?.key?.includes('base_') && (
+                  <>
+                    <div>
+                      <div className="mb-2 text-sm text-gray-600">元素类型</div>
+                      <Tag color="arcoblue" size="medium">
+                        {getTypeLabel(selectedElement.element_type)}
+                      </Tag>
+                    </div>
+                    <div>
+                      <div className="mb-2 text-sm text-gray-600">字段名称</div>
+                      <Input
+                        value={selectedElement.label}
+                        onChange={(v) => updateSelectedElement({ label: v })}
+                        placeholder="请输入字段名称"
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-2 text-sm text-gray-600">宽度占比</div>
+                      <Radio.Group
+                        type="button"
+                        value={selectedElement.width}
+                        onChange={(v) => updateSelectedElement({ width: v })}
+                      >
+                        {WIDTH_OPTIONS.map((opt) => (
+                          <Radio key={opt.value} value={opt.value}>
+                            {opt.tip}
+                          </Radio>
+                        ))}
+                      </Radio.Group>
+                    </div>
+                  </>
+                )}
                 {/* 表格组件：动态配置列 / 子字段 */}
                 {selectedElement.element_type === 'table' && (
                   <div>
@@ -747,7 +779,7 @@ export default function LayoutManage() {
                         添加列
                       </Button>
                     </div>
-                    <div className="mb-3">
+                    <div className="mb-4">
                       <div className="mb-1 text-xs text-gray-500">关联子表</div>
                       <Select
                         size="small"
@@ -758,10 +790,7 @@ export default function LayoutManage() {
                       />
                     </div>
                     {(selectedElement.columns || []).map((col, idx) => (
-                      <div
-                        key={col.id}
-                        className="mb-2 flex items-center justify-between gap-1"
-                      >
+                      <div key={col.id} className="mb-2 flex items-center justify-between gap-1">
                         <div className="text-xs whitespace-nowrap text-gray-500">列 {idx + 1}</div>
                         <Select
                           size="small"
