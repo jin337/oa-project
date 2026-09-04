@@ -178,7 +178,7 @@ export default function LayoutManage() {
           key: 'base_upload',
           type: 'upload',
           element_type: 'upload',
-          label: '上传',
+          label: '附件',
           field_key: '',
           table_key: '',
           required: false,
@@ -427,7 +427,7 @@ export default function LayoutManage() {
       {/* ========== 中间：预览画布（自定义 Header，标题靠左 / 按钮靠右） ========== */}
       <div className="min-w-0 flex-1 self-stretch border-y border-gray-200 bg-white">
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
-          <span className="text-sm font-medium text-gray-800">预览画布</span>
+          <div className="text-sm font-medium text-gray-800 w-60">预览画布</div>
           {/* 表单页 / 详情页切换 */}
           <Radio.Group
             type="button"
