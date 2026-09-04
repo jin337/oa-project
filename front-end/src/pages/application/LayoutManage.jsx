@@ -55,7 +55,27 @@ const ALIGN_OPTIONS = [
   { label: '右对齐', value: 'right' },
 ]
 
+// 布局页面类型（表单页 / 详情页）
+const PAGE_OPTIONS = [
+  { label: '表单页', value: 'form' },
+  { label: '详情页', value: 'detail' },
+]
+
 const genId = () => `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+// 解析后端布局 JSON（form_layout_json / detail_layout_json 均为 { formConfig, elements } 结构）
+const parseLayoutJson = (raw) => {
+  if (!raw || typeof raw !== 'string') return null
+  try {
+    const parsed = JSON.parse(raw)
+    return {
+      formConfig: { ...DEFAULT_FORM_CONFIG, ...(parsed.formConfig || {}) },
+      elements: Array.isArray(parsed.elements) ? parsed.elements : [],
+    }
+  } catch (e) {
+    return null
+  }
+}
 
 // 根据类型获取中文标签
 const getTypeLabel = (type) => ELEMENT_TYPE_OPTIONS.find((c) => c.value === type)?.label || type
@@ -71,9 +91,18 @@ export default function LayoutManage() {
   // 应用的主表 / 子表信息（用于组件库分组）
   const [appTables, setAppTables] = useState({ tableName: '', subTables: [] })
 
-  // 布局数据
-  const [formConfig, setFormConfig] = useState(DEFAULT_FORM_CONFIG)
-  const [elements, setElements] = useState([])
+  // 布局数据：按页面类型（表单页 / 详情页）分别缓存两套布局配置
+  const [activePage, setActivePage] = useState('form') // 'form' | 'detail'
+  const [layouts, setLayouts] = useState({
+    form: { formConfig: { ...DEFAULT_FORM_CONFIG }, elements: [] },
+    detail: { formConfig: { ...DEFAULT_FORM_CONFIG }, elements: [] },
+  })
+
+  // 当前激活页的派生数据（画布渲染与右侧属性面板均基于此）
+  const { formConfig, elements } = layouts[activePage]
+
+  const updateLayout = (patch) =>
+    setLayouts((prev) => ({ ...prev, [activePage]: { ...prev[activePage], ...patch } }))
 
   // 选中与面板
   const [selectedId, setSelectedId] = useState(null)
@@ -104,17 +133,11 @@ export default function LayoutManage() {
           .map((s) => s.trim())
           .filter(Boolean)
         setAppTables({ tableName: data?.table_name || '', subTables })
-        // 回填已保存的布局配置
-        const raw = data?.form_layout_json
-        if (raw && typeof raw === 'string') {
-          try {
-            const parsed = JSON.parse(raw)
-            if (parsed.formConfig) setFormConfig({ ...DEFAULT_FORM_CONFIG, ...parsed.formConfig })
-            if (Array.isArray(parsed.elements)) setElements(parsed.elements)
-          } catch (e) {
-            // 非法 JSON 忽略
-          }
-        }
+        // 分别回填表单页 / 详情页的布局配置
+        setLayouts((prev) => ({
+          form: parseLayoutJson(data?.form_layout_json) || prev.form,
+          detail: parseLayoutJson(data?.detail_layout_json) || prev.detail,
+        }))
       })
       .catch(() => {})
     return () => {
@@ -132,14 +155,7 @@ export default function LayoutManage() {
         if (cancelled) return
         const list = res.data?.list || []
         setLibrary(
-          list.map((item) => ({
-            key: String(item.id),
-            type: item.element_type,
-            label: item.label || item.field_key || '未命名元素',
-            fieldKey: item.field_key,
-            tableKey: item.table_key || '',
-            required: Boolean(item.required),
-          })),
+          list.map((item) => ({...item,element_id:item.id})),
         )
       })
       .catch(() => setLibrary([]))
@@ -178,35 +194,45 @@ export default function LayoutManage() {
   const addElement = (libItem, index) => {
     if (!libItem) return
     const el = {
+      ...libItem,
       id: genId(),
-      type: libItem.type,
-      label: libItem.label || libItem.type,
       width: 12,
-      required: Boolean(libItem.required),
     }
-    const next = [...elements]
-    if (index == null || index === -1) next.push(el)
-    else next.splice(index, 0, el)
-    setElements(next)
+    setLayouts((prev) => {
+      const cur = prev[activePage]
+      const next = [...cur.elements]
+      if (index == null || index === -1) next.push(el)
+      else next.splice(index, 0, el)
+      return { ...prev, [activePage]: { ...cur, elements: next } }
+    })
     setSelectedId(el.id)
     setActivePanel('element')
   }
 
   const moveElement = (sourceId, targetIndex) => {
     if (!sourceId) return
-    const next = [...elements]
-    const from = next.findIndex((e) => e.id === sourceId)
-    if (from === -1) return
-    const [moved] = next.splice(from, 1)
-    let to = targetIndex
-    if (to == null || to === -1) to = next.length
-    else if (from < to) to -= 1
-    next.splice(Math.max(0, Math.min(to, next.length)), 0, moved)
-    setElements(next)
+    setLayouts((prev) => {
+      const cur = prev[activePage]
+      const next = [...cur.elements]
+      const from = next.findIndex((e) => e.id === sourceId)
+      if (from === -1) return prev
+      const [moved] = next.splice(from, 1)
+      let to = targetIndex
+      if (to == null || to === -1) to = next.length
+      else if (from < to) to -= 1
+      next.splice(Math.max(0, Math.min(to, next.length)), 0, moved)
+      return { ...prev, [activePage]: { ...cur, elements: next } }
+    })
   }
 
   const removeElement = (elId) => {
-    setElements((prev) => prev.filter((e) => e.id !== elId))
+    setLayouts((prev) => {
+      const cur = prev[activePage]
+      return {
+        ...prev,
+        [activePage]: { ...cur, elements: cur.elements.filter((e) => e.id !== elId) },
+      }
+    })
     if (selectedId === elId) {
       setSelectedId(null)
       setActivePanel('form')
@@ -214,7 +240,7 @@ export default function LayoutManage() {
   }
 
   const handleClear = () => {
-    setElements([])
+    updateLayout({ elements: [] })
     setSelectedId(null)
     setActivePanel('form')
   }
@@ -235,11 +261,31 @@ export default function LayoutManage() {
 
   // ==================== 属性编辑 ====================
 
-  const updateFormConfig = (patch) => setFormConfig((prev) => ({ ...prev, ...patch }))
+  const updateFormConfig = (patch) =>
+    setLayouts((prev) => {
+      const cur = prev[activePage]
+      return { ...prev, [activePage]: { ...cur, formConfig: { ...cur.formConfig, ...patch } } }
+    })
 
   const updateSelectedElement = (patch) => {
     if (!selectedId) return
-    setElements((prev) => prev.map((e) => (e.id === selectedId ? { ...e, ...patch } : e)))
+    setLayouts((prev) => {
+      const cur = prev[activePage]
+      return {
+        ...prev,
+        [activePage]: {
+          ...cur,
+          elements: cur.elements.map((e) => (e.id === selectedId ? { ...e, ...patch } : e)),
+        },
+      }
+    })
+  }
+
+  // 切换表单页 / 详情页（重置选中与面板状态）
+  const handlePageChange = (page) => {
+    setActivePage(page)
+    setSelectedId(null)
+    setActivePanel('form')
   }
 
   // ==================== 保存 ====================
@@ -247,11 +293,10 @@ export default function LayoutManage() {
   const handleSave = async () => {
     setSaving(true)
     try {
+      const key = activePage === 'form' ? 'form_layout_json' : 'detail_layout_json'
       const layoutData = { formConfig, elements }
-      await applicationApi.updateApplication(id, {
-        form_layout_json: JSON.stringify(layoutData),
-      })
-      Message.success('布局配置已保存')
+      await applicationApi.updateApplication(id, { [key]: JSON.stringify(layoutData) })
+      Message.success(`${activePage === 'form' ? '表单页' : '详情页'}布局配置已保存`)
     } catch (e) {
       Message.error('保存失败，请稍后重试')
     } finally {
@@ -350,6 +395,14 @@ export default function LayoutManage() {
       <div className="min-w-0 flex-1 self-stretch border-y border-gray-200 bg-white">
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
           <span className="text-sm font-medium text-gray-800">预览画布</span>
+          {/* 表单页 / 详情页切换 */}
+          <Radio.Group
+            type="button"
+            size="mini"
+            value={activePage}
+            onChange={handlePageChange}
+            options={PAGE_OPTIONS}
+          />
           <div className="flex items-center gap-2">
             <Popconfirm title="确定清空画布中的所有表单元素吗？" onOk={handleClear}>
               <Button size="mini" icon={<IconDelete />}>
@@ -475,7 +528,11 @@ export default function LayoutManage() {
 
       {/* ========== 右侧：属性配置面板（Tabs 作为顶部导航） ========== */}
       <div className="w-80 shrink-0 self-stretch border border-gray-200 bg-white">
-        <Tabs activeTab={panelKey} onChange={setActivePanel} className="[&_.arco-tabs-content]:px-3 py-px">
+        <Tabs
+          activeTab={panelKey}
+          onChange={setActivePanel}
+          className="py-px [&_.arco-tabs-content]:px-3"
+        >
           {/* 表单全局设置 */}
           <TabPane key="form" title="表单设置">
             <div className="flex flex-col gap-4 py-2">
@@ -526,7 +583,7 @@ export default function LayoutManage() {
                 <div>
                   <div className="mb-2 text-sm text-gray-600">元素类型</div>
                   <Tag color="arcoblue" size="medium">
-                    {getTypeLabel(selectedElement.type)}
+                    {getTypeLabel(selectedElement.element_type)}
                   </Tag>
                 </div>
                 <div>
