@@ -28,7 +28,7 @@ func (r *BaseListReq) normalize() (page, size int) {
 	if page <= 0 {
 		page = 1
 	}
-	if size <= 0 || size > 200 {
+	if size <= 0 || size > 10000 {
 		size = 10
 	}
 	return page, size

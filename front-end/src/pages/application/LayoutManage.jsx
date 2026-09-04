@@ -390,7 +390,12 @@ export default function LayoutManage() {
             <Form
               layout={formConfig.layout}
               labelAlign={formConfig.labelAlign}
-              labelColStyle={isHorizontal ? { width: formConfig.labelWidth } : undefined}
+              labelCol={isHorizontal ? { style: { flexBasis: formConfig.labelWidth } } : undefined}
+              wrapperCol={
+                isHorizontal
+                  ? { style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` } }
+                  : undefined
+              }
             >
               <Row gutter={[12, 12]}>
                 {elements.map((el, index) => {
@@ -431,7 +436,11 @@ export default function LayoutManage() {
                         }`}
                       >
                         {/* 使用 Form.Item 展示字段名称（label）与必填星号，布局/标签宽度/对齐由 Form 统一控制 */}
-                        <FormItem label={el.label} required={Boolean(el.required)} className="mb-0!">
+                        <FormItem
+                          label={el.label}
+                          required={Boolean(el.required)}
+                          className="mb-0!"
+                        >
                           {renderElementPreview(el)}
                         </FormItem>
 
