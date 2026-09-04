@@ -266,12 +266,18 @@ export default function LayoutManage() {
     setActivePanel('form')
   }
 
-  // 将表单页布局深拷贝后完整覆盖到详情页
+  // 将表单页布局深拷贝后完整覆盖到详情页，并过滤 table 元素中的操作列（action）
   const handleSyncLayout = () => {
-    setLayouts((prev) => ({
-      ...prev,
-      detail: structuredClone(prev.form),
-    }))
+    setLayouts((prev) => {
+      const cloned = structuredClone(prev.form)
+      cloned.elements = (cloned.elements || []).map((el) => {
+        if (el.element_type === 'table' && Array.isArray(el.columns)) {
+          return { ...el, columns: el.columns.filter((c) => c.key !== 'action') }
+        }
+        return el
+      })
+      return { ...prev, detail: cloned }
+    })
     Message.success('已同步至详情页')
   }
 
@@ -420,7 +426,7 @@ export default function LayoutManage() {
   const renderElementPreview = (el) => {
     // 基础组件（分割线/表格等）：从配置中心分派预览渲染
     const baseCfg = getBaseElementConfig(el.element_type)
-    if (baseCfg?.renderPreview) return baseCfg.renderPreview(el)
+    if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, activePage)
     // 常规表单控件：从 renderPreviewConfig 映射查找
     const render = renderPreviewConfig[el.element_type]
     if (render) return render(el)

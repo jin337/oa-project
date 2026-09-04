@@ -75,7 +75,7 @@ export const BASE_ELEMENT_CONFIGS = {
       width: 24,
       defaultProps: { columns: [], table_key: '' },
     },
-    renderPreview: (el) => {
+    renderPreview: (el, pageType) => {
       const columns = (el.columns || []).map((col, i) => ({
         title: col.title || col.dataIndex || `列${i + 1}`,
         dataIndex: col.dataIndex || `col_${i + 1}`,
@@ -83,20 +83,22 @@ export const BASE_ELEMENT_CONFIGS = {
       const action = {
         key: 'action',
         title: '操作',
-        width: 140,
+        width: 60,
         render: () => (
           <Button size="mini" status="danger">
             删除
           </Button>
         ),
       }
+      // 表单页追加操作列；详情页不追加
+      const finalColumns = pageType === 'detail' ? columns : [...columns, action]
       return columns.length ? (
         <Table
           size="small"
           rowKey={el.element_id}
           border
           pagination={false}
-          columns={columns}
+          columns={finalColumns}
           data={[]}
         />
       ) : (
