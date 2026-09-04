@@ -2,6 +2,7 @@ import {
   Button,
   Checkbox,
   DatePicker,
+  Divider,
   Empty,
   Form,
   Grid,
@@ -154,9 +155,7 @@ export default function LayoutManage() {
       .then((res) => {
         if (cancelled) return
         const list = res.data?.list || []
-        setLibrary(
-          list.map((item) => ({...item,element_id:item.id})),
-        )
+        setLibrary(list.map((item) => ({ ...item, element_id: item.id })))
       })
       .catch(() => setLibrary([]))
       .finally(() => {
@@ -167,10 +166,35 @@ export default function LayoutManage() {
     }
   }, [id])
 
-  // 组件库按表分组：主表 / 子表 / 其他
+  // 组件库按分组展示：固定"基础"分组（最前）+ 主表 / 子表 / 其他
   const libraryGroups = useMemo(() => {
     const { tableName, subTables } = appTables
     const groups = []
+    // 固定的"基础"分组：上传 / 分割线（始终显示，不依赖后端表单元素）
+    groups.push({
+      title: '基础',
+      items: [
+        {
+          key: 'base_upload',
+          type: 'upload',
+          element_type: 'upload',
+          label: '上传',
+          field_key: '',
+          table_key: '',
+          required: false,
+        },
+        {
+          key: 'base_divider',
+          type: 'divider',
+          element_type: 'divider',
+          label: '分割线',
+          field_key: '',
+          table_key: '',
+          width: 24,
+          required: false,
+        },
+      ],
+    })
     if (tableName) {
       const items = library.filter((i) => i.table_key === tableName)
       if (items.length) groups.push({ title: `主表 · ${tableName}`, items })
@@ -196,7 +220,7 @@ export default function LayoutManage() {
     const el = {
       ...libItem,
       id: genId(),
-      width: 12,
+      width: libItem.width || 12,
     }
     setLayouts((prev) => {
       const cur = prev[activePage]
@@ -339,6 +363,8 @@ export default function LayoutManage() {
         return <Switch disabled />
       case 'upload':
         return <Input {...disabledProps} placeholder="点击上传" />
+      case 'divider':
+        return <Divider />
       default:
         return <Input {...disabledProps} />
     }
@@ -356,8 +382,6 @@ export default function LayoutManage() {
         <div className="max-h-[calc(100vh-220px)] overflow-y-auto p-3">
           {libraryLoading ? (
             <Empty description="加载中..." />
-          ) : library.length === 0 ? (
-            <Empty description="暂无表单元素" />
           ) : (
             libraryGroups.map((group) => (
               <div key={group.title} className="mb-3 last:mb-0">
@@ -493,6 +517,8 @@ export default function LayoutManage() {
                           className="mb-0!"
                         >
                           {renderElementPreview(el)}
+                          {/* mask 蒙层 */}
+                          <div className="absolute inset-0 z-1"></div>
                         </FormItem>
 
                         {isSelected && (
