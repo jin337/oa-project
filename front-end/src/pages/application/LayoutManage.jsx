@@ -13,15 +13,22 @@ import {
   Radio,
   Select,
   Switch,
+  Table,
   Tabs,
   Tag,
   TimePicker,
 } from '@arco-design/web-react'
-import { IconDelete, IconDragArrow, IconSave, IconSync } from '@arco-design/web-react/icon'
+import {
+  IconDelete,
+  IconDragArrow,
+  IconPlus,
+  IconSave,
+  IconSync,
+} from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
-import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
+import { BASE_LAYOUT_ELEMENTS, ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 import { useTabs } from '../../store/tab-context'
 
 const FormItem = Form.Item
@@ -170,30 +177,10 @@ export default function LayoutManage() {
   const libraryGroups = useMemo(() => {
     const { tableName, subTables } = appTables
     const groups = []
-    // 固定的"基础"分组：上传 / 分割线（始终显示，不依赖后端表单元素）
+    // 固定的"基础"分组（配置集中维护于 config/app.js，始终显示，不依赖后端表单元素）
     groups.push({
       title: '基础',
-      items: [
-        {
-          key: 'base_upload',
-          type: 'upload',
-          element_type: 'upload',
-          label: '附件',
-          field_key: '',
-          table_key: '',
-          required: false,
-        },
-        {
-          key: 'base_divider',
-          type: 'divider',
-          element_type: 'divider',
-          label: '分割线',
-          field_key: '',
-          table_key: '',
-          width: 24,
-          required: false,
-        },
-      ],
+      items: BASE_LAYOUT_ELEMENTS,
     })
     if (tableName) {
       const items = library.filter((i) => i.table_key === tableName)
@@ -314,6 +301,40 @@ export default function LayoutManage() {
     })
   }
 
+  // ==================== 表格列配置 ====================
+
+  const genColumn = (cols) => ({
+    id: `col_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    title: `列${(cols || []).length + 1}`,
+    dataIndex: `col_${(cols || []).length + 1}`,
+  })
+
+  const updateSelectedElementColumns = (fn) => {
+    if (!selectedId) return
+    setLayouts((prev) => {
+      const cur = prev[activePage]
+      return {
+        ...prev,
+        [activePage]: {
+          ...cur,
+          elements: cur.elements.map((e) =>
+            e.id === selectedId ? { ...e, columns: fn(e.columns || []) } : e,
+          ),
+        },
+      }
+    })
+  }
+
+  const addColumn = () => updateSelectedElementColumns((cols) => [...cols, genColumn(cols)])
+
+  const removeColumn = (colId) =>
+    updateSelectedElementColumns((cols) => cols.filter((c) => c.id !== colId))
+
+  const updateColumn = (colId, patch) =>
+    updateSelectedElementColumns((cols) =>
+      cols.map((c) => (c.id === colId ? { ...c, ...patch } : c)),
+    )
+
   // 切换表单页 / 详情页（重置选中与面板状态）
   const handlePageChange = (page) => {
     setActivePage(page)
@@ -374,6 +395,19 @@ export default function LayoutManage() {
         return <Input {...disabledProps} placeholder="点击上传" />
       case 'divider':
         return <Divider />
+      case 'table': {
+        const columns = (el.columns || []).map((col, i) => ({
+          title: col.title || col.dataIndex || `列${i + 1}`,
+          dataIndex: col.dataIndex || `col_${i + 1}`,
+        }))
+        return columns.length ? (
+          <Table size="small" border pagination={false} columns={columns} data={[{ key: 1 }]} />
+        ) : (
+          <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
+            表格（未配置列）
+          </div>
+        )
+      }
       default:
         return <Input {...disabledProps} />
     }
@@ -649,6 +683,51 @@ export default function LayoutManage() {
                     ))}
                   </Radio.Group>
                 </div>
+                {/* 表格组件：动态配置列 / 子字段 */}
+                {selectedElement.element_type === 'table' && (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="text-sm text-gray-600">表格列配置</div>
+                      <Button size="mini" icon={<IconPlus />} onClick={addColumn}>
+                        添加列
+                      </Button>
+                    </div>
+                    {(selectedElement.columns || []).map((col, idx) => (
+                      <div
+                        key={col.id}
+                        className="mb-2 rounded border border-gray-200 bg-gray-50 p-2"
+                      >
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="text-xs text-gray-500">列 {idx + 1}</span>
+                          <Button
+                            size="mini"
+                            status="danger"
+                            icon={<IconDelete />}
+                            onClick={() => removeColumn(col.id)}
+                          />
+                        </div>
+                        <Input
+                          size="small"
+                          placeholder="列标题"
+                          value={col.title}
+                          onChange={(v) => updateColumn(col.id, { title: v })}
+                        />
+                        <Input
+                          size="small"
+                          className="mt-1"
+                          placeholder="字段名 (dataIndex)"
+                          value={col.dataIndex}
+                          onChange={(v) => updateColumn(col.id, { dataIndex: v })}
+                        />
+                      </div>
+                    ))}
+                    {!(selectedElement.columns || []).length && (
+                      <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
+                        暂无列，点击"添加列"开始配置
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </TabPane>
           )}
