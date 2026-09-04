@@ -770,8 +770,8 @@ export default function LayoutManage() {
                 )}
                 {/* 表格组件：动态配置列 / 子字段 */}
                 {selectedElement.element_type === 'table' && (
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
+                  <>
+                    <div className="flex items-center justify-between">
                       <div className="text-sm text-gray-600">表格列配置</div>
                       <Button
                         size="mini"
@@ -782,17 +782,15 @@ export default function LayoutManage() {
                         添加列
                       </Button>
                     </div>
-                    <div className="mb-4">
-                      <Select
-                        size="small"
-                        placeholder="选择关联子表"
-                        value={selectedElement.table_key || undefined}
-                        onChange={handleTableKeyChange}
-                        options={appTables.subTables.map((tb) => ({ label: tb, value: tb }))}
-                      />
-                    </div>
+                    <Select
+                      size="small"
+                      placeholder="选择关联子表"
+                      value={selectedElement.table_key || undefined}
+                      onChange={handleTableKeyChange}
+                      options={appTables.subTables.map((tb) => ({ label: tb, value: tb }))}
+                    />
                     {(selectedElement.columns || []).map((col, idx) => (
-                      <div key={col.id} className="mb-2 flex items-center justify-between gap-1">
+                      <div key={col.id} className="flex items-center justify-between gap-1">
                         <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
                         <Select
                           size="small"
@@ -821,7 +819,7 @@ export default function LayoutManage() {
                         {selectedElement.table_key ? '点击"添加列"开始配置' : '请先选择关联子表'}
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
             </TabPane>
