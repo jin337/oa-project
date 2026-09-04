@@ -53,8 +53,6 @@ const SIZE_OPTIONS = [
   { label: '迷你', value: 'mini' },
 ]
 
-// 元素类型选项已迁移至 src/config/app.js（ELEMENT_TYPE_OPTIONS）
-
 const EMPTY_FORM = {
   label: '',
   field_key: undefined,
@@ -67,7 +65,6 @@ const EMPTY_FORM = {
   vis_list: true,
   vis_search: true,
   disabled_if: '',
-  required_if: '',
   visible_if: '',
   data_source: {},
   actions: { on_mount: [], on_change: [], on_blur: [] },
@@ -101,8 +98,8 @@ function safeStringify(obj) {
 
 // 事件触发时机配置
 const ACTION_TRIGGERS = [
-  { key: 'on_mount', label: '初始化触发' },
   { key: 'on_change', label: '值改变触发' },
+  { key: 'on_mount', label: '初始化触发' },
   { key: 'on_blur', label: '失焦触发' },
 ]
 
@@ -114,17 +111,15 @@ const ACTION_TYPE_OPTIONS = [
 
 const ACTION_TRIGGER_KEYS = ['on_mount', 'on_change', 'on_blur']
 
-// 后端 actions 对象 -> 表单结构（param_mapping 对象反序列化为 JSON 字符串）
+// 后端 actions 对象 -> 表单结构（params 对象反序列化为 JSON 字符串）
 function normalizeActionsForForm(actions) {
   const result = { on_mount: [], on_change: [], on_blur: [] }
   for (const t of ACTION_TRIGGER_KEYS) {
     const list = Array.isArray(actions?.[t]) ? actions[t] : []
     result[t] = list.map((a) => {
       const item = { ...a }
-      item.param_mapping =
-        item.param_mapping && typeof item.param_mapping === 'object'
-          ? JSON.stringify(item.param_mapping, null, 2)
-          : ''
+      item.params =
+        item.params && typeof item.params === 'object' ? JSON.stringify(item.params, null, 2) : ''
       if (!Array.isArray(item.target_mapping)) item.target_mapping = []
       if (a.action_type === 'set_value') {
         if (Array.isArray(a.value)) {
@@ -156,9 +151,9 @@ function buildActionsFromValues(actions) {
         } else if (a.action_type === 'fetch_and_fill') {
           if (a.api_url) item.api_url = a.api_url
           if (a.method) item.method = a.method
-          if (a.param_mapping && String(a.param_mapping).trim()) {
+          if (a.params && String(a.params).trim()) {
             try {
-              item.param_mapping = JSON.parse(a.param_mapping)
+              item.params = JSON.parse(a.params)
             } catch (e) {
               // 校验失败忽略
             }
@@ -397,7 +392,6 @@ export default function FormElementManage() {
       vis_list: record.visibility?.list ?? true,
       vis_search: record.visibility?.search ?? false,
       disabled_if: record.dynamic_states?.disabled_if || '',
-      required_if: record.dynamic_states?.required_if || '',
       visible_if: record.dynamic_states?.visible_if || '',
       data_source: {
         ...(record.data_source || {}),
@@ -433,7 +427,6 @@ export default function FormElementManage() {
       dynamic_states: Object.fromEntries(
         Object.entries({
           disabled_if: values.disabled_if,
-          required_if: values.required_if,
           visible_if: values.visible_if,
         }).filter(([, v]) => v && String(v).trim() !== ''),
       ),
@@ -747,7 +740,7 @@ export default function FormElementManage() {
             </Col>
             <Col span={12}>
               <FormItem label="默认值" field="default_value">
-                <Input placeholder="支持表达式，如 ${current_user.name}" />
+                <Input placeholder="支持表达式，如 ${form.name}" />
               </FormItem>
             </Col>
             <Col span={12}>
@@ -760,7 +753,7 @@ export default function FormElementManage() {
             <Col span={24}>
               <FormItem label="校验规则" field="validation_rule">
                 <Input.TextArea
-                  placeholder="请输入正则表达式或校验表达式"
+                  placeholder="支持正则表达式（如 /^1[3-9]\d{9}$/）或校验表达式（如 ${form.end_date} > ${form.start_date}）"
                   autoSize={{ minRows: 1, maxRows: 4 }}
                 />
               </FormItem>
@@ -784,24 +777,14 @@ export default function FormElementManage() {
           <FormItem label="动态显隐" field="visible_if">
             <Input.TextArea
               autoSize={{ minRows: 1, maxRows: 5 }}
-              style={{ fontFamily: 'monospace' }}
-              placeholder='${form.field_name} === "value"'
+              placeholder='支持表达式：${form.country_id} === "CN"'
             />
           </FormItem>
 
           <FormItem label="动态禁用/只读" field="disabled_if">
             <Input.TextArea
               autoSize={{ minRows: 1, maxRows: 5 }}
-              style={{ fontFamily: 'monospace' }}
-              placeholder='${form.field_name} === "value"'
-            />
-          </FormItem>
-
-          <FormItem label="动态必填" field="required_if">
-            <Input.TextArea
-              autoSize={{ minRows: 1, maxRows: 5 }}
-              style={{ fontFamily: 'monospace' }}
-              placeholder="${form.field_name} === true"
+              placeholder='支持表达式：${form.user_id}===""'
             />
           </FormItem>
 
@@ -816,8 +799,8 @@ export default function FormElementManage() {
                     rules={[{ required: true, message: '请选择数据类型' }]}
                   >
                     <Select placeholder="请选择" onChange={handleDataSourceTypeChange}>
-                      <Select.Option value="json">静态数据（json）</Select.Option>
-                      <Select.Option value="api">动态接口（api）</Select.Option>
+                      <Select.Option value="json">静态数据</Select.Option>
+                      <Select.Option value="api">动态接口</Select.Option>
                     </Select>
                   </FormItem>
                 </Col>
@@ -848,7 +831,7 @@ export default function FormElementManage() {
                               >
                                 <Input placeholder="提交值，如：1" />
                               </FormItem>
-                              <Button size="mini" status="danger" onClick={() => remove(index)}>
+                              <Button status="danger" onClick={() => remove(index)}>
                                 删除
                               </Button>
                             </div>
@@ -892,42 +875,51 @@ export default function FormElementManage() {
                       rules={[{ validator: validateJson }]}
                     >
                       <Input.TextArea
-                        placeholder='{"user_id":"${current_value}","page":1}'
+                        placeholder='{"user_id":"${form.id}","page":1}'
                         autoSize={{ minRows: 1, maxRows: 5 }}
-                        style={{ fontFamily: 'monospace' }}
                       />
                     </FormItem>
                   </Col>
                   <Col span={24}>
                     <FormItem label="显示标签" field="data_source.label">
-                      <Input placeholder="支持表达式：${data.name}" />
+                      <Input placeholder="支持表达式：${form.name}" />
                     </FormItem>
                   </Col>
                   <Col span={24}>
-                    <div className="mb-2 text-xs text-gray-500">提交值映射（value）</div>
+                    <div className="mb-2 text-gray-500">提交内容</div>
                     <Form.List field="data_source.value">
                       {(fields, { add, remove }) => (
                         <>
-                          {fields.map((item, index) => (
-                            <div key={item.key} className="mb-2 flex items-center gap-2">
-                              <FormItem field={item.field + '.source'} noStyle className="mb-0! flex-1">
-                                <Input placeholder="来源表达式，如 ${data.base_salary}" />
-                              </FormItem>
-                              <span className="text-gray-400">→</span>
-                              <FormItem field={item.field + '.target'} noStyle className="mb-0! flex-1">
-                                <Input placeholder="目标字段，如 net_salary" />
-                              </FormItem>
-                              <Button size="mini" status="danger" onClick={() => remove(index)}>
-                                删除
-                              </Button>
-                            </div>
-                          ))}
+                          {fields.length > 0 && (<div className='mb-3 rounded border border-gray-200 bg-white p-3'>
+                            {fields.map((item, index) => (
+                              <div key={item.key} className={`${index === 0 ? '' : 'mt-2'} flex items-center gap-2`}>
+                                <FormItem
+                                  field={item.field + '.source'}
+                                  noStyle
+                                  className="mb-0! flex-1"
+                                >
+                                  <Input placeholder="支持表达式，如 ${item.country}/${item.city}" />
+                                </FormItem>
+                                <span className="text-gray-400">→</span>
+                                <FormItem
+                                  field={item.field + '.target'}
+                                  noStyle
+                                  className="mb-0! flex-1"
+                                >
+                                  <Input placeholder="目标字段，如 city" />
+                                </FormItem>
+                                <Button status="danger" onClick={() => remove(index)}>
+                                  删除
+                                </Button>
+                              </div>
+                            ))}
+                          </div>)}
                           <Button
                             size="small"
                             type="outline"
                             onClick={() => add({ source: '', target: '' })}
                           >
-                            + 添加提交值映射
+                            + 添加提交内容
                           </Button>
                         </>
                       )}
@@ -982,21 +974,28 @@ export default function FormElementManage() {
                             {/* set_value：直接赋值（多字段映射） */}
                             {actionType === 'set_value' && (
                               <>
-                                <div className="mb-2 text-xs text-gray-500">赋值映射（value）</div>
+                                <div className="mb-2 text-gray-500">赋值映射</div>
                                 <Form.List field={item.field + '.value'}>
                                   {(valueFields, { add: addValue, remove: removeValue }) => (
                                     <>
                                       {valueFields.map((vf, vfIndex) => (
                                         <div key={vf.key} className="mb-2 flex items-center gap-2">
-                                          <FormItem field={vf.field + '.source'} noStyle className="mb-0! flex-1">
-                                            <Input placeholder="赋值来源，如 new Date().toISOString()" />
+                                          <FormItem
+                                            field={vf.field + '.source'}
+                                            noStyle
+                                            className="mb-0! flex-1"
+                                          >
+                                            <Input placeholder="赋值来源，如 ${form.city_id}" />
                                           </FormItem>
                                           <span className="text-gray-400">→</span>
-                                          <FormItem field={vf.field + '.target'} noStyle className="mb-0! flex-1">
-                                            <Input placeholder="目标字段，如 create_time" />
+                                          <FormItem
+                                            field={vf.field + '.target'}
+                                            noStyle
+                                            className="mb-0! flex-1"
+                                          >
+                                            <Input placeholder="目标字段，如 city_id" />
                                           </FormItem>
                                           <Button
-                                            size="mini"
                                             status="danger"
                                             onClick={() => removeValue(vfIndex)}
                                           >
@@ -1031,7 +1030,11 @@ export default function FormElementManage() {
                                     </FormItem>
                                   </Col>
                                   <Col span={8}>
-                                    <FormItem label="请求方法" field={item.field + '.method'}>
+                                    <FormItem
+                                      label="请求方法"
+                                      field={item.field + '.method'}
+                                      rules={[{ required: true, message: '请选择请求方法' }]}
+                                    >
                                       <Select>
                                         <Select.Option value="GET">GET</Select.Option>
                                         <Select.Option value="POST">POST</Select.Option>
@@ -1043,18 +1046,17 @@ export default function FormElementManage() {
                                   <Col span={24}>
                                     <FormItem
                                       label="请求参数"
-                                      field={item.field + '.param_mapping'}
+                                      field={item.field + '.params'}
                                       rules={[{ validator: validateJson }]}
                                     >
                                       <Input.TextArea
-                                        placeholder='{"user_id":"${current_value}"}'
+                                        placeholder='{"user_id":"${form.user_id}"}'
                                         autoSize={{ minRows: 1, maxRows: 5 }}
-                                        style={{ fontFamily: 'monospace' }}
                                       />
                                     </FormItem>
                                   </Col>
                                 </Row>
-                                <div className="mb-2 text-xs text-gray-500">目标字段映射</div>
+                                <div className="mb-2 text-gray-500">目标字段</div>
                                 <Form.List field={item.field + '.target_mapping'}>
                                   {(tmFields, { add: addTm, remove: removeTm }) => (
                                     <>
@@ -1065,7 +1067,7 @@ export default function FormElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Input placeholder="来源表达式，如 ${data.base_salary}" />
+                                            <Input placeholder="支持表达式，如 ${data.base_salary}" />
                                           </FormItem>
                                           <span className="text-gray-400">→</span>
                                           <FormItem
@@ -1075,11 +1077,7 @@ export default function FormElementManage() {
                                           >
                                             <Input placeholder="目标字段，如 net_salary" />
                                           </FormItem>
-                                          <Button
-                                            size="mini"
-                                            status="danger"
-                                            onClick={() => removeTm(tmIndex)}
-                                          >
+                                          <Button status="danger" onClick={() => removeTm(tmIndex)}>
                                             删除
                                           </Button>
                                         </div>
@@ -1089,7 +1087,7 @@ export default function FormElementManage() {
                                         type="outline"
                                         onClick={() => addTm({ source: '', target: '' })}
                                       >
-                                        + 添加目标映射
+                                        + 添加目标字段
                                       </Button>
                                     </>
                                   )}

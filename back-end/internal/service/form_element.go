@@ -62,6 +62,7 @@ func FormElementCreate(curUserID, appID uint, req *model.FormElementCreateReq) (
 		Placeholder:   req.Placeholder,
 		Required:      req.Required,
 		DefaultValue:  req.DefaultValue,
+		ValidationRule: req.ValidationRule,
 		Visibility:    req.Visibility,
 		DynamicStates: req.DynamicStates,
 		DataSource:    req.DataSource,
@@ -103,6 +104,7 @@ func FormElementUpdate(curUserID, appID, id uint, req *model.FormElementUpdateRe
 		el.Required = *req.Required
 	}
 	el.DefaultValue = req.DefaultValue
+	el.ValidationRule = req.ValidationRule
 	// JSON 配置对象仅在传入（非 nil）时覆盖
 	if req.Visibility != nil {
 		el.Visibility = req.Visibility

@@ -61,7 +61,7 @@ var migrations = []migration{
 	},
 	// 示例：后续迭代追加增量迁移，只加表/加字段，不删数据
 	// {
-	// 	Version: 4,
+	// 	Version: 3,
 	// 	Name:    "add_user_avatar",
 	// 	Up: func(db *gorm.DB) error {
 	// 		return db.AutoMigrate(&model.User{})
