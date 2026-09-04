@@ -17,7 +17,7 @@ import {
   Tag,
   TimePicker,
 } from '@arco-design/web-react'
-import { IconDelete, IconDragArrow, IconSave } from '@arco-design/web-react/icon'
+import { IconDelete, IconDragArrow, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
@@ -269,6 +269,15 @@ export default function LayoutManage() {
     setActivePanel('form')
   }
 
+  // 将表单页布局深拷贝后完整覆盖到详情页
+  const handleSyncLayout = () => {
+    setLayouts((prev) => ({
+      ...prev,
+      detail: structuredClone(prev.form),
+    }))
+    Message.success('已同步至详情页')
+  }
+
   const handleCanvasDrop = (e, index) => {
     e.preventDefault()
     e.stopPropagation()
@@ -427,7 +436,13 @@ export default function LayoutManage() {
             onChange={handlePageChange}
             options={PAGE_OPTIONS}
           />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-60 justify-end">
+            {/* 详情页编辑时：一键将表单页布局同步到详情页 */}
+            {activePage === 'detail' && (
+              <Button size="mini" icon={<IconSync />} onClick={handleSyncLayout}>
+                同步布局
+              </Button>
+            )}
             <Popconfirm title="确定清空画布中的所有表单元素吗？" onOk={handleClear}>
               <Button size="mini" icon={<IconDelete />}>
                 清空
