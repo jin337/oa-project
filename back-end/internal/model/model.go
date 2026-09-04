@@ -254,13 +254,13 @@ type ApplicationCreateReq struct {
 }
 
 type ApplicationUpdateReq struct {
-	Name             string `json:"name" validate:"omitempty,min=2,max=64" label:"页面名称"`
-	Code             string `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"`
-	TableName        string `json:"table_name" validate:"omitempty,max=128" label:"对应表"`
-	SubTableName     string `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
-	Status           int    `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
-	FormLayoutJSON   string `json:"form_layout_json" validate:"omitempty,max=50000" label:"表单页布局"`
-	DetailLayoutJSON string `json:"detail_layout_json" validate:"omitempty,max=50000" label:"详情页布局"`
+	Name             *string `json:"name" validate:"omitempty,min=2,max=64" label:"页面名称"`
+	Code             string  `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"`
+	TableName        *string `json:"table_name" validate:"omitempty,max=128" label:"对应表"`
+	SubTableName     *string `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
+	Status           int     `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
+	FormLayoutJSON   *string `json:"form_layout_json" validate:"omitempty,max=50000" label:"表单页布局"`
+	DetailLayoutJSON *string `json:"detail_layout_json" validate:"omitempty,max=50000" label:"详情页布局"`
 }
 
 type ApplicationListReq struct {

@@ -158,16 +158,22 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 		}
 		app.Code = req.Code
 	}
-	if req.Name != "" {
-		app.Name = req.Name
+	if req.Name != nil {
+		app.Name = *req.Name
 	}
-	if req.TableName != "" {
-		app.TableName = req.TableName
+	if req.TableName != nil {
+		app.TableName = *req.TableName
 	}
-	// 子表名与布局 JSON 允许清空
-	app.SubTableName = req.SubTableName
-	app.FormLayoutJSON = req.FormLayoutJSON
-	app.DetailLayoutJSON = req.DetailLayoutJSON
+	// 以下字段使用指针，区分“未传递”（保持原值）与“主动清空”（传空串）
+	if req.SubTableName != nil {
+		app.SubTableName = *req.SubTableName
+	}
+	if req.FormLayoutJSON != nil {
+		app.FormLayoutJSON = *req.FormLayoutJSON
+	}
+	if req.DetailLayoutJSON != nil {
+		app.DetailLayoutJSON = *req.DetailLayoutJSON
+	}
 	if req.Status == 1 || req.Status == 2 {
 		app.Status = req.Status
 	}
