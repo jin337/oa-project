@@ -172,15 +172,15 @@ export default function LayoutManage() {
     const { tableName, subTables } = appTables
     const groups = []
     if (tableName) {
-      const items = library.filter((i) => i.tableKey === tableName)
+      const items = library.filter((i) => i.table_key === tableName)
       if (items.length) groups.push({ title: `主表 · ${tableName}`, items })
     }
     subTables.forEach((tb) => {
-      const items = library.filter((i) => i.tableKey === tb)
+      const items = library.filter((i) => i.table_key === tb)
       if (items.length) groups.push({ title: `子表 · ${tb}`, items })
     })
     const others = library.filter(
-      (i) => i.tableKey !== tableName && !subTables.includes(i.tableKey),
+      (i) => i.table_key !== tableName && !subTables.includes(i.table_key),
     )
     if (others.length) groups.push({ title: '其他', items: others })
     return groups
