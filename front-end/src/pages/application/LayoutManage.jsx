@@ -638,7 +638,11 @@ export default function LayoutManage() {
                       >
                         {/* 使用 Form.Item 展示字段名称（label）与必填星号，布局/标签宽度/对齐由 Form 统一控制 */}
                         <FormItem
-                          label={el?.key?.includes('base_') ? ' ' : el.label}
+                          label={
+                            BASE_LAYOUT_ELEMENTS.some((c) => c.element_type === el.element_type)
+                              ? '\u00A0'
+                              : el.label
+                          }
                           required={Boolean(el.required)}
                           className="mb-0!"
                         >
