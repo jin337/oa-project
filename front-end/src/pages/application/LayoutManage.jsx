@@ -74,12 +74,11 @@ const genId = () => `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
 // 解析后端布局 JSON（form_layout_json / detail_layout_json 均为 { formConfig, elements } 结构）
 const parseLayoutJson = (raw) => {
-  if (!raw || typeof raw !== 'string') return null
+  if (!raw) return null
   try {
-    const parsed = JSON.parse(raw)
     return {
-      formConfig: { ...DEFAULT_FORM_CONFIG, ...(parsed.formConfig || {}) },
-      elements: Array.isArray(parsed.elements) ? parsed.elements : [],
+      formConfig: { ...DEFAULT_FORM_CONFIG, ...(raw.formConfig || {}) },
+      elements: Array.isArray(raw.elements) ? raw.elements : [],
     }
   } catch (e) {
     return null
@@ -410,7 +409,7 @@ export default function LayoutManage() {
     try {
       const key = activePage === 'form' ? 'form_layout_json' : 'detail_layout_json'
       const layoutData = { formConfig, elements }
-      await applicationApi.updateApplication(id, { [key]: JSON.stringify(layoutData) })
+      await applicationApi.updateApplication(id, { [key]: layoutData })
       Message.success(`${activePage === 'form' ? '表单页' : '详情页'}布局配置已保存`)
     } catch (e) {
       Message.error('保存失败，请稍后重试')

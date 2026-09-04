@@ -239,8 +239,8 @@ type Application struct {
 	TableName        string `gorm:"size:128;not null;comment:对应表" json:"table_name"`
 	SubTableName     string `gorm:"size:255;comment:子表(多个用逗号分隔)" json:"sub_table_name"`
 	Status           int    `gorm:"default:1;comment:状态 1启用 2停用" json:"status"`
-	FormLayoutJSON   string `gorm:"type:text;comment:表单页布局配置(JSON)" json:"form_layout_json"`
-	DetailLayoutJSON string `gorm:"type:text;comment:详情页布局配置(JSON)" json:"detail_layout_json"`
+	FormLayoutJSON   map[string]interface{} `gorm:"serializer:json;type:json;comment:表单页布局配置" json:"form_layout_json"`
+	DetailLayoutJSON map[string]interface{} `gorm:"serializer:json;type:json;comment:详情页布局配置" json:"detail_layout_json"`
 }
 
 type ApplicationCreateReq struct {
@@ -249,8 +249,8 @@ type ApplicationCreateReq struct {
 	TableName        string `json:"table_name" validate:"required,max=128" label:"对应表"`
 	SubTableName     string `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
 	Status           int    `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
-	FormLayoutJSON   string `json:"form_layout_json" validate:"omitempty,max=50000" label:"表单页布局"`
-	DetailLayoutJSON string `json:"detail_layout_json" validate:"omitempty,max=50000" label:"详情页布局"`
+	FormLayoutJSON   map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
+	DetailLayoutJSON map[string]interface{} `json:"detail_layout_json" validate:"omitempty" label:"详情页布局"`
 }
 
 type ApplicationUpdateReq struct {
@@ -259,8 +259,8 @@ type ApplicationUpdateReq struct {
 	TableName        *string `json:"table_name" validate:"omitempty,max=128" label:"对应表"`
 	SubTableName     *string `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
 	Status           int     `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
-	FormLayoutJSON   *string `json:"form_layout_json" validate:"omitempty,max=50000" label:"表单页布局"`
-	DetailLayoutJSON *string `json:"detail_layout_json" validate:"omitempty,max=50000" label:"详情页布局"`
+	FormLayoutJSON   *map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
+	DetailLayoutJSON *map[string]interface{} `json:"detail_layout_json" validate:"omitempty" label:"详情页布局"`
 }
 
 type ApplicationListReq struct {
