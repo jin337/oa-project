@@ -11,12 +11,7 @@ import {
   Tabs,
   Tag,
 } from '@arco-design/web-react'
-import {
-  IconDelete,
-  IconDragArrow,
-  IconSave,
-  IconSync
-} from '@arco-design/web-react/icon'
+import { IconDelete, IconDragArrow, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
@@ -450,13 +445,13 @@ export default function LayoutManage() {
   }
 
   return (
-    <div className="flex items-start">
+    <div className="flex h-[96.8%] items-stretch">
       {/* ========== 左侧：组件库（按表分组，两列网格） ========== */}
-      <div className="w-56 shrink-0 self-stretch border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-800">
+      <div className="flex w-56 shrink-0 flex-col border border-gray-200 bg-white">
+        <div className="shrink-0 border-b border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-800">
           组件库
         </div>
-        <div className="max-h-[calc(100vh-220px)] overflow-y-auto p-3">
+        <div className="flex-1 overflow-y-auto p-3">
           {libraryLoading ? (
             <Empty description="加载中..." />
           ) : (
@@ -493,8 +488,8 @@ export default function LayoutManage() {
       </div>
 
       {/* ========== 中间：预览画布（自定义 Header，标题靠左 / 按钮靠右） ========== */}
-      <div className="min-w-0 flex-1 self-stretch border-y border-gray-200 bg-white">
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
+      <div className="flex min-w-0 flex-1 flex-col border-y border-gray-200 bg-white">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
           <div className="w-60 text-sm font-medium text-gray-800">预览画布</div>
           {/* 表单页 / 详情页切换 */}
           <Radio.Group
@@ -529,7 +524,7 @@ export default function LayoutManage() {
         </div>
 
         <div
-          className="m-4 min-h-105 border-2 border-dashed border-gray-200 p-4"
+          className="m-4 flex-1 overflow-auto border-2 border-dashed border-gray-200 p-4"
           onDragOver={(e) => {
             e.preventDefault()
             e.dataTransfer.dropEffect = dragType.current === 'move' ? 'move' : 'copy'
@@ -541,11 +536,12 @@ export default function LayoutManage() {
           }}
         >
           {elements.length === 0 ? (
-            <div className="flex h-95 items-center justify-center">
+            <div className="flex h-full items-center justify-center">
               <Empty description="从左侧拖拽表单元素到此处开始设计" />
             </div>
           ) : (
             <Form
+              className={'mx-auto max-w-187.5'}
               layout={formConfig.layout}
               labelAlign={formConfig.labelAlign}
               labelCol={isHorizontal ? { style: { flexBasis: formConfig.labelWidth } } : undefined}
@@ -636,11 +632,11 @@ export default function LayoutManage() {
       </div>
 
       {/* ========== 右侧：属性配置面板（Tabs 作为顶部导航） ========== */}
-      <div className="w-80 shrink-0 self-stretch border border-gray-200 bg-white">
+      <div className="flex w-80 shrink-0 flex-col overflow-hidden border border-gray-200 bg-white">
         <Tabs
           activeTab={panelKey}
           onChange={setActivePanel}
-          className="py-px [&_.arco-tabs-content]:px-3"
+          className="flex min-h-0 flex-1 flex-col py-px [&_.arco-tabs-content]:min-h-0 [&_.arco-tabs-content]:flex-1 [&_.arco-tabs-content]:overflow-y-auto [&_.arco-tabs-content]:px-3"
         >
           {/* 表单全局设置 */}
           <TabPane key="form" title="表单设置">
