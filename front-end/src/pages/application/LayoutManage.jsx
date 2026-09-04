@@ -362,7 +362,7 @@ export default function LayoutManage() {
 
   const renderElementPreview = (el) => {
     const disabledProps = { disabled: true, placeholder: el.placeholder || undefined }
-    switch (el.type) {
+    switch (el.element_type) {
       case 'textarea':
         return <Input.TextArea {...disabledProps} autoSize={{ minRows: 2 }} />
       case 'number':
