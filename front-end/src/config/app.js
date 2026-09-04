@@ -50,30 +50,4 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'datepicker', label: '日期选择', needDataSource: false, needPlaceholder: true },
   { value: 'timepicker', label: '时间选择', needDataSource: false, needPlaceholder: true },
   { value: 'switch', label: '开关', needDataSource: false, needPlaceholder: false },
-  { value: 'upload', label: '文件上传', needDataSource: false, needPlaceholder: false },
-]
-
-// —— 布局设计器基础组件（左侧"基础"分组，始终显示，不依赖后端表单元素） ——
-// key: 拖拽唯一标识；type: 画布渲染分派（renderElementPreview switch）；element_type: 属性面板展示
-// width: 24 栅格宽度（默认 12，分割线/表格默认占满整行）
-export const BASE_LAYOUT_ELEMENTS = [
-  {
-    key: 'base_divider',
-    element_type: 'divider',
-    label: '分割线',
-    field_key: '',
-    table_key: '',
-    width: 24,
-    required: false,
-  },
-  {
-    key: 'base_table',
-    element_type: 'table',
-    label: '表格',
-    field_key: '',
-    table_key: '',
-    width: 24,
-    required: false,
-    columns: [],
-  },
 ]

@@ -1,8 +1,5 @@
 import {
   Button,
-  Checkbox,
-  DatePicker,
-  Divider,
   Empty,
   Form,
   Grid,
@@ -11,26 +8,26 @@ import {
   Message,
   Popconfirm,
   Radio,
-  Select,
-  Switch,
-  Table,
   Tabs,
   Tag,
-  TimePicker,
-  Upload,
 } from '@arco-design/web-react'
 import {
   IconDelete,
   IconDragArrow,
-  IconPlus,
   IconSave,
-  IconSync,
+  IconSync
 } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
-import { BASE_LAYOUT_ELEMENTS, ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
+import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 import { useTabs } from '../../store/tab-context'
+import {
+  BASE_LAYOUT_ELEMENTS,
+  getBaseElementConfig,
+  isBaseElement,
+  renderPreviewConfig,
+} from './elementsConfig'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -421,76 +418,30 @@ export default function LayoutManage() {
   // ==================== 元素预览渲染 ====================
 
   const renderElementPreview = (el) => {
-    const disabledProps = { disabled: true, placeholder: el.placeholder || undefined }
-    switch (el.element_type) {
-      case 'textarea':
-        return <Input.TextArea {...disabledProps} autoSize={{ minRows: 2 }} />
-      case 'number':
-        return <InputNumber {...disabledProps} style={{ width: '100%' }} />
-      case 'select':
-        return <Select {...disabledProps} placeholder={el.placeholder || '请选择'} />
-      case 'radio':
-        return (
-          <Radio.Group disabled>
-            <Radio>选项一</Radio>
-            <Radio>选项二</Radio>
-          </Radio.Group>
-        )
-      case 'checkbox':
-        return (
-          <Checkbox.Group disabled>
-            <Checkbox>选项一</Checkbox>
-            <Checkbox>选项二</Checkbox>
-          </Checkbox.Group>
-        )
-      case 'date':
-      case 'datepicker':
-        return <DatePicker {...disabledProps} />
-      case 'time':
-      case 'timepicker':
-        return <TimePicker {...disabledProps} style={{ width: '100%' }} />
-      case 'switch':
-        return <Switch disabled />
-      case 'upload':
-        return <Upload action="/" {...disabledProps} />
-      case 'divider':
-        return <Divider />
-      case 'table': {
-        const columns = (el.columns || []).map((col, i) => ({
-          title: col.title || col.dataIndex || `列${i + 1}`,
-          dataIndex: col.dataIndex || `col_${i + 1}`,
-        }))
-        const action = {
-          key: 'action',
-          title: '操作',
-          width: 140,
-          render: () => (
-            <Button size="mini" status="danger">
-              删除
-            </Button>
-          ),
-        }
-        return columns.length ? (
-          <Table
-            size="small"
-            rowKey={el.element_id}
-            border
-            pagination={false}
-            columns={[...columns, action]}
-            data={[]}
-          />
-        ) : (
-          <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
-            表格（未配置列）
-          </div>
-        )
-      }
-      default:
-        return <Input {...disabledProps} />
-    }
+    // 基础组件（分割线/表格等）：从配置中心分派预览渲染
+    const baseCfg = getBaseElementConfig(el.element_type)
+    if (baseCfg?.renderPreview) return baseCfg.renderPreview(el)
+    // 常规表单控件：从 renderPreviewConfig 映射查找
+    const render = renderPreviewConfig[el.element_type]
+    if (render) return render(el)
+    // 兜底：单行输入框
+    return <Input disabled placeholder={el.placeholder || undefined} />
   }
 
   const isHorizontal = formConfig.layout === 'horizontal'
+
+  // 注入基础组件属性面板的上下文（组件级状态 + 回调，由配置中心的 renderSettings 按需取用）
+  const settingsCtx = {
+    selectedElement,
+    appTables,
+    tableFieldsMap,
+    fieldLoadingKeys,
+    updateSelectedElement,
+    handleTableKeyChange,
+    handleColumnFieldChange,
+    addColumn,
+    removeColumn,
+  }
 
   return (
     <div className="flex items-start">
@@ -638,11 +589,7 @@ export default function LayoutManage() {
                       >
                         {/* 使用 Form.Item 展示字段名称（label）与必填星号，布局/标签宽度/对齐由 Form 统一控制 */}
                         <FormItem
-                          label={
-                            BASE_LAYOUT_ELEMENTS.some((c) => c.element_type === el.element_type)
-                              ? '\u00A0'
-                              : el.label
-                          }
+                          label={isBaseElement(el.element_type) ? '\u00A0' : el.label}
                           required={Boolean(el.required)}
                           className="mb-0!"
                         >
@@ -736,7 +683,7 @@ export default function LayoutManage() {
           {selectedElement && (
             <TabPane key="element" title="元素属性">
               <div className="flex flex-col gap-4 py-2">
-                {!selectedElement?.key?.includes('base_') && (
+                {!isBaseElement(selectedElement.element_type) && (
                   <>
                     <div>
                       <div className="mb-2 text-sm text-gray-600">元素类型</div>
@@ -768,59 +715,8 @@ export default function LayoutManage() {
                     </div>
                   </>
                 )}
-                {/* 表格组件：动态配置列 / 子字段 */}
-                {selectedElement.element_type === 'table' && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-600">表格列配置</div>
-                      <Button
-                        size="mini"
-                        icon={<IconPlus />}
-                        disabled={!selectedElement.table_key}
-                        onClick={addColumn}
-                      >
-                        添加列
-                      </Button>
-                    </div>
-                    <Select
-                      size="small"
-                      placeholder="选择关联子表"
-                      value={selectedElement.table_key || undefined}
-                      onChange={handleTableKeyChange}
-                      options={appTables.subTables.map((tb) => ({ label: tb, value: tb }))}
-                    />
-                    {(selectedElement.columns || []).map((col, idx) => (
-                      <div key={col.id} className="flex items-center justify-between gap-1">
-                        <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
-                        <Select
-                          size="small"
-                          placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
-                          value={col.dataIndex || undefined}
-                          disabled={!selectedElement.table_key}
-                          loading={Boolean(fieldLoadingKeys[selectedElement.table_key])}
-                          options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => ({
-                            label: f.label || f.name || f.field_key,
-                            value: f.field_key || f.name || String(f.id),
-                          }))}
-                          onChange={(v) =>
-                            handleColumnFieldChange(col.id, selectedElement.table_key, v)
-                          }
-                        />
-                        <Button
-                          size="small"
-                          status="danger"
-                          icon={<IconDelete />}
-                          onClick={() => removeColumn(col.id)}
-                        />
-                      </div>
-                    ))}
-                    {!(selectedElement.columns || []).length && (
-                      <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
-                        {selectedElement.table_key ? '点击"添加列"开始配置' : '请先选择关联子表'}
-                      </div>
-                    )}
-                  </>
-                )}
+                {/* 基础组件的专属属性配置（从配置中心动态分发：表格列配置、分割线样式等） */}
+                {getBaseElementConfig(selectedElement.element_type)?.renderSettings?.(settingsCtx)}
               </div>
             </TabPane>
           )}
