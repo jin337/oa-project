@@ -9,19 +9,18 @@ import {
   Popconfirm,
   Radio,
   Tabs,
-  Tag,
   Tooltip,
 } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
-import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 import { useTabs } from '../../store/tab-context'
 import {
   BASE_LAYOUT_ELEMENTS,
   getBaseElementConfig,
-  isBaseElement,
+  isNoLabelElement,
+  renderElementSettings,
   renderPreviewConfig,
 } from './elementsConfig'
 
@@ -31,14 +30,6 @@ const Col = Grid.Col
 const TabPane = Tabs.TabPane
 
 const MODULE_LABEL = '布局管理'
-
-// 元素宽度占比（24 栅格，短标签适配按钮式 Radio）
-const WIDTH_OPTIONS = [
-  { label: '100%', value: 24, tip: '整行' },
-  { label: '50%', value: 12, tip: '1/2' },
-  { label: '33%', value: 8, tip: '1/3' },
-  { label: '25%', value: 6, tip: '1/4' },
-]
 
 // 全局表单配置默认值
 const DEFAULT_FORM_CONFIG = {
@@ -77,9 +68,6 @@ const parseLayoutJson = (raw) => {
     return null
   }
 }
-
-// 根据类型获取中文标签
-const getTypeLabel = (type) => ELEMENT_TYPE_OPTIONS.find((c) => c.value === type)?.label || type
 
 export default function LayoutManage() {
   const location = useLocation()
@@ -323,13 +311,6 @@ export default function LayoutManage() {
 
   // ==================== 表格列配置 ====================
 
-  const genColumn = (cols) => ({
-    id: `col_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    table_key: selectedElement?.table_key || '',
-    title: `列${(cols || []).length + 1}`,
-    dataIndex: null,
-  })
-
   const updateSelectedElementColumns = (fn) => {
     if (!selectedId) return
     setLayouts((prev) => {
@@ -345,16 +326,6 @@ export default function LayoutManage() {
       }
     })
   }
-
-  const addColumn = () => updateSelectedElementColumns((cols) => [...cols, genColumn(cols)])
-
-  const removeColumn = (colId) =>
-    updateSelectedElementColumns((cols) => cols.filter((c) => c.id !== colId))
-
-  const updateColumn = (colId, patch) =>
-    updateSelectedElementColumns((cols) =>
-      cols.map((c) => (c.id === colId ? { ...c, ...patch } : c)),
-    )
 
   // 加载指定表下的字段列表（表单元素接口，按 table_key 过滤），并缓存
   const loadTableFields = async (tableKey) => {
@@ -396,10 +367,17 @@ export default function LayoutManage() {
     if (!tableKey) return
     const fields = tableFieldsMap[tableKey] || []
     const field = fields.find((f) => f.field_key === fieldKey || String(f.id) === fieldKey)
-    updateColumn(colId, {
-      dataIndex: field?.field_key || fieldKey,
-      title: field?.label || field?.name || fieldKey,
-    })
+    updateSelectedElementColumns((cols) =>
+      cols.map((c) =>
+        c.id === colId
+          ? {
+              ...c,
+              dataIndex: field?.field_key || fieldKey,
+              title: field?.label || field?.name || fieldKey,
+            }
+          : c,
+      ),
+    )
   }
 
   // 切换表单页 / 详情页（重置选中与面板状态）
@@ -449,8 +427,7 @@ export default function LayoutManage() {
     updateSelectedElement,
     handleTableKeyChange,
     handleColumnFieldChange,
-    addColumn,
-    removeColumn,
+    updateSelectedElementColumns,
     activePage,
   }
 
@@ -503,7 +480,7 @@ export default function LayoutManage() {
                       </div>
                     )
                     return isSubTableItem ? (
-                      <Tooltip key={item.key} content="请从表格添加子表">
+                      <Tooltip key={item.key} content="请从表格添加子表项">
                         {itemNode}
                       </Tooltip>
                     ) : (
@@ -615,19 +592,21 @@ export default function LayoutManage() {
                       >
                         {/* 使用 Form.Item 展示字段名称（label）与必填星号，布局/标签宽度/对齐由 Form 统一控制 */}
                         <FormItem
-                          label={isBaseElement(el.element_type) ? '' : el.label}
+                          label={isNoLabelElement(el.element_type) ? '' : el.label}
                           labelCol={
                             isHorizontal
-                              ? isBaseElement(el.element_type)
-                                ? { span: 0 }
+                              ? isNoLabelElement(el.element_type)
+                                ? { span: 24 - el.width }
                                 : { style: { flexBasis: formConfig.labelWidth } }
                               : undefined
                           }
                           wrapperCol={
                             isHorizontal
-                              ? isBaseElement(el.element_type)
-                                ? { span: 24 }
-                                : { style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` } }
+                              ? isNoLabelElement(el.element_type)
+                                ? { span: el.width }
+                                : {
+                                    style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` },
+                                  }
                               : undefined
                           }
                           required={Boolean(el.required)}
@@ -719,44 +698,11 @@ export default function LayoutManage() {
             </div>
           </TabPane>
 
-          {/* 元素属性设置：未选中元素时不渲染该 Tab */}
+          {/* 元素属性设置：未选中元素时不渲染该 Tab，内容统一由配置中心分发（常规控件通用面板 + 基础组件专属面板） */}
           {selectedElement && (
             <TabPane key="element" title="元素属性">
               <div className="flex flex-col gap-4 py-2">
-                {!isBaseElement(selectedElement.element_type) && (
-                  <>
-                    <div>
-                      <div className="mb-2 text-sm text-gray-600">元素类型</div>
-                      <Tag color="arcoblue" size="medium">
-                        {getTypeLabel(selectedElement.element_type)}
-                      </Tag>
-                    </div>
-                    <div>
-                      <div className="mb-2 text-sm text-gray-600">字段名称</div>
-                      <Input
-                        value={selectedElement.label}
-                        onChange={(v) => updateSelectedElement({ label: v })}
-                        placeholder="请输入字段名称"
-                      />
-                    </div>
-                    <div>
-                      <div className="mb-2 text-sm text-gray-600">宽度占比</div>
-                      <Radio.Group
-                        type="button"
-                        value={selectedElement.width}
-                        onChange={(v) => updateSelectedElement({ width: v })}
-                      >
-                        {WIDTH_OPTIONS.map((opt) => (
-                          <Radio key={opt.value} value={opt.value}>
-                            {opt.tip}
-                          </Radio>
-                        ))}
-                      </Radio.Group>
-                    </div>
-                  </>
-                )}
-                {/* 基础组件的专属属性配置（从配置中心动态分发：表格列配置、分割线样式等） */}
-                {getBaseElementConfig(selectedElement.element_type)?.renderSettings?.(settingsCtx)}
+                {renderElementSettings(selectedElement, settingsCtx)}
               </div>
             </TabPane>
           )}

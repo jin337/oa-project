@@ -9,10 +9,12 @@ import {
   Select,
   Switch,
   Table,
+  Tag,
   TimePicker,
   Upload,
 } from '@arco-design/web-react'
-import { IconDelete, IconPlus } from '@arco-design/web-react/icon'
+import { IconDelete, IconPlus, IconUpload } from '@arco-design/web-react/icon'
+import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 
 /**
  * 布局设计器 —— 基础组件配置中心
@@ -24,6 +26,76 @@ import { IconDelete, IconPlus } from '@arco-design/web-react/icon'
  *
  * 新增基础组件只需在此对象中追加一项，左侧组件库、画布预览、属性面板自动生效。
  */
+
+// 元素宽度占比（24 栅格，短标签适配按钮式 Radio）
+const WIDTH_OPTIONS = [
+  { label: '100%', value: 24, tip: '整行' },
+  { label: '50%', value: 12, tip: '1/2' },
+  { label: '33%', value: 8, tip: '1/3' },
+  { label: '25%', value: 6, tip: '1/4' },
+]
+
+// 根据类型获取中文标签
+const getTypeLabel = (type) => ELEMENT_TYPE_OPTIONS.find((c) => c.value === type)?.label || type
+
+/**
+ * 常规表单元素的通用属性面板（元素类型 / 字段名称 / 宽度占比）
+ * 由常规控件的 renderSettings 或 renderElementSettings 分发调用。
+ */
+export const renderCommonSettings = ({ selectedElement, updateSelectedElement }) => (
+  <>
+    <div>
+      <div className="mb-2 text-sm text-gray-600">元素类型</div>
+      <Tag color="arcoblue" size="medium">
+        {getTypeLabel(selectedElement.element_type)}
+      </Tag>
+    </div>
+    <div>
+      <div className="mb-2 text-sm text-gray-600">字段名称</div>
+      <Input
+        value={selectedElement.label}
+        onChange={(v) => updateSelectedElement({ label: v })}
+        placeholder="请输入字段名称"
+      />
+    </div>
+    <div>
+      <div className="mb-2 text-sm text-gray-600">宽度占比</div>
+      <Radio.Group
+        type="button"
+        value={selectedElement.width}
+        onChange={(v) => updateSelectedElement({ width: v })}
+      >
+        {WIDTH_OPTIONS.map((opt) => (
+          <Radio key={opt.value} value={opt.value}>
+            {opt.tip}
+          </Radio>
+        ))}
+      </Radio.Group>
+    </div>
+  </>
+)
+
+// ==================== 表格列配置工具 ====================
+
+/** 生成表格列（新增列自动继承当前关联子表） */
+export const genColumn = (cols, tableKey) => ({
+  id: `col_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+  table_key: tableKey || '',
+  title: `列${(cols || []).length + 1}`,
+  dataIndex: null,
+})
+
+/** 新增列：通过 updateSelectedElementColumns 在选中表格元素上追加一列 */
+export const addColumn = (updateSelectedElementColumns, tableKey) =>
+  updateSelectedElementColumns((cols) => [...cols, genColumn(cols, tableKey)])
+
+/** 删除列 */
+export const removeColumn = (updateSelectedElementColumns, colId) =>
+  updateSelectedElementColumns((cols) => cols.filter((c) => c.id !== colId))
+
+/** 更新列（局部 patch） */
+export const updateColumn = (updateSelectedElementColumns, colId, patch) =>
+  updateSelectedElementColumns((cols) => cols.map((c) => (c.id === colId ? { ...c, ...patch } : c)))
 
 export const BASE_ELEMENT_CONFIGS = {
   divider: {
@@ -127,9 +199,8 @@ export const BASE_ELEMENT_CONFIGS = {
       fieldLoadingKeys,
       handleTableKeyChange,
       handleColumnFieldChange,
-      addColumn,
-      removeColumn,
       updateSelectedElement,
+      updateSelectedElementColumns,
       activePage,
     }) => (
       <>
@@ -161,7 +232,7 @@ export const BASE_ELEMENT_CONFIGS = {
               size="small"
               status="danger"
               icon={<IconDelete />}
-              onClick={() => removeColumn(col.id)}
+              onClick={() => removeColumn(updateSelectedElementColumns, col.id)}
             />
           </div>
         ))}
@@ -169,7 +240,7 @@ export const BASE_ELEMENT_CONFIGS = {
           size="mini"
           icon={<IconPlus />}
           disabled={!selectedElement.table_key}
-          onClick={addColumn}
+          onClick={() => addColumn(updateSelectedElementColumns, selectedElement.table_key)}
         >
           添加列
         </Button>
@@ -179,6 +250,63 @@ export const BASE_ELEMENT_CONFIGS = {
             disabled={activePage === 'detail'}
             checked={selectedElement.editable !== false}
             onChange={(v) => updateSelectedElement({ editable: v })}
+          />
+        </div>
+      </>
+    ),
+  },
+
+  upload: {
+    meta: {
+      key: 'base_upload',
+      element_type: 'upload',
+      label: '相关文件',
+      width: 24,
+      defaultProps: {
+        buttonText: '添加文件',
+      },
+    },
+    renderPreview: (el) => (
+      <Upload action="/" disabled>
+        <Button icon={<IconUpload />}>{el.buttonText || '添加文件'}</Button>
+      </Upload>
+    ),
+    renderSettings: ({ selectedElement, updateSelectedElement }) => (
+      <>
+        <div>
+          <div className="mb-2 text-sm text-gray-600">元素类型</div>
+          <Tag color="arcoblue" size="medium">
+            文件上传
+          </Tag>
+        </div>
+        <div>
+          <div className="mb-2 text-sm text-gray-600">字段名称</div>
+          <Input
+            value={selectedElement.label}
+            onChange={(v) => updateSelectedElement({ label: v })}
+            placeholder="请输入字段名称"
+          />
+        </div>
+        <div>
+          <div className="mb-2 text-sm text-gray-600">宽度占比</div>
+          <Radio.Group
+            type="button"
+            value={selectedElement.width}
+            onChange={(v) => updateSelectedElement({ width: v })}
+          >
+            {WIDTH_OPTIONS.map((opt) => (
+              <Radio key={opt.value} value={opt.value}>
+                {opt.tip}
+              </Radio>
+            ))}
+          </Radio.Group>
+        </div>
+        <div>
+          <div className="mb-2 text-sm text-gray-600">按钮文本</div>
+          <Input
+            value={selectedElement.buttonText}
+            onChange={(v) => updateSelectedElement({ buttonText: v })}
+            placeholder="请输入按钮文本"
           />
         </div>
       </>
@@ -202,6 +330,12 @@ export const BASE_LAYOUT_ELEMENTS = Object.values(BASE_ELEMENT_CONFIGS).map(({ m
 
 /** 判断是否为基础组件（不显示通用字段名称/宽度等配置） */
 export const isBaseElement = (element_type) => Boolean(BASE_ELEMENT_CONFIGS[element_type])
+
+// 无字段标签的基础组件（画布 FormItem 中隐藏 label 并走特殊布局，如分割线/表格）
+const NO_LABEL_ELEMENT_TYPES = ['divider', 'table']
+
+/** 判断是否为无字段标签元素（画布中不显示 label；upload 等字段型基础组件不受影响） */
+export const isNoLabelElement = (element_type) => NO_LABEL_ELEMENT_TYPES.includes(element_type)
 
 /** 获取基础组件配置（含 renderPreview / renderSettings） */
 export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[element_type] || null
@@ -241,4 +375,14 @@ export const renderPreviewConfig = {
   ),
   switch: () => <Switch disabled />,
   upload: (el) => <Upload action="/" disabled placeholder={el.placeholder || undefined} />,
+}
+
+/**
+ * 元素属性面板总分发：基础组件 → 专属 renderSettings；常规控件 → 通用属性面板
+ * LayoutManage 右侧"元素属性"Tab 统一调用此函数，无需再关心具体类型。
+ */
+export const renderElementSettings = (el, ctx) => {
+  const baseCfg = getBaseElementConfig(el.element_type)
+  if (baseCfg?.renderSettings) return baseCfg.renderSettings(ctx)
+  return renderCommonSettings(ctx)
 }
