@@ -10,6 +10,11 @@ export function getApplication(id) {
   return request.get(`/application/${id}`)
 }
 
+// GET /application/by-code/:code 按页面编码（code）查询应用配置（动态菜单页面渲染用）
+export function getApplicationByCode(code) {
+  return request.get(`/application/by-code/${code}`)
+}
+
 // POST /application 新增
 export function createApplication(data) {
   return request.post('/application', data)

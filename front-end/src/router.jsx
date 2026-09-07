@@ -17,8 +17,9 @@ const ApplicationManage = lazy(() => import('./pages/application/ApplicationMana
 const TableManage = lazy(() => import('./pages/application/TableManage.jsx'))
 const FormElementManage = lazy(() => import('./pages/application/FormElementManage.jsx'))
 const LayoutManage = lazy(() => import('./pages/application/LayoutManage.jsx'))
+// 动态配置页面：菜单 link_app 关联的应用配置页面（布局 JSON 还原渲染）
+const DynamicPage = lazy(() => import('./pages/application/DynamicPage.jsx'))
 const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
-const NotFound = lazy(() => import('./pages/error/NotFound.jsx'))
 
 function PageLoading() {
   return (
@@ -198,7 +199,7 @@ const router = createBrowserRouter([
         path: '*',
         element: (
           <Page>
-            <NotFound />
+            <DynamicPage />
           </Page>
         ),
       },
