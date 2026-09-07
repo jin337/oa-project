@@ -36,7 +36,7 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['id', 'username', 'dept', 'roles', 'email', 'phone', 'status', 'created_at']
+const ALL_COL_KEYS = ['index', 'username', 'dept', 'roles', 'email', 'phone', 'status', 'created_at']
 
 // 表格密度选项
 const SIZE_OPTIONS = [
@@ -331,7 +331,14 @@ export default function UserManage() {
   )
 
   const columns = [
-    { key: 'id', title: 'ID', dataIndex: 'id', width: 70 },
+    {
+      key: 'index',
+      title: '序号',
+      dataIndex: 'index',
+      width: 62,
+      align: 'center',
+      render: (_, __, index) => index + 1,
+    },
     { key: 'username', title: '用户名', dataIndex: 'username' },
     {
       key: 'dept',
@@ -388,7 +395,12 @@ export default function UserManage() {
               </Button>
             </Tooltip>
           ) : (
-            <Popconfirm position="rb" focusLock title="确认删除该用户？" onOk={() => handleDelete(record)}>
+            <Popconfirm
+              position="rb"
+              focusLock
+              title="确认删除该用户？"
+              onOk={() => handleDelete(record)}
+            >
               <Button size="mini" status="danger">
                 删除
               </Button>

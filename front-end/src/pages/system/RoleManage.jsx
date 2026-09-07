@@ -33,7 +33,7 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['id', 'name', 'code', 'data_scope', 'sort', 'status', 'remark']
+const ALL_COL_KEYS = ['index', 'name', 'code', 'data_scope', 'sort', 'status', 'remark']
 
 // 表格密度选项
 const SIZE_OPTIONS = [
@@ -199,7 +199,10 @@ export default function RoleManage() {
   // 打开分配菜单：加载菜单树 + 角色详情拿到已分配菜单
   const openAssignMenus = async (record) => {
     try {
-      const [treeRes, detailRes] = await Promise.all([menuApi.getMenuTree(), roleApi.getRole(record.id)])
+      const [treeRes, detailRes] = await Promise.all([
+        menuApi.getMenuTree(),
+        roleApi.getRole(record.id),
+      ])
       const tree = treeRes.data || []
       setMenuTree(tree)
       const assigned = (detailRes.data.menus || []).map((m) => String(m.id))
@@ -227,7 +230,10 @@ export default function RoleManage() {
   // 打开绑定部门：加载部门树 + 角色详情拿到已绑定部门
   const openAssignDepts = async (record) => {
     try {
-      const [treeRes, detailRes] = await Promise.all([deptApi.getDeptTree(), roleApi.getRole(record.id)])
+      const [treeRes, detailRes] = await Promise.all([
+        deptApi.getDeptTree(),
+        roleApi.getRole(record.id),
+      ])
       setDeptTree(treeRes.data || [])
       setCheckedDepts((detailRes.data.depts || []).map((d) => String(d.id)))
       setDeptModal(record)
@@ -265,7 +271,14 @@ export default function RoleManage() {
   )
 
   const columns = [
-    { key: 'id', title: 'ID', dataIndex: 'id', width: 70 },
+    {
+      key: 'index',
+      title: '序号',
+      dataIndex: 'index',
+      width: 62,
+      align: 'center',
+      render: (_, __, index) => index + 1,
+    },
     { key: 'name', title: '角色名称', dataIndex: 'name' },
     { key: 'code', title: '角色编码', dataIndex: 'code' },
     {
@@ -280,14 +293,19 @@ export default function RoleManage() {
       title: '状态',
       dataIndex: 'status',
       width: 80,
-      render: (status) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+      render: (status) =>
+        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },
     {
       key: 'remark',
       title: '备注',
       dataIndex: 'remark',
       width: 200,
-      render: (v) => <Typography.Text className="mb-0!" ellipsis={{ showTooltip: true }}>{v || '-'}</Typography.Text>,
+      render: (v) => (
+        <Typography.Text className="mb-0!" ellipsis={{ showTooltip: true }}>
+          {v || '-'}
+        </Typography.Text>
+      ),
     },
     {
       key: 'action',
@@ -313,7 +331,12 @@ export default function RoleManage() {
               </Button>
             </Tooltip>
           ) : (
-            <Popconfirm position="rb" focusLock title="确认删除该角色？" onOk={() => handleDelete(record)}>
+            <Popconfirm
+              position="rb"
+              focusLock
+              title="确认删除该角色？"
+              onOk={() => handleDelete(record)}
+            >
               <Button size="mini" status="danger">
                 删除
               </Button>
@@ -408,7 +431,8 @@ export default function RoleManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        className="w-160! max-w-[90vw]">
+        className="w-160! max-w-[90vw]"
+      >
         <Form
           form={form}
           layout="vertical"
@@ -417,7 +441,8 @@ export default function RoleManage() {
             if (changed.data_scope !== undefined) {
               setDataScope(changed.data_scope)
             }
-          }}>
+          }}
+        >
           <Row gutter={20}>
             <Col span={12}>
               <FormItem
@@ -426,7 +451,8 @@ export default function RoleManage() {
                 rules={[
                   { required: true, message: '请输入角色名称' },
                   { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-                ]}>
+                ]}
+              >
                 <Input placeholder="如：运营专员" />
               </FormItem>
             </Col>
@@ -437,7 +463,8 @@ export default function RoleManage() {
                 rules={[
                   { required: true, message: '请输入角色编码' },
                   { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-                ]}>
+                ]}
+              >
                 <Input placeholder="如：operator" disabled={Boolean(editing)} />
               </FormItem>
             </Col>
@@ -452,7 +479,9 @@ export default function RoleManage() {
             </Radio.Group>
           </FormItem>
           {dataScope === 2 && (
-            <div className="mb-3 text-sm text-gray-500">保存后请在列表中点击「绑定部门」为该角色选择自定义数据范围。</div>
+            <div className="mb-3 text-sm text-gray-500">
+              保存后请在列表中点击「绑定部门」为该角色选择自定义数据范围。
+            </div>
           )}
           <Row gutter={20}>
             <Col span={12}>
@@ -481,7 +510,8 @@ export default function RoleManage() {
         onOk={handleSaveMenus}
         onCancel={() => setMenuModal(null)}
         unmountOnExit
-        className="w-120! max-w-[90vw]">
+        className="w-120! max-w-[90vw]"
+      >
         <Tree
           checkable
           defaultExpandAll
@@ -498,7 +528,8 @@ export default function RoleManage() {
         onOk={handleSaveDepts}
         onCancel={() => setDeptModal(null)}
         unmountOnExit
-        className="w-120! max-w-[90vw]">
+        className="w-120! max-w-[90vw]"
+      >
         <Tree
           checkable
           defaultExpandAll

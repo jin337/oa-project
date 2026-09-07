@@ -34,7 +34,7 @@ const TabPane = Tabs.TabPane
 const MODULE_LABEL = '表管理'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['name', 'type', 'length', 'not_null', 'default_value', 'comment']
+const ALL_COL_KEYS = ['index', 'name', 'type', 'length', 'not_null', 'default_value', 'comment']
 
 // 表格密度选项
 const SIZE_OPTIONS = [
@@ -82,7 +82,7 @@ const RESERVED_FIELDS = new Set([
   'created_by',
   'updated_by',
   'deleted_at',
-  'parent_id'
+  'parent_id',
 ])
 
 function isReservedField(name) {
@@ -278,6 +278,14 @@ export default function TableManage() {
   )
 
   const columns = [
+    {
+      key: 'index',
+      title: '序号',
+      dataIndex: 'index',
+      width: 62,
+      align: 'center',
+      render: (_, __, index) => index + 1,
+    },
     { key: 'name', title: '字段名称', dataIndex: 'name' },
     { key: 'type', title: '类型', dataIndex: 'type' },
     { key: 'length', title: '长度', dataIndex: 'length', render: (v) => v || '-' },
@@ -322,7 +330,12 @@ export default function TableManage() {
                 </Button>
               </Tooltip>
             ) : (
-              <Popconfirm position="rb" focusLock title="确认删除该字段？" onOk={() => handleDelete(record)}>
+              <Popconfirm
+                position="rb"
+                focusLock
+                title="确认删除该字段？"
+                onOk={() => handleDelete(record)}
+              >
                 <Button size="mini" status="danger">
                   删除
                 </Button>

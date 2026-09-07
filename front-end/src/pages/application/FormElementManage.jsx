@@ -35,6 +35,7 @@ const MODULE_LABEL = '表单元素'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = [
+  "index",
   'label',
   'field_key',
   'table_key',
@@ -509,6 +510,14 @@ export default function FormElementManage() {
   )
 
   const columns = [
+    {
+      key: 'index',
+      title: '序号',
+      dataIndex: 'index',
+      width: 62,
+      align: 'center',
+      render: (_, __, index) => index + 1,
+    },
     { key: 'label', title: '名称', dataIndex: 'label' },
     { key: 'field_key', title: '对应字段', dataIndex: 'field_key' },
     {

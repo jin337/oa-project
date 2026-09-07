@@ -153,6 +153,13 @@ export const BASE_ELEMENT_CONFIGS = {
       const columns = (el.columns || []).map((col, i) => ({
         title: col.title || col.dataIndex || `列${i + 1}`,
         dataIndex: col.dataIndex || `col_${i + 1}`,
+        // 按列配置的 element_type 从 renderPreviewConfig 映射渲染禁用态表单控件预览；
+        // element_type 缺失或未定义时降级为直接显示普通文本
+        render: (value) => {
+          const renderFn = renderPreviewConfig[col.element_type]
+          if (renderFn) return renderFn(col)
+          return <span>{value ?? ''}</span>
+        },
       }))
       const action = {
         key: 'action',

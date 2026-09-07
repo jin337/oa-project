@@ -28,7 +28,7 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['id', 'name', 'code', 'table_name', 'sub_table_name', 'status']
+const ALL_COL_KEYS = ['index', 'name', 'code', 'table_name', 'sub_table_name', 'status']
 
 // 表格密度选项
 const SIZE_OPTIONS = [
@@ -182,7 +182,14 @@ export default function ApplicationManage() {
   )
 
   const columns = [
-    { key: 'id', title: 'ID', dataIndex: 'id', width: 70 },
+    {
+      key: 'index',
+      title: '序号',
+      dataIndex: 'index',
+      width: 62,
+      align: 'center',
+      render: (_, __, index) => index + 1,
+    },
     { key: 'name', title: '页面名称', dataIndex: 'name' },
     { key: 'code', title: '页面编码', dataIndex: 'code' },
     { key: 'table_name', title: '对应表', dataIndex: 'table_name' },
