@@ -13,7 +13,7 @@ import {
   TimePicker,
   Upload,
 } from '@arco-design/web-react'
-import { IconDelete, IconPlus, IconUpload } from '@arco-design/web-react/icon'
+import { IconDelete, IconPlus } from '@arco-design/web-react/icon'
 import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 
 /**
@@ -250,63 +250,6 @@ export const BASE_ELEMENT_CONFIGS = {
             disabled={activePage === 'detail'}
             checked={selectedElement.editable !== false}
             onChange={(v) => updateSelectedElement({ editable: v })}
-          />
-        </div>
-      </>
-    ),
-  },
-
-  upload: {
-    meta: {
-      key: 'base_upload',
-      element_type: 'upload',
-      label: '相关文件',
-      width: 24,
-      defaultProps: {
-        buttonText: '添加文件',
-      },
-    },
-    renderPreview: (el) => (
-      <Upload action="/" disabled>
-        <Button icon={<IconUpload />}>{el.buttonText || '添加文件'}</Button>
-      </Upload>
-    ),
-    renderSettings: ({ selectedElement, updateSelectedElement }) => (
-      <>
-        <div>
-          <div className="mb-2 text-sm text-gray-600">元素类型</div>
-          <Tag color="arcoblue" size="medium">
-            文件上传
-          </Tag>
-        </div>
-        <div>
-          <div className="mb-2 text-sm text-gray-600">字段名称</div>
-          <Input
-            value={selectedElement.label}
-            onChange={(v) => updateSelectedElement({ label: v })}
-            placeholder="请输入字段名称"
-          />
-        </div>
-        <div>
-          <div className="mb-2 text-sm text-gray-600">宽度占比</div>
-          <Radio.Group
-            type="button"
-            value={selectedElement.width}
-            onChange={(v) => updateSelectedElement({ width: v })}
-          >
-            {WIDTH_OPTIONS.map((opt) => (
-              <Radio key={opt.value} value={opt.value}>
-                {opt.tip}
-              </Radio>
-            ))}
-          </Radio.Group>
-        </div>
-        <div>
-          <div className="mb-2 text-sm text-gray-600">按钮文本</div>
-          <Input
-            value={selectedElement.buttonText}
-            onChange={(v) => updateSelectedElement({ buttonText: v })}
-            placeholder="请输入按钮文本"
           />
         </div>
       </>

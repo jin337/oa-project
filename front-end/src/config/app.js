@@ -50,4 +50,5 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'datepicker', label: '日期选择', needDataSource: false, needPlaceholder: true },
   { value: 'timepicker', label: '时间选择', needDataSource: false, needPlaceholder: true },
   { value: 'switch', label: '开关', needDataSource: false, needPlaceholder: false },
+  { value: 'upload', label: '文件上传', needDataSource: true, needPlaceholder: false },
 ]
