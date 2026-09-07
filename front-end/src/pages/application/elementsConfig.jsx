@@ -149,7 +149,7 @@ export const BASE_ELEMENT_CONFIGS = {
       width: 24,
       defaultProps: { columns: [], table_key: '', editable: true },
     },
-    renderPreview: (el) => {
+    renderPreview: (el, activePage) => {
       const columns = (el.columns || []).map((col, i) => ({
         title: col.title || col.dataIndex || `列${i + 1}`,
         dataIndex: col.dataIndex || `col_${i + 1}`,
@@ -171,7 +171,8 @@ export const BASE_ELEMENT_CONFIGS = {
         width: 62,
         render: (_, __, index) => index + 1,
       }
-      const isEditable = el.editable !== false
+      // 判断当前页面是否为表单页
+      const isEditable = activePage === 'form'
       // 可编辑且为表单页时追加操作列；详情页或不可编辑时不追加
       const finalColumns = [indexColumn, ...(!isEditable ? columns : [...columns, action])]
       return columns.length ? (
@@ -207,7 +208,6 @@ export const BASE_ELEMENT_CONFIGS = {
       handleColumnFieldChange,
       updateSelectedElement,
       updateSelectedElementColumns,
-      activePage,
     }) => (
       <>
         <div>
@@ -256,14 +256,6 @@ export const BASE_ELEMENT_CONFIGS = {
         >
           添加列
         </Button>
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">是否编辑</div>
-          <Switch
-            disabled={activePage === 'detail'}
-            checked={selectedElement.editable !== false}
-            onChange={(v) => updateSelectedElement({ editable: v })}
-          />
-        </div>
       </>
     ),
   },

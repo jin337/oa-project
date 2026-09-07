@@ -252,7 +252,7 @@ export default function LayoutManage() {
     setActivePanel('form')
   }
 
-  // 将表单页布局深拷贝后完整覆盖到详情页：过滤 table 的操作列（action），并强制只读（editable: false）
+  // 将表单页布局深拷贝后完整覆盖到详情页：过滤 table 的操作列（action）
   const handleSyncLayout = () => {
     setLayouts((prev) => {
       const cloned = structuredClone(prev.form)
@@ -260,7 +260,6 @@ export default function LayoutManage() {
         if (el.element_type === 'table') {
           return {
             ...el,
-            editable: false,
             columns: Array.isArray(el.columns)
               ? el.columns.filter((c) => c.key !== 'action')
               : el.columns,
@@ -428,7 +427,6 @@ export default function LayoutManage() {
     handleTableKeyChange,
     handleColumnFieldChange,
     updateSelectedElementColumns,
-    activePage,
   }
 
   return (
