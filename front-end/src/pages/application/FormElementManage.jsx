@@ -35,12 +35,13 @@ const MODULE_LABEL = '表单元素'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = [
-  "index",
+  'index',
   'label',
   'field_key',
   'table_key',
   'element_type',
   'default_value',
+  'data_source',
   'required',
   'vis_list',
   'vis_search',
@@ -532,6 +533,14 @@ export default function FormElementManage() {
       title: '默认值',
       dataIndex: 'default_value',
       render: (v) => (v === '' || v === null || v === undefined ? '-' : String(v)),
+    },
+    {
+      key: 'data_source',
+      title: '数据源',
+      dataIndex: 'data_source.type',
+      width: 80,
+      align: 'center',
+      render: (v) => (v ? <Tag color="arcoblue">{v === 'json' ? '静态' : '动态'}</Tag> : '-'),
     },
     {
       key: 'required',
