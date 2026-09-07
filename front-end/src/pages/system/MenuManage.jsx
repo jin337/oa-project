@@ -342,7 +342,7 @@ export default function MenuManage() {
                 </Select>
               </FormItem>
             </Col>
-            {formType !== 3 && (
+            {formType === 2 && (
               <Col span={12}>
                 <FormItem label="路由地址" field="path">
                   <Input placeholder="如：/system/user" />
@@ -356,13 +356,11 @@ export default function MenuManage() {
                 </FormItem>
               </Col>
             )}
-            {formType === 3 && (
-              <Col span={12}>
-                <FormItem label="权限标识" field="perm">
-                  <Input placeholder="如：system:user:add" />
-                </FormItem>
-              </Col>
-            )}
+            <Col span={12}>
+              <FormItem label="权限标识" field="perm">
+                <Input placeholder="如：system:user:add" />
+              </FormItem>
+            </Col>
             {formType !== 3 && (
               <Col span={12}>
                 <FormItem label="图标" field="icon">

@@ -19,6 +19,10 @@ const FormElementManage = lazy(() => import('./pages/application/FormElementMana
 const LayoutManage = lazy(() => import('./pages/application/LayoutManage.jsx'))
 // 动态配置页面：菜单 link_app 关联的应用配置页面（布局 JSON 还原渲染）
 const DynamicPage = lazy(() => import('./pages/application/DynamicPage.jsx'))
+// 动态表单渲染页：按 code 渲染应用配置的动态表单（供审批申请项等入口跳转）
+const DynamicRender = lazy(() => import('./pages/application/DynamicRender.jsx'))
+// 审批申请页：分类 + 申请项管理
+const ApprovalApply = lazy(() => import('./pages/approval/ApprovalApply.jsx'))
 const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
 
 function PageLoading() {
@@ -184,6 +188,24 @@ const router = createBrowserRouter([
         element: (
           <Page>
             <LayoutManage />
+          </Page>
+        ),
+      },
+      {
+        path: 'application/render/:code',
+        element: (
+          <Page>
+            <DynamicRender />
+          </Page>
+        ),
+      },
+      {
+        path: 'approval/apply',
+        element: (
+          <Page>
+            <RequirePermission>
+              <ApprovalApply />
+            </RequirePermission>
           </Page>
         ),
       },

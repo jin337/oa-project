@@ -103,6 +103,19 @@ func queryColumns(tableName string) ([]model.TableColumn, error) {
 	return cols, nil
 }
 
+// queryColumnSet 查询业务表列名集合（用于动态字段校验，防 SQL 注入）
+func queryColumnSet(tableName string) (map[string]bool, error) {
+	cols, err := queryColumns(tableName)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[string]bool, len(cols))
+	for _, c := range cols {
+		set[c.Name] = true
+	}
+	return set, nil
+}
+
 // getTableColumn 查询业务表单列定义
 func getTableColumn(tableName, columnName string) (*model.TableColumn, error) {
 	var col model.TableColumn

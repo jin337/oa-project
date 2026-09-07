@@ -271,6 +271,19 @@ type ApplicationListReq struct {
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
 }
 
+// ApplicationDataListReq 动态数据列表查询：分页 + 目标表名 + 动态搜索字段
+// 动态搜索字段以 field_key 作为 Query 参数名，由 handler 从 URL 提取后填充到 Filters
+type ApplicationDataListReq struct {
+	BaseListReq
+	TableName string            `json:"table_name" form:"table_name" validate:"required" label:"表名"`
+	Filters   map[string]string `json:"-" form:"-"` // 动态搜索字段（field_key → 值）
+}
+
+// ApplicationDataDetailReq 动态数据详情查询：主键为路径参数 dataId，目标表以应用配置为准
+type ApplicationDataDetailReq struct {
+	TableName string `json:"table_name" form:"table_name" validate:"omitempty" label:"表名"`
+}
+
 // TableColumn 物理业务表列定义（来源：information_schema.columns）
 // ID 为列名，作为前端编辑/删除的路径标识
 type TableColumn struct {

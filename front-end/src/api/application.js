@@ -77,3 +77,20 @@ export function updateFormElement(appId, elementId, data) {
 export function deleteFormElement(appId, elementId) {
   return request.delete(`/application/${appId}/formelement/${elementId}`)
 }
+
+// ========== 动态页面数据（/application/:appId/data） ==========
+
+// GET /application/:appId/data 通用数据列表查询（动态配置页面的表格数据，params 携带 table_name 与搜索字段）
+export function listApplicationData(appId, params) {
+  return request.get(`/application/${appId}/data`, { params })
+}
+
+// GET /application/:appId/data/:id 数据详情（含子表数据，动态配置页面的详情弹窗；主键假定为 id）
+export function getApplicationDataDetail(appId, id, params) {
+  return request.get(`/application/${appId}/data/${id}`, { params })
+}
+
+// POST /application/:appId/data 通用数据新增（动态表单页提交，body 携带 table_name 与表单字段）
+export function createApplicationData(appId, data, tableName) {
+  return request.post(`/application/${appId}/data`, { ...data, table_name: tableName })
+}

@@ -84,6 +84,7 @@ func Setup() *gin.Engine {
 	{
 		applications.GET("", handler.ApplicationList)
 		applications.POST("", handler.ApplicationCreate)
+		applications.GET("/by-code/:code", handler.ApplicationByCode)
 		applications.GET("/:id", handler.ApplicationDetail)
 		applications.PUT("/:id", handler.ApplicationUpdate)
 		applications.DELETE("/:id", handler.ApplicationDelete)
@@ -97,6 +98,9 @@ func Setup() *gin.Engine {
 		applications.POST("/:id/formelement", handler.FormElementCreate)
 		applications.PUT("/:id/formelement/:elementId", handler.FormElementUpdate)
 		applications.DELETE("/:id/formelement/:elementId", handler.FormElementDelete)
+		// 动态页面数据
+		applications.GET("/:id/data", handler.ApplicationDataList)
+		applications.GET("/:id/data/:dataId", handler.ApplicationDataDetail)
 	}
 
 	return r

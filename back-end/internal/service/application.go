@@ -51,6 +51,118 @@ func ApplicationDetail(id uint) (*model.Application, error) {
 	return &app, nil
 }
 
+// ApplicationByCode 根据页面编码（code）查询页面配置详情
+func ApplicationByCode(code string) (*model.Application, error) {
+	var app model.Application
+	if err := database.DB.Where("code = ?", code).First(&app).Error; err != nil {
+		return nil, errors.New("页面配置不存在")
+	}
+	return &app, nil
+}
+
+// ApplicationDataList 动态数据列表查询：
+//  1. 按 table_name 定位页面配置归属的业务物理表（含前缀）
+//  2. 动态搜索字段（field_key）经真实列名校验后拼装等值条件，值走参数绑定，防 SQL 注入
+//  3. 过滤软删除行，支持分页，返回标准分页结构
+func ApplicationDataList(appID uint, req *model.ApplicationDataListReq) ([]map[string]interface{}, int64, error) {
+	real, err := getApplicationBizTableBy(appID, req.TableName)
+	if err != nil {
+		return nil, 0, err
+	}
+	// 校验动态搜索字段均为表中真实列，避免注入
+	colSet, err := queryColumnSet(real)
+	if err != nil {
+		return nil, 0, err
+	}
+	conds := []string{}
+	args := []interface{}{}
+	if colSet["deleted_at"] {
+		conds = append(conds, "`deleted_at` IS NULL")
+	}
+	for k, v := range req.Filters {
+		if !colSet[k] {
+			return nil, 0, fmt.Errorf("搜索字段不存在: %s", k)
+		}
+		conds = append(conds, "`"+k+"` = ?")
+		args = append(args, v)
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = " WHERE " + strings.Join(conds, " AND ")
+	}
+	table := "`" + real + "`"
+
+	var total int64
+	if err := database.DB.Raw("SELECT COUNT(*) FROM "+table+where, args...).Scan(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var list []map[string]interface{}
+	if err := database.DB.Raw("SELECT * FROM "+table+where+" ORDER BY `id` DESC LIMIT ? OFFSET ?",
+		append(args, req.Limit(), req.Offset())...).Scan(&list).Error; err != nil {
+		return nil, 0, err
+	}
+	if list == nil {
+		list = []map[string]interface{}{}
+	}
+	return list, total, nil
+}
+
+// ApplicationDataDetail 动态数据详情：
+//  1. 根据应用配置的主表 table_name 查询 dataId 对应行（过滤软删除）
+//  2. 应用配置了子表时，按子表 parent_id 关联查询子表数据
+//  3. 子表数据以子表名（table_key）为 key 挂到返回对象顶层，前端按 detailData[table_key] 读取
+func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailReq) (map[string]interface{}, error) {
+	app, err := ApplicationDetail(appID)
+	if err != nil {
+		return nil, err
+	}
+	if !isValidTableName(app.TableName) {
+		return nil, errors.New("非法的表名")
+	}
+	mainReal := bizTableName(app.TableName)
+	mainColSet, err := queryColumnSet(mainReal)
+	if err != nil {
+		return nil, err
+	}
+
+	var main map[string]interface{}
+	sql := "SELECT * FROM `" + mainReal + "` WHERE `id` = ?"
+	if mainColSet["deleted_at"] {
+		sql += " AND `deleted_at` IS NULL"
+	}
+	if err := database.DB.Raw(sql, dataID).Scan(&main).Error; err != nil {
+		return nil, err
+	}
+	if main == nil {
+		return nil, errors.New("数据不存在")
+	}
+
+	// 子表数据：按 parent_id 关联主表主键
+	if app.SubTableName != "" {
+		for _, sub := range strings.Split(app.SubTableName, ",") {
+			sub = strings.TrimSpace(sub)
+			if sub == "" || !isValidTableName(sub) {
+				continue
+			}
+			subReal := bizTableName(sub)
+			var rows []map[string]interface{}
+			subSQL := "SELECT * FROM `" + subReal + "` WHERE `parent_id` = ?"
+			if subColSet, err := queryColumnSet(subReal); err == nil && subColSet["deleted_at"] {
+				subSQL += " AND `deleted_at` IS NULL"
+			}
+			subSQL += " ORDER BY `id` ASC"
+			if err := database.DB.Raw(subSQL, dataID).Scan(&rows).Error; err != nil {
+				return nil, err
+			}
+			if rows == nil {
+				rows = []map[string]interface{}{}
+			}
+			main[sub] = rows
+		}
+	}
+	return main, nil
+}
+
 // code 唯一性校验：GORM 软删除只加 deleted_at 条件，而数据库唯一索引覆盖全部行（含软删除），
 // 因此查重必须 Unscoped 带上已删除记录，否则检查通过但入库仍撞唯一键报 Error 1062
 func checkApplicationCodeExists(code string, excludeID uint) bool {
