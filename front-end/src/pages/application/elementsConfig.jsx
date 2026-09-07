@@ -111,6 +111,12 @@ export const BASE_ELEMENT_CONFIGS = {
     renderSettings: ({ selectedElement, updateSelectedElement }) => (
       <>
         <div>
+          <div className="mb-2 text-sm text-gray-600">元素类型</div>
+          <Tag color="arcoblue" size="medium">
+            分割线
+          </Tag>
+        </div>
+        <div>
           <div className="mb-2 text-sm text-gray-600">分割线文字</div>
           <Input
             value={selectedElement.text || ''}
@@ -204,6 +210,12 @@ export const BASE_ELEMENT_CONFIGS = {
       activePage,
     }) => (
       <>
+        <div>
+          <div className="mb-2 text-sm text-gray-600">元素类型</div>
+          <Tag color="arcoblue" size="medium">
+            表格
+          </Tag>
+        </div>
         <div className="text-sm text-gray-600">关联子表</div>
         <Select
           size="small"
@@ -317,7 +329,7 @@ export const renderPreviewConfig = {
     <TimePicker disabled style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
   ),
   switch: () => <Switch disabled />,
-  upload: (el) => <Upload action="/" disabled placeholder={el.placeholder || undefined} />,
+  upload: (el) => <Upload action="/" disabled tip={el.placeholder || undefined} />,
 }
 
 /**

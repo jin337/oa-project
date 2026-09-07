@@ -353,7 +353,7 @@ export default function FormElementManage() {
           type: 'api',
           options: [],
           url: '',
-          method: 'GET',
+          method: 'POST',
           label: '',
           value: [],
           params: '',
@@ -452,7 +452,7 @@ export default function FormElementManage() {
           return {
             type: 'api',
             url: ds.url || '',
-            method: ds.method || 'GET',
+            method: ds.method || 'POST',
             label: ds.label || '',
             value,
             params,
@@ -890,30 +890,35 @@ export default function FormElementManage() {
                     <Form.List field="data_source.value">
                       {(fields, { add, remove }) => (
                         <>
-                          {fields.length > 0 && (<div className='mb-3 rounded border border-gray-200 bg-white p-3'>
-                            {fields.map((item, index) => (
-                              <div key={item.key} className={`${index === 0 ? '' : 'mt-2'} flex items-center gap-2`}>
-                                <FormItem
-                                  field={item.field + '.source'}
-                                  noStyle
-                                  className="mb-0! flex-1"
+                          {fields.length > 0 && (
+                            <div className="mb-3 rounded border border-gray-200 bg-white p-3">
+                              {fields.map((item, index) => (
+                                <div
+                                  key={item.key}
+                                  className={`${index === 0 ? '' : 'mt-2'} flex items-center gap-2`}
                                 >
-                                  <Input placeholder="支持表达式，如 ${item.country}/${item.city}" />
-                                </FormItem>
-                                <span className="text-gray-400">→</span>
-                                <FormItem
-                                  field={item.field + '.target'}
-                                  noStyle
-                                  className="mb-0! flex-1"
-                                >
-                                  <Input placeholder="目标字段，如 city" />
-                                </FormItem>
-                                <Button status="danger" onClick={() => remove(index)}>
-                                  删除
-                                </Button>
-                              </div>
-                            ))}
-                          </div>)}
+                                  <FormItem
+                                    field={item.field + '.source'}
+                                    noStyle
+                                    className="mb-0! flex-1"
+                                  >
+                                    <Input placeholder="支持表达式，如 ${item.country}/${item.city}" />
+                                  </FormItem>
+                                  <span className="text-gray-400">→</span>
+                                  <FormItem
+                                    field={item.field + '.target'}
+                                    noStyle
+                                    className="mb-0! flex-1"
+                                  >
+                                    <Input placeholder="目标字段，如 city" />
+                                  </FormItem>
+                                  <Button status="danger" onClick={() => remove(index)}>
+                                    删除
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <Button
                             size="small"
                             type="outline"
