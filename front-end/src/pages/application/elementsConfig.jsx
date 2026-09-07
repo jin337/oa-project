@@ -32,14 +32,10 @@ export const BASE_ELEMENT_CONFIGS = {
       element_type: 'divider',
       label: '分割线',
       width: 24,
-      defaultProps: { orientation: 'center', text: '' },
+      defaultProps: { orientation: 'center', text: '分割线' },
     },
     renderPreview: (el) =>
-      el.text ? (
-        <Divider orientation={el.orientation || 'center'}>{el.text}</Divider>
-      ) : (
-        <Divider />
-      ),
+      el.text ? <Divider orientation={el.orientation || 'center'}>{el.text}</Divider> : <Divider />,
     renderSettings: ({ selectedElement, updateSelectedElement }) => (
       <>
         <div>
@@ -73,9 +69,9 @@ export const BASE_ELEMENT_CONFIGS = {
       element_type: 'table',
       label: '表格',
       width: 24,
-      defaultProps: { columns: [], table_key: '' },
+      defaultProps: { columns: [], table_key: '', editable: true },
     },
-    renderPreview: (el, pageType) => {
+    renderPreview: (el) => {
       const columns = (el.columns || []).map((col, i) => ({
         title: col.title || col.dataIndex || `列${i + 1}`,
         dataIndex: col.dataIndex || `col_${i + 1}`,
@@ -90,17 +86,34 @@ export const BASE_ELEMENT_CONFIGS = {
           </Button>
         ),
       }
-      // 表单页追加操作列；详情页不追加
-      const finalColumns = pageType === 'detail' ? columns : [...columns, action]
+      // 固定的"序号"列：独立于用户配置列与操作列，渲染当前行行号（index + 1）
+      const indexColumn = {
+        key: 'index',
+        title: '序号',
+        width: 62,
+        render: (_, __, index) => index + 1,
+      }
+      const isEditable = el.editable !== false
+      // 可编辑且为表单页时追加操作列；详情页或不可编辑时不追加
+      const finalColumns = [indexColumn, ...(!isEditable ? columns : [...columns, action])]
       return columns.length ? (
-        <Table
-          size="small"
-          rowKey={el.element_id}
-          border
-          pagination={false}
-          columns={finalColumns}
-          data={[]}
-        />
+        <div>
+          <Table
+            size="small"
+            rowKey={el.element_id}
+            border
+            pagination={false}
+            columns={finalColumns}
+            data={[]}
+          />
+          {isEditable && (
+            <div className="mt-2 flex justify-end">
+              <Button size="mini" type="primary" icon={<IconPlus />}>
+                新增
+              </Button>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
           表格（未配置列）
@@ -116,19 +129,11 @@ export const BASE_ELEMENT_CONFIGS = {
       handleColumnFieldChange,
       addColumn,
       removeColumn,
+      updateSelectedElement,
+      activePage,
     }) => (
       <>
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">表格列配置</div>
-          <Button
-            size="mini"
-            icon={<IconPlus />}
-            disabled={!selectedElement.table_key}
-            onClick={addColumn}
-          >
-            添加列
-          </Button>
-        </div>
+        <div className="text-sm text-gray-600">关联子表</div>
         <Select
           size="small"
           placeholder="选择关联子表"
@@ -136,6 +141,7 @@ export const BASE_ELEMENT_CONFIGS = {
           onChange={handleTableKeyChange}
           options={appTables.subTables.map((tb) => ({ label: tb, value: tb }))}
         />
+        <div className="text-sm text-gray-600">列配置</div>
         {(selectedElement.columns || []).map((col, idx) => (
           <div key={col.id} className="flex items-center justify-between gap-1">
             <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
@@ -159,11 +165,22 @@ export const BASE_ELEMENT_CONFIGS = {
             />
           </div>
         ))}
-        {!(selectedElement.columns || []).length && (
-          <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
-            {selectedElement.table_key ? '点击"添加列"开始配置' : '请先选择关联子表'}
-          </div>
-        )}
+        <Button
+          size="mini"
+          icon={<IconPlus />}
+          disabled={!selectedElement.table_key}
+          onClick={addColumn}
+        >
+          添加列
+        </Button>
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-gray-600">是否编辑</div>
+          <Switch
+            disabled={activePage === 'detail'}
+            checked={selectedElement.editable !== false}
+            onChange={(v) => updateSelectedElement({ editable: v })}
+          />
+        </div>
       </>
     ),
   },

@@ -10,6 +10,7 @@ import {
   Radio,
   Tabs,
   Tag,
+  Tooltip,
 } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -213,6 +214,8 @@ export default function LayoutManage() {
       ...libItem,
       id: genId(),
       width: libItem.width || 12,
+      // 表格组件：表单页默认可编辑，详情页默认只读
+      ...(libItem.element_type === 'table' && { editable: activePage === 'form' }),
     }
     setLayouts((prev) => {
       const cur = prev[activePage]
@@ -261,13 +264,19 @@ export default function LayoutManage() {
     setActivePanel('form')
   }
 
-  // 将表单页布局深拷贝后完整覆盖到详情页，并过滤 table 元素中的操作列（action）
+  // 将表单页布局深拷贝后完整覆盖到详情页：过滤 table 的操作列（action），并强制只读（editable: false）
   const handleSyncLayout = () => {
     setLayouts((prev) => {
       const cloned = structuredClone(prev.form)
       cloned.elements = (cloned.elements || []).map((el) => {
-        if (el.element_type === 'table' && Array.isArray(el.columns)) {
-          return { ...el, columns: el.columns.filter((c) => c.key !== 'action') }
+        if (el.element_type === 'table') {
+          return {
+            ...el,
+            editable: false,
+            columns: Array.isArray(el.columns)
+              ? el.columns.filter((c) => c.key !== 'action')
+              : el.columns,
+          }
         }
         return el
       })
@@ -442,6 +451,7 @@ export default function LayoutManage() {
     handleColumnFieldChange,
     addColumn,
     removeColumn,
+    activePage,
   }
 
   return (
@@ -459,27 +469,47 @@ export default function LayoutManage() {
               <div key={group.title} className="mb-3 last:mb-0">
                 <div className="mb-2 text-xs font-medium text-gray-500">{group.title}</div>
                 <div className="grid grid-cols-2 gap-2">
-                  {group.items.map((item) => (
-                    <div
-                      key={item.key}
-                      draggable
-                      onDragStart={(e) => {
-                        dragType.current = 'new'
-                        dragNewItem.current = item
-                        e.dataTransfer.setData('text/plain', item.key)
-                        e.dataTransfer.effectAllowed = 'copy'
-                      }}
-                      onDragEnd={() => {
-                        dragType.current = null
-                        dragNewItem.current = null
-                        setDragOverIndex(null)
-                      }}
-                      title={item.label}
-                      className="flex cursor-grab items-center justify-center rounded border border-gray-200 bg-gray-50 px-1 py-2 text-center text-xs text-gray-700 transition-colors hover:border-[rgb(var(--arcoblue-6))] hover:bg-[rgb(var(--arcoblue-1))]"
-                    >
-                      <span className="w-full truncate">{item.label}</span>
-                    </div>
-                  ))}
+                  {group.items.map((item) => {
+                    // 子表元素禁止直接拖拽（需通过表格组件配置），主表 / 基础分组不受影响
+                    const isSubTableItem = appTables.subTables.includes(item.table_key)
+                    const dragProps = isSubTableItem
+                      ? { draggable: false }
+                      : {
+                          draggable: true,
+                          onDragStart: (e) => {
+                            dragType.current = 'new'
+                            dragNewItem.current = item
+                            e.dataTransfer.setData('text/plain', item.key)
+                            e.dataTransfer.effectAllowed = 'copy'
+                          },
+                          onDragEnd: () => {
+                            dragType.current = null
+                            dragNewItem.current = null
+                            setDragOverIndex(null)
+                          },
+                        }
+                    const itemNode = (
+                      <div
+                        key={item.key}
+                        {...dragProps}
+                        title={item.label}
+                        className={`flex items-center justify-center rounded border px-1 py-2 text-center text-xs transition-colors ${
+                          isSubTableItem
+                            ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-400'
+                            : 'cursor-grab border-gray-200 bg-gray-50 text-gray-700 hover:border-[rgb(var(--arcoblue-6))] hover:bg-[rgb(var(--arcoblue-1))]'
+                        }`}
+                      >
+                        <span className="w-full truncate">{item.label}</span>
+                      </div>
+                    )
+                    return isSubTableItem ? (
+                      <Tooltip key={item.key} content="请从表格添加子表">
+                        {itemNode}
+                      </Tooltip>
+                    ) : (
+                      itemNode
+                    )
+                  })}
                 </div>
               </div>
             ))
@@ -544,12 +574,6 @@ export default function LayoutManage() {
               className={'mx-auto max-w-187.5'}
               layout={formConfig.layout}
               labelAlign={formConfig.labelAlign}
-              labelCol={isHorizontal ? { style: { flexBasis: formConfig.labelWidth } } : undefined}
-              wrapperCol={
-                isHorizontal
-                  ? { style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` } }
-                  : undefined
-              }
             >
               <Row gutter={[12, 12]}>
                 {elements.map((el, index) => {
@@ -591,7 +615,21 @@ export default function LayoutManage() {
                       >
                         {/* 使用 Form.Item 展示字段名称（label）与必填星号，布局/标签宽度/对齐由 Form 统一控制 */}
                         <FormItem
-                          label={isBaseElement(el.element_type) ? '\u00A0' : el.label}
+                          label={isBaseElement(el.element_type) ? '' : el.label}
+                          labelCol={
+                            isHorizontal
+                              ? isBaseElement(el.element_type)
+                                ? { span: 0 }
+                                : { style: { flexBasis: formConfig.labelWidth } }
+                              : undefined
+                          }
+                          wrapperCol={
+                            isHorizontal
+                              ? isBaseElement(el.element_type)
+                                ? { span: 24 }
+                                : { style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` } }
+                              : undefined
+                          }
                           required={Boolean(el.required)}
                           className="mb-0!"
                         >
