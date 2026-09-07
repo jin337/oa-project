@@ -72,6 +72,7 @@ type Menu struct {
 	Type     int    `gorm:"comment:类型 1目录 2页面菜单 3按钮/权限标识" json:"type"`
 	Path     string `gorm:"size:255;comment:路由地址" json:"path"`
 	Perm     string `gorm:"size:128;index;comment:权限标识 如 system:user:add" json:"perm"`
+	LinkApp  string `gorm:"size:64;comment:关联应用" json:"link_app"`
 	Icon     string `gorm:"size:64;comment:图标" json:"icon"`
 	Sort     int    `gorm:"default:0;comment:排序" json:"sort"`
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
@@ -193,6 +194,7 @@ type MenuCreateReq struct {
 	Type     int    `json:"type" validate:"required,oneof=1 2 3" label:"菜单类型"`
 	Path     string `json:"path" validate:"omitempty,max=255" label:"路由地址"`
 	Perm     string `json:"perm" validate:"omitempty,max=128" label:"权限标识"`
+	LinkApp  string `json:"link_app" validate:"omitempty,max=64" label:"关联应用"`
 	Icon     string `json:"icon" validate:"omitempty,max=64" label:"图标"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
@@ -205,6 +207,7 @@ type MenuUpdateReq struct {
 	Type     int    `json:"type" validate:"omitempty,oneof=1 2 3" label:"菜单类型"`
 	Path     string `json:"path" validate:"omitempty,max=255" label:"路由地址"`
 	Perm     string `json:"perm" validate:"omitempty,max=128" label:"权限标识"`
+	LinkApp  string `json:"link_app" validate:"omitempty,max=64" label:"关联应用"`
 	Icon     string `json:"icon" validate:"omitempty,max=64" label:"图标"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`

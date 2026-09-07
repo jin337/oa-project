@@ -49,7 +49,7 @@ func MenuCreate(curUserID uint, req *model.MenuCreateReq) (*model.Menu, error) {
 	}
 	menu := model.Menu{
 		ParentID: req.ParentID, Name: req.Name, Type: req.Type,
-		Path: req.Path, Perm: req.Perm, Icon: req.Icon, Sort: req.Sort, Status: status, Hidden: req.Hidden,
+		Path: req.Path, Perm: req.Perm, LinkApp: req.LinkApp, Icon: req.Icon, Sort: req.Sort, Status: status, Hidden: req.Hidden,
 	}
 	menu.CreatedBy, menu.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&menu).Error; err != nil {
@@ -86,6 +86,8 @@ func MenuUpdate(curUserID, id uint, req *model.MenuUpdateReq) (*model.Menu, erro
 	menu.Path = req.Path
 	menu.Perm = req.Perm
 	menu.Icon = req.Icon
+	menu.LinkApp = req.LinkApp
+
 	if req.Sort > 0 {
 		menu.Sort = req.Sort
 	}

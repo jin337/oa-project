@@ -29,7 +29,17 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['name', 'type', 'path', 'perm', 'icon', 'sort', 'status', 'hidden']
+const ALL_COL_KEYS = [
+  'name',
+  'type',
+  'path',
+  'perm',
+  'link_app',
+  'icon',
+  'sort',
+  'status',
+  'hidden',
+]
 
 // 表格密度选项
 const SIZE_OPTIONS = [
@@ -57,6 +67,7 @@ const EMPTY_FORM = {
   path: '',
   perm: '',
   icon: '',
+  link_app: '',
   sort: 0,
   status: 1,
   hidden: 0,
@@ -108,6 +119,7 @@ export default function MenuManage() {
       path: record.path,
       perm: record.perm,
       icon: record.icon,
+      link_app: record.link_app,
       sort: record.sort,
       status: record.status,
       hidden: record.hidden,
@@ -178,6 +190,7 @@ export default function MenuManage() {
     },
     { key: 'path', title: '路由地址', dataIndex: 'path', render: (v) => v || '-' },
     { key: 'perm', title: '权限标识', dataIndex: 'perm', render: (v) => v || '-' },
+    { key: 'link_app', title: '关联应用', dataIndex: 'link_app', render: (v) => v || '-' },
     { key: 'icon', title: '图标', dataIndex: 'icon', render: (v) => v || '-' },
     { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
     {
@@ -216,7 +229,12 @@ export default function MenuManage() {
               </Button>
             </Tooltip>
           ) : (
-            <Popconfirm position="rb" focusLock title="确认删除该菜单？" onOk={() => handleDelete(record)}>
+            <Popconfirm
+              position="rb"
+              focusLock
+              title="确认删除该菜单？"
+              onOk={() => handleDelete(record)}
+            >
               <Button size="mini" status="danger">
                 删除
               </Button>
@@ -328,6 +346,13 @@ export default function MenuManage() {
               <Col span={12}>
                 <FormItem label="路由地址" field="path">
                   <Input placeholder="如：/system/user" />
+                </FormItem>
+              </Col>
+            )}
+            {formType === 2 && (
+              <Col span={12}>
+                <FormItem label="关联应用" field="link_app">
+                  <Input placeholder="如：app_1" />
                 </FormItem>
               </Col>
             )}

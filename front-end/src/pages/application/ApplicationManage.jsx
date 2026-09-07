@@ -228,7 +228,7 @@ export default function ApplicationManage() {
           <Popconfirm
             position="rb"
             focusLock
-            title="确认删除该页面配置？"
+            title="确认删除该应用配置？"
             content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
             onOk={() => handleDelete(record)}
           >
@@ -258,7 +258,7 @@ export default function ApplicationManage() {
   const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
 
   return (
-    <Card title="页面配置">
+    <Card title="应用配置">
       {/* 搜索区域 */}
       <div className="mb-3">
         <Space wrap>
@@ -319,7 +319,7 @@ export default function ApplicationManage() {
       />
 
       <Modal
-        title={editing ? '编辑页面配置' : '新增页面配置'}
+        title={editing ? '编辑应用配置' : '新增应用配置'}
         visible={modalVisible}
         onOk={handleSave}
         confirmLoading={saving}

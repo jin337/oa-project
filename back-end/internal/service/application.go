@@ -132,7 +132,7 @@ func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.
 	}
 	app := model.Application{
 		Name:             req.Name,
-		Code:             fmt.Sprintf("app-%d", time.Now().Unix()), // 自动生成，忽略前端传入
+		Code:             fmt.Sprintf("app_%d", time.Now().Unix()), // 自动生成，忽略前端传入
 		TableName:        req.TableName,
 		SubTableName:     req.SubTableName,
 		Status:           status,

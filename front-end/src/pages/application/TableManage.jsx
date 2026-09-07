@@ -1,23 +1,23 @@
 import {
-  Button,
-  Card,
-  Checkbox,
-  Dropdown,
-  Empty,
-  Form,
-  Grid,
-  Input,
-  Menu,
-  Message,
-  Modal,
-  Popconfirm,
-  Popover,
-  Select,
-  Space,
-  Switch,
-  Table,
-  Tabs,
-  Tooltip,
+    Button,
+    Card,
+    Checkbox,
+    Dropdown,
+    Empty,
+    Form,
+    Grid,
+    Input,
+    Menu,
+    Message,
+    Modal,
+    Popconfirm,
+    Popover,
+    Select,
+    Space,
+    Switch,
+    Table,
+    Tabs,
+    Tooltip,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -381,7 +381,7 @@ export default function TableManage() {
       )}
 
       {tables.length === 0 ? (
-        <Empty description="未配置数据表，请先在页面配置中设置主表或子表" />
+        <Empty description="未配置数据表，请先在应用配置中设置主表或子表" />
       ) : (
         <>
           {/* 搜索区域 */}
