@@ -370,6 +370,7 @@ export default function LayoutManage() {
       cols.map((c) =>
         c.id === colId
           ? {
+              ...field,
               ...c,
               dataIndex: field?.field_key || fieldKey,
               title: field?.label || field?.name || fieldKey,

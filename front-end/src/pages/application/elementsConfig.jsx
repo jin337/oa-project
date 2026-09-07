@@ -174,7 +174,8 @@ export const BASE_ELEMENT_CONFIGS = {
       // 判断当前页面是否为表单页
       const isEditable = activePage === 'form'
       // 可编辑且为表单页时追加操作列；详情页或不可编辑时不追加
-      const finalColumns = [indexColumn, ...(!isEditable ? columns : [...columns, action])]
+      const finalColumns = [indexColumn, ...(isEditable ? [...columns, action] : columns)]
+      const finalData = isEditable ? [{ element_id: '1' }] : []
       return columns.length ? (
         <div>
           <Table
@@ -183,7 +184,7 @@ export const BASE_ELEMENT_CONFIGS = {
             border
             pagination={false}
             columns={finalColumns}
-            data={[]}
+            data={finalData}
           />
           {isEditable && (
             <div className="mt-2 flex justify-end">
