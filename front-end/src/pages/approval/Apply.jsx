@@ -67,7 +67,6 @@ export default function Apply() {
   // 动态表单 Drawer（点击申请项卡片打开）
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [drawerLoading, setDrawerLoading] = useState(false)
-  const [drawerSubmitting, setDrawerSubmitting] = useState(false)
   const [drawerApp, setDrawerApp] = useState(null)
   const [drawerForm] = Form.useForm()
 
@@ -238,7 +237,6 @@ export default function Apply() {
     } catch (e) {
       return
     }
-    setDrawerSubmitting(true)
     try {
       // 依据布局配置拆分主表字段与子表（表格组件）数据：
       // 布局中 element_type === 'table' 的元素以 table_key（或 id 兜底）作为 Form.List 字段名，
@@ -262,8 +260,6 @@ export default function Apply() {
       setDrawerVisible(false)
     } catch (e) {
       Message.error('申请提交失败，请稍后重试')
-    } finally {
-      setDrawerSubmitting(false)
     }
   }
 
@@ -453,7 +449,6 @@ export default function Apply() {
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
         onOk={handleDrawerSubmit}
-        okLoading={drawerSubmitting}
         title={drawerApp?.name || '申请表单'}
         unmountOnExit
       >
