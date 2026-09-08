@@ -1,9 +1,6 @@
 import {
   Button,
   Empty,
-  Form,
-  Grid,
-  Input,
   InputNumber,
   Message,
   Popconfirm,
@@ -11,24 +8,18 @@ import {
   Tabs,
   Tooltip,
 } from '@arco-design/web-react'
-import { IconDelete, IconDragArrow, IconSave, IconSync } from '@arco-design/web-react/icon'
+import { IconDelete, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
 import { useTabs } from '../../store/tab-context'
-import {
+import DynamicForm, {
   BASE_LAYOUT_ELEMENTS,
   DEFAULT_FORM_CONFIG,
-  getBaseElementConfig,
-  isNoLabelElement,
   parseLayoutJson,
   renderElementSettings,
-  renderPreviewConfig,
-} from './elementsConfig'
+} from './DynamicForm'
 
-const FormItem = Form.Item
-const Row = Grid.Row
-const Col = Grid.Col
 const TabPane = Tabs.TabPane
 
 const MODULE_LABEL = '布局管理'
@@ -385,19 +376,6 @@ export default function LayoutManage() {
     }
   }
 
-  // ==================== 元素预览渲染 ====================
-
-  const renderElementPreview = (el) => {
-    // 基础组件（分割线/表格等）：从配置中心分派预览渲染
-    const baseCfg = getBaseElementConfig(el.element_type)
-    if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, activePage)
-    // 常规表单控件：从 renderPreviewConfig 映射查找
-    const render = renderPreviewConfig[el.element_type]
-    if (render) return render(el)
-    // 兜底：单行输入框
-    return <Input disabled placeholder={el.placeholder || undefined} />
-  }
-
   const isHorizontal = formConfig.layout === 'horizontal'
 
   // 注入基础组件属性面板的上下文（组件级状态 + 回调，由配置中心的 renderSettings 按需取用）
@@ -511,122 +489,44 @@ export default function LayoutManage() {
           </div>
         </div>
 
-        <div
-          className="m-4 flex-1 overflow-auto border-2 border-dashed border-gray-200 p-4"
-          onDragOver={(e) => {
+        {/* 中间画布：渲染逻辑与拖拽/选中/删除交互统一由 DynamicForm（move-* 模式）承载 */}
+        <DynamicForm
+          app={{ form_layout_json: { formConfig, elements } }}
+          pageType={activePage === 'form' ? 'move-form' : 'move-detail'}
+          selectedId={selectedId}
+          dragOverIndex={dragOverIndex}
+          onSelectElement={(el) => {
+            setSelectedId(el.id)
+            setActivePanel('element')
+          }}
+          onRemoveElement={removeElement}
+          onElementDragStart={(e, el) => {
+            dragType.current = 'move'
+            dragSourceId.current = el.id
+            e.dataTransfer.effectAllowed = 'move'
+            e.stopPropagation()
+          }}
+          onElementDragOver={(e, index) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setDragOverIndex(index)
+          }}
+          onElementDrop={(e, index) => handleCanvasDrop(e, index)}
+          onDragEnd={() => {
+            dragType.current = null
+            dragSourceId.current = null
+            setDragOverIndex(null)
+          }}
+          onCanvasDragOver={(e) => {
             e.preventDefault()
             e.dataTransfer.dropEffect = dragType.current === 'move' ? 'move' : 'copy'
           }}
-          onDrop={(e) => handleCanvasDrop(e, -1)}
-          onClick={() => {
+          onCanvasDrop={(e) => handleCanvasDrop(e, -1)}
+          onCanvasClick={() => {
             setSelectedId(null)
             setActivePanel('form')
           }}
-        >
-          {elements.length === 0 ? (
-            <div className="flex h-full items-center justify-center">
-              <Empty description="从左侧拖拽表单元素到此处开始设计" />
-            </div>
-          ) : (
-            <Form
-              className={'mx-auto max-w-187.5'}
-              layout={formConfig.layout}
-              labelAlign={formConfig.labelAlign}
-            >
-              <Row gutter={[12, 12]}>
-                {elements.map((el, index) => {
-                  const isSelected = el.id === selectedId
-                  const isDragOver = dragOverIndex === index
-                  return (
-                    <Col span={el.width} key={el.id}>
-                      <div
-                        draggable
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedId(el.id)
-                          setActivePanel('element')
-                        }}
-                        onDragStart={(e) => {
-                          dragType.current = 'move'
-                          dragSourceId.current = el.id
-                          e.dataTransfer.effectAllowed = 'move'
-                          e.stopPropagation()
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setDragOverIndex(index)
-                        }}
-                        onDrop={(e) => handleCanvasDrop(e, index)}
-                        onDragEnd={() => {
-                          dragType.current = null
-                          dragSourceId.current = null
-                          setDragOverIndex(null)
-                        }}
-                        className={`group relative h-full cursor-pointer border transition-colors ${
-                          isSelected
-                            ? 'border-[rgb(var(--arcoblue-6))] bg-[rgb(var(--arcoblue-1))]'
-                            : isDragOver
-                              ? 'border-dashed border-[rgb(var(--arcoblue-6))] bg-[rgb(var(--arcoblue-1))]'
-                              : 'border-transparent bg-white hover:border-[rgb(var(--arcoblue-6))]'
-                        }`}
-                      >
-                        {/* 使用 Form.Item 展示字段名称（label）与必填星号，布局/标签宽度/对齐由 Form 统一控制 */}
-                        <FormItem
-                          label={isNoLabelElement(el.element_type) ? '' : el.label}
-                          labelCol={
-                            isHorizontal
-                              ? isNoLabelElement(el.element_type)
-                                ? { span: 24 - el.width }
-                                : { style: { flexBasis: formConfig.labelWidth } }
-                              : undefined
-                          }
-                          wrapperCol={
-                            isHorizontal
-                              ? isNoLabelElement(el.element_type)
-                                ? { span: el.width }
-                                : {
-                                    style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` },
-                                  }
-                              : undefined
-                          }
-                          required={Boolean(el.required)}
-                          className="mb-0!"
-                        >
-                          {renderElementPreview(el)}
-                          {/* mask 蒙层 */}
-                          <div className="absolute inset-0 z-1"></div>
-                        </FormItem>
-
-                        {isSelected && (
-                          <>
-                            {/* 拖拽图标：绝对定位左下角，hover 显示 */}
-                            <span className="absolute bottom-0 left-0 bg-[rgb(var(--arcoblue-6))] px-0.5">
-                              <IconDragArrow className="cursor-grab text-white!" />
-                            </span>
-                            {/* 删除按钮：绝对定位右上角（悬浮于边框上），hover 显示（原生 title 提示，避免 Trigger 组件动态重排崩溃） */}
-                            <Button
-                              size="mini"
-                              status="danger"
-                              shape="circle"
-                              icon={<IconDelete />}
-                              title="删除元素"
-                              className="absolute! -top-2 -right-2 z-2 shadow"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                removeElement(el.id)
-                              }}
-                            />
-                          </>
-                        )}
-                      </div>
-                    </Col>
-                  )
-                })}
-              </Row>
-            </Form>
-          )}
-        </div>
+        />
       </div>
 
       {/* ========== 右侧：属性配置面板（Tabs 作为顶部导航） ========== */}
