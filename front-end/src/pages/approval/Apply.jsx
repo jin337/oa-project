@@ -236,17 +236,28 @@ export default function Apply() {
     try {
       values = await drawerForm.validate()
     } catch (e) {
-      // 校验失败：提取首条错误信息提示（Arco 表单同时展示字段级错误），终止提交
-      const messages = Object.values(e || {})
-        .flat()
-        .map((x) => x?.message)
-        .filter(Boolean)
-      if (messages.length) Message.error(messages[0])
       return
     }
     setDrawerSubmitting(true)
     try {
-      await applicationApi.createApplicationData(drawerApp.id, values, drawerApp.table_name)
+      // 依据布局配置拆分主表字段与子表（表格组件）数据：
+      // 布局中 element_type === 'table' 的元素以 table_key（或 id 兜底）作为 Form.List 字段名，
+      // 其值为行数组；其余字段归入主表数据
+      const tableKeys = new Set(
+        (elements || [])
+          .filter((el) => el.element_type === 'table' && (el.table_key || el.id))
+          .map((el) => el.table_key || el.id),
+      )
+      const mainData = {}
+      const subTables = {}
+      Object.entries(values || {}).forEach(([key, value]) => {
+        if (tableKeys.has(key)) {
+          subTables[key] = value
+        } else {
+          mainData[key] = value
+        }
+      })
+      await applicationApi.createApplicationData(drawerApp.id, mainData, subTables)
       Message.success('申请提交成功')
       setDrawerVisible(false)
     } catch (e) {

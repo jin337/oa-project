@@ -90,7 +90,13 @@ export function getApplicationDataDetail(appId, id, params) {
   return request.get(`/application/${appId}/data/${id}`, { params })
 }
 
-// POST /application/:appId/data 通用数据新增（动态表单页提交，body 携带 table_name 与表单字段）
-export function createApplicationData(appId, data, tableName) {
-  return request.post(`/application/${appId}/data`, { ...data, table_name: tableName })
+// POST /application/:appId/data 通用数据新增（动态表单提交：主表字段数据 + 子表数据）
+// @param {number|string} appId     应用 ID（后端据此定位主表名）
+// @param {object} mainData         主表字段数据（布局中普通表单元素的值）
+// @param {object} subTables        子表数据 { table_key: [行数据...] }（布局中表格组件的 Form.List 数组值）
+export function createApplicationData(appId, mainData, subTables) {
+  return request.post(`/application/${appId}/data`, {
+    data: mainData,
+    sub_tables: subTables,
+  })
 }
