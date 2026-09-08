@@ -361,7 +361,7 @@ export const ELEMENT_RENDER_CONFIG = {
     ),
   },
   select: {
-    renderPreview: (el,pageType) => {
+    renderPreview: (el, pageType) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
       if (pageType?.startsWith('move-')) {
         return (
@@ -386,7 +386,7 @@ export const ELEMENT_RENDER_CONFIG = {
     },
   },
   radio: {
-    renderPreview: (el,pageType) => {
+    renderPreview: (el, pageType) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
       if (pageType?.startsWith('move-')) {
         return (
@@ -406,7 +406,7 @@ export const ELEMENT_RENDER_CONFIG = {
     },
   },
   checkbox: {
-    renderPreview: (el,pageType) => {
+    renderPreview: (el, pageType) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
       if (pageType?.startsWith('move-')) {
         return (
@@ -546,18 +546,12 @@ export default function DynamicForm({
 
     // 仅在水平模式下进行布局计算
     if (isHorizontal) {
-      if (isMoveMode && noLabel) {
-        // 拖拽模式且无标签：标签和控件按剩余宽度分配
-        labelCol = { span: 24 - el.width }
-        wrapperCol = { span: el.width }
-      } else if (isMoveMode) {
-        // 拖拽模式且有标签：使用 flex 布局
-        labelCol = { style: { flexBasis: formConfig.labelWidth } }
-        wrapperCol = { style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` } }
-      } else if (noLabel) {
+      if (noLabel) {
+        // 无标签：无论是否在拖拽模式，都使用栅格布局按宽度分配
         labelCol = { span: 24 - el.width }
         wrapperCol = { span: el.width }
       } else {
+        // 有标签：无论是否在拖拽模式，都使用 Flex 布局
         labelCol = { style: { flexBasis: formConfig.labelWidth } }
         wrapperCol = { style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` } }
       }
@@ -606,7 +600,7 @@ export default function DynamicForm({
           {isSelected && (
             <>
               {/* 拖拽图标：绝对定位左下角，hover 显示 */}
-              <span className="absolute bottom-0 left-0 bg-[rgb(var(--arcoblue-6))] px-0.5">
+              <span className="absolute -bottom-px -left-px bg-[rgb(var(--arcoblue-6))] px-1">
                 <IconDragArrow className="cursor-grab text-white!" />
               </span>
               {/* 删除按钮：绝对定位右上角（悬浮于边框上），hover 显示 */}
@@ -629,6 +623,7 @@ export default function DynamicForm({
     )
   }
 
+  // 表单节点：根据页面类型渲染不同内容
   const formNode = (
     <Form
       form={form}
@@ -675,5 +670,5 @@ export default function DynamicForm({
     return <Empty description="该应用暂未配置表单布局" />
   }
 
-  return <>{formNode}</>
+  return formNode
 }
