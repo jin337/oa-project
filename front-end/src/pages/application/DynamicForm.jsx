@@ -204,7 +204,13 @@ export const BASE_ELEMENT_CONFIGS = {
     },
     renderPreview: (el, activePage) => {
       const columns = (el.columns || []).map((col, i) => ({
-        title: col.title || col.dataIndex || `列${i + 1}`,
+        title:
+          (
+            <>
+              <span className="mr-1 text-[rgb(var(--danger-6))]">&#x2A;</span>
+              {col.title}
+            </>
+          ) || `列${i + 1}`,
         dataIndex: col.dataIndex || `col_${i + 1}`,
         // 按列配置的 element_type 从 renderPreviewConfig 映射渲染禁用态表单控件预览；
         // element_type 缺失或未定义时降级为直接显示普通文本
@@ -214,6 +220,7 @@ export const BASE_ELEMENT_CONFIGS = {
           return <span>{value ?? ''}</span>
         },
       }))
+
       const action = {
         key: 'action',
         title: '操作',
@@ -235,12 +242,13 @@ export const BASE_ELEMENT_CONFIGS = {
       const isEditable = activePage === 'form'
       // 可编辑且为表单页时追加操作列；详情页或不可编辑时不追加
       const finalColumns = [indexColumn, ...(isEditable ? [...columns, action] : columns)]
-      const finalData = isEditable ? [{ element_id: '1' }] : []
+      const finalData = isEditable ? [{ id: '1' }] : []
       return columns.length ? (
-        <div>
+        <>
           <Table
+            key={el.table_key}
             size="small"
-            rowKey={el.element_id}
+            rowKey={el.id}
             border
             pagination={false}
             columns={finalColumns}
@@ -253,7 +261,7 @@ export const BASE_ELEMENT_CONFIGS = {
               </Button>
             </div>
           )}
-        </div>
+        </>
       ) : (
         <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
           表格（未配置列）
@@ -287,7 +295,7 @@ export const BASE_ELEMENT_CONFIGS = {
         />
         <div className="text-sm text-gray-600">列配置</div>
         {(selectedElement.columns || []).map((col, idx) => (
-          <div key={col.id} className="flex items-center justify-between gap-1">
+          <div key={col.id || `col_${idx}`} className="flex items-center justify-between gap-1">
             <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
             <Select
               size="small"
@@ -563,7 +571,7 @@ export default function DynamicForm({
         labelCol={labelCol}
         wrapperCol={wrapperCol}
         required={isMoveMode ? Boolean(el.required) : Boolean(el.required) && !noLabel}
-        className={isMoveMode ? 'mb-0!' : undefined}
+        noStyle={noLabel}
       >
         {renderControl(el)}
         {/* 画布模式：透明蒙层阻止触发表单控件原生交互 */}
@@ -577,7 +585,7 @@ export default function DynamicForm({
     const isSelected = el.id === selectedId
     const isDragOver = dragOverIndex === index
     return (
-      <Col span={el.width} key={el.id}>
+      <Col span={el.width} key={el.id || `el_${el.element_type}_${index}`}>
         <div
           draggable
           onClick={(e) => {
@@ -632,7 +640,7 @@ export default function DynamicForm({
       labelAlign={formConfig.labelAlign}
       disabled={pageType !== 'form'}
     >
-      <Row gutter={[12, 12]}>
+      <Row>
         {elements.map((el, index) =>
           isMoveMode ? (
             renderCanvasElement(el, index)

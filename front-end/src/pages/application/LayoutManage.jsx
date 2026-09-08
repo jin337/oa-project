@@ -401,11 +401,11 @@ export default function LayoutManage() {
           {libraryLoading ? (
             <Empty description="加载中..." />
           ) : (
-            libraryGroups.map((group) => (
+            libraryGroups?.map((group) => (
               <div key={group.title} className="mb-3 last:mb-0">
                 <div className="mb-2 text-xs font-medium text-gray-500">{group.title}</div>
                 <div className="grid grid-cols-2 gap-2">
-                  {group.items.map((item) => {
+                  {group?.items?.map((item) => {
                     // 子表元素禁止直接拖拽（需通过表格组件配置），主表 / 基础分组不受影响
                     const isSubTableItem = appTables.subTables.includes(item.table_key)
                     const dragProps = isSubTableItem
@@ -424,9 +424,10 @@ export default function LayoutManage() {
                             setDragOverIndex(null)
                           },
                         }
+
                     const itemNode = (
                       <div
-                        key={item.key}
+                        key={item.key + '_' + item.field_key}
                         {...dragProps}
                         title={item.label}
                         className={`flex items-center justify-center rounded border px-1 py-2 text-center text-xs transition-colors ${
@@ -439,7 +440,7 @@ export default function LayoutManage() {
                       </div>
                     )
                     return isSubTableItem ? (
-                      <Tooltip key={item.key} content="请从表格添加子表项">
+                      <Tooltip key={item.key + '_' + item.field_key} content="请从表格添加子表项">
                         {itemNode}
                       </Tooltip>
                     ) : (
