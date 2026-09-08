@@ -221,16 +221,29 @@ export default function Apply() {
   // 提交申请：校验动态表单内容，成功后调用通用数据新增接口写入主表
   const handleDrawerSubmit = async () => {
     if (!drawerApp) return
-    // 前置检查：表单是否配置了可提交字段（field_key/name），避免静默提交空对象
+    // 前置检查：表单是否配置了可提交字段（field_key/name，或表格元素的 table_key/id），避免静默提交空对象
     const layout = drawerApp.form_layout_json
     const elements = layout?.elements
-    const hasFields = Array.isArray(elements) && elements.some((el) => el.field_key || el.name)
+    const hasFields =
+      Array.isArray(elements) &&
+      elements.some((el) => el.field_key || el.name || (el.element_type === 'table' && (el.table_key || el.id)))
     if (!hasFields) {
       Message.warning('该应用暂未配置可提交的表单字段')
       return
     }
 
-    let values = await drawerForm.validate()
+    let values
+    try {
+      values = await drawerForm.validate()
+    } catch (e) {
+      // 校验失败：提取首条错误信息提示（Arco 表单同时展示字段级错误），终止提交
+      const messages = Object.values(e || {})
+        .flat()
+        .map((x) => x?.message)
+        .filter(Boolean)
+      if (messages.length) Message.error(messages[0])
+      return
+    }
     setDrawerSubmitting(true)
     try {
       await applicationApi.createApplicationData(drawerApp.id, values, drawerApp.table_name)

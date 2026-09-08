@@ -17,10 +17,10 @@ import {
   Upload,
 } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon'
-import { useEffect, useState } from 'react'
 import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 
 const FormItem = Form.Item
+const FormList = Form.List
 const Row = Grid.Row
 const Col = Grid.Col
 
@@ -141,101 +141,140 @@ export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[eleme
 
 // ==================== 渲染配置中心 ====================
 
-// 生成表格行唯一标识
-const genRowKey = () => `row_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-
 /**
- * 表格组件（table）字段：带真实"新增行 / 删除行"交互的可编辑表格。
- * 行数据由本组件内部 useState 维护，并动态更新 Table 的 data 属性。
+ * 表格组件（table）字段：基于 Arco Form.List 的多行数据录入表格。
+ * - Form.List field 绑定 el.table_key，行数据以 table_key[index].colKey 嵌套路径注册到 Form store
+ * - 校验规则挂在 Form.List 上（整体至少一行 + 必填列非空），错误通过 useFormState 读取并显示在表格底部
  * - pageType === 'form'：可编辑模式，显示"新增"按钮与行内"删除"按钮，行内控件可交互
- * - 其他（detail / 画布只读）：只读展示，隐藏操作列与新增按钮，行内控件禁用态
+ * - 其他（detail / 画布只读）：只读展示，隐藏操作列与新增按钮，行内控件由 Form disabled 统一禁用
  */
 const TableElementField = ({ el, pageType }) => {
   const isEditable = pageType === 'form'
-  const [rows, setRows] = useState(() => (isEditable ? [{ _key: genRowKey() }] : []))
+  // Form.List 字段名：优先关联子表名（table_key），其次元素 id 兜底
+  const listField = el.table_key || el.id || 'table'
+  const { form } = Form.useFormContext()
+  // 订阅该字段的表单状态（含校验错误），错误变化时自动重渲染
+  const formState = Form.useFormState(listField, form)
+  // 提取错误文本：Arco 返回的错误项为 b-validate 错误对象（含 message/type/value 等键），
+  // 需安全提取 message 字符串；同时兼容纯字符串结构的错误项，避免直接渲染对象触发 React 报错
+  const errorMessage = (formState?.errors || [])
+    .flat()
+    .filter(Boolean)
+    .map((e) => (typeof e === 'string' ? e : e?.message))
+    .find(Boolean)
 
-  // 切换为只读模式时清空行数据（详情展示无需行数据）
-  useEffect(() => {
-    if (!isEditable) setRows([])
-  }, [isEditable])
-
-  // 关联子表变化（表格元素被重新配置）时重置行数据
-  useEffect(() => {
-    setRows(isEditable ? [{ _key: genRowKey() }] : [])
-  }, [el.table_key, isEditable])
-
-  const addRow = () => setRows((prev) => [...prev, { _key: genRowKey() }])
-  const removeRow = (rowKey) => setRows((prev) => prev.filter((r) => r._key !== rowKey))
-
-  const columns = (el.columns || []).map((col, i) => ({
-    title:
-      (
-        <>
-          <span className="mr-1 text-[rgb(var(--danger-6))]">&#x2A;</span>
-          {col.title}
-        </>
-      ) || `列${i + 1}`,
-    dataIndex: col.dataIndex || `col_${i + 1}`,
-    // 按列配置的 element_type 从 renderPreviewConfig 映射渲染表单控件；
-    // 可编辑模式传 'form'（可交互），只读模式不传（禁用态预览）；
-    // element_type 缺失或未定义时降级为直接显示普通文本
-    render: (value) => {
-      const renderFn = renderPreviewConfig[col.element_type]
-      if (renderFn) return renderFn(col, isEditable ? 'form' : undefined)
-      return <span>{value ?? ''}</span>
+  // 表格校验规则：整体必填（至少一行有效数据）+ 必填列非空
+  // validateTrigger 设为 'submit'：字段级 onChange/onBlur 校验被过滤，仅在全局 form.validate()（如提交）时触发，
+  // 避免用户填写过程中错误提示实时弹出；校验产生的错误在下次 validate 前持续保留展示
+  const needValidate = el.required || (el.columns || []).some((c) => c.required)
+  const rules = [
+    {
+      validateTrigger: 'submit',
+      validator: (val, callback) => {
+        const rows = Array.isArray(val) ? val : []
+        if (el.required && rows.length === 0) {
+          callback(`${el.label || '表格'}至少需要添加一行数据`)
+          return
+        }
+        const requiredCols = (el.columns || []).filter((c) => c.required)
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i]
+          for (const col of requiredCols) {
+            const colKey = col.dataIndex || col.field_key
+            if (colKey == null) continue
+            const cell = row?.[colKey]
+            if (cell === undefined || cell === null || cell === '') {
+              callback(`第 ${i + 1} 行的 ${col.title || '字段'} 不能为空`)
+              return
+            }
+          }
+        }
+        callback()
+      },
     },
-  }))
-  // 操作列：删除当前行
-  const action = {
-    key: 'action',
-    title: '操作',
-    width: 60,
-    render: (_, __, index) => (
-      <Button
-        size="mini"
-        status="danger"
-        onClick={() => {
-          const row = rows[index]
-          if (row) removeRow(row._key)
-        }}
-      >
-        删除
-      </Button>
-    ),
-  }
-  // 固定的"序号"列：独立于用户配置列与操作列，渲染当前行行号（index + 1）
-  const indexColumn = {
-    key: 'index',
-    title: '序号',
-    width: 62,
-    render: (_, __, index) => index + 1,
-  }
-  // 可编辑时追加操作列；只读时不追加
-  const finalColumns = [indexColumn, ...(isEditable ? [...columns, action] : columns)]
+  ]
 
-  return columns.length ? (
-    <>
-      <Table
-        key={el.table_key}
-        size="small"
-        rowKey="_key"
-        border
-        pagination={false}
-        columns={finalColumns}
-        data={rows}
-      />
-      {isEditable && (
-        <div className="mt-2 flex justify-end">
-          <Button size="mini" type="primary" icon={<IconPlus />} onClick={addRow}>
-            新增
-          </Button>
-        </div>
-      )}
-    </>
-  ) : (
-    <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
-      表格（未配置列）
-    </div>
+  return (
+    <FormList field={listField} rules={needValidate ? rules : undefined} noStyle>
+      {(fields, { add, remove }) => {
+        const columns = (el.columns || []).map((col, i) => {
+          const colKey = col.dataIndex || col.field_key || `col_${i + 1}`
+          return {
+            title:
+              (
+                <>
+                  {col.required ? <span className="mr-1 text-[rgb(var(--danger-6))]">&#x2A;</span> : ''}
+                  {col.title}
+                </>
+              ) || `列${i + 1}`,
+            dataIndex: colKey,
+            // 按列配置的 element_type 从 renderPreviewConfig 映射渲染表单控件；
+            // 行内控件由 FormItem 绑定嵌套字段路径（table_key[index].colKey）自动注入 value/onChange/disabled；
+            // 注意：field 必须为单层字符串路径（Arco Form.List 的 getItemKey 会对 field 调用字符串 replace，
+            // 传入数组 [field, colKey] 会触发 "fieldKey.replace is not a function" 错误）
+            render: (cellValue, record, index) => {
+              const renderFn = renderPreviewConfig[col.element_type]
+              if (!renderFn) return <span>{cellValue ?? ''}</span>
+              const field = fields[index]?.field
+              if (!field) return renderFn(col, isEditable ? 'form' : undefined)
+              return (
+                <FormItem field={`${field}.${colKey}`} noStyle>
+                  {renderFn(col, isEditable ? 'form' : undefined)}
+                </FormItem>
+              )
+            },
+          }
+        })
+        // 操作列：删除当前行（Form.List remove）
+        const action = {
+          key: 'action',
+          title: '操作',
+          width: 60,
+          render: (_, __, index) => (
+            <Button size="mini" status="danger" onClick={() => remove(index)}>
+              删除
+            </Button>
+          ),
+        }
+        // 固定的"序号"列：独立于用户配置列与操作列，渲染当前行行号（index + 1）
+        const indexColumn = {
+          key: 'index',
+          title: '序号',
+          width: 62,
+          align: 'center',
+          render: (_, __, index) => index + 1,
+        }
+        // 可编辑时追加操作列；只读时不追加
+        const finalColumns = [indexColumn, ...(isEditable ? [...columns, action] : columns)]
+
+        return columns.length ? (
+          <>
+            <Table
+              key={el.table_key}
+              size="small"
+              rowKey={(record) => record.key}
+              border
+              pagination={false}
+              columns={finalColumns}
+              data={fields}
+            />
+            {isEditable && (
+              <div className="mt-2 flex justify-between">
+                {/* 表格错误提示：显示 Form.List 校验错误（整体必填 / 必填列非空） */}
+                <div className="arco-form-message">{errorMessage || ''}</div>
+                <Button size="mini" type="primary" icon={<IconPlus />} onClick={() => add({})}>
+                  新增
+                </Button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
+            表格（未配置列）
+          </div>
+        )
+      }}
+    </FormList>
   )
 }
 
@@ -581,6 +620,7 @@ export default function DynamicForm({
   // 表单控件渲染：包含标签和控件
   const renderFormItem = (el, index) => {
     const noLabel = isNoLabelElement(el.element_type)
+    const isTableElement = el.element_type === 'table'
     // 画布模式：无标签元素用 span 相对占位（留白给控件），常规元素按全局标签宽度 flexBasis
     // 默认值
     let labelCol = undefined
@@ -599,16 +639,24 @@ export default function DynamicForm({
       }
     }
 
-    // 必填判断：画布模式下无标签元素也参与必填星号；常规模式无标签元素（分割线/表格）不参与必填
-    const isRequired = isMoveMode ? Boolean(el.required) : Boolean(el.required) && !noLabel
-    // 根据必填状态生成 Arco 校验规则（required 同时驱动 UI 星号与底层校验）
-    const rules = isRequired
-      ? [{ required: true, message: `${el.label || '此项'}不能为空` }]
-      : undefined
+    // 必填判断：画布模式下无标签元素也参与必填星号；
+    // 常规模式下无标签元素（分割线/表格）不参与必填——表格元素例外（支持整体/列必填校验）
+    const isRequired = isMoveMode
+      ? Boolean(el.required)
+      : Boolean(el.required) && (!noLabel || isTableElement)
+
+    // 校验规则生成：
+    // - 表格元素：校验移交给内部 Form.List（整体至少一行 + 必填列非空），此处不再挂载
+    // - 常规元素：required 规则（同时驱动 UI 星号与底层校验）
+    const rules = isTableElement
+      ? undefined
+      : isRequired
+        ? [{ required: true, message: `${el.label || '此项'}不能为空` }]
+        : undefined
 
     return (
       <FormItem
-        field={el.field_key || el.name || undefined}
+        field={isTableElement ? undefined : el.field_key || el.name || undefined}
         label={noLabel ? '' : el.label}
         labelCol={labelCol}
         wrapperCol={wrapperCol}
