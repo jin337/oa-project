@@ -378,3 +378,61 @@ type FormElementListReq struct {
 	BaseListReq
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
 }
+
+// ============================================================
+// 审批模块模型
+// ============================================================
+
+// ApprovalCategory 审批分类
+type ApprovalCategory struct {
+	BaseModel
+	Name   string `gorm:"size:64;not null;comment:分类名称" json:"name"`
+	Sort   int    `gorm:"default:0;comment:排序" json:"sort"`
+}
+
+type ApprovalCategoryCreateReq struct {
+	Name string `json:"name" validate:"required,min=1,max=64" label:"分类名称"`
+	Sort int    `json:"sort" validate:"omitempty" label:"排序"`
+}
+
+type ApprovalCategoryUpdateReq struct {
+	Name string `json:"name" validate:"omitempty,min=1,max=64" label:"分类名称"`
+	Sort int    `json:"sort" validate:"omitempty" label:"排序"`
+}
+
+type ApprovalCategoryListReq struct {
+	BaseListReq
+}
+
+// ApprovalItem 申请项
+type ApprovalItem struct {
+	BaseModel
+	Name        string `gorm:"size:64;not null;comment:申请项名称" json:"name"`
+	Code        string `gorm:"size:64;comment:关联应用页面编码" json:"code"`
+	CategoryID  uint   `gorm:"index;not null;comment:所属分类ID" json:"category_id"`
+	Icon        string `gorm:"size:64;comment:图标" json:"icon"`
+	Sort        int    `gorm:"default:0;comment:排序" json:"sort"`
+
+	Category *ApprovalCategory `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+}
+
+type ApprovalItemCreateReq struct {
+	Name        string `json:"name" validate:"required,min=1,max=64" label:"申请项名称"`
+	Code        string `json:"code" validate:"required,min=1,max=64" label:"页面编码"`
+	CategoryID  uint   `json:"category_id" validate:"required" label:"所属分类"`
+	Icon        string `json:"icon" validate:"omitempty,max=64" label:"图标"`
+	Sort        int    `json:"sort" validate:"omitempty" label:"排序"`
+}
+
+type ApprovalItemUpdateReq struct {
+	Name        string `json:"name" validate:"omitempty,min=1,max=64" label:"申请项名称"`
+	Code        string `json:"code" validate:"omitempty,min=1,max=64" label:"页面编码"`
+	CategoryID  uint   `json:"category_id" validate:"omitempty" label:"所属分类"`
+	Icon        string `json:"icon" validate:"omitempty,max=64" label:"图标"`
+	Sort        int    `json:"sort" validate:"omitempty" label:"排序"`
+}
+
+type ApprovalItemListReq struct {
+	BaseListReq
+	CategoryID uint `json:"category_id" form:"category_id" validate:"omitempty" label:"所属分类"`
+}

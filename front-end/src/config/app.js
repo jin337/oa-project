@@ -7,7 +7,7 @@ export const APP_NAME = 'OA 管理系统'
 // —— 登录页配置 ——
 export const LOGIN_CONFIG = {
   // Logo 副标题（英文描述）
-  logoSubtitle: 'Role-Based Access Control',
+  logoSubtitle: 'OA Management System',
   // 主宣传标语（\n 用于换行）
   slogan: '统一身份与权限，\n让组织管理更简单',
   // 宣传描述文案
@@ -17,7 +17,7 @@ export const LOGIN_CONFIG = {
   // 登录方式提示
   loginHint: '账号密码登录',
   // 底部版权信息
-  copyright: '© 2026 Full Stack Project · OA',
+  copyright: '© 2026 Management System · OA',
   // 核心功能亮点（icon 为 Arco 图标组件名，在 Login.jsx 中映射为实际组件）
   features: [
     {

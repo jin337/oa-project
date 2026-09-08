@@ -20,7 +20,7 @@ import {
   IconPlus,
   IconUser,
 } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as approvalApi from '../../api/approval'
 
@@ -39,19 +39,18 @@ const ICON_MAP = {
 const getIcon = (icon) => ICON_MAP[(icon || '').toLowerCase()] || <IconFile />
 
 /**
- * 审批申请页：左侧分类管理 + 右侧申请项卡片。
+ * 审批申请页：上下按行排列的流式布局——每个分类独占一行（左侧名称与编辑/删除，右侧新增申请项），
+ * 分类行下方以网格卡片展示该分类下的申请项。
  * 申请项通过「页面编码（code）」关联 ApplicationManage 中已配置的应用页面，
  * 点击申请项卡片跳转到对应的动态表单页面（/application/render/:code）。
  */
-export default function ApprovalApply() {
+export default function Apply() {
   const navigate = useNavigate()
 
   // 分类 & 申请项数据
   const [categories, setCategories] = useState([])
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
-  // 当前选中的分类（默认选中第一个）
-  const [activeCategoryId, setActiveCategoryId] = useState(null)
 
   // 分类弹窗
   const [catModalVisible, setCatModalVisible] = useState(false)
@@ -64,27 +63,11 @@ export default function ApprovalApply() {
   const [saving, setSaving] = useState(false)
   const [itemForm] = Form.useForm()
 
-  // 当前选中的分类对象
-  const activeCategory = useMemo(
-    () => categories.find((c) => c.id === activeCategoryId) || null,
-    [categories, activeCategoryId],
-  )
-
-  // 当前分类下的申请项
-  const activeItems = useMemo(
-    () => items.filter((it) => it.category_id === activeCategoryId),
-    [items, activeCategoryId],
-  )
-
-  // 加载分类列表（选中项失效时回退到第一个）
+  // 加载分类列表
   const fetchCategories = useCallback(async () => {
     try {
       const res = await approvalApi.listApprovalCategories({ page: 1, size: 9999 })
-      const list = res.data?.list || []
-      setCategories(list)
-      setActiveCategoryId((prev) =>
-        prev && list.some((c) => c.id === prev) ? prev : (list[0]?.id ?? null),
-      )
+      setCategories(res.data?.list || [])
     } catch (e) {
       // 错误已在请求层提示
     }
@@ -148,7 +131,6 @@ export default function ApprovalApply() {
     try {
       await approvalApi.deleteApprovalCategory(record.id)
       Message.success('分类删除成功')
-      if (activeCategoryId === record.id) setActiveCategoryId(null)
       fetchCategories()
     } catch (e) {
       // 错误已在请求层提示
@@ -157,14 +139,11 @@ export default function ApprovalApply() {
 
   // ==================== 申请项管理 ====================
 
-  const openCreateItem = () => {
-    if (!activeCategoryId) {
-      Message.warning('请先创建并选择分类')
-      return
-    }
+  // 新增申请项：默认归属传入的分类
+  const openCreateItem = (category) => {
     setEditingItem(null)
     itemForm.resetFields()
-    itemForm.setFieldsValue({ category_id: activeCategoryId, sort: 0 })
+    itemForm.setFieldsValue({ category_id: category.id, sort: 0 })
     setItemModalVisible(true)
   }
 
@@ -176,7 +155,6 @@ export default function ApprovalApply() {
       category_id: record.category_id,
       icon: record.icon || '',
       sort: record.sort ?? 0,
-      description: record.description || '',
     })
     setItemModalVisible(true)
   }
@@ -221,99 +199,104 @@ export default function ApprovalApply() {
   }
 
   return (
-    <Card title="审批申请">
-      <div className="flex gap-4">
-        {/* 左侧：分类管理 */}
-        <div className="w-64 shrink-0">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="font-medium">分类管理</span>
-            <Button size="mini" type="primary" icon={<IconPlus />} onClick={openCreateCategory}>
-              新增分类
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {categories.map((c) => (
-              <div
-                key={c.id}
-                className={`group flex cursor-pointer items-center justify-between rounded border px-3 py-2 transition-colors ${
-                  activeCategoryId === c.id
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-                onClick={() => setActiveCategoryId(c.id)}
-              >
-                <span className="text-sm">{c.name}</span>
-                <span className="hidden items-center group-hover:flex">
-                  <Button
-                    size="mini"
-                    type="text"
-                    icon={<IconEdit />}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      openEditCategory(c)
-                    }}
-                  />
-                  <Popconfirm
-                    content="确定删除该分类吗？"
-                    onOk={() => handleCategoryDelete(c)}
-                    position="br"
-                  >
+    <Card
+      title="审批申请"
+      extra={
+        <Button type="primary" icon={<IconPlus />} onClick={openCreateCategory}>
+          新增分类
+        </Button>
+      }
+    >
+      {/* 分类流式区块：每个分类独占一行，行下展示该分类的申请项网格 */}
+      {categories.length ? (
+        <div className="space-y-4">
+          {categories.map((c) => {
+            const catItems = items.filter((it) => it.category_id === c.id)
+            return (
+              <div key={c.id}>
+                {/* 分类行：左侧名称 + 编辑/删除图标，右侧新增申请项按钮 */}
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <span className="text-base font-medium">{c.name}</span>
                     <Button
                       size="mini"
                       type="text"
-                      status="danger"
-                      icon={<IconDelete />}
-                      onClick={(e) => e.stopPropagation()}
+                      icon={<IconEdit />}
+                      onClick={() => openEditCategory(c)}
                     />
-                  </Popconfirm>
-                </span>
+                    <Popconfirm
+                      title="确定删除该分类吗？"
+                      onOk={() => handleCategoryDelete(c)}
+                      position="bl"
+                    >
+                      <Button size="mini" type="text" status="danger" icon={<IconDelete />} />
+                    </Popconfirm>
+                  </div>
+                  <Button
+                    size="small"
+                    type="secondary"
+                    icon={<IconPlus />}
+                    onClick={() => openCreateItem(c)}
+                  >
+                    新增申请项
+                  </Button>
+                </div>
+
+                {/* 申请项网格卡片 */}
+                {catItems.length ? (
+                  <Row gutter={[16, 16]}>
+                    {catItems.map((item) => (
+                      <Col span={4} key={item.id}>
+                        <Card
+                          hoverable
+                          className="group relative cursor-pointer"
+                          bodyStyle={{ padding: '10px' }}
+                          onClick={() => handleItemClick(item)}
+                        >
+                          {/* 卡片右上角操作区：编辑 / 删除（hover 显示） */}
+                          <div
+                            className="absolute top-2 right-2 z-10 hidden items-center group-hover:flex"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              size="mini"
+                              type="text"
+                              icon={<IconEdit />}
+                              onClick={() => openEditItem(item)}
+                            />
+                            <Popconfirm
+                              content="确定删除该申请项吗？"
+                              onOk={() => handleItemDelete(item)}
+                              position="br"
+                            >
+                              <Button
+                                size="mini"
+                                type="text"
+                                status="danger"
+                                icon={<IconDelete />}
+                              />
+                            </Popconfirm>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-lg text-blue-600">
+                              {getIcon(item.icon)}
+                            </div>
+                            <div className="min-w-0 font-medium">{item.name}</div>
+                          </div>
+                        </Card>
+                      </Col>
+                    ))}
+                  </Row>
+                ) : (
+                  <Empty description="该分类下暂无申请项" className="py-4" />
+                )}
               </div>
-            ))}
-            {!categories.length && (
-              <Empty description="暂无分类，请先新增" className="py-6" />
-            )}
-          </div>
+            )
+          })}
         </div>
-
-        {/* 右侧：申请项管理 */}
-        <div className="min-w-0 flex-1">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="font-medium">
-              申请项管理{activeCategory ? `（${activeCategory.name}）` : ''}
-            </span>
-            <Button type="primary" icon={<IconPlus />} onClick={openCreateItem}>
-              新增申请项
-            </Button>
-          </div>
-
-          {activeItems.length ? (
-            <Row gutter={[16, 16]}>
-              {activeItems.map((item) => (
-                <Col span={8} key={item.id}>
-                  <Card hoverable className="cursor-pointer" onClick={() => handleItemClick(item)}>
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-lg text-blue-600">
-                        {getIcon(item.icon)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-medium">{item.name}</div>
-                        <div className="mt-1 line-clamp-2 text-xs text-gray-500">
-                          {item.description || '暂无描述'}
-                        </div>
-                        <div className="mt-2 text-xs text-gray-400">
-                          编码：{item.code || '-'}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          ) : (
-            <Empty description={loading ? '加载中...' : '该分类下暂无申请项，点击右上角新增'} />
-          )}
-        </div>
-      </div>
+      ) : (
+        <Empty description={loading ? '加载中...' : '暂无分类，请先新增'} className="py-10" />
+      )}
 
       {/* 分类新增/编辑弹窗 */}
       <Modal
@@ -332,11 +315,7 @@ export default function ApprovalApply() {
           >
             <Input placeholder="如：人事类、财务类、行政类" maxLength={20} showWordLimit />
           </FormItem>
-          <FormItem
-            label="排序"
-            field="sort"
-            rules={[{ required: true, message: '请输入排序值' }]}
-          >
+          <FormItem label="排序" field="sort" rules={[{ required: true, message: '请输入排序值' }]}>
             <InputNumber style={{ width: '100%' }} min={0} placeholder="数字越小越靠前" />
           </FormItem>
         </Form>
@@ -359,26 +338,30 @@ export default function ApprovalApply() {
           >
             <Input placeholder="如：加班申请、差旅费报销" maxLength={30} showWordLimit />
           </FormItem>
-          <FormItem
-            label="页面编码（code）"
-            field="code"
-            rules={[{ required: true, message: '请输入关联的应用页面编码' }]}
-          >
-            <Input placeholder="关联 ApplicationManage 中配置的应用页面编码" />
-          </FormItem>
-          <FormItem
-            label="所属分类"
-            field="category_id"
-            rules={[{ required: true, message: '请选择所属分类' }]}
-          >
-            <Select
-              placeholder="请选择分类"
-              options={categories.map((c) => ({ label: c.name, value: c.id }))}
-            />
-          </FormItem>
           <Row gutter={16}>
             <Col span={12}>
-              <FormItem label="图标（可选）" field="icon">
+              <FormItem
+                label="页面编码"
+                field="code"
+                rules={[{ required: true, message: '请输入关联的应用页面编码' }]}
+              >
+                <Input placeholder="关联应用编码" />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem
+                label="所属分类"
+                field="category_id"
+                rules={[{ required: true, message: '请选择所属分类' }]}
+              >
+                <Select
+                  placeholder="请选择分类"
+                  options={categories.map((c) => ({ label: c.name, value: c.id }))}
+                />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem label="图标" field="icon">
                 <Input placeholder="如：user / money / calendar" />
               </FormItem>
             </Col>
@@ -392,12 +375,6 @@ export default function ApprovalApply() {
               </FormItem>
             </Col>
           </Row>
-          <FormItem label="描述（可选）" field="description">
-            <Input.TextArea
-              placeholder="申请项说明，如：适用于月度加班时长登记"
-              autoSize={{ minRows: 2, maxRows: 4 }}
-            />
-          </FormItem>
         </Form>
       </Modal>
     </Card>

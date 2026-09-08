@@ -78,6 +78,22 @@ func Setup() *gin.Engine {
 		depts.DELETE("/:id", handler.DeptDelete)
 	}
 
+	// 审批管理
+	approval := v1.Group("/approval")
+	approval.Use(middleware.JWTAuth())
+	{
+		// 审批分类
+		approval.GET("/category", handler.ApprovalCategoryList)
+		approval.POST("/category", handler.ApprovalCategoryCreate)
+		approval.PUT("/category/:id", handler.ApprovalCategoryUpdate)
+		approval.DELETE("/category/:id", handler.ApprovalCategoryDelete)
+		// 申请项
+		approval.GET("/item", handler.ApprovalItemList)
+		approval.POST("/item", handler.ApprovalItemCreate)
+		approval.PUT("/item/:id", handler.ApprovalItemUpdate)
+		approval.DELETE("/item/:id", handler.ApprovalItemDelete)
+	}
+
 	// 页面配置管理
 	applications := v1.Group("/application")
 	applications.Use(middleware.JWTAuth())

@@ -22,7 +22,7 @@ const DynamicPage = lazy(() => import('./pages/application/DynamicPage.jsx'))
 // 动态表单渲染页：按 code 渲染应用配置的动态表单（供审批申请项等入口跳转）
 const DynamicRender = lazy(() => import('./pages/application/DynamicRender.jsx'))
 // 审批申请页：分类 + 申请项管理
-const ApprovalApply = lazy(() => import('./pages/approval/ApprovalApply.jsx'))
+const ApprovalApply = lazy(() => import('./pages/approval/Apply.jsx'))
 const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
 
 function PageLoading() {
