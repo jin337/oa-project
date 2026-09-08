@@ -17,6 +17,7 @@ import {
   Upload,
 } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon'
+import { memo, useMemo } from 'react'
 import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 
 const FormItem = Form.Item
@@ -32,6 +33,12 @@ const WIDTH_OPTIONS = [
   { label: '50%', value: 12, tip: '1/2' },
   { label: '33%', value: 8, tip: '1/3' },
   { label: '25%', value: 6, tip: '1/4' },
+]
+
+// 画布模式（move-*）下依赖选项组件的统一预览占位选项（不解析真实 data_source）
+const PREVIEW_OPTIONS = [
+  { label: '选项一', value: 'option1' },
+  { label: '选项二', value: 'option2' },
 ]
 
 // 根据类型获取中文标签
@@ -455,10 +462,7 @@ export const ELEMENT_RENDER_CONFIG = {
           <Select
             style={{ width: '100%' }}
             placeholder={el.placeholder || '请选择'}
-            options={[
-              { label: '选项一', value: 'option1' },
-              { label: '选项二', value: 'option2' },
-            ]}
+            options={PREVIEW_OPTIONS}
           />
         )
       }
@@ -476,15 +480,7 @@ export const ELEMENT_RENDER_CONFIG = {
     renderPreview: (el, pageType) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
       if (pageType?.startsWith('move-')) {
-        return (
-          <Radio.Group
-            style={{ width: '100%' }}
-            options={[
-              { label: '选项一', value: 'option1' },
-              { label: '选项二', value: 'option2' },
-            ]}
-          />
-        )
+        return <Radio.Group style={{ width: '100%' }} options={PREVIEW_OPTIONS} />
       }
       const options = getStaticOptions(el)
       return (
@@ -496,15 +492,7 @@ export const ELEMENT_RENDER_CONFIG = {
     renderPreview: (el, pageType) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
       if (pageType?.startsWith('move-')) {
-        return (
-          <Checkbox.Group
-            style={{ width: '100%' }}
-            options={[
-              { label: '选项一', value: 'option1' },
-              { label: '选项二', value: 'option2' },
-            ]}
-          />
-        )
+        return <Checkbox.Group style={{ width: '100%' }} options={PREVIEW_OPTIONS} />
       }
       const options = getStaticOptions(el)
       return (
@@ -558,6 +546,138 @@ export const renderElementSettings = (el, ctx) => {
   return renderCommonSettings(ctx)
 }
 
+// ==================== 画布/常规表单渲染辅助 ====================
+
+/** 基础组件（表格等）语义下的控件 pageType：detail/move-detail → 'detail'（只读），其余 → 'form' */
+const canvasPageTypeFor = (pageType) =>
+  pageType === 'detail' || pageType === 'move-detail' ? 'detail' : 'form'
+
+/**
+ * 渲染单个表单控件项（标签 / 栅格 / 校验规则 / 控件），画布与常规模式共用。
+ * @param {object} el   布局元素
+ * @param {object} ctx  渲染上下文 { isHorizontal, formConfig, pageType, isMoveMode }
+ */
+const renderFormItemElement = (el, ctx) => {
+  const { isHorizontal, formConfig, pageType, isMoveMode } = ctx
+  const noLabel = isNoLabelElement(el.element_type)
+  const isTableElement = el.element_type === 'table'
+  const isFormMode = pageType === 'form'
+
+  // 仅在水平模式下计算栅格/Flex 布局（无标签元素按宽度分配，常规元素按全局标签宽度）
+  let labelCol
+  let wrapperCol
+  if (isHorizontal) {
+    if (noLabel) {
+      labelCol = { span: 24 - el.width }
+      wrapperCol = { span: el.width }
+    } else {
+      labelCol = { style: { flexBasis: formConfig.labelWidth } }
+      wrapperCol = { style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` } }
+    }
+  }
+
+  // 必填判断：画布模式下无标签元素也参与必填星号；
+  // 常规模式下无标签元素（分割线/表格）不参与必填——表格元素例外（支持整体/列必填校验）
+  const isRequired = isMoveMode
+    ? Boolean(el.required)
+    : Boolean(el.required) && (!noLabel || isTableElement)
+
+  // 校验规则：表格元素校验移交给内部 Form.List；常规元素用 required 规则（驱动星号与底层校验）
+  const rules = isTableElement
+    ? undefined
+    : isRequired
+      ? [{ required: true, message: `${el.label || '此项'}不能为空` }]
+      : undefined
+
+  // 控件渲染分发（统一由 renderPreview 承担）：基础组件走专属配置，常规控件走统一渲染配置中心
+  const renderControl = () => {
+    const baseCfg = getBaseElementConfig(el.element_type)
+    if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, canvasPageTypeFor(pageType))
+    const render = renderPreviewConfig[el.element_type]
+    if (render) return render(el, pageType)
+    return <Input disabled={!isFormMode} placeholder={el.placeholder || undefined} />
+  }
+
+  return (
+    <FormItem
+      field={isTableElement ? undefined : el.field_key || el.name || undefined}
+      label={noLabel ? '' : el.label}
+      labelCol={labelCol}
+      wrapperCol={wrapperCol}
+      rules={rules}
+      noStyle={noLabel}
+    >
+      {renderControl()}
+    </FormItem>
+  )
+}
+
+/**
+ * 画布模式元素容器（memo 化）：拖拽/选中/悬停等高频状态变化时，
+ * 仅目标元素的 isSelected / isDragOver 变化触发自身重渲染，其余元素跳过组件树更新。
+ */
+const CanvasElement = memo(function CanvasElement({
+  el,
+  index,
+  isSelected,
+  isDragOver,
+  ctx,
+  onSelectElement,
+  onRemoveElement,
+  onElementDragStart,
+  onElementDragOver,
+  onElementDrop,
+  onDragEnd,
+}) {
+  return (
+    <Col span={el.width}>
+      <div
+        draggable
+        onClick={(e) => {
+          e.stopPropagation()
+          onSelectElement?.(el)
+        }}
+        onDragStart={(e) => onElementDragStart?.(e, el)}
+        onDragOver={(e) => onElementDragOver?.(e, index)}
+        onDrop={(e) => onElementDrop?.(e, index)}
+        onDragEnd={onDragEnd}
+        className={`group relative h-full cursor-pointer border transition-colors ${
+          isSelected
+            ? 'border-[rgb(var(--arcoblue-6))] bg-[rgb(var(--arcoblue-1))]'
+            : isDragOver
+              ? 'border-dashed border-[rgb(var(--arcoblue-6))] bg-[rgb(var(--arcoblue-1))]'
+              : 'border-transparent bg-white hover:border-[rgb(var(--arcoblue-6))]'
+        }`}
+      >
+        {renderFormItemElement(el, ctx)}
+        {/* 透明蒙层阻止触发表单控件原生交互（置于容器内，避免 FormItem children 成数组导致字段注入失效） */}
+        <div className="absolute inset-0 z-1"></div>
+        {isSelected && (
+          <>
+            {/* 拖拽图标：绝对定位左下角 */}
+            <span className="absolute -bottom-px -left-px bg-[rgb(var(--arcoblue-6))] px-1">
+              <IconDragArrow className="cursor-grab text-white!" />
+            </span>
+            {/* 删除按钮：绝对定位右上角（悬浮于边框上） */}
+            <Button
+              size="mini"
+              status="danger"
+              shape="circle"
+              icon={<IconDelete />}
+              title="删除元素"
+              className="absolute! -top-2 -right-2 z-2 shadow"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemoveElement?.(el.id)
+              }}
+            />
+          </>
+        )}
+      </div>
+    </Col>
+  )
+})
+
 // ==================== 核心组件：DynamicForm ====================
 
 /**
@@ -601,133 +721,28 @@ export default function DynamicForm({
   onCanvasDrop,
   onCanvasClick,
 }) {
-  const layout = parseLayoutJson(app?.form_layout_json)
+  // 布局解析缓存：仅当布局 JSON 变化时重新解析，拖拽/选中等状态更新不触发重复解析
+  const layout = useMemo(() => parseLayoutJson(app?.form_layout_json), [app?.form_layout_json])
   const elements = layout?.elements || []
   const formConfig = layout?.formConfig || DEFAULT_FORM_CONFIG
 
   const isMoveMode = pageType === 'move-form' || pageType === 'move-detail'
-  const isDetail = pageType === 'detail'
-  // 画布模式下基础组件（表格等）的 pageType 语义：move-form → 'form'，move-detail → 'detail'
-  const canvasPageType = pageType === 'move-detail' ? 'detail' : 'form'
-  const isHorizontal = formConfig.layout === 'horizontal'
+  // 表单渲染上下文（画布元素 memo 依赖）：仅当 formConfig / pageType 变化时重建，
+  // 拖拽悬停、选中等高频状态更新不改变该引用，CanvasElement 可跳过无关重渲染
+  const formCtx = useMemo(
+    () => ({
+      isHorizontal: formConfig.layout === 'horizontal',
+      formConfig,
+      pageType,
+      isMoveMode,
+    }),
+    [formConfig, pageType, isMoveMode],
+  )
 
-  // 控件渲染分发（统一由 renderPreview 承担）：
-  // - 画布模式 / 详情模式：pageType 非 'form' → 控件禁用态预览
-  // - form 模式：pageType 为 'form' → 控件可交互
-  // - 基础组件（分割线/表格等）：走配置中心，传二值 pageType（form/detail）供表格 editable 判断
-  const renderControl = (el) => {
-    const baseCfg = getBaseElementConfig(el.element_type)
-    if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, canvasPageType)
-    const render = renderPreviewConfig[el.element_type]
-    if (render) return render(el, pageType)
-    return <Input disabled={pageType !== 'form'} placeholder={el.placeholder || undefined} />
-  }
-
-  // 表单控件渲染：包含标签和控件
-  const renderFormItem = (el, index) => {
-    const noLabel = isNoLabelElement(el.element_type)
-    const isTableElement = el.element_type === 'table'
-    // 画布模式：无标签元素用 span 相对占位（留白给控件），常规元素按全局标签宽度 flexBasis
-    // 默认值
-    let labelCol = undefined
-    let wrapperCol = undefined
-
-    // 仅在水平模式下进行布局计算
-    if (isHorizontal) {
-      if (noLabel) {
-        // 无标签：无论是否在拖拽模式，都使用栅格布局按宽度分配
-        labelCol = { span: 24 - el.width }
-        wrapperCol = { span: el.width }
-      } else {
-        // 有标签：无论是否在拖拽模式，都使用 Flex 布局
-        labelCol = { style: { flexBasis: formConfig.labelWidth } }
-        wrapperCol = { style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` } }
-      }
-    }
-
-    // 必填判断：画布模式下无标签元素也参与必填星号；
-    // 常规模式下无标签元素（分割线/表格）不参与必填——表格元素例外（支持整体/列必填校验）
-    const isRequired = isMoveMode
-      ? Boolean(el.required)
-      : Boolean(el.required) && (!noLabel || isTableElement)
-
-    // 校验规则生成：
-    // - 表格元素：校验移交给内部 Form.List（整体至少一行 + 必填列非空），此处不再挂载
-    // - 常规元素：required 规则（同时驱动 UI 星号与底层校验）
-    const rules = isTableElement
-      ? undefined
-      : isRequired
-        ? [{ required: true, message: `${el.label || '此项'}不能为空` }]
-        : undefined
-
-    return (
-      <FormItem
-        field={isTableElement ? undefined : el.field_key || el.name || undefined}
-        label={noLabel ? '' : el.label}
-        labelCol={labelCol}
-        wrapperCol={wrapperCol}
-        rules={rules}
-        noStyle={noLabel}
-      >
-        {renderControl(el)}
-      </FormItem>
-    )
-  }
-
-  // 画布模式：每个元素包裹可拖拽容器（选中高亮 / 悬停位标识 / 删除按钮 / 拖拽图标）
-  const renderCanvasElement = (el, index) => {
-    const isSelected = el.id === selectedId
-    const isDragOver = dragOverIndex === index
-    return (
-      <Col span={el.width} key={el.id || `el_${el.element_type}_${index}`}>
-        <div
-          draggable
-          onClick={(e) => {
-            e.stopPropagation()
-            onSelectElement?.(el)
-          }}
-          onDragStart={(e) => onElementDragStart?.(e, el)}
-          onDragOver={(e) => onElementDragOver?.(e, index)}
-          onDrop={(e) => onElementDrop?.(e, index)}
-          onDragEnd={onDragEnd}
-          className={`group relative h-full cursor-pointer border transition-colors ${
-            isSelected
-              ? 'border-[rgb(var(--arcoblue-6))] bg-[rgb(var(--arcoblue-1))]'
-              : isDragOver
-                ? 'border-dashed border-[rgb(var(--arcoblue-6))] bg-[rgb(var(--arcoblue-1))]'
-                : 'border-transparent bg-white hover:border-[rgb(var(--arcoblue-6))]'
-          }`}
-        >
-          {renderFormItem(el, index)}
-          {/* 画布模式：透明蒙层阻止触发表单控件原生交互（置于容器内，避免 FormItem children 成数组导致字段注入失效） */}
-          <div className="absolute inset-0 z-1"></div>
-          {isSelected && (
-            <>
-              {/* 拖拽图标：绝对定位左下角，hover 显示 */}
-              <span className="absolute -bottom-px -left-px bg-[rgb(var(--arcoblue-6))] px-1">
-                <IconDragArrow className="cursor-grab text-white!" />
-              </span>
-              {/* 删除按钮：绝对定位右上角（悬浮于边框上），hover 显示 */}
-              <Button
-                size="mini"
-                status="danger"
-                shape="circle"
-                icon={<IconDelete />}
-                title="删除元素"
-                className="absolute! -top-2 -right-2 z-2 shadow"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onRemoveElement?.(el.id)
-                }}
-              />
-            </>
-          )}
-        </div>
-      </Col>
-    )
-  }
 
   // 表单节点：根据页面类型渲染不同内容
+  // - 画布模式：memo 化 CanvasElement（拖拽/悬停/选中仅影响目标元素重渲染）
+  // - 常规模式：直接渲染 Col + FormItem
   const formNode = (
     <Form
       form={form}
@@ -737,15 +752,28 @@ export default function DynamicForm({
       disabled={pageType !== 'form'}
     >
       <Row>
-        {elements.map((el, index) =>
-          isMoveMode ? (
-            renderCanvasElement(el, index)
-          ) : (
-            <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
-              {renderFormItem(el, index)}
-            </Col>
-          ),
-        )}
+        {isMoveMode
+          ? elements.map((el, index) => (
+              <CanvasElement
+                key={el.id || `el_${el.element_type}_${index}`}
+                el={el}
+                index={index}
+                isSelected={el.id === selectedId}
+                isDragOver={dragOverIndex === index}
+                ctx={formCtx}
+                onSelectElement={onSelectElement}
+                onRemoveElement={onRemoveElement}
+                onElementDragStart={onElementDragStart}
+                onElementDragOver={onElementDragOver}
+                onElementDrop={onElementDrop}
+                onDragEnd={onDragEnd}
+              />
+            ))
+          : elements.map((el, index) => (
+              <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
+                {renderFormItemElement(el, formCtx)}
+              </Col>
+            ))}
       </Row>
     </Form>
   )
