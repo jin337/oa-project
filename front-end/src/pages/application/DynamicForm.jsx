@@ -195,7 +195,13 @@ const TableElementField = ({ el, pageType }) => {
   ]
 
   return (
-    <FormList field={listField} rules={needValidate ? rules : undefined} noStyle>
+    // initialValue：可编辑模式下默认初始化一行空记录（{}），挂载/重置（resetFields）后表格至少有一行可填写
+    <FormList
+      field={listField}
+      rules={needValidate ? rules : undefined}
+      noStyle
+      initialValue={isEditable ? [{}] : undefined}
+    >
       {(fields, { add, remove }) => {
         const columns = (el.columns || []).map((col, i) => {
           const colKey = col.dataIndex || col.field_key || `col_${i + 1}`
