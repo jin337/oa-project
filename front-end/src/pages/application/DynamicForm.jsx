@@ -17,6 +17,7 @@ import {
   Upload,
 } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon'
+import { useEffect, useState } from 'react'
 import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 
 const FormItem = Form.Item
@@ -140,12 +141,110 @@ export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[eleme
 
 // ==================== 渲染配置中心 ====================
 
+// 生成表格行唯一标识
+const genRowKey = () => `row_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+/**
+ * 表格组件（table）字段：带真实"新增行 / 删除行"交互的可编辑表格。
+ * 行数据由本组件内部 useState 维护，并动态更新 Table 的 data 属性。
+ * - pageType === 'form'：可编辑模式，显示"新增"按钮与行内"删除"按钮，行内控件可交互
+ * - 其他（detail / 画布只读）：只读展示，隐藏操作列与新增按钮，行内控件禁用态
+ */
+const TableElementField = ({ el, pageType }) => {
+  const isEditable = pageType === 'form'
+  const [rows, setRows] = useState(() => (isEditable ? [{ _key: genRowKey() }] : []))
+
+  // 切换为只读模式时清空行数据（详情展示无需行数据）
+  useEffect(() => {
+    if (!isEditable) setRows([])
+  }, [isEditable])
+
+  // 关联子表变化（表格元素被重新配置）时重置行数据
+  useEffect(() => {
+    setRows(isEditable ? [{ _key: genRowKey() }] : [])
+  }, [el.table_key, isEditable])
+
+  const addRow = () => setRows((prev) => [...prev, { _key: genRowKey() }])
+  const removeRow = (rowKey) => setRows((prev) => prev.filter((r) => r._key !== rowKey))
+
+  const columns = (el.columns || []).map((col, i) => ({
+    title:
+      (
+        <>
+          <span className="mr-1 text-[rgb(var(--danger-6))]">&#x2A;</span>
+          {col.title}
+        </>
+      ) || `列${i + 1}`,
+    dataIndex: col.dataIndex || `col_${i + 1}`,
+    // 按列配置的 element_type 从 renderPreviewConfig 映射渲染表单控件；
+    // 可编辑模式传 'form'（可交互），只读模式不传（禁用态预览）；
+    // element_type 缺失或未定义时降级为直接显示普通文本
+    render: (value) => {
+      const renderFn = renderPreviewConfig[col.element_type]
+      if (renderFn) return renderFn(col, isEditable ? 'form' : undefined)
+      return <span>{value ?? ''}</span>
+    },
+  }))
+  // 操作列：删除当前行
+  const action = {
+    key: 'action',
+    title: '操作',
+    width: 60,
+    render: (_, __, index) => (
+      <Button
+        size="mini"
+        status="danger"
+        onClick={() => {
+          const row = rows[index]
+          if (row) removeRow(row._key)
+        }}
+      >
+        删除
+      </Button>
+    ),
+  }
+  // 固定的"序号"列：独立于用户配置列与操作列，渲染当前行行号（index + 1）
+  const indexColumn = {
+    key: 'index',
+    title: '序号',
+    width: 62,
+    render: (_, __, index) => index + 1,
+  }
+  // 可编辑时追加操作列；只读时不追加
+  const finalColumns = [indexColumn, ...(isEditable ? [...columns, action] : columns)]
+
+  return columns.length ? (
+    <>
+      <Table
+        key={el.table_key}
+        size="small"
+        rowKey="_key"
+        border
+        pagination={false}
+        columns={finalColumns}
+        data={rows}
+      />
+      {isEditable && (
+        <div className="mt-2 flex justify-end">
+          <Button size="mini" type="primary" icon={<IconPlus />} onClick={addRow}>
+            新增
+          </Button>
+        </div>
+      )}
+    </>
+  ) : (
+    <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
+      表格（未配置列）
+    </div>
+  )
+}
+
 /**
  * 布局设计器 —— 基础组件配置中心
  *
  * 集中维护基础组件（不依赖后端表单元素、始终显示在左侧"基础"分组）的：
  *   - meta：元数据（拖拽标识、类型、标签、默认宽度、默认属性）
- *   - renderPreview(el, activePage)：画布预览渲染（所有表单控件渲染的统一入口）
+ *   - renderPreview(el, pageType)：画布预览渲染（所有表单控件渲染的统一入口）
  *   - renderSettings(ctx)：右侧属性面板渲染（ctx 由 LayoutManage 注入组件状态与回调）
  *
  * 新增基础组件只需在此对象中追加一项，左侧组件库、画布预览、属性面板自动生效。
@@ -202,72 +301,7 @@ export const BASE_ELEMENT_CONFIGS = {
       width: 24,
       defaultProps: { columns: [], table_key: '', editable: true },
     },
-    renderPreview: (el, activePage) => {
-      const columns = (el.columns || []).map((col, i) => ({
-        title:
-          (
-            <>
-              <span className="mr-1 text-[rgb(var(--danger-6))]">&#x2A;</span>
-              {col.title}
-            </>
-          ) || `列${i + 1}`,
-        dataIndex: col.dataIndex || `col_${i + 1}`,
-        // 按列配置的 element_type 从 renderPreviewConfig 映射渲染禁用态表单控件预览；
-        // element_type 缺失或未定义时降级为直接显示普通文本
-        render: (value) => {
-          const renderFn = renderPreviewConfig[col.element_type]
-          if (renderFn) return renderFn(col)
-          return <span>{value ?? ''}</span>
-        },
-      }))
-
-      const action = {
-        key: 'action',
-        title: '操作',
-        width: 60,
-        render: () => (
-          <Button size="mini" status="danger">
-            删除
-          </Button>
-        ),
-      }
-      // 固定的"序号"列：独立于用户配置列与操作列，渲染当前行行号（index + 1）
-      const indexColumn = {
-        key: 'index',
-        title: '序号',
-        width: 62,
-        render: (_, __, index) => index + 1,
-      }
-      // 判断当前页面是否为表单页
-      const isEditable = activePage === 'form'
-      // 可编辑且为表单页时追加操作列；详情页或不可编辑时不追加
-      const finalColumns = [indexColumn, ...(isEditable ? [...columns, action] : columns)]
-      const finalData = isEditable ? [{ id: '1' }] : []
-      return columns.length ? (
-        <>
-          <Table
-            key={el.table_key}
-            size="small"
-            rowKey={el.id}
-            border
-            pagination={false}
-            columns={finalColumns}
-            data={finalData}
-          />
-          {isEditable && (
-            <div className="mt-2 flex justify-end">
-              <Button size="mini" type="primary" icon={<IconPlus />}>
-                新增
-              </Button>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-400">
-          表格（未配置列）
-        </div>
-      )
-    },
+    renderPreview: (el, pageType) => <TableElementField el={el} pageType={pageType} />,
     renderSettings: ({
       selectedElement,
       appTables,
@@ -528,14 +562,14 @@ export default function DynamicForm({
 
   const isMoveMode = pageType === 'move-form' || pageType === 'move-detail'
   const isDetail = pageType === 'detail'
-  // 画布模式下基础组件（表格等）的 activePage 语义：move-form → 'form'，move-detail → 'detail'
+  // 画布模式下基础组件（表格等）的 pageType 语义：move-form → 'form'，move-detail → 'detail'
   const canvasPageType = pageType === 'move-detail' ? 'detail' : 'form'
   const isHorizontal = formConfig.layout === 'horizontal'
 
   // 控件渲染分发（统一由 renderPreview 承担）：
   // - 画布模式 / 详情模式：pageType 非 'form' → 控件禁用态预览
   // - form 模式：pageType 为 'form' → 控件可交互
-  // - 基础组件（分割线/表格等）：走配置中心，传二值 activePage（form/detail）供表格 editable 判断
+  // - 基础组件（分割线/表格等）：走配置中心，传二值 pageType（form/detail）供表格 editable 判断
   const renderControl = (el) => {
     const baseCfg = getBaseElementConfig(el.element_type)
     if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, canvasPageType)
@@ -565,17 +599,23 @@ export default function DynamicForm({
       }
     }
 
+    // 必填判断：画布模式下无标签元素也参与必填星号；常规模式无标签元素（分割线/表格）不参与必填
+    const isRequired = isMoveMode ? Boolean(el.required) : Boolean(el.required) && !noLabel
+    // 根据必填状态生成 Arco 校验规则（required 同时驱动 UI 星号与底层校验）
+    const rules = isRequired
+      ? [{ required: true, message: `${el.label || '此项'}不能为空` }]
+      : undefined
+
     return (
       <FormItem
+        field={el.field_key || el.name || undefined}
         label={noLabel ? '' : el.label}
         labelCol={labelCol}
         wrapperCol={wrapperCol}
-        required={isMoveMode ? Boolean(el.required) : Boolean(el.required) && !noLabel}
+        rules={rules}
         noStyle={noLabel}
       >
         {renderControl(el)}
-        {/* 画布模式：透明蒙层阻止触发表单控件原生交互 */}
-        {isMoveMode && <div className="absolute inset-0 z-1"></div>}
       </FormItem>
     )
   }
@@ -605,6 +645,8 @@ export default function DynamicForm({
           }`}
         >
           {renderFormItem(el, index)}
+          {/* 画布模式：透明蒙层阻止触发表单控件原生交互（置于容器内，避免 FormItem children 成数组导致字段注入失效） */}
+          <div className="absolute inset-0 z-1"></div>
           {isSelected && (
             <>
               {/* 拖拽图标：绝对定位左下角，hover 显示 */}

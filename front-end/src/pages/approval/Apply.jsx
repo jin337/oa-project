@@ -67,6 +67,7 @@ export default function Apply() {
   // 动态表单 Drawer（点击申请项卡片打开）
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [drawerLoading, setDrawerLoading] = useState(false)
+  const [drawerSubmitting, setDrawerSubmitting] = useState(false)
   const [drawerApp, setDrawerApp] = useState(null)
   const [drawerForm] = Form.useForm()
 
@@ -217,6 +218,31 @@ export default function Apply() {
     }
   }
 
+  // 提交申请：校验动态表单内容，成功后调用通用数据新增接口写入主表
+  const handleDrawerSubmit = async () => {
+    if (!drawerApp) return
+    // 前置检查：表单是否配置了可提交字段（field_key/name），避免静默提交空对象
+    const layout = drawerApp.form_layout_json
+    const elements = layout?.elements
+    const hasFields = Array.isArray(elements) && elements.some((el) => el.field_key || el.name)
+    if (!hasFields) {
+      Message.warning('该应用暂未配置可提交的表单字段')
+      return
+    }
+
+    let values = await drawerForm.validate()
+    setDrawerSubmitting(true)
+    try {
+      await applicationApi.createApplicationData(drawerApp.id, values, drawerApp.table_name)
+      Message.success('申请提交成功')
+      setDrawerVisible(false)
+    } catch (e) {
+      Message.error('申请提交失败，请稍后重试')
+    } finally {
+      setDrawerSubmitting(false)
+    }
+  }
+
   return (
     <Card
       title="审批申请"
@@ -284,7 +310,7 @@ export default function Apply() {
                               onClick={() => openEditItem(item)}
                             />
                             <Popconfirm
-                              content="确定删除该申请项吗？"
+                              title="确定删除该申请项吗？"
                               onOk={() => handleItemDelete(item)}
                               position="br"
                             >
@@ -402,6 +428,8 @@ export default function Apply() {
         width="50%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
+        onOk={handleDrawerSubmit}
+        okLoading={drawerSubmitting}
         title={drawerApp?.name || '申请表单'}
         unmountOnExit
       >
