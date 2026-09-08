@@ -1,6 +1,7 @@
 import {
   Button,
   Card,
+  Drawer,
   Empty,
   Form,
   Grid,
@@ -10,6 +11,7 @@ import {
   Modal,
   Popconfirm,
   Select,
+  Spin,
 } from '@arco-design/web-react'
 import {
   IconAlipayCircle,
@@ -21,8 +23,9 @@ import {
   IconUser,
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import * as applicationApi from '../../api/application'
 import * as approvalApi from '../../api/approval'
+import DynamicForm from '../application/DynamicForm'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -42,11 +45,9 @@ const getIcon = (icon) => ICON_MAP[(icon || '').toLowerCase()] || <IconFile />
  * 审批申请页：上下按行排列的流式布局——每个分类独占一行（左侧名称与编辑/删除，右侧新增申请项），
  * 分类行下方以网格卡片展示该分类下的申请项。
  * 申请项通过「页面编码（code）」关联 ApplicationManage 中已配置的应用页面，
- * 点击申请项卡片跳转到对应的动态表单页面（/application/render/:code）。
+ * 点击申请项卡片时预请求应用配置，并在 Drawer 中注入动态表单组件进行展示。
  */
 export default function Apply() {
-  const navigate = useNavigate()
-
   // 分类 & 申请项数据
   const [categories, setCategories] = useState([])
   const [items, setItems] = useState([])
@@ -62,6 +63,12 @@ export default function Apply() {
   const [editingItem, setEditingItem] = useState(null)
   const [saving, setSaving] = useState(false)
   const [itemForm] = Form.useForm()
+
+  // 动态表单 Drawer（点击申请项卡片打开）
+  const [drawerVisible, setDrawerVisible] = useState(false)
+  const [drawerLoading, setDrawerLoading] = useState(false)
+  const [drawerApp, setDrawerApp] = useState(null)
+  const [drawerForm] = Form.useForm()
 
   // 加载分类列表
   const fetchCategories = useCallback(async () => {
@@ -188,14 +195,26 @@ export default function Apply() {
     }
   }
 
-  // 点击申请项卡片：按关联的页面编码跳转到动态表单页面
-  const handleItemClick = (record) => {
+  // 点击申请项卡片：预请求关联的应用配置，完成后在 Drawer 中注入动态表单组件
+  const handleItemClick = async (record) => {
     const code = (record.code || '').trim()
     if (!code) {
       Message.warning('该申请项未关联页面编码，请先编辑配置')
       return
     }
-    navigate(`/application/render/${code}`)
+    setDrawerVisible(true)
+    setDrawerLoading(true)
+    setDrawerApp(null)
+    drawerForm.resetFields()
+    try {
+      const res = await applicationApi.getApplicationByCode(code)
+      setDrawerApp(res.data)
+    } catch (e) {
+      Message.error('应用配置加载失败，请稍后重试')
+      setDrawerVisible(false)
+    } finally {
+      setDrawerLoading(false)
+    }
   }
 
   return (
@@ -377,6 +396,23 @@ export default function Apply() {
           </Row>
         </Form>
       </Modal>
+
+      {/* 动态表单 Drawer：点击申请项卡片后加载应用配置并注入动态表单组件 */}
+      <Drawer
+        width="50%"
+        visible={drawerVisible}
+        onCancel={() => setDrawerVisible(false)}
+        title={drawerApp?.name || '申请表单'}
+        unmountOnExit
+      >
+        {drawerLoading ? (
+          <div className="flex h-40 items-center justify-center">
+            <Spin />
+          </div>
+        ) : drawerApp ? (
+          <DynamicForm app={drawerApp} form={drawerForm} pageType="form" />
+        ) : null}
+      </Drawer>
     </Card>
   )
 }

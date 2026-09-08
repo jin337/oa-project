@@ -1,6 +1,12 @@
 import { Spin } from '@arco-design/web-react'
 import { lazy, Suspense } from 'react'
-import { createBrowserRouter, Navigate, redirect, RouterProvider, useLocation } from 'react-router-dom'
+import {
+  createBrowserRouter,
+  Navigate,
+  redirect,
+  RouterProvider,
+  useLocation,
+} from 'react-router-dom'
 import MainLayout from './components/layout.jsx'
 import { useAuth } from './store/auth-context'
 import { getToken } from './utils/auth'
@@ -8,22 +14,27 @@ import { getToken } from './utils/auth'
 // 路由页面全部懒加载：每个页面单独分包，按需下载
 const Login = lazy(() => import('./pages/Login.jsx'))
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'))
+// 系统管理
 const UserManage = lazy(() => import('./pages/system/UserManage.jsx'))
 const RoleManage = lazy(() => import('./pages/system/RoleManage.jsx'))
 const MenuManage = lazy(() => import('./pages/system/MenuManage.jsx'))
 const DeptManage = lazy(() => import('./pages/system/DeptManage.jsx'))
+
+// 个人中心
 const Profile = lazy(() => import('./pages/profile/Profile.jsx'))
+
+// 应用管理
 const ApplicationManage = lazy(() => import('./pages/application/ApplicationManage.jsx'))
 const TableManage = lazy(() => import('./pages/application/TableManage.jsx'))
 const FormElementManage = lazy(() => import('./pages/application/FormElementManage.jsx'))
 const LayoutManage = lazy(() => import('./pages/application/LayoutManage.jsx'))
-// 动态配置页面：菜单 link_app 关联的应用配置页面（布局 JSON 还原渲染）
-const DynamicPage = lazy(() => import('./pages/application/DynamicPage.jsx'))
-// 动态表单渲染页：按 code 渲染应用配置的动态表单（供审批申请项等入口跳转）
-const DynamicRender = lazy(() => import('./pages/application/DynamicRender.jsx'))
+
+// 错误页面
+const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
+const NotFound = lazy(() => import('./pages/error/NotFound.jsx'))
+
 // 审批申请页：分类 + 申请项管理
 const ApprovalApply = lazy(() => import('./pages/approval/Apply.jsx'))
-const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
 
 function PageLoading() {
   return (
@@ -192,14 +203,6 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: 'application/render/:code',
-        element: (
-          <Page>
-            <DynamicRender />
-          </Page>
-        ),
-      },
-      {
         path: 'approval/apply',
         element: (
           <Page>
@@ -221,7 +224,7 @@ const router = createBrowserRouter([
         path: '*',
         element: (
           <Page>
-            <DynamicPage />
+            <NotFound />
           </Page>
         ),
       },

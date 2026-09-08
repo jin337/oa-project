@@ -18,8 +18,10 @@ import * as applicationApi from '../../api/application'
 import { useTabs } from '../../store/tab-context'
 import {
   BASE_LAYOUT_ELEMENTS,
+  DEFAULT_FORM_CONFIG,
   getBaseElementConfig,
   isNoLabelElement,
+  parseLayoutJson,
   renderElementSettings,
   renderPreviewConfig,
 } from './elementsConfig'
@@ -30,13 +32,6 @@ const Col = Grid.Col
 const TabPane = Tabs.TabPane
 
 const MODULE_LABEL = '布局管理'
-
-// 全局表单配置默认值
-const DEFAULT_FORM_CONFIG = {
-  layout: 'horizontal', // vertical | horizontal
-  labelWidth: 100,
-  labelAlign: 'right', // left | right
-}
 
 const LAYOUT_OPTIONS = [
   { label: '垂直布局', value: 'vertical' },
@@ -55,19 +50,6 @@ const PAGE_OPTIONS = [
 ]
 
 const genId = () => `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-
-// 解析后端布局 JSON（form_layout_json / detail_layout_json 均为 { formConfig, elements } 结构）
-const parseLayoutJson = (raw) => {
-  if (!raw) return null
-  try {
-    return {
-      formConfig: { ...DEFAULT_FORM_CONFIG, ...(raw.formConfig || {}) },
-      elements: Array.isArray(raw.elements) ? raw.elements : [],
-    }
-  } catch (e) {
-    return null
-  }
-}
 
 export default function LayoutManage() {
   const location = useLocation()

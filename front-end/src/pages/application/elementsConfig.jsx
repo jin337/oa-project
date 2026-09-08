@@ -286,50 +286,197 @@ export const BASE_LAYOUT_ELEMENTS = Object.values(BASE_ELEMENT_CONFIGS).map(({ m
 /** 判断是否为基础组件（不显示通用字段名称/宽度等配置） */
 export const isBaseElement = (element_type) => Boolean(BASE_ELEMENT_CONFIGS[element_type])
 
-// 无字段标签的基础组件（画布 FormItem 中隐藏 label 并走特殊布局，如分割线/表格）
-const NO_LABEL_ELEMENT_TYPES = ['divider', 'table']
+// 无字段标签的组件类型（画布 FormItem / 动态表单中隐藏 label 并走特殊布局，如分割线/表格）
+export const NO_LABEL_TYPES = ['divider', 'table']
 
 /** 判断是否为无字段标签元素（画布中不显示 label；upload 等字段型基础组件不受影响） */
-export const isNoLabelElement = (element_type) => NO_LABEL_ELEMENT_TYPES.includes(element_type)
+export const isNoLabelElement = (element_type) => NO_LABEL_TYPES.includes(element_type)
 
 /** 获取基础组件配置（含 renderPreview / renderSettings） */
 export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[element_type] || null
 
+// ==================== 布局解析公共逻辑 ====================
+
+// 全局表单配置默认值（垂直/水平布局、标签宽度、标签对齐）
+export const DEFAULT_FORM_CONFIG = {
+  layout: 'horizontal', // vertical | horizontal
+  labelWidth: 100,
+  labelAlign: 'right', // left | right
+}
+
+// 解析后端布局 JSON（form_layout_json / detail_layout_json 均为 { formConfig, elements } 结构）
+export const parseLayoutJson = (raw) => {
+  if (!raw) return null
+  try {
+    return {
+      formConfig: { ...DEFAULT_FORM_CONFIG, ...(raw.formConfig || {}) },
+      elements: Array.isArray(raw.elements) ? raw.elements : [],
+    }
+  } catch (e) {
+    return null
+  }
+}
+
+// ==================== 组件统一渲染配置中心 ====================
+
+/** 从元素 data_source 中提取静态选项（json 类型），供 select/radio/checkbox 等使用 */
+export const getStaticOptions = (el) => {
+  const ds = el?.data_source
+  if (ds?.type === 'json' && Array.isArray(ds.options)) {
+    return ds.options.filter((o) => o && (o.label || o.value))
+  }
+  return []
+}
+
+// table 元素渲染（列结构 + 空数据），预览与可编辑态共用
+const renderTableElement = (el) => {
+  const cols = (el.columns || []).map((c, i) => ({
+    title: c.title || c.dataIndex || `列${i + 1}`,
+    dataIndex: c.dataIndex || `col_${i + 1}`,
+  }))
+  return <Table size="small" border pagination={false} columns={cols} data={[]} />
+}
+
 /**
- * 常规表单控件的预览渲染映射（element_type → 渲染函数）
+ * 组件统一渲染配置中心：每个 element_type 一个配置对象，
+ * 同时提供 renderPreview（设计器禁用态预览）与 renderField（实际表单可编辑态渲染），
+ * 保证两处渲染逻辑单一来源、保持一致。
+ */
+export const ELEMENT_RENDER_CONFIG = {
+  input: {
+    renderPreview: (el) => <Input disabled placeholder={el.placeholder || undefined} />,
+    renderField: (el) => <Input placeholder={el.placeholder || undefined} />,
+  },
+  textarea: {
+    renderPreview: (el) => (
+      <Input.TextArea disabled autoSize={{ minRows: 2 }} placeholder={el.placeholder || undefined} />
+    ),
+    renderField: (el) => (
+      <Input.TextArea autoSize={{ minRows: 2 }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  number: {
+    renderPreview: (el) => (
+      <InputNumber disabled style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+    renderField: (el) => (
+      <InputNumber style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  select: {
+    renderPreview: (el) => <Select disabled placeholder={el.placeholder || '请选择'} />,
+    renderField: (el) => {
+      const options = getStaticOptions(el)
+      return options.length ? (
+        <Select
+          style={{ width: '100%' }}
+          options={options}
+          placeholder={el.placeholder || '请选择'}
+        />
+      ) : (
+        <Select style={{ width: '100%' }} placeholder={el.placeholder || '请选择'} />
+      )
+    },
+  },
+  radio: {
+    renderPreview: () => (
+      <Radio.Group disabled>
+        <Radio>选项一</Radio>
+        <Radio>选项二</Radio>
+      </Radio.Group>
+    ),
+    renderField: (el) => {
+      const options = getStaticOptions(el)
+      return options.length ? (
+        <Radio.Group options={options} />
+      ) : (
+        <Radio.Group>
+          <Radio>选项一</Radio>
+          <Radio>选项二</Radio>
+        </Radio.Group>
+      )
+    },
+  },
+  checkbox: {
+    renderPreview: () => (
+      <Checkbox.Group disabled>
+        <Checkbox>选项一</Checkbox>
+        <Checkbox>选项二</Checkbox>
+      </Checkbox.Group>
+    ),
+    renderField: (el) => {
+      const options = getStaticOptions(el)
+      return options.length ? (
+        <Checkbox.Group options={options} />
+      ) : (
+        <Checkbox.Group>
+          <Checkbox>选项一</Checkbox>
+          <Checkbox>选项二</Checkbox>
+        </Checkbox.Group>
+      )
+    },
+  },
+  date: {
+    renderPreview: (el) => <DatePicker disabled placeholder={el.placeholder || undefined} />,
+    renderField: (el) => (
+      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  datepicker: {
+    renderPreview: (el) => <DatePicker disabled placeholder={el.placeholder || undefined} />,
+    renderField: (el) => (
+      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  time: {
+    renderPreview: (el) => (
+      <TimePicker disabled style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+    renderField: (el) => (
+      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  timepicker: {
+    renderPreview: (el) => (
+      <TimePicker disabled style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+    renderField: (el) => (
+      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  switch: {
+    renderPreview: () => <Switch disabled />,
+    renderField: () => <Switch />,
+  },
+  upload: {
+    renderPreview: (el) => <Upload action="/" disabled tip={el.placeholder || undefined} />,
+    renderField: (el) => <Upload action="/" placeholder={el.placeholder || undefined} />,
+  },
+  divider: {
+    renderPreview: (el) =>
+      el.text ? <Divider orientation={el.orientation || 'center'}>{el.text}</Divider> : <Divider />,
+    renderField: (el) =>
+      el.text ? <Divider orientation={el.orientation || 'center'}>{el.text}</Divider> : <Divider />,
+  },
+  table: {
+    renderPreview: renderTableElement,
+    renderField: renderTableElement,
+  },
+}
+
+/**
+ * 常规表单控件的预览渲染映射（element_type → 渲染函数），由统一配置中心派生。
  * 画布中动态表单元素（来自后端表单元素接口）按此映射渲染禁用态预览。
  */
-export const renderPreviewConfig = {
-  input: (el) => <Input disabled placeholder={el.placeholder || undefined} />,
-  textarea: (el) => (
-    <Input.TextArea disabled autoSize={{ minRows: 2 }} placeholder={el.placeholder || undefined} />
-  ),
-  number: (el) => (
-    <InputNumber disabled style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
-  ),
-  select: (el) => <Select disabled placeholder={el.placeholder || '请选择'} />,
-  radio: () => (
-    <Radio.Group disabled>
-      <Radio>选项一</Radio>
-      <Radio>选项二</Radio>
-    </Radio.Group>
-  ),
-  checkbox: () => (
-    <Checkbox.Group disabled>
-      <Checkbox>选项一</Checkbox>
-      <Checkbox>选项二</Checkbox>
-    </Checkbox.Group>
-  ),
-  date: (el) => <DatePicker disabled placeholder={el.placeholder || undefined} />,
-  datepicker: (el) => <DatePicker disabled placeholder={el.placeholder || undefined} />,
-  time: (el) => (
-    <TimePicker disabled style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
-  ),
-  timepicker: (el) => (
-    <TimePicker disabled style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
-  ),
-  switch: () => <Switch disabled />,
-  upload: (el) => <Upload action="/" disabled tip={el.placeholder || undefined} />,
+export const renderPreviewConfig = Object.fromEntries(
+  Object.entries(ELEMENT_RENDER_CONFIG).map(([key, cfg]) => [key, cfg.renderPreview]),
+)
+
+/** 可编辑态渲染统一入口：按 element_type 分发，未知类型兜底为普通输入框 */
+export const renderField = (el) => {
+  const cfg = ELEMENT_RENDER_CONFIG[el.element_type]
+  if (cfg?.renderField) return cfg.renderField(el)
+  return <Input placeholder={el.placeholder || undefined} />
 }
 
 /**
