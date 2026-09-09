@@ -15,11 +15,12 @@ import {
   IconStorage,
   IconUser,
 } from '@arco-design/web-react/icon'
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { APP_NAME } from '../config/app.js'
+import { useMenuMeta } from '../hooks/useMenuMeta'
 import { useAuth } from '../store/auth-context'
-import { TabProvider } from '../store/tab-context'
+import { TabProvider, useTabs } from '../store/tab-context'
 import TabsBar from './tabs-bar'
 
 const Header = Layout.Header
@@ -72,39 +73,27 @@ function renderMenus(menus) {
     .filter(Boolean)
 }
 
-// 动态子路由路径段 -> 显示名称映射（用于面包屑）
-const SUB_ROUTE_NAMES = {
-  tables: '表管理',
-  'form-elements': '表单元素',
-  layout: '布局管理',
-}
-
-// 在菜单树中查找当前路径对应的层级链（目录 → 页面），用于面包屑和菜单高亮
-// 支持动态子路由：精确匹配优先，未命中时回退到最长前缀匹配（如 /application/1/tables → /application）
-// 匹配一律基于菜单配置的原始 path
-function findMenuChain(menus, pathname) {
-  let prefixMatch = null
-  const walk = (list, chain) => {
-    for (const m of list || []) {
-      if (m.status !== 1 || m.type === 3) continue
-      const nextChain = [...chain, m]
-      // 实际导航路径：菜单配置的原始 path
-      const navPath = m.path
-      if (navPath === pathname) return nextChain
-      // 记录最长前缀匹配，供动态子路由回退
-      if (navPath && pathname.startsWith(navPath + '/')) {
-        if (!prefixMatch || navPath.length > (prefixMatch[prefixMatch.length - 1].path || '').length) {
-          prefixMatch = nextChain
-        }
-      }
-      if (m.children?.length) {
-        const found = walk(m.children, nextChain)
-        if (found) return found
-      }
-    }
-    return null
-  }
-  return walk(menus, []) || prefixMatch
+/**
+ * 面包屑：直接消费当前激活页签内嵌的 breadcrumbs（单一数据源：tab-context）。
+ * 首页（/）与无页签的系统路径（如 /403）不渲染；
+ * 渲染结构为 [首页图标, ...页签 breadcrumbs]。
+ */
+function ContentBreadcrumb() {
+  const { tabs, activeTab } = useTabs()
+  if (activeTab === '/') return null
+  const active = tabs.find((t) => t.path === activeTab)
+  const crumbs = active?.breadcrumbs
+  if (!crumbs || !crumbs.length) return null
+  return (
+    <Breadcrumb className="mb-3">
+      <Breadcrumb.Item key="/">
+        <IconHome />
+      </Breadcrumb.Item>
+      {crumbs.map((title, idx) => (
+        <Breadcrumb.Item key={idx}>{title}</Breadcrumb.Item>
+      ))}
+    </Breadcrumb>
+  )
 }
 
 export default function MainLayout() {
@@ -135,36 +124,11 @@ export default function MainLayout() {
     </Menu>
   )
 
-  // 当前路径对应的菜单链（精确匹配或最长前缀匹配）
-  const activeChain = useMemo(
-    () => findMenuChain(menus, location.pathname),
-    [menus, location.pathname],
-  )
+  // 当前路径对应的菜单链（精确匹配或最长前缀匹配），由公共模块 useMenuMeta 统一提供
+  const { chain: activeChain } = useMenuMeta(location.pathname)
 
   // 顶部导航高亮的菜单 key：动态子路由时高亮其父级菜单项
   const activeMenuKey = activeChain?.length ? activeChain[activeChain.length - 1].path : location.pathname
-
-  // 根据当前路由与菜单树动态生成面包屑：根节点(首页图标) / 目录... / 当前页面
-  const breadcrumbItems = useMemo(() => {
-    const items = [{ title: '首页', path: '/', isRoot: true }]
-    if (location.pathname === '/') return items
-
-    if (activeChain && activeChain.length) {
-      activeChain
-        .filter((m) => m.path !== '/')
-        .forEach((m) => items.push({ title: m.name, path: m.path || null }))
-
-      // 前缀匹配（动态子路由）：在父级菜单后追加当前子页面名称
-      const lastPath = activeChain[activeChain.length - 1]?.path
-      if (lastPath && location.pathname !== lastPath && location.pathname.startsWith(lastPath + '/')) {
-        const segment = location.pathname.split('/').pop()
-        items.push({ title: SUB_ROUTE_NAMES[segment] || segment, path: null })
-      }
-    } else {
-      items.push({ title: "异常页", path: null })
-    }
-    return items
-  }, [location.pathname, activeChain])
 
   return (
     <TabProvider>
@@ -215,15 +179,8 @@ export default function MainLayout() {
         <TabsBar />
 
         <Content className="flex-1 overflow-auto bg-gray-50 p-4">
-          {breadcrumbItems.length > 1 && (
-            <Breadcrumb className="mb-3">
-              {breadcrumbItems.map((item, idx) => (
-                <Breadcrumb.Item key={item.path || item.title || idx}>
-                  {item.isRoot ? <IconHome /> : item.title}
-                </Breadcrumb.Item>
-              ))}
-            </Breadcrumb>
-          )}
+          {/* 面包屑：由当前激活页签的 breadcrumbs 驱动 */}
+          <ContentBreadcrumb />
           <Outlet />
         </Content>
       </Layout>
