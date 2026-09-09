@@ -36,6 +36,9 @@ const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
 // 审批申请页：分类 + 申请项管理
 const ApprovalApply = lazy(() => import('./pages/approval/Apply.jsx'))
 
+// 审核配置（流程设计）管理
+const ExamineManage = lazy(() => import('./pages/examine/ExamineManage.jsx'))
+
 function PageLoading() {
   return (
     <div className="flex min-h-50 items-center justify-center">
@@ -209,6 +212,16 @@ const router = createBrowserRouter([
           <Page>
             <RequirePermission>
               <ApprovalApply />
+            </RequirePermission>
+          </Page>
+        ),
+      },
+      {
+        path: 'examine',
+        element: (
+          <Page>
+            <RequirePermission>
+              <ExamineManage />
             </RequirePermission>
           </Page>
         ),
