@@ -120,6 +120,25 @@ func ApplicationDataDetail(c *gin.Context) {
 	response.OK(c, data)
 }
 
+// ApplicationDataCreate POST /api/v1/application/:id/data 动态业务数据新增（提交申请表单）
+func ApplicationDataCreate(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var data map[string]interface{}
+	if err := c.ShouldBindJSON(&data); err != nil || len(data) == 0 {
+		response.Fail(c, response.CodeParamError, "请求体不能为空")
+		return
+	}
+	newID, err := service.ApplicationDataCreate(id, middleware.CurrentUserID(c), data)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"id": newID})
+}
+
 // ApplicationCreate POST /api/v1/application
 func ApplicationCreate(c *gin.Context) {
 	var req model.ApplicationCreateReq

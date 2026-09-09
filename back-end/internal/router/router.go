@@ -116,6 +116,7 @@ func Setup() *gin.Engine {
 		applications.DELETE("/:id/formelement/:elementId", handler.FormElementDelete)
 		// 动态页面数据
 		applications.GET("/:id/data", handler.ApplicationDataList)
+		applications.POST("/:id/data", handler.ApplicationDataCreate)
 		applications.GET("/:id/data/:dataId", handler.ApplicationDataDetail)
 	}
 

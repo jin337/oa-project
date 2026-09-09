@@ -58,6 +58,13 @@ export function deleteTableField(appId, fieldId, tableName) {
   })
 }
 
+// ========== 动态业务数据（/application/:id/data） ==========
+
+// POST /application/:id/data 新增动态业务数据（提交申请表单）
+export function createApplicationData(appId, data) {
+  return request.post(`/application/${appId}/data`, data)
+}
+
 // ========== 表单元素管理（/application/:appId/formelement） ==========
 
 // GET /application/:appId/formelement 表单元素列表

@@ -227,6 +227,152 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 	return main, nil
 }
 
+// ApplicationDataCreate 动态业务数据新增（支持主表 + 子表）：
+//  1. 根据应用配置获取主表名，拼接前缀得到真实物理表
+//  2. 区分主表字段与子表数据：key 匹配子表名时视为子表行数据（[]interface{}），不作为主表字段校验
+//  3. 主表字段经真实列校验后拼装 INSERT，自动填充审计字段
+//  4. 主表 INSERT 成功后获取自增主键 ID
+//  5. 遍历子表数据，为每行填充 parent_id（= 主表 ID）及审计字段，校验列合法性后逐行 INSERT
+func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface{}) (uint, error) {
+	app, err := ApplicationDetail(appID)
+	if err != nil {
+		return 0, err
+	}
+	if !isValidTableName(app.TableName) {
+		return 0, errors.New("非法的表名")
+	}
+	real := bizTableName(app.TableName)
+
+	// 查询主表中真实列，校验提交字段合法性
+	mainColSet, err := queryColumnSet(real)
+	if err != nil {
+		return 0, fmt.Errorf("查询表结构失败: %w", err)
+	}
+
+	// 系统字段由后端自动管理，不接受前端写入
+	systemCols := map[string]bool{
+		"id": true, "created_at": true, "updated_at": true,
+		"deleted_at": true, "created_by": true, "updated_by": true,
+	}
+
+	// 构建子表名集合（与 ApplicationDataDetail 保持一致的拆分逻辑）
+	subTableSet := map[string]bool{}
+	if app.SubTableName != "" {
+		for _, sub := range strings.Split(app.SubTableName, ",") {
+			sub = strings.TrimSpace(sub)
+			if sub != "" && isValidTableName(sub) {
+				subTableSet[sub] = true
+			}
+		}
+	}
+
+	// 分离主表字段与子表数据
+	mainColumns := []string{}
+	mainPlaceholders := []string{}
+	mainArgs := []interface{}{}
+	subData := map[string][]interface{}{} // 子表名 → 行数据数组
+
+	for k, v := range data {
+		// key 匹配子表名时，将值视为子表行数组，跳过主表字段校验
+		if subTableSet[k] {
+			rows, ok := v.([]interface{})
+			if !ok {
+				return 0, fmt.Errorf("子表 %s 的数据格式错误，期望数组", k)
+			}
+			subData[k] = rows
+			continue
+		}
+		if systemCols[k] {
+			continue
+		}
+		if !mainColSet[k] {
+			return 0, fmt.Errorf("字段不存在: %s", k)
+		}
+		mainColumns = append(mainColumns, "`"+k+"`")
+		mainPlaceholders = append(mainPlaceholders, "?")
+		mainArgs = append(mainArgs, v)
+	}
+
+	// 自动填充主表审计字段
+	now := time.Now()
+	mainColumns = append(mainColumns, "`created_at`", "`updated_at`", "`created_by`", "`updated_by`")
+	mainPlaceholders = append(mainPlaceholders, "?", "?", "?", "?")
+	mainArgs = append(mainArgs, now, now, curUserID, curUserID)
+
+	mainSQL := fmt.Sprintf(
+		"INSERT INTO `%s` (%s) VALUES (%s)",
+		real,
+		strings.Join(mainColumns, ","),
+		strings.Join(mainPlaceholders, ","),
+	)
+
+	if err := database.DB.Exec(mainSQL, mainArgs...).Error; err != nil {
+		return 0, fmt.Errorf("插入数据失败: %w", err)
+	}
+
+	// 获取主表自增主键
+	var id uint
+	if err := database.DB.Raw("SELECT LAST_INSERT_ID()").Scan(&id).Error; err != nil {
+		return 0, err
+	}
+
+	// 子表数据插入：主表 INSERT 成功后，逐子表、逐行写入
+	for subName, rows := range subData {
+		if !isValidTableName(subName) {
+			return 0, fmt.Errorf("非法的子表名: %s", subName)
+		}
+		subReal := bizTableName(subName)
+		if !isValidTableName(subReal) {
+			return 0, fmt.Errorf("子表名附加前缀后不合法: %s", subReal)
+		}
+		subColSet, err := queryColumnSet(subReal)
+		if err != nil {
+			return 0, fmt.Errorf("查询子表 %s 结构失败: %w", subName, err)
+		}
+
+		for i, row := range rows {
+			rowMap, ok := row.(map[string]interface{})
+			if !ok {
+				return 0, fmt.Errorf("子表 %s 第 %d 行数据格式错误，期望对象", subName, i+1)
+			}
+
+			subColumns := []string{"`parent_id`"}
+			subPlaceholders := []string{"?"}
+			subArgs := []interface{}{id} // parent_id = 主表新 ID
+
+			for k, v := range rowMap {
+				if systemCols[k] || k == "parent_id" {
+					continue
+				}
+				if !subColSet[k] {
+					return 0, fmt.Errorf("子表 %s 字段不存在: %s", subName, k)
+				}
+				subColumns = append(subColumns, "`"+k+"`")
+				subPlaceholders = append(subPlaceholders, "?")
+				subArgs = append(subArgs, v)
+			}
+
+			// 自动填充子表审计字段
+			subColumns = append(subColumns, "`created_at`", "`updated_at`", "`created_by`", "`updated_by`")
+			subPlaceholders = append(subPlaceholders, "?", "?", "?", "?")
+			subArgs = append(subArgs, now, now, curUserID, curUserID)
+
+			subSQL := fmt.Sprintf(
+				"INSERT INTO `%s` (%s) VALUES (%s)",
+				subReal,
+				strings.Join(subColumns, ","),
+				strings.Join(subPlaceholders, ","),
+			)
+
+			if err := database.DB.Exec(subSQL, subArgs...).Error; err != nil {
+				return 0, fmt.Errorf("插入子表 %s 数据失败: %w", subName, err)
+			}
+		}
+	}
+
+	return id, nil
+}
+
 // code 唯一性校验：GORM 软删除只加 deleted_at 条件，而数据库唯一索引覆盖全部行（含软删除），
 // 因此查重必须 Unscoped 带上已删除记录，否则检查通过但入库仍撞唯一键报 Error 1062
 func checkApplicationCodeExists(code string, excludeID uint) bool {
