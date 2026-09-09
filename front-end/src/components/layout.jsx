@@ -1,19 +1,19 @@
 import {
-  Avatar,
-  Breadcrumb,
-  Dropdown,
-  Layout,
-  Menu,
-  Space,
-  Typography,
+    Avatar,
+    Breadcrumb,
+    Dropdown,
+    Layout,
+    Menu,
+    Space,
+    Typography,
 } from '@arco-design/web-react'
 import {
-  IconApps,
-  IconDesktop,
-  IconHome,
-  IconSettings,
-  IconStorage,
-  IconUser,
+    IconApps,
+    IconDesktop,
+    IconHome,
+    IconSettings,
+    IconStorage,
+    IconUser,
 } from '@arco-design/web-react/icon'
 import { useEffect, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -44,6 +44,7 @@ function menuIcon(menu) {
 }
 
 // 把后端菜单树转成 Arco Menu 项（只渲染目录和页面菜单，按钮权限项跳过；hidden=1 的菜单不显示在导航栏）
+// 导航路径一律使用菜单配置的原始 path（link_app 仅用于动态页面请求应用数据，不参与路由派生）
 function renderMenus(menus) {
   return menus
     .filter((m) => m.status === 1 && m.type !== 3 && m.hidden !== 1)
@@ -57,9 +58,11 @@ function renderMenus(menus) {
           </SubMenu>
         )
       }
-      if (m.path) {
+      // 导航路径：菜单配置的原始 path（link_app 不参与路径派生）
+      const navPath = m.path
+      if (navPath) {
         return (
-          <MenuItem key={m.path} icon={menuIcon(m)}>
+          <MenuItem key={navPath} icon={menuIcon(m)}>
             {m.name}
           </MenuItem>
         )
@@ -78,16 +81,19 @@ const SUB_ROUTE_NAMES = {
 
 // 在菜单树中查找当前路径对应的层级链（目录 → 页面），用于面包屑和菜单高亮
 // 支持动态子路由：精确匹配优先，未命中时回退到最长前缀匹配（如 /application/1/tables → /application）
+// 匹配一律基于菜单配置的原始 path
 function findMenuChain(menus, pathname) {
   let prefixMatch = null
   const walk = (list, chain) => {
     for (const m of list || []) {
       if (m.status !== 1 || m.type === 3) continue
       const nextChain = [...chain, m]
-      if (m.path === pathname) return nextChain
+      // 实际导航路径：菜单配置的原始 path
+      const navPath = m.path
+      if (navPath === pathname) return nextChain
       // 记录最长前缀匹配，供动态子路由回退
-      if (m.path && pathname.startsWith(m.path + '/')) {
-        if (!prefixMatch || m.path.length > prefixMatch[prefixMatch.length - 1].path.length) {
+      if (navPath && pathname.startsWith(navPath + '/')) {
+        if (!prefixMatch || navPath.length > (prefixMatch[prefixMatch.length - 1].path || '').length) {
           prefixMatch = nextChain
         }
       }

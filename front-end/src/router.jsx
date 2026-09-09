@@ -28,10 +28,10 @@ const ApplicationManage = lazy(() => import('./pages/application/ApplicationMana
 const TableManage = lazy(() => import('./pages/application/TableManage.jsx'))
 const FormElementManage = lazy(() => import('./pages/application/FormElementManage.jsx'))
 const LayoutManage = lazy(() => import('./pages/application/LayoutManage.jsx'))
+const DynamicPage = lazy(() => import('./pages/application/DynamicPage.jsx'))
 
 // 错误页面
 const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
-const NotFound = lazy(() => import('./pages/error/NotFound.jsx'))
 
 // 审批申请页：分类 + 申请项管理
 const ApprovalApply = lazy(() => import('./pages/approval/Apply.jsx'))
@@ -50,6 +50,7 @@ function Page({ children }) {
 }
 
 // 扁平化菜单树，收集所有可访问的路由路径（排除按钮类型 type=3）
+// 一律使用菜单配置的原始 path（link_app 仅用于动态页面请求应用数据，不参与权限路径派生）
 function collectMenuPaths(menus) {
   const paths = new Set()
   const walk = (list) => {
@@ -68,7 +69,7 @@ function collectMenuPaths(menus) {
 
 // 路由权限校验包装组件：
 // - 菜单未加载完成时显示加载中（避免误判）
-// - 当前路径不在用户菜单中时重定向到 /403
+// - 当前路径不在用户菜单（原始 path）中时重定向到 /403
 // - 登录校验由外层路由 loader 负责，优先级高于本组件
 function RequirePermission({ children }) {
   const { menus, menusLoaded } = useAuth()
@@ -220,11 +221,14 @@ const router = createBrowserRouter([
           </Page>
         ),
       },
+      // 动态应用页面路由：通配兜底，由 DynamicPage 从 location.pathname 解析 code / state 并分发渲染
       {
         path: '*',
         element: (
           <Page>
-            <NotFound />
+            <RequirePermission>
+              <DynamicPage />
+            </RequirePermission>
           </Page>
         ),
       },

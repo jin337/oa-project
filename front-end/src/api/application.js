@@ -11,10 +11,18 @@ export function getApplication(id) {
 }
 
 // GET /application/by-code/:code 按页面编码（code）查询应用配置（动态菜单页面渲染用）
-// @param {string} code  页面编码（如 app_1788413612）
-// @param {string} state 页面状态（如 list / form / detail），作为 query 参数（?state=xxx）透传后端，可选
-export function getApplicationByCode(code, state) {
-  return request.get(`/application/by-code/${code}`, { params: state ? { state } : undefined })
+// @param {string} code     页面编码（如 app_1788413612）
+// @param {string} state    页面状态（如 list / form / detail），作为 query 参数（?state=xxx）透传后端，可选
+// @param {number} page     页码（state=list 时用于分页），可选
+// @param {number} size     每页条数（state=list 时用于分页），可选
+// @param {object} filters  动态搜索字段（state=list 时作为额外 query 参数透传），可选
+export function getApplicationByCode(code, state, page, size, filters) {
+  const params = {}
+  if (state) params.state = state
+  if (page) params.page = page
+  if (size) params.size = size
+  if (filters) Object.assign(params, filters)
+  return request.get(`/application/by-code/${code}`, { params: Object.keys(params).length ? params : undefined })
 }
 
 // POST /application 新增
@@ -63,6 +71,16 @@ export function deleteTableField(appId, fieldId, tableName) {
 // POST /application/:id/data 新增动态业务数据（提交申请表单）
 export function createApplicationData(appId, data) {
   return request.post(`/application/${appId}/data`, data)
+}
+
+// PUT /application/:id/data/:dataId 更新动态业务数据（编辑表单提交）
+export function updateApplicationData(appId, dataId, data) {
+  return request.put(`/application/${appId}/data/${dataId}`, data)
+}
+
+// GET /application/:id/data/:dataId 动态业务数据详情（含子表数据）
+export function getApplicationDataDetail(appId, dataId) {
+  return request.get(`/application/${appId}/data/${dataId}`)
 }
 
 // ========== 表单元素管理（/application/:appId/formelement） ==========
