@@ -54,7 +54,7 @@ export function findChildBySegments(candidates, parentPath, pathname) {
     // 有序子序列匹配：childSegs 需按顺序出现在 pathSegs 中（动态参数段可被跳过）
     let i = 0
     for (const seg of pathSegs) {
-      if (i < childSegs.length && seg === childSegs[i]) i++
+      if (i < childSegs.length && (seg === childSegs[i] || childSegs[i]?.startsWith(':'))) i++
     }
     if (i === childSegs.length) return m
     const found = findChildBySegments(m.children, m.path, pathname)
