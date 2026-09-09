@@ -586,9 +586,13 @@ const pad2 = (n) => String(n).padStart(2, '0')
  * 兼容三种输入形态：ISO/带格式字符串、13 位毫秒时间戳、10 位秒时间戳；
  * 已是标准日期开头（YYYY-MM-DD）的字符串直接截取，避免二次解析引发的时区偏移；
  * 无法解析的值原样返回。
+ * @param {*} value         时间值
+ * @param {string} elementType 元素类型（date/datetime/time 等）
+ * @param {*} emptyValue    空值（null/undefined/''）时的返回值：
+ *                          展示场景默认 '-'；提交场景传原值（value）实现空值透传，避免污染数据
  */
-export function formatTimeValue(value, elementType) {
-  if (value == null || value === '') return '-'
+export function formatTimeValue(value, elementType, emptyValue = '-') {
+  if (value == null || value === '') return emptyValue
   const raw = String(value)
   // 已是标准日期开头（YYYY-MM-DD）：按需截取，避免 new Date 按 UTC 解析导致日期偏移一天
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {

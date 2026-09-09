@@ -230,7 +230,7 @@ export default function MenuManage() {
             </Tooltip>
           ) : (
             <Popconfirm
-              position="rb"
+              position="lb"
               focusLock
               title="确认删除该菜单？"
               onOk={() => handleDelete(record)}

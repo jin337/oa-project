@@ -331,7 +331,7 @@ export default function TableManage() {
               </Tooltip>
             ) : (
               <Popconfirm
-                position="rb"
+                position="lb"
                 focusLock
                 title="确认删除该字段？"
                 onOk={() => handleDelete(record)}

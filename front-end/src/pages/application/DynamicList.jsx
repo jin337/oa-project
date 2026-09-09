@@ -8,6 +8,7 @@ import {
   Input,
   Menu,
   Message,
+  Popconfirm,
   Popover,
   Space,
   Spin,
@@ -20,6 +21,7 @@ import DynamicDetail from './DynamicDetail'
 import DynamicForm, {
   formatTimeValue,
   getStaticOptions,
+  parseLayoutJson,
   renderPreviewConfig,
   TIME_ELEMENT_TYPES,
 } from './DynamicForm'
@@ -35,6 +37,50 @@ const SIZE_OPTIONS = [
   { label: '紧凑', value: 'small' },
   { label: '迷你', value: 'mini' },
 ]
+
+/**
+ * 将表单 values 中的时间字段序列化为 MySQL 兼容格式（提交前调用）：
+ * 依据表单元素配置（含 table 子表的列配置）识别时间类型字段（TIME_ELEMENT_TYPES），
+ * 主表字段与子表行内字段均转换；
+ * 统一复用 formatTimeValue，第三个参数传原值（value）实现空值透传，避免污染提交数据
+ */
+function serializeTimeFields(values, elements) {
+  if (!values || !Array.isArray(elements)) return values
+  const next = { ...values }
+  for (const el of elements || []) {
+    const key = el?.field_key
+    if (!key) continue
+    if (el.element_type === 'table') {
+      // 子表（Form.List）：遍历行内时间列
+      const rows = next[key]
+      if (Array.isArray(rows)) {
+        next[key] = rows.map((row) => {
+          if (!row || typeof row !== 'object') return row
+          const nr = { ...row }
+          for (const col of el.columns || []) {
+            const colKey = col.dataIndex || col.field_key
+            if (
+              colKey &&
+              TIME_ELEMENT_TYPES.includes(col.element_type) &&
+              nr[colKey] != null &&
+              nr[colKey] !== ''
+            ) {
+              nr[colKey] = formatTimeValue(nr[colKey], col.element_type, nr[colKey])
+            }
+          }
+          return nr
+        })
+      }
+    } else if (
+      TIME_ELEMENT_TYPES.includes(el.element_type) &&
+      next[key] != null &&
+      next[key] !== ''
+    ) {
+      next[key] = formatTimeValue(next[key], el.element_type, next[key])
+    }
+  }
+  return next
+}
 
 /**
  * 根据元素类型获取单元格的展示文本：
@@ -170,7 +216,12 @@ export default function DynamicList({ app, code }) {
     }
     setDrawerSubmitting(true)
     try {
-      await applicationApi.updateApplicationData(drawerApp.id, drawerRecord.id, values)
+      // 时间字段（date/datetime/time 等）序列化为 MySQL 兼容格式
+      // （YYYY-MM-DD / YYYY-MM-DD HH:mm:ss / HH:mm:ss），避免前端 ISO 8601
+      // （如 2026-09-09T00:00:00+08:00）导致 MySQL Error 1292 更新失败
+      const layout = parseLayoutJson(drawerApp?.form_layout_json)
+      const payload = serializeTimeFields(values, layout?.elements || [])
+      await applicationApi.updateApplicationData(drawerApp.id, drawerRecord.id, payload)
       Message.success('保存成功')
       setDrawerVisible(false)
       fetchList()
@@ -202,15 +253,24 @@ export default function DynamicList({ app, code }) {
         key: 'action',
         title: '操作',
         dataIndex: 'operation',
-        width: 120,
+        width: 160,
         render: (_, record) => (
           <Space>
-            <Button type="text" size="small" onClick={() => openDrawer(record, 'form')}>
-              编辑
-            </Button>
             <Button type="text" size="small" onClick={() => openDrawer(record, 'detail')}>
               查看
             </Button>
+            <Button type="text" size="small" onClick={() => openDrawer(record, 'form')}>
+              编辑
+            </Button>
+            <Popconfirm
+              position="lb"
+              title="确认删除该条数据？"
+              onOk={() => handleDelete(record)}
+            >
+              <Button type="text" size="small" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
           </Space>
         ),
       },
@@ -242,6 +302,21 @@ export default function DynamicList({ app, code }) {
       }
     },
     [code, pageSize, searchValues],
+  )
+
+  // 删除当前行数据：Popconfirm 二次确认后调用删除接口，成功后提示并刷新列表
+  const handleDelete = useCallback(
+    async (record) => {
+      if (!app?.id || !record?.id) return
+      try {
+        await applicationApi.deleteApplicationData(app.id, record.id)
+        Message.success('删除成功')
+        fetchList()
+      } catch {
+        // 错误已在请求层提示
+      }
+    },
+    [app?.id, fetchList],
   )
 
   // 搜索：生效当前草稿条件，回到第一页并请求

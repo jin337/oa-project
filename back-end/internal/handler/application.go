@@ -149,6 +149,47 @@ func ApplicationDataCreate(c *gin.Context) {
 	response.OK(c, gin.H{"id": newID})
 }
 
+// ApplicationDataDelete DELETE /api/v1/application/:id/data/:dataId 动态业务数据删除（列表页删除行）
+func ApplicationDataDelete(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	dataID, err := strconv.ParseUint(c.Param("dataId"), 10, 64)
+	if err != nil || dataID == 0 {
+		response.Fail(c, response.CodeParamError, "数据 ID 参数非法")
+		return
+	}
+	if err := service.ApplicationDataDelete(id, uint(dataID)); err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OKMsg(c, "删除成功")
+}
+
+// ApplicationDataUpdate PUT /api/v1/application/:id/data/:dataId 动态业务数据更新（编辑表单提交）
+func ApplicationDataUpdate(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	dataID, err := strconv.ParseUint(c.Param("dataId"), 10, 64)
+	if err != nil || dataID == 0 {
+		response.Fail(c, response.CodeParamError, "数据 ID 参数非法")
+		return
+	}
+	var data map[string]interface{}
+	if err := c.ShouldBindJSON(&data); err != nil || len(data) == 0 {
+		response.Fail(c, response.CodeParamError, "请求体不能为空")
+		return
+	}
+	if err := service.ApplicationDataUpdate(id, uint(dataID), middleware.CurrentUserID(c), data); err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OKMsg(c, "更新成功")
+}
+
 // ApplicationCreate POST /api/v1/application
 func ApplicationCreate(c *gin.Context) {
 	var req model.ApplicationCreateReq

@@ -83,6 +83,11 @@ export function getApplicationDataDetail(appId, dataId) {
   return request.get(`/application/${appId}/data/${dataId}`)
 }
 
+// DELETE /application/:id/data/:dataId 删除动态业务数据（列表页删除行）
+export function deleteApplicationData(appId, dataId) {
+  return request.delete(`/application/${appId}/data/${dataId}`)
+}
+
 // ========== 表单元素管理（/application/:appId/formelement） ==========
 
 // GET /application/:appId/formelement 表单元素列表

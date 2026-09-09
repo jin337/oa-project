@@ -226,7 +226,7 @@ export default function ApplicationManage() {
             编辑
           </Button>
           <Popconfirm
-            position="rb"
+            position="lb"
             focusLock
             title="确认删除该应用配置？"
             content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"

@@ -1,22 +1,22 @@
 import {
-  Button,
-  Card,
-  Checkbox,
-  Collapse,
-  Divider,
-  Drawer,
-  Dropdown,
-  Form,
-  Grid,
-  Input,
-  Menu,
-  Message,
-  Popconfirm,
-  Popover,
-  Select,
-  Space,
-  Table,
-  Tag,
+    Button,
+    Card,
+    Checkbox,
+    Collapse,
+    Divider,
+    Drawer,
+    Dropdown,
+    Form,
+    Grid,
+    Input,
+    Menu,
+    Message,
+    Popconfirm,
+    Popover,
+    Select,
+    Space,
+    Table,
+    Tag,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -576,7 +576,7 @@ export default function FormElementManage() {
             编辑
           </Button>
           <Popconfirm
-            position="rb"
+            position="lb"
             focusLock
             title="确认删除该表单元素？"
             onOk={() => handleDelete(record)}

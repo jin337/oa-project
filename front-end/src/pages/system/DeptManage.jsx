@@ -1,23 +1,23 @@
 import {
-  Button,
-  Card,
-  Checkbox,
-  Dropdown,
-  Form,
-  Grid,
-  Input,
-  InputNumber,
-  Menu,
-  Message,
-  Modal,
-  Popconfirm,
-  Popover,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  TreeSelect,
+    Button,
+    Card,
+    Checkbox,
+    Dropdown,
+    Form,
+    Grid,
+    Input,
+    InputNumber,
+    Menu,
+    Message,
+    Modal,
+    Popconfirm,
+    Popover,
+    Select,
+    Space,
+    Table,
+    Tag,
+    Tooltip,
+    TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -187,7 +187,7 @@ export default function DeptManage() {
               </Button>
             </Tooltip>
           ) : (
-            <Popconfirm position="rb" focusLock title="确认删除该部门？" onOk={() => handleDelete(record)}>
+            <Popconfirm position="lb" focusLock title="确认删除该部门？" onOk={() => handleDelete(record)}>
               <Button size="mini" status="danger">
                 删除
               </Button>

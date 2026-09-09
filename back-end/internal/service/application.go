@@ -229,6 +229,12 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 	return main, nil
 }
 
+// appSystemCols 动态业务数据系统字段：由后端自动管理，不接受前端写入（Create/Update 共用）
+var appSystemCols = map[string]bool{
+	"id": true, "created_at": true, "updated_at": true,
+	"deleted_at": true, "created_by": true, "updated_by": true,
+}
+
 // ApplicationDataCreate 动态业务数据新增（支持主表 + 子表）：
 //  1. 根据应用配置获取主表名，拼接前缀得到真实物理表
 //  2. 区分主表字段与子表数据：key 匹配子表名时视为子表行数据（[]interface{}），不作为主表字段校验
@@ -249,12 +255,6 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 	mainColSet, err := queryColumnSet(real)
 	if err != nil {
 		return 0, fmt.Errorf("查询表结构失败: %w", err)
-	}
-
-	// 系统字段由后端自动管理，不接受前端写入
-	systemCols := map[string]bool{
-		"id": true, "created_at": true, "updated_at": true,
-		"deleted_at": true, "created_by": true, "updated_by": true,
 	}
 
 	// 构建子表名集合（与 ApplicationDataDetail 保持一致的拆分逻辑）
@@ -284,7 +284,7 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 			subData[k] = rows
 			continue
 		}
-		if systemCols[k] {
+		if appSystemCols[k] {
 			continue
 		}
 		if !mainColSet[k] {
@@ -343,7 +343,7 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 			subArgs := []interface{}{id} // parent_id = 主表新 ID
 
 			for k, v := range rowMap {
-				if systemCols[k] || k == "parent_id" {
+				if appSystemCols[k] || k == "parent_id" {
 					continue
 				}
 				if !subColSet[k] {
@@ -373,6 +373,216 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 	}
 
 	return id, nil
+}
+
+// ApplicationDataDelete 动态业务数据删除（列表页删除行）：
+//  1. 根据应用配置获取主表真实物理表名，校验目标行存在（过滤软删除）
+//  2. 删除策略：业务表有 deleted_at 列时软删除（与列表/详情查询的 deleted_at IS NULL 过滤语义一致），
+//     表无 deleted_at 列时降级为物理删除
+//  3. 级联处理子表数据（parent_id = dataId），删除策略与主表一致，避免产生孤儿数据
+func ApplicationDataDelete(appID, dataID uint) error {
+	app, err := ApplicationDetail(appID)
+	if err != nil {
+		return err
+	}
+	if !isValidTableName(app.TableName) {
+		return errors.New("非法的表名")
+	}
+	real := bizTableName(app.TableName)
+
+	// 校验目标行存在（过滤软删除）
+	var cnt int64
+	if err := database.DB.Raw("SELECT COUNT(*) FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", dataID).Scan(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return errors.New("数据不存在")
+	}
+
+	// 删除主表行：有 deleted_at 列用软删除，否则物理删除
+	mainColSet, err := queryColumnSet(real)
+	if err != nil {
+		return fmt.Errorf("查询表结构失败: %w", err)
+	}
+	if mainColSet["deleted_at"] {
+		if err := database.DB.Exec("UPDATE `"+real+"` SET `deleted_at` = ? WHERE `id` = ?", time.Now(), dataID).Error; err != nil {
+			return fmt.Errorf("删除数据失败: %w", err)
+		}
+	} else {
+		if err := database.DB.Exec("DELETE FROM `"+real+"` WHERE `id` = ?", dataID).Error; err != nil {
+			return fmt.Errorf("删除数据失败: %w", err)
+		}
+	}
+
+	// 级联处理子表数据（parent_id = dataId），策略与主表一致
+	if app.SubTableName != "" {
+		for _, sub := range strings.Split(app.SubTableName, ",") {
+			sub = strings.TrimSpace(sub)
+			if sub == "" || !isValidTableName(sub) {
+				continue
+			}
+			subReal := bizTableName(sub)
+			subColSet, err := queryColumnSet(subReal)
+			if err != nil {
+				return fmt.Errorf("查询子表 %s 结构失败: %w", sub, err)
+			}
+			if subColSet["deleted_at"] {
+				if err := database.DB.Exec("UPDATE `"+subReal+"` SET `deleted_at` = ? WHERE `parent_id` = ?", time.Now(), dataID).Error; err != nil {
+					return fmt.Errorf("删除子表 %s 数据失败: %w", sub, err)
+				}
+			} else {
+				if err := database.DB.Exec("DELETE FROM `"+subReal+"` WHERE `parent_id` = ?", dataID).Error; err != nil {
+					return fmt.Errorf("删除子表 %s 数据失败: %w", sub, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// ApplicationDataUpdate 动态业务数据更新（编辑表单提交）：
+//  1. 根据应用配置获取主表真实物理表名，校验目标记录存在（过滤软删除）
+//  2. 区分主表字段与子表数据：key 匹配子表名且值为数组时视为子表行数据，不作为主表字段校验
+//  3. 主表字段经真实列校验后拼装 UPDATE，自动更新 updated_at/updated_by，且不允许修改系统字段与主键
+//  4. 子表数据：先清理旧数据（parent_id = dataId，有 deleted_at 软删、否则物理删），
+//     再遍历新数据逐行校验列合法性后重新 INSERT（自动填充 parent_id 及审计字段）
+func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]interface{}) error {
+	app, err := ApplicationDetail(appID)
+	if err != nil {
+		return err
+	}
+	if !isValidTableName(app.TableName) {
+		return errors.New("非法的表名")
+	}
+	real := bizTableName(app.TableName)
+
+	// 校验目标记录存在（过滤软删除）
+	var cnt int64
+	if err := database.DB.Raw("SELECT COUNT(*) FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", dataID).Scan(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return errors.New("数据不存在")
+	}
+
+	mainColSet, err := queryColumnSet(real)
+	if err != nil {
+		return fmt.Errorf("查询表结构失败: %w", err)
+	}
+
+	// 构建子表名集合（与 ApplicationDataCreate 保持一致的拆分逻辑）
+	subTableSet := map[string]bool{}
+	if app.SubTableName != "" {
+		for _, sub := range strings.Split(app.SubTableName, ",") {
+			sub = strings.TrimSpace(sub)
+			if sub != "" && isValidTableName(sub) {
+				subTableSet[sub] = true
+			}
+		}
+	}
+
+	// 分离主表字段与子表数据
+	sets := []string{}
+	args := []interface{}{}
+	subData := map[string][]interface{}{} // 子表名 → 行数据数组
+
+	for k, v := range data {
+		// key 匹配子表名时，将值视为子表行数组，跳过主表字段校验
+		if subTableSet[k] {
+			rows, ok := v.([]interface{})
+			if !ok {
+				return fmt.Errorf("子表 %s 的数据格式错误，期望数组", k)
+			}
+			subData[k] = rows
+			continue
+		}
+		if appSystemCols[k] {
+			continue
+		}
+		if !mainColSet[k] {
+			return fmt.Errorf("字段不存在: %s", k)
+		}
+		sets = append(sets, "`"+k+"` = ?")
+		args = append(args, v)
+	}
+
+	// 自动更新审计字段
+	now := time.Now()
+	sets = append(sets, "`updated_at` = ?", "`updated_by` = ?")
+	args = append(args, now, curUserID)
+
+	updateSQL := fmt.Sprintf("UPDATE `%s` SET %s WHERE `id` = ? AND `deleted_at` IS NULL",
+		real, strings.Join(sets, ","))
+	args = append(args, dataID)
+	if err := database.DB.Exec(updateSQL, args...).Error; err != nil {
+		return fmt.Errorf("更新数据失败: %w", err)
+	}
+
+	// 子表数据更新：先清理旧数据，再逐行插入新数据
+	for subName, rows := range subData {
+		if !isValidTableName(subName) {
+			return fmt.Errorf("非法的子表名: %s", subName)
+		}
+		subReal := bizTableName(subName)
+		if !isValidTableName(subReal) {
+			return fmt.Errorf("子表名附加前缀后不合法: %s", subReal)
+		}
+		subColSet, err := queryColumnSet(subReal)
+		if err != nil {
+			return fmt.Errorf("查询子表 %s 结构失败: %w", subName, err)
+		}
+
+		// 清理旧子表数据：有 deleted_at 列软删，否则物理删
+		if subColSet["deleted_at"] {
+			if err := database.DB.Exec("UPDATE `"+subReal+"` SET `deleted_at` = ? WHERE `parent_id` = ?", now, dataID).Error; err != nil {
+				return fmt.Errorf("清理子表 %s 旧数据失败: %w", subName, err)
+			}
+		} else {
+			if err := database.DB.Exec("DELETE FROM `"+subReal+"` WHERE `parent_id` = ?", dataID).Error; err != nil {
+				return fmt.Errorf("清理子表 %s 旧数据失败: %w", subName, err)
+			}
+		}
+
+		// 逐行插入新数据（复用 ApplicationDataCreate 的子表行逻辑）
+		for i, row := range rows {
+			rowMap, ok := row.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("子表 %s 第 %d 行数据格式错误，期望对象", subName, i+1)
+			}
+			subColumns := []string{"`parent_id`"}
+			subPlaceholders := []string{"?"}
+			subArgs := []interface{}{dataID} // parent_id = 主表记录 ID
+
+			for k, v := range rowMap {
+				if appSystemCols[k] || k == "parent_id" {
+					continue
+				}
+				if !subColSet[k] {
+					return fmt.Errorf("子表 %s 字段不存在: %s", subName, k)
+				}
+				subColumns = append(subColumns, "`"+k+"`")
+				subPlaceholders = append(subPlaceholders, "?")
+				subArgs = append(subArgs, v)
+			}
+
+			// 自动填充子表审计字段
+			subColumns = append(subColumns, "`created_at`", "`updated_at`", "`created_by`", "`updated_by`")
+			subPlaceholders = append(subPlaceholders, "?", "?", "?", "?")
+			subArgs = append(subArgs, now, now, curUserID, curUserID)
+
+			subSQL := fmt.Sprintf(
+				"INSERT INTO `%s` (%s) VALUES (%s)",
+				subReal,
+				strings.Join(subColumns, ","),
+				strings.Join(subPlaceholders, ","),
+			)
+			if err := database.DB.Exec(subSQL, subArgs...).Error; err != nil {
+				return fmt.Errorf("插入子表 %s 数据失败: %w", subName, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // code 唯一性校验：GORM 软删除只加 deleted_at 条件，而数据库唯一索引覆盖全部行（含软删除），

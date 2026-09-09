@@ -1,28 +1,28 @@
 import {
-  Button,
-  Card,
-  Checkbox,
-  DatePicker,
-  Descriptions,
-  Divider,
-  Drawer,
-  Dropdown,
-  Form,
-  Grid,
-  Input,
-  Menu,
-  Message,
-  Modal,
-  Popconfirm,
-  Popover,
-  Radio,
-  Select,
-  Space,
-  Spin,
-  Table,
-  Tag,
-  Tooltip,
-  TreeSelect,
+    Button,
+    Card,
+    Checkbox,
+    DatePicker,
+    Descriptions,
+    Divider,
+    Drawer,
+    Dropdown,
+    Form,
+    Grid,
+    Input,
+    Menu,
+    Message,
+    Modal,
+    Popconfirm,
+    Popover,
+    Radio,
+    Select,
+    Space,
+    Spin,
+    Table,
+    Tag,
+    Tooltip,
+    TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -396,7 +396,7 @@ export default function UserManage() {
             </Tooltip>
           ) : (
             <Popconfirm
-              position="rb"
+              position="lb"
               focusLock
               title="确认删除该用户？"
               onOk={() => handleDelete(record)}
