@@ -11,8 +11,10 @@ export function getApplication(id) {
 }
 
 // GET /application/by-code/:code 按页面编码（code）查询应用配置（动态菜单页面渲染用）
-export function getApplicationByCode(code) {
-  return request.get(`/application/by-code/${code}`)
+// @param {string} code  页面编码（如 app_1788413612）
+// @param {string} state 页面状态（如 list / form / detail），作为 query 参数（?state=xxx）透传后端，可选
+export function getApplicationByCode(code, state) {
+  return request.get(`/application/by-code/${code}`, { params: state ? { state } : undefined })
 }
 
 // POST /application 新增
@@ -76,27 +78,4 @@ export function updateFormElement(appId, elementId, data) {
 // DELETE /application/:appId/formelement/:id 删除表单元素
 export function deleteFormElement(appId, elementId) {
   return request.delete(`/application/${appId}/formelement/${elementId}`)
-}
-
-// ========== 动态页面数据（/application/:appId/data） ==========
-
-// GET /application/:appId/data 通用数据列表查询（动态配置页面的表格数据，params 携带 table_name 与搜索字段）
-export function listApplicationData(appId, params) {
-  return request.get(`/application/${appId}/data`, { params })
-}
-
-// GET /application/:appId/data/:id 数据详情（含子表数据，动态配置页面的详情弹窗；主键假定为 id）
-export function getApplicationDataDetail(appId, id, params) {
-  return request.get(`/application/${appId}/data/${id}`, { params })
-}
-
-// POST /application/:appId/data 通用数据新增（动态表单提交：主表字段数据 + 子表数据）
-// @param {number|string} appId     应用 ID（后端据此定位主表名）
-// @param {object} mainData         主表字段数据（布局中普通表单元素的值）
-// @param {object} subTables        子表数据 { table_key: [行数据...] }（布局中表格组件的 Form.List 数组值）
-export function createApplicationData(appId, mainData, subTables) {
-  return request.post(`/application/${appId}/data`, {
-    data: mainData,
-    sub_tables: subTables,
-  })
 }

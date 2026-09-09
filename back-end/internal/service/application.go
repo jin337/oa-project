@@ -51,13 +51,77 @@ func ApplicationDetail(id uint) (*model.Application, error) {
 	return &app, nil
 }
 
-// ApplicationByCode 根据页面编码（code）查询页面配置详情
-func ApplicationByCode(code string) (*model.Application, error) {
+// visibilityFlag 判断 FormElement.Visibility 中指定开关是否为真（list/search），兼容 JSON 反序列化后的数字类型
+func visibilityFlag(vis map[string]interface{}, key string) bool {
+	if vis == nil {
+		return false
+	}
+	switch v := vis[key].(type) {
+	case float64:
+		return int(v) == 1
+	case int:
+		return v == 1
+	case bool:
+		return v
+	}
+	return false
+}
+
+// ApplicationByCode 根据页面编码（code）查询页面配置，并按 state 裁剪返回：
+//   - list  ：基础信息 + 搜索项 search_fields + 表格表头 columns + 主表数据列表（分页），布局 JSON 置空
+//   - form  ：基础信息 + form_layout_json，detail_layout_json 置空
+//   - detail：基础信息 + detail_layout_json，form_layout_json 置空
+//   - 空/未知：返回完整配置（兼容旧调用方）
+func ApplicationByCode(code, state string, page, size int) (*model.ApplicationByCodeResult, error) {
 	var app model.Application
 	if err := database.DB.Where("code = ?", code).First(&app).Error; err != nil {
 		return nil, errors.New("页面配置不存在")
 	}
-	return &app, nil
+	result := &model.ApplicationByCodeResult{Application: app}
+
+	switch state {
+	case "list":
+		// 列表场景不需要布局配置，置空减少冗余
+		result.FormLayoutJSON = nil
+		result.DetailLayoutJSON = nil
+		// 搜索项与表格表头取自该应用的表单元素（visibility.search / visibility.list）
+		var elements []model.FormElement
+		if err := database.DB.Where("app_id = ?", app.ID).Order("id ASC").Find(&elements).Error; err != nil {
+			return nil, err
+		}
+		for _, el := range elements {
+			if visibilityFlag(el.Visibility, "search") {
+				result.SearchFields = append(result.SearchFields, el)
+			}
+			if visibilityFlag(el.Visibility, "list") {
+				result.Columns = append(result.Columns, el)
+			}
+		}
+		// 主表数据列表（复用动态数据查询逻辑，过滤软删除）
+		list, total, err := ApplicationDataList(app.ID, &model.ApplicationDataListReq{
+			BaseListReq: model.BaseListReq{Page: page, Size: size},
+			TableName:   app.TableName,
+		})
+		if err != nil {
+			return nil, err
+		}
+		result.List = list
+		result.Total = total
+		result.Page, result.Size = page, size
+		if result.Page <= 0 {
+			result.Page = 1
+		}
+		if result.Size <= 0 || result.Size > 10000 {
+			result.Size = 10
+		}
+	case "form":
+		result.DetailLayoutJSON = nil
+	case "detail":
+		result.FormLayoutJSON = nil
+	default:
+		// 未传或未知 state：返回完整配置，保持旧行为
+	}
+	return result, nil
 }
 
 // ApplicationDataList 动态数据列表查询：

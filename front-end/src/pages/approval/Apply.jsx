@@ -197,9 +197,16 @@ export default function Apply() {
 
   // 点击申请项卡片：预请求关联的应用配置，完成后在 Drawer 中注入动态表单组件
   const handleItemClick = async (record) => {
-    const code = (record.code || '').trim()
-    if (!code) {
+    const raw = (record.code || '').trim()
+    if (!raw) {
       Message.warning('该申请项未关联页面编码，请先编辑配置')
+      return
+    }
+    // 兼容 "页面编码:页面状态"（如 app_1788413612:form）与旧格式（纯页面编码）：
+    // 无 ":" 或 state 为空时降级为 form；多余冒号只取前两段
+    const [code = '', state = 'form'] = raw.split(':')
+    if (!code.trim()) {
+      Message.warning('该申请项页面编码格式无效，请先编辑配置')
       return
     }
     setDrawerVisible(true)
@@ -207,7 +214,7 @@ export default function Apply() {
     setDrawerApp(null)
     drawerForm.resetFields()
     try {
-      const res = await applicationApi.getApplicationByCode(code)
+      const res = await applicationApi.getApplicationByCode(code.trim(), state.trim() || 'form')
       setDrawerApp(res.data)
     } catch (e) {
       Message.error('应用配置加载失败，请稍后重试')
@@ -217,20 +224,9 @@ export default function Apply() {
     }
   }
 
-  // 提交申请：校验动态表单内容，成功后调用通用数据新增接口写入主表
+  // 提交申请：校验动态表单内容
   const handleDrawerSubmit = async () => {
     if (!drawerApp) return
-    // 前置检查：表单是否配置了可提交字段（field_key/name，或表格元素的 table_key/id），避免静默提交空对象
-    const layout = drawerApp.form_layout_json
-    const elements = layout?.elements
-    const hasFields =
-      Array.isArray(elements) &&
-      elements.some((el) => el.field_key || el.name || (el.element_type === 'table' && (el.table_key || el.id)))
-    if (!hasFields) {
-      Message.warning('该应用暂未配置可提交的表单字段')
-      return
-    }
-
     let values
     try {
       values = await drawerForm.validate()
@@ -238,24 +234,7 @@ export default function Apply() {
       return
     }
     try {
-      // 依据布局配置拆分主表字段与子表（表格组件）数据：
-      // 布局中 element_type === 'table' 的元素以 table_key（或 id 兜底）作为 Form.List 字段名，
-      // 其值为行数组；其余字段归入主表数据
-      const tableKeys = new Set(
-        (elements || [])
-          .filter((el) => el.element_type === 'table' && (el.table_key || el.id))
-          .map((el) => el.table_key || el.id),
-      )
-      const mainData = {}
-      const subTables = {}
-      Object.entries(values || {}).forEach(([key, value]) => {
-        if (tableKeys.has(key)) {
-          subTables[key] = value
-        } else {
-          mainData[key] = value
-        }
-      })
-      await applicationApi.createApplicationData(drawerApp.id, mainData, subTables)
+      await applicationApi.createApplicationData(drawerApp.id,values)
       Message.success('申请提交成功')
       setDrawerVisible(false)
     } catch (e) {

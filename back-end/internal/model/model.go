@@ -284,6 +284,19 @@ type ApplicationDataDetailReq struct {
 	TableName string `json:"table_name" form:"table_name" validate:"omitempty" label:"表名"`
 }
 
+// ApplicationByCodeResult 按页面编码查询应用配置的响应：
+// 嵌入基础信息（id/name/table_name/sub_table_name/status 等），按 state 裁剪布局 JSON；
+// state=list 时额外附带 search_fields（搜索项）、columns（表格表头）与主表数据列表
+type ApplicationByCodeResult struct {
+	Application
+	SearchFields []FormElement            `json:"search_fields,omitempty"`
+	Columns      []FormElement            `json:"columns,omitempty"`
+	List         []map[string]interface{} `json:"list,omitempty"`
+	Total        int64                    `json:"total,omitempty"`
+	Page         int                      `json:"page,omitempty"`
+	Size         int                      `json:"size,omitempty"`
+}
+
 // TableColumn 物理业务表列定义（来源：information_schema.columns）
 // ID 为列名，作为前端编辑/删除的路径标识
 type TableColumn struct {

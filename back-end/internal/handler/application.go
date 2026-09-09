@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strconv"
+	"strings"
 
 	"back-end/internal/middleware"
 	"back-end/internal/model"
@@ -42,18 +43,26 @@ func ApplicationDetail(c *gin.Context) {
 }
 
 // ApplicationByCode GET /api/v1/application/by-code/:code 按页面编码查询详情
+// Query 参数 state 控制返回内容：list / form / detail；不传或未知时返回完整配置
 func ApplicationByCode(c *gin.Context) {
-	code := c.Param("code")
+	code := strings.TrimSpace(c.Param("code"))
 	if code == "" {
 		response.Fail(c, response.CodeParamError, "页面编码不能为空")
 		return
 	}
-	app, err := service.ApplicationByCode(code)
+	state := strings.TrimSpace(c.DefaultQuery("state", ""))
+	if state != "" && state != "list" && state != "form" && state != "detail" {
+		response.Fail(c, response.CodeParamError, "state 参数非法，仅支持 list/form/detail")
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
+	result, err := service.ApplicationByCode(code, state, page, size)
 	if err != nil {
 		response.Fail(c, response.CodeNotFound, err.Error())
 		return
 	}
-	response.OK(c, app)
+	response.OK(c, result)
 }
 
 // ApplicationDataList GET /api/v1/application/:id/data 动态数据列表查询
