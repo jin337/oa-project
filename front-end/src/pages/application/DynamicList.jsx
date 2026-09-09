@@ -19,6 +19,7 @@ import * as applicationApi from '../../api/application'
 import DynamicDetail from './DynamicDetail'
 import DynamicForm from './DynamicForm'
 import { getStaticOptions } from './DynamicForm'
+import { useApplicationDetailData } from './useApplicationDetailData'
 
 const FormItem = Form.Item
 const MenuItem = Menu.Item
@@ -31,12 +32,59 @@ const SIZE_OPTIONS = [
   { label: '迷你', value: 'mini' },
 ]
 
+// 时间/日期相关元素类型（含 datepicker/timepicker 别名）
+const TIME_ELEMENT_TYPES = ['date', 'datepicker', 'datetime', 'time', 'timepicker']
+
+// 数值补零
+const pad2 = (n) => String(n).padStart(2, '0')
+
+/**
+ * 将时间值格式化为标准可读格式（按元素类型决定粒度）：
+ * - date / datepicker → YYYY-MM-DD
+ * - time / timepicker → HH:mm:ss
+ * - datetime         → YYYY-MM-DD HH:mm:ss
+ * 兼容三种输入形态：ISO/带格式字符串、13 位毫秒时间戳、10 位秒时间戳；
+ * 已是标准日期开头（YYYY-MM-DD）的字符串直接截取，避免二次解析引发的时区偏移；
+ * 无法解析的值原样返回。
+ */
+function formatTimeValue(value, elementType) {
+  if (value == null || value === '') return '-'
+  const raw = String(value)
+  // 已是标准日期开头（YYYY-MM-DD）：按需截取，避免 new Date 按 UTC 解析导致日期偏移一天
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    if (elementType === 'date' || elementType === 'datepicker') return raw.slice(0, 10)
+    return raw.slice(0, 19).replace('T', ' ')
+  }
+  // 数字时间戳：13 位毫秒 / 10 位秒
+  let date
+  if (typeof value === 'number' || /^\d+$/.test(raw)) {
+    const num = Number(value)
+    date = new Date(num > 1e12 ? num : num * 1000)
+  } else {
+    date = new Date(value)
+  }
+  if (Number.isNaN(date.getTime())) return raw
+  const y = date.getFullYear()
+  const mo = pad2(date.getMonth() + 1)
+  const d = pad2(date.getDate())
+  if (elementType === 'date' || elementType === 'datepicker') return `${y}-${mo}-${d}`
+  const h = pad2(date.getHours())
+  const mi = pad2(date.getMinutes())
+  const s = pad2(date.getSeconds())
+  if (elementType === 'time' || elementType === 'timepicker') return `${h}:${mi}:${s}`
+  return `${y}-${mo}-${d} ${h}:${mi}:${s}`
+}
+
 /**
  * 根据元素类型获取单元格的展示文本：
- * 选择类控件（select/radio/checkbox）从 data_source 静态选项中查找 label，其余类型直接返回原始值
+ * 时间/日期类型（date/datetime/time 等）格式化为标准可读格式；
+ * 选择类控件（select/radio/checkbox）从 data_source 静态选项中查找 label；其余类型直接返回原始值
  */
 function getDisplayValue(col, value) {
   if (value == null || value === '') return '-'
+  if (TIME_ELEMENT_TYPES.includes(col.element_type)) {
+    return formatTimeValue(value, col.element_type)
+  }
   if (['select', 'radio', 'checkbox'].includes(col.element_type)) {
     const options = getStaticOptions(col)
     if (options.length) {
@@ -92,8 +140,16 @@ export default function DynamicList({ app, code }) {
   const [drawerRecord, setDrawerRecord] = useState(null)
   const [drawerForm] = Form.useForm()
 
+  // 详情数据加载 Hook：编辑模式回填复用（手动触发，回填由 hook 内部 effect 完成）
+  const { fetchDetail: fetchRecordDetail } = useApplicationDetailData(
+    null,
+    null,
+    drawerForm,
+    { autoFetch: false },
+  )
+
   // 打开编辑/查看 Drawer：按 state 预请求应用配置（form → 编辑表单，detail → 只读详情）
-  // 编辑模式额外回填当前行数据（主表字段 + 子表 Form.List 数组）
+  // 编辑模式额外加载完整数据（含子表 Form.List 数组）回填，与"查看"模式行为一致
   const openDrawer = async (record, state) => {
     setDrawerVisible(true)
     setDrawerState(state)
@@ -104,12 +160,9 @@ export default function DynamicList({ app, code }) {
     try {
       const res = await applicationApi.getApplicationByCode(code, state)
       setDrawerApp(res.data)
-      // 编辑模式：列表行 record 仅含主表字段，子表（Form.List）数据缺失；
-      // 与"查看"模式一致，先调用详情接口获取完整数据（含子表数组）再回填，
-      // 确保主表字段与子表数据均正确回显
       if (state === 'form') {
-        const detailRes = await applicationApi.getApplicationDataDetail(res.data.id, record.id)
-        drawerForm.setFieldsValue(detailRes.data || record || {})
+        // 列表行 record 仅含主表字段；调用详情接口获取完整数据（含子表），由 hook 回填到表单
+        await fetchRecordDetail(res.data.id, record.id)
       }
     } catch (e) {
       Message.error('应用配置加载失败，请稍后重试')
