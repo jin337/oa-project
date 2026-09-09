@@ -35,6 +35,24 @@ export function findMenuChain(menus, pathname) {
   return walk(menus, []) || prefixMatch
 }
 
+// 在菜单树中查找 path 与指定路径精确匹配的菜单项（递归，返回首个命中）。
+// 动态页面路由使用菜单配置的原始 path（如 /examine），需要据此反查菜单项以读取 link_app 等配置。
+export function findMenuByPath(menus, pathname) {
+  let found = null
+  const walk = (list) => {
+    for (const m of list || []) {
+      if (m?.path === pathname) {
+        found = m
+        return true
+      }
+      if (m?.children?.length && walk(m.children)) return true
+    }
+    return false
+  }
+  walk(menus)
+  return found
+}
+
 // 按路径段动态匹配子路由菜单项：
 // 将候选菜单 path 与 pathname 做段级有序匹配（允许 pathname 中穿插动态参数段，如 :id），
 // 且候选路径需深于父级路径（排除父级自身）；命中返回菜单项，未命中返回 null。
