@@ -3,9 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
 import { useAuth } from '../../store/auth-context'
+import NotFound from '../error/NotFound'
 import DynamicDetail from './DynamicDetail'
 import DynamicForm from './DynamicForm'
 import DynamicList from './DynamicList'
+
 
 // 合法页面状态与默认降级状态
 const VALID_STATES = ['list', 'form', 'detail']
@@ -114,7 +116,7 @@ export default function DynamicPage() {
 
   // 容错 1：菜单未配置 link_app（或菜单项缺失），无法确定要加载的应用
   if (!code) {
-    return <Empty description="该菜单未关联应用配置，无法加载动态页面" />
+    return <NotFound/>
   }
 
   // 容错 2：state 不合法（非 list / form / detail），友好提示并阻断渲染

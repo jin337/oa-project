@@ -1,19 +1,19 @@
 import {
-    Avatar,
-    Breadcrumb,
-    Dropdown,
-    Layout,
-    Menu,
-    Space,
-    Typography,
+  Avatar,
+  Breadcrumb,
+  Dropdown,
+  Layout,
+  Menu,
+  Space,
+  Typography,
 } from '@arco-design/web-react'
 import {
-    IconApps,
-    IconDesktop,
-    IconHome,
-    IconSettings,
-    IconStorage,
-    IconUser,
+  IconApps,
+  IconDesktop,
+  IconHome,
+  IconSettings,
+  IconStorage,
+  IconUser,
 } from '@arco-design/web-react/icon'
 import { useEffect, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -161,7 +161,7 @@ export default function MainLayout() {
         items.push({ title: SUB_ROUTE_NAMES[segment] || segment, path: null })
       }
     } else {
-      items.push({ title: location.pathname, path: null })
+      items.push({ title: "异常页", path: null })
     }
     return items
   }, [location.pathname, activeChain])

@@ -1,10 +1,9 @@
-import { Result, Button, Card } from '@arco-design/web-react'
+import { Button, Result } from '@arco-design/web-react'
 import { useNavigate } from 'react-router-dom'
 
 export default function NotFound() {
   const navigate = useNavigate()
   return (
-    <Card>
       <Result
         status="404"
         subTitle="页面不存在或已被移除"
@@ -14,6 +13,5 @@ export default function NotFound() {
           </Button>
         }
       />
-    </Card>
   )
 }
