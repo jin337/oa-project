@@ -57,7 +57,17 @@ func ApplicationByCode(c *gin.Context) {
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
-	result, err := service.ApplicationByCode(code, state, page, size)
+	// 动态搜索字段：query 中除 state/page/size 等系统保留参数之外的参数（field_key → 值）
+	filters := make(map[string]string)
+	for k, vs := range c.Request.URL.Query() {
+		if k == "state" || k == "page" || k == "size" {
+			continue
+		}
+		if len(vs) > 0 && vs[0] != "" {
+			filters[k] = vs[0]
+		}
+	}
+	result, err := service.ApplicationByCode(code, state, page, size, filters)
 	if err != nil {
 		response.Fail(c, response.CodeNotFound, err.Error())
 		return

@@ -72,7 +72,8 @@ func visibilityFlag(vis map[string]interface{}, key string) bool {
 //   - form  ：基础信息 + form_layout_json，detail_layout_json 置空
 //   - detail：基础信息 + detail_layout_json，form_layout_json 置空
 //   - 空/未知：返回完整配置（兼容旧调用方）
-func ApplicationByCode(code, state string, page, size int) (*model.ApplicationByCodeResult, error) {
+// filters 为动态搜索字段（field_key → 值），仅 state=list 时作用于数据列表过滤
+func ApplicationByCode(code, state string, page, size int, filters map[string]string) (*model.ApplicationByCodeResult, error) {
 	var app model.Application
 	if err := database.DB.Where("code = ?", code).First(&app).Error; err != nil {
 		return nil, errors.New("页面配置不存在")
@@ -97,10 +98,11 @@ func ApplicationByCode(code, state string, page, size int) (*model.ApplicationBy
 				result.Columns = append(result.Columns, el)
 			}
 		}
-		// 主表数据列表（复用动态数据查询逻辑，过滤软删除）
+		// 主表数据列表（复用动态数据查询逻辑，filters 作为动态过滤条件，过滤软删除）
 		list, total, err := ApplicationDataList(app.ID, &model.ApplicationDataListReq{
 			BaseListReq: model.BaseListReq{Page: page, Size: size},
 			TableName:   app.TableName,
+			Filters:     filters,
 		})
 		if err != nil {
 			return nil, err

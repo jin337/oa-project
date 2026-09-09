@@ -152,11 +152,15 @@ export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[eleme
  * 表格组件（table）字段：基于 Arco Form.List 的多行数据录入表格。
  * - Form.List field 绑定 el.table_key，行数据以 table_key[index].colKey 嵌套路径注册到 Form store
  * - 校验规则挂在 Form.List 上（整体至少一行 + 必填列非空），错误通过 useFormState 读取并显示在表格底部
- * - pageType === 'form'：可编辑模式，显示"新增"按钮与行内"删除"按钮，行内控件可交互
- * - 其他（detail / 画布只读）：只读展示，隐藏操作列与新增按钮，行内控件由 Form disabled 统一禁用
+ * - form / move-form：可编辑模式，显示"新增"按钮与行内"删除"按钮，行内控件可交互
+ * - detail：详情只读模式，行内单元格渲染为纯文本（ReadonlyValue，空值 '-'）
+ * - move-detail：画布只读预览，隐藏操作列与新增按钮，行内控件保持禁用态预览
  */
 const TableElementField = ({ el, pageType }) => {
-  const isEditable = pageType === 'form'
+  // 可编辑：实际填写（form）与画布表单页（move-form）
+  const isEditable = pageType === 'form' || pageType === 'move-form'
+  // 详情只读：仅真实详情页（detail）渲染纯文本；画布 move-detail 保持禁用控件预览
+  const isReadonlyText = pageType === 'detail'
   // Form.List 字段名：优先关联子表名（table_key），其次元素 id 兜底
   const listField = el.table_key || el.id || 'table'
   const { form } = Form.useFormContext()
@@ -212,11 +216,16 @@ const TableElementField = ({ el, pageType }) => {
       {(fields, { add, remove }) => {
         const columns = (el.columns || []).map((col, i) => {
           const colKey = col.dataIndex || col.field_key || `col_${i + 1}`
+          const isDetail = pageType === 'detail'
           return {
             title:
               (
                 <>
-                  {col.required ? <span className="mr-1 text-[rgb(var(--danger-6))]">&#x2A;</span> : ''}
+                  {col.required && !isDetail ? (
+                    <span className="mr-1 text-[rgb(var(--danger-6))]">&#x2A;</span>
+                  ) : (
+                    ''
+                  )}
                   {col.title}
                 </>
               ) || `列${i + 1}`,
@@ -229,10 +238,25 @@ const TableElementField = ({ el, pageType }) => {
               const renderFn = renderPreviewConfig[col.element_type]
               if (!renderFn) return <span>{cellValue ?? ''}</span>
               const field = fields[index]?.field
-              if (!field) return renderFn(col, isEditable ? 'form' : undefined)
+              if (!field) {
+                // 行未注册到 Form store（如画布空态）：可编辑渲染可交互控件，详情渲染纯文本
+                return isEditable ? (
+                  renderFn(col, 'form')
+                ) : isReadonlyText ? (
+                  <ReadonlyValue value={cellValue} elementType={col.element_type} />
+                ) : (
+                  renderFn(col, undefined)
+                )
+              }
               return (
                 <FormItem field={`${field}.${colKey}`} noStyle>
-                  {renderFn(col, isEditable ? 'form' : undefined)}
+                  {isEditable ? (
+                    renderFn(col, 'form')
+                  ) : isReadonlyText ? (
+                    <ReadonlyValue elementType={col.element_type} />
+                  ) : (
+                    renderFn(col, undefined)
+                  )}
                 </FormItem>
               )
             },
@@ -548,9 +572,67 @@ export const renderElementSettings = (el, ctx) => {
 
 // ==================== 画布/常规表单渲染辅助 ====================
 
-/** 基础组件（表格等）语义下的控件 pageType：detail/move-detail → 'detail'（只读），其余 → 'form' */
-const canvasPageTypeFor = (pageType) =>
-  pageType === 'detail' || pageType === 'move-detail' ? 'detail' : 'form'
+/** 时间/日期相关元素类型（含 datepicker/timepicker 别名） */
+export const TIME_ELEMENT_TYPES = ['date', 'datepicker', 'datetime', 'time', 'timepicker']
+
+// 数值补零
+const pad2 = (n) => String(n).padStart(2, '0')
+
+/**
+ * 将时间值格式化为标准可读格式（按元素类型决定粒度）：
+ * - date / datepicker → YYYY-MM-DD
+ * - time / timepicker → HH:mm:ss
+ * - datetime         → YYYY-MM-DD HH:mm:ss
+ * 兼容三种输入形态：ISO/带格式字符串、13 位毫秒时间戳、10 位秒时间戳；
+ * 已是标准日期开头（YYYY-MM-DD）的字符串直接截取，避免二次解析引发的时区偏移；
+ * 无法解析的值原样返回。
+ */
+export function formatTimeValue(value, elementType) {
+  if (value == null || value === '') return '-'
+  const raw = String(value)
+  // 已是标准日期开头（YYYY-MM-DD）：按需截取，避免 new Date 按 UTC 解析导致日期偏移一天
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    if (elementType === 'date' || elementType === 'datepicker') return raw.slice(0, 10)
+    return raw.slice(0, 19).replace('T', ' ')
+  }
+  // 数字时间戳：13 位毫秒 / 10 位秒
+  let date
+  if (typeof value === 'number' || /^\d+$/.test(raw)) {
+    const num = Number(value)
+    date = new Date(num > 1e12 ? num : num * 1000)
+  } else {
+    date = new Date(value)
+  }
+  if (Number.isNaN(date.getTime())) return raw
+  const y = date.getFullYear()
+  const mo = pad2(date.getMonth() + 1)
+  const d = pad2(date.getDate())
+  if (elementType === 'date' || elementType === 'datepicker') return `${y}-${mo}-${d}`
+  const h = pad2(date.getHours())
+  const mi = pad2(date.getMinutes())
+  const s = pad2(date.getSeconds())
+  if (elementType === 'time' || elementType === 'timepicker') return `${h}:${mi}:${s}`
+  return `${y}-${mo}-${d} ${h}:${mi}:${s}`
+}
+
+/**
+ * 详情只读模式（pageType='detail'）下的纯文本展示组件：
+ * 作为 FormItem 单子元素接收 Arco 注入的 value，直接输出数据值（数组值以 ", " 连接），空值显示 '-'。
+ * elementType 为时间/日期类型时，value 经 formatTimeValue 格式化为标准可读的日期/时间字符串。
+ */
+const ReadonlyValue = ({ value, elementType }) => {
+  let text
+  if (value == null || value === '') {
+    text = '-'
+  } else if (TIME_ELEMENT_TYPES.includes(elementType)) {
+    text = formatTimeValue(value, elementType)
+  } else if (Array.isArray(value)) {
+    text = value.join(', ')
+  } else {
+    text = String(value)
+  }
+  return <span className="break-all whitespace-pre-wrap">{text}</span>
+}
 
 /**
  * 渲染单个表单控件项（标签 / 栅格 / 校验规则 / 控件），画布与常规模式共用。
@@ -562,6 +644,7 @@ const renderFormItemElement = (el, ctx) => {
   const noLabel = isNoLabelElement(el.element_type)
   const isTableElement = el.element_type === 'table'
   const isFormMode = pageType === 'form'
+  const isDetailMode = pageType === 'detail'
 
   // 仅在水平模式下计算栅格/Flex 布局（无标签元素按宽度分配，常规元素按全局标签宽度）
   let labelCol
@@ -585,14 +668,21 @@ const renderFormItemElement = (el, ctx) => {
   // 校验规则：表格元素校验移交给内部 Form.List；常规元素用 required 规则（驱动星号与底层校验）
   const rules = isTableElement
     ? undefined
-    : isRequired
+    : isRequired && !isDetailMode
       ? [{ required: true, message: `${el.label || '此项'}不能为空` }]
       : undefined
 
-  // 控件渲染分发（统一由 renderPreview 承担）：基础组件走专属配置，常规控件走统一渲染配置中心
+  // 控件渲染分发：
+  // - 详情只读模式（pageType='detail'）：常规控件与字段型组件（如 upload）渲染为纯文本（空值显示 '-'），
+  //   divider 保持分割线、table 走表格只读逻辑
+  // - 其余模式：基础组件走专属配置（传原始 pageType，表格据此区分 form/move-form 可编辑、
+  //   detail 纯文本、move-detail 画布禁用预览）；常规控件走统一渲染配置中心
   const renderControl = () => {
+    if (pageType === 'detail' && el.element_type !== 'divider' && el.element_type !== 'table') {
+      return <ReadonlyValue elementType={el.element_type} />
+    }
     const baseCfg = getBaseElementConfig(el.element_type)
-    if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, canvasPageTypeFor(pageType))
+    if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, pageType)
     const render = renderPreviewConfig[el.element_type]
     if (render) return render(el, pageType)
     return <Input disabled={!isFormMode} placeholder={el.placeholder || undefined} />
@@ -738,7 +828,6 @@ export default function DynamicForm({
     }),
     [formConfig, pageType, isMoveMode],
   )
-
 
   // 表单节点：根据页面类型渲染不同内容
   // - 画布模式：memo 化 CanvasElement（拖拽/悬停/选中仅影响目标元素重渲染）
