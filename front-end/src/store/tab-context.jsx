@@ -160,6 +160,34 @@ export function TabProvider({ children }) {
     navigate(HOME_PATH, { replace: true })
   }, [navigate])
 
+  // 关闭指定页签左侧的所有可关闭页签（固定首页始终保留）；
+  // 若当前激活页签被关闭，跳转到目标页签
+  const closeLeft = useCallback(
+    (path) => {
+      const prev = tabsRef.current
+      const index = prev.findIndex((t) => t.path === path)
+      if (index === -1) return
+      const next = prev.filter((t, i) => t.path === HOME_PATH || !t.closable || i >= index)
+      setTabs(next)
+      if (!next.some((t) => t.path === location.pathname)) navigate(path, { replace: true })
+    },
+    [location.pathname, navigate],
+  )
+
+  // 关闭指定页签右侧的所有可关闭页签（固定首页始终保留）；
+  // 若当前激活页签被关闭，跳转到目标页签
+  const closeRight = useCallback(
+    (path) => {
+      const prev = tabsRef.current
+      const index = prev.findIndex((t) => t.path === path)
+      if (index === -1) return
+      const next = prev.filter((t, i) => t.path === HOME_PATH || !t.closable || i <= index)
+      setTabs(next)
+      if (!next.some((t) => t.path === location.pathname)) navigate(path, { replace: true })
+    },
+    [location.pathname, navigate],
+  )
+
   // 手动添加页签（用于动态路由等不在菜单树中的页面，已存在则跳过）；
   // 未显式传入 title/breadcrumbs 时，由 resolveTabMeta 按菜单树自动解析
   const addTab = useCallback((tab) => {
@@ -178,10 +206,34 @@ export function TabProvider({ children }) {
     setTabs((prev) => prev.map((t) => (t.path === path ? { ...t, ...updates } : t)))
   }, [])
 
+  // Context value 稳定引用：仅在各状态/回调实际变化时更新，避免无关重渲染波及所有消费者
+  const contextValue = useMemo(
+    () => ({
+      tabs,
+      activeTab: location.pathname,
+      addTab,
+      updateTab,
+      closeTab,
+      closeOthers,
+      closeAll,
+      closeLeft,
+      closeRight,
+    }),
+    [
+      tabs,
+      location.pathname,
+      addTab,
+      updateTab,
+      closeTab,
+      closeOthers,
+      closeAll,
+      closeLeft,
+      closeRight,
+    ],
+  )
+
   return (
-    <TabContext.Provider
-      value={{ tabs, activeTab: location.pathname, addTab, updateTab, closeTab, closeOthers, closeAll }}
-    >
+    <TabContext.Provider value={contextValue}>
       {children}
     </TabContext.Provider>
   )

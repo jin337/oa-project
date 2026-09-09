@@ -96,16 +96,18 @@ function ContentBreadcrumb() {
   )
 }
 
-export default function MainLayout() {
+/**
+ * 顶部导航栏：Logo + 水平菜单 + 用户信息下拉。
+ * 独立组件避免主布局因菜单高亮/用户资料等局部状态变化而整体重渲染。
+ */
+function HeaderBar() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, menus, logout, refreshProfile } = useAuth()
-
-  // 进入后台后拉取用户资料与菜单（已有则跳过）
-  useEffect(() => {
-    refreshProfile().catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const { user, menus, logout } = useAuth()
+  // 当前路径对应的菜单链（精确匹配或最长前缀匹配），用于顶部导航高亮
+  const { chain: activeChain } = useMenuMeta(location.pathname)
+  // 动态子路由时高亮其父级菜单项
+  const activeMenuKey = activeChain?.length ? activeChain[activeChain.length - 1].path : location.pathname
 
   const profileMenu = (
     <Menu
@@ -124,60 +126,66 @@ export default function MainLayout() {
     </Menu>
   )
 
-  // 当前路径对应的菜单链（精确匹配或最长前缀匹配），由公共模块 useMenuMeta 统一提供
-  const { chain: activeChain } = useMenuMeta(location.pathname)
+  return (
+    <Header className="flex items-center gap-8 border-b border-gray-200 bg-white px-6">
+      {/* 左侧：Logo + 系统标题，点击返回首页 */}
+      <div
+        className="flex shrink-0 cursor-pointer items-center gap-2"
+        onClick={() => navigate('/')}
+      >
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#165dff] text-lg text-white">
+          <IconStorage />
+        </div>
+        <Typography.Text className="text-lg! font-semibold!">{APP_NAME}</Typography.Text>
+      </div>
 
-  // 顶部导航高亮的菜单 key：动态子路由时高亮其父级菜单项
-  const activeMenuKey = activeChain?.length ? activeChain[activeChain.length - 1].path : location.pathname
+      {/* 中间：水平菜单，自适应宽度 */}
+      <Menu
+        mode="horizontal"
+        selectedKeys={[activeMenuKey]}
+        onClickMenuItem={(key) => {
+          if (typeof key === 'string' && key.startsWith('/')) {
+            navigate(key)
+          }
+        }}
+        className="min-w-0 flex-1"
+      >
+        <MenuItem key="/" icon={<IconHome />}>
+          工作台
+        </MenuItem>
+        {menus && menus.length > 0 ? renderMenus(menus) : null}
+      </Menu>
+
+      {/* 右侧：用户信息 + 退出登录 */}
+      <Dropdown droplist={profileMenu} position="br">
+        <Space className="shrink-0 cursor-pointer">
+          <Avatar size={32} className="bg-[#165dff]!">
+            <IconUser />
+          </Avatar>
+          <Typography.Text>
+            {user?.profile?.nickname || user?.username || '加载中'}
+          </Typography.Text>
+        </Space>
+      </Dropdown>
+    </Header>
+  )
+}
+
+export default function MainLayout() {
+  const { refreshProfile } = useAuth()
+
+  // 进入后台后拉取用户资料与菜单（已有则跳过）
+  useEffect(() => {
+    refreshProfile().catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <TabProvider>
       <Layout className="h-full">
-        <Header className="flex items-center gap-8 border-b border-gray-200 bg-white px-6">
-          {/* 左侧：Logo + 系统标题，点击返回首页 */}
-          <div
-            className="flex shrink-0 cursor-pointer items-center gap-2"
-            onClick={() => navigate('/')}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#165dff] text-lg text-white">
-              <IconStorage />
-            </div>
-            <Typography.Text className="text-lg! font-semibold!">{APP_NAME}</Typography.Text>
-          </div>
-
-          {/* 中间：水平菜单，自适应宽度 */}
-          <Menu
-            mode="horizontal"
-            selectedKeys={[activeMenuKey]}
-            onClickMenuItem={(key) => {
-              if (typeof key === 'string' && key.startsWith('/')) {
-                navigate(key)
-              }
-            }}
-            className="min-w-0 flex-1"
-          >
-            <MenuItem key="/" icon={<IconHome />}>
-              工作台
-            </MenuItem>
-            {menus && menus.length > 0 ? renderMenus(menus) : null}
-          </Menu>
-
-          {/* 右侧：用户信息 + 退出登录 */}
-          <Dropdown droplist={profileMenu} position="br">
-            <Space className="shrink-0 cursor-pointer">
-              <Avatar size={32} className="bg-[#165dff]!">
-                <IconUser />
-              </Avatar>
-              <Typography.Text>
-                {user?.profile?.nickname || user?.username || '加载中'}
-              </Typography.Text>
-            </Space>
-          </Dropdown>
-        </Header>
-
+        <HeaderBar />
         {/* 页签栏 */}
         <TabsBar />
-
         <Content className="flex-1 overflow-auto bg-gray-50 p-4">
           {/* 面包屑：由当前激活页签的 breadcrumbs 驱动 */}
           <ContentBreadcrumb />
