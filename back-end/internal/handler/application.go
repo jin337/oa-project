@@ -190,6 +190,31 @@ func ApplicationDataUpdate(c *gin.Context) {
 	response.OKMsg(c, "更新成功")
 }
 
+// ApplicationDataApproval PUT /api/v1/application/:id/data/:dataId/approval 动态业务数据审核状态变更（状态机驱动）
+// body: {"status": 1|2|3|4|5|6}（1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废；已删除由删除接口置位）
+// 流转合法性由 Service 状态机校验：如已驳回可重新提交回到待审核，终态（已通过/不通过/已作废/已删除）不可再流转
+func ApplicationDataApproval(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	dataID, err := strconv.ParseUint(c.Param("dataId"), 10, 64)
+	if err != nil || dataID == 0 {
+		response.Fail(c, response.CodeParamError, "数据 ID 参数非法")
+		return
+	}
+	var req model.ApplicationApprovalReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	if err := service.ApplicationDataApproval(id, uint(dataID), middleware.CurrentUserID(c), req.Status); err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OKMsg(c, "操作成功")
+}
+
 // ApplicationCreate POST /api/v1/application
 func ApplicationCreate(c *gin.Context) {
 	var req model.ApplicationCreateReq

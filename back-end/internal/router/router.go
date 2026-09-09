@@ -119,6 +119,7 @@ func Setup() *gin.Engine {
 		applications.POST("/:id/data", handler.ApplicationDataCreate)
 		applications.GET("/:id/data/:dataId", handler.ApplicationDataDetail)
 		applications.PUT("/:id/data/:dataId", handler.ApplicationDataUpdate)
+		applications.PUT("/:id/data/:dataId/approval", handler.ApplicationDataApproval)
 		applications.DELETE("/:id/data/:dataId", handler.ApplicationDataDelete)
 	}
 

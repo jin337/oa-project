@@ -271,12 +271,31 @@ type ApplicationListReq struct {
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
 }
 
+// 动态业务数据审核状态（approval_status 列取值）
+const (
+	ApprovalStatusPending   = 1 // 待审核（数据创建时默认，重新提交后回到此状态）
+	ApprovalStatusReviewing = 2 // 审核中（审核人开始审核）
+	ApprovalStatusPassed    = 3 // 已通过（审核通过，终态）
+	ApprovalStatusRejected  = 4 // 不通过（审核拒绝，终态）
+	ApprovalStatusReturned  = 5 // 已驳回（退回修改，可重新提交回到待审核）
+	ApprovalStatusVoided    = 6 // 已作废（终态）
+	ApprovalStatusDeleted   = 7 // 已删除（由删除接口自动置位，终态）
+)
+
 // ApplicationDataListReq 动态数据列表查询：分页 + 目标表名 + 动态搜索字段
 // 动态搜索字段以 field_key 作为 Query 参数名，由 handler 从 URL 提取后填充到 Filters
 type ApplicationDataListReq struct {
 	BaseListReq
 	TableName string            `json:"table_name" form:"table_name" validate:"required" label:"表名"`
+	Status    int               `json:"status" form:"status" validate:"omitempty,oneof=1 2 3 4 5 6 7" label:"审核状态"`
 	Filters   map[string]string `json:"-" form:"-"` // 动态搜索字段（field_key → 值）
+}
+
+// ApplicationApprovalReq 动态业务数据审核请求：设置审核状态
+// 1待审核(重新提交) 2审核中 3已通过 4不通过 5已驳回 6已作废；已删除(7)由删除接口自动置位，不允许设置
+// 状态流转合法性由 Service 层按状态机校验（如：已驳回可重新提交回到待审核，终态不可再流转）
+type ApplicationApprovalReq struct {
+	Status int `json:"status" validate:"required,oneof=1 2 3 4 5 6" label:"审核状态"`
 }
 
 // ApplicationDataDetailReq 动态数据详情查询：主键为路径参数 dataId，目标表以应用配置为准

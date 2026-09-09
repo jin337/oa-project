@@ -145,6 +145,11 @@ func ApplicationDataList(appID uint, req *model.ApplicationDataListReq) ([]map[s
 	if colSet["deleted_at"] {
 		conds = append(conds, "`deleted_at` IS NULL")
 	}
+	// 按审核状态过滤（业务表无该列时忽略，兼容旧表）
+	if req.Status > 0 && colSet["approval_status"] {
+		conds = append(conds, "`approval_status` = ?")
+		args = append(args, req.Status)
+	}
 	for k, v := range req.Filters {
 		if !colSet[k] {
 			return nil, 0, fmt.Errorf("搜索字段不存在: %s", k)
@@ -233,6 +238,7 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 var appSystemCols = map[string]bool{
 	"id": true, "created_at": true, "updated_at": true,
 	"deleted_at": true, "created_by": true, "updated_by": true,
+	"approval_status": true, // 审核状态由审核接口/默认值管理
 }
 
 // ApplicationDataCreate 动态业务数据新增（支持主表 + 子表）：
@@ -405,8 +411,16 @@ func ApplicationDataDelete(appID, dataID uint) error {
 		return fmt.Errorf("查询表结构失败: %w", err)
 	}
 	if mainColSet["deleted_at"] {
-		if err := database.DB.Exec("UPDATE `"+real+"` SET `deleted_at` = ? WHERE `id` = ?", time.Now(), dataID).Error; err != nil {
-			return fmt.Errorf("删除数据失败: %w", err)
+		// 软删除：置 deleted_at，并同步审核状态为已删除（表无该列时仅置 deleted_at，兼容旧表）
+		if mainColSet["approval_status"] {
+			if err := database.DB.Exec("UPDATE `"+real+"` SET `deleted_at` = ?, `approval_status` = ? WHERE `id` = ?",
+				time.Now(), model.ApprovalStatusDeleted, dataID).Error; err != nil {
+				return fmt.Errorf("删除数据失败: %w", err)
+			}
+		} else {
+			if err := database.DB.Exec("UPDATE `"+real+"` SET `deleted_at` = ? WHERE `id` = ?", time.Now(), dataID).Error; err != nil {
+				return fmt.Errorf("删除数据失败: %w", err)
+			}
 		}
 	} else {
 		if err := database.DB.Exec("DELETE FROM `"+real+"` WHERE `id` = ?", dataID).Error; err != nil {
@@ -585,6 +599,108 @@ func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]i
 	return nil
 }
 
+// approvalTransitions 审核状态机流转表：目标状态 → 允许的当前状态集合
+// 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除
+//   - 待审核：仅已驳回可重新提交回到待审核
+//   - 审核中：待审核/已驳回可开始（或重新）审核
+//   - 已通过/不通过：待审核或审核中可直接给出结果（终态）
+//   - 已驳回：待审核或审核中可退回修改（非终态，可重新提交）
+//   - 已作废：待审核/审核中/已驳回可作废（终态）
+//   - 已删除：不在此表，仅由删除接口置位
+var approvalTransitions = map[int]map[int]bool{
+	model.ApprovalStatusPending: {
+		model.ApprovalStatusReturned: true, // 5 已驳回 → 1 重新提交
+	},
+	model.ApprovalStatusReviewing: {
+		model.ApprovalStatusPending:  true, // 1 待审核 → 2 开始审核
+		model.ApprovalStatusReturned: true, // 5 已驳回 → 2 重新审核
+	},
+	model.ApprovalStatusPassed: {
+		model.ApprovalStatusPending:   true, // 1 → 3 直接通过
+		model.ApprovalStatusReviewing: true, // 2 → 3 审核通过
+	},
+	model.ApprovalStatusRejected: {
+		model.ApprovalStatusPending:   true, // 1 → 4 直接不通过
+		model.ApprovalStatusReviewing: true, // 2 → 4 审核拒绝
+	},
+	model.ApprovalStatusReturned: {
+		model.ApprovalStatusPending:   true, // 1 → 5 直接驳回
+		model.ApprovalStatusReviewing: true, // 2 → 5 审核退回
+	},
+	model.ApprovalStatusVoided: {
+		model.ApprovalStatusPending:   true, // 1 → 6 作废
+		model.ApprovalStatusReviewing: true, // 2 → 6 作废
+		model.ApprovalStatusReturned:  true, // 5 → 6 作废
+	},
+}
+
+// ApplicationDataApproval 动态业务数据审核状态变更（状态机驱动）：
+//  1. 根据应用配置获取主表真实物理表名，确认业务表含 approval_status 列
+//  2. 校验目标记录存在（过滤软删除），读取当前审核状态
+//  3. 按 approvalTransitions 状态机校验流转合法性（终态不可再流转、驳回可重新提交等）
+//  4. 更新审核状态（1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废），并刷新审计字段
+// 已删除(7)由删除接口自动置位，不允许通过本接口设置
+func ApplicationDataApproval(appID, dataID uint, curUserID uint, status int) error {
+	app, err := ApplicationDetail(appID)
+	if err != nil {
+		return err
+	}
+	if !isValidTableName(app.TableName) {
+		return errors.New("非法的表名")
+	}
+	real := bizTableName(app.TableName)
+
+	mainColSet, err := queryColumnSet(real)
+	if err != nil {
+		return fmt.Errorf("查询表结构失败: %w", err)
+	}
+	if !mainColSet["approval_status"] {
+		return errors.New("业务表缺少审核状态字段")
+	}
+	if _, ok := approvalTransitions[status]; !ok {
+		return errors.New("非法的审核状态")
+	}
+
+	var curStatus int
+	if err := database.DB.Raw("SELECT `approval_status` FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", dataID).Scan(&curStatus).Error; err != nil {
+		return err
+	}
+	if curStatus == 0 {
+		return errors.New("数据不存在")
+	}
+	if !approvalTransitions[status][curStatus] {
+		return fmt.Errorf("当前状态(%s)不允许变更为(%s)", approvalStatusName(curStatus), approvalStatusName(status))
+	}
+
+	if err := database.DB.Exec("UPDATE `"+real+"` SET `approval_status` = ?, `updated_at` = ?, `updated_by` = ? WHERE `id` = ?",
+		status, time.Now(), curUserID, dataID).Error; err != nil {
+		return fmt.Errorf("更新审核状态失败: %w", err)
+	}
+	return nil
+}
+
+// approvalStatusName 审核状态的中文名（用于状态机报错提示）
+func approvalStatusName(status int) string {
+	switch status {
+	case model.ApprovalStatusPending:
+		return "待审核"
+	case model.ApprovalStatusReviewing:
+		return "审核中"
+	case model.ApprovalStatusPassed:
+		return "已通过"
+	case model.ApprovalStatusRejected:
+		return "不通过"
+	case model.ApprovalStatusReturned:
+		return "已驳回"
+	case model.ApprovalStatusVoided:
+		return "已作废"
+	case model.ApprovalStatusDeleted:
+		return "已删除"
+	default:
+		return fmt.Sprintf("未知(%d)", status)
+	}
+}
+
 // code 唯一性校验：GORM 软删除只加 deleted_at 条件，而数据库唯一索引覆盖全部行（含软删除），
 // 因此查重必须 Unscoped 带上已删除记录，否则检查通过但入库仍撞唯一键报 Error 1062
 func checkApplicationCodeExists(code string, excludeID uint) bool {
@@ -624,6 +740,7 @@ func createBizTable(tableName string, withParent bool) error {
 	b.WriteString("`created_by` bigint unsigned DEFAULT NULL COMMENT '创建人',")
 	b.WriteString("`updated_by` bigint unsigned DEFAULT NULL COMMENT '更新人',")
 	b.WriteString("`deleted_at` datetime(3) DEFAULT NULL COMMENT '删除时间',")
+	b.WriteString("`approval_status` tinyint NOT NULL DEFAULT 1 COMMENT '审核状态 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除',")
 	if withParent {
 		// 子表：额外添加关联主表的外键字段
 		b.WriteString("`parent_id` bigint unsigned DEFAULT NULL COMMENT '关联主表ID',")

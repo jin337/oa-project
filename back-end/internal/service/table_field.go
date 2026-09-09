@@ -43,6 +43,14 @@ func columnTypeSQL(typ string, length int) string {
 	}
 }
 
+// appFieldSystemCols 物理业务表系统列：禁止通过字段管理接口增删改
+// （id/审计字段/软删除/审核状态/子表关联列）
+var appFieldSystemCols = map[string]bool{
+	"id": true, "created_at": true, "updated_at": true,
+	"deleted_at": true, "created_by": true, "updated_by": true,
+	"approval_status": true, "parent_id": true,
+}
+
 // isValidFieldName 字段名校验（复用表名规则：字母/数字/下划线，首字符字母或下划线，限长 64）
 func isValidFieldName(name string) bool {
 	return isValidTableName(name)
@@ -189,6 +197,9 @@ func TableFieldCreate(appID uint, tableName string, req *model.TableFieldCreateR
 	if !isValidFieldName(req.Name) {
 		return nil, errors.New("非法的字段名称")
 	}
+	if appFieldSystemCols[req.Name] {
+		return nil, errors.New("系统字段不允许创建: " + req.Name)
+	}
 	if !validFieldTypes[strings.ToLower(req.Type)] {
 		return nil, errors.New("不支持的字段类型: " + req.Type)
 	}
@@ -217,6 +228,9 @@ func TableFieldUpdate(appID uint, tableName, oldName string, req *model.TableFie
 	old, err := getTableColumn(real, oldName)
 	if err != nil {
 		return nil, err
+	}
+	if appFieldSystemCols[oldName] {
+		return nil, errors.New("系统字段不允许修改: " + oldName)
 	}
 	// 合并请求字段与现有列定义
 	col := *old
@@ -271,6 +285,9 @@ func TableFieldDelete(appID uint, tableName, fieldName string) error {
 	}
 	if !columnExists(real, fieldName) {
 		return errors.New("字段不存在")
+	}
+	if appFieldSystemCols[fieldName] {
+		return errors.New("系统字段不允许删除: " + fieldName)
 	}
 	if err := database.DB.Exec("ALTER TABLE `" + real + "` DROP COLUMN `" + fieldName + "`").Error; err != nil {
 		return fmt.Errorf("删除数据库字段失败: %w", err)
