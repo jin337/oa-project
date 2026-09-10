@@ -37,13 +37,6 @@ const NODE_TYPE_META = {
   },
 }
 
-// 审批人策略（卡片摘要展示用）
-const STRATEGY_MAP = {
-  self_multi: '发起人自选（多选）',
-  self_single: '发起人自选（单选）',
-  assign: '指定成员',
-}
-
 const genId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
 const createBranch = (label, isDefault = false) => ({
@@ -51,6 +44,7 @@ const createBranch = (label, isDefault = false) => ({
   label,
   isDefault,
   rules: [],
+  children: [], // 分支下的流程节点链
 })
 
 // 按类型创建节点（发起人/抄送人带成员；审批人带策略；条件分支默认生成「默认 + 条件1」两个分支）
@@ -65,24 +59,8 @@ const createNode = (type) => {
 
 // ==================== 流程画布子组件 ====================
 
-// 节点摘要（纯信息展示）：成员/ 审批策略 / 条件分支卡
+// 节点摘要（纯信息展示）：成员 / 审批策略（条件分支由 ConditionBlock 独立渲染）
 function renderNodeSummary(node) {
-  if (node.type === 'condition') {
-    return (
-      <div className="flex flex-wrap gap-2">
-        {node.branches?.map((b) => (
-          <div key={b.id} className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs">
-            <div className="font-medium text-gray-700">
-              条件: {b.isDefault ? '默认' : b.label || '未命名'}
-            </div>
-            <div className="text-gray-400">
-              {b.isDefault ? '不满足其他条件，进入此分支' : `已设置(${b.rules?.length || 0})个条件`}
-            </div>
-          </div>
-        ))}
-      </div>
-    )
-  }
   if (node.type === 'approver') {
     return (
       <div className="flex flex-wrap items-center gap-1">
@@ -155,6 +133,89 @@ function NodeConnector({ menu }) {
   )
 }
 
+/** 分支卡：以 FlowNodeCard 同款卡片样式渲染单个条件分支（条件: X + 摘要 + 非默认可删除） */
+function BranchCard({ branch, onRemove }) {
+  return (
+    <div className="w-52 rounded border border-(--color-neutral-3) bg-white shadow">
+      <div className="flex items-center justify-between border-b border-(--color-neutral-3) bg-purple-500 px-2 py-1 text-sm text-white">
+        <div className="flex items-center gap-2 font-medium">
+          条件: {branch.isDefault ? '默认' : branch.label || '未命名'}
+        </div>
+        {onRemove && (
+          <IconClose
+            className="cursor-pointer text-white!"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove()
+            }}
+          />
+        )}
+      </div>
+      <div className="px-3 py-2 text-xs text-gray-400">
+        {branch.isDefault
+          ? '不满足其他条件，进入此分支'
+          : `已设置 (${branch.rules?.length || 0}) 个条件`}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 条件分支节点：纯布局容器（无卡片外观），负责承载各条件分支列。
+ * 每个分支以 BranchCard（FlowNodeCard 同款样式）渲染，卡下接连接线 + 加号，再挂节点链（支持嵌套条件递归）。
+ * 条件分支不能被直接删除：仅当删除某非默认分支后只剩「默认」分支时，级联删除整个条件节点。
+ */
+function ConditionBlock({ node, onAddBranch, onRemoveBranch, onRemoveNode, buildBranchAddMenu }) {
+  return (
+    <div className="flex flex-col items-center">
+      {/* 添加条件：灰色圆角胶囊 */}
+      <div
+        className="z-10 -mb-4 cursor-pointer rounded-full bg-neutral-200 px-4 leading-7 hover:bg-neutral-300"
+        onClick={() => onAddBranch(node.id)}
+      >
+        添加条件
+      </div>
+      {/* 分支列区：每分支一列 = 分支卡 + 连接线/加号 + 节点链 + 末尾加号 */}
+      <div className="relative flex bg-white">
+        {node.branches?.map((b, i) => (
+          <div key={b.id} className="relative flex flex-col items-center px-2">
+            <div
+              className={`absolute top-0 ${i === 0 ? 'right-0 left-1/2 w-1/2' : i === node.branches.length - 1 ? 'right-1/2 left-0 w-1/2' : 'w-full'} h-0 border-t border-gray-300`}
+            />
+            <div className="h-8 w-px border-l border-gray-300" />
+            <BranchCard
+              branch={b}
+              onRemove={b.isDefault ? undefined : () => onRemoveBranch(node.id, b.id)}
+            />
+            <NodeConnector menu={buildBranchAddMenu(node.id, b.id, b.children?.length || 0)} />
+            <div
+              className={`absolute bottom-0 ${i === 0 ? 'right-0 left-1/2 w-1/2' : i === node.branches.length - 1 ? 'right-1/2 left-0 w-1/2' : 'w-full'} h-0 border-t border-gray-300`}
+            />
+            {b.children?.map((child, ci) => (
+              <Fragment key={child.id}>
+                {ci > 0 && <NodeConnector menu={buildBranchAddMenu(node.id, b.id, ci + 1)} />}
+                {child.type === 'condition' ? (
+                  <ConditionBlock
+                    node={child}
+                    onAddBranch={onAddBranch}
+                    onRemoveBranch={onRemoveBranch}
+                    onRemoveNode={onRemoveNode}
+                    buildBranchAddMenu={buildBranchAddMenu}
+                  />
+                ) : (
+                  <FlowNodeCard node={child} onRemove={(cid) => onRemoveNode(node.id, b.id, cid)} />
+                )}
+              </Fragment>
+            ))}
+            {/* 分支内末尾：添加节点（指向分支结束） */}
+            <NodeConnector menu={buildBranchAddMenu(node.id, b.id, b.children?.length || 0)} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function ExamineManage() {
   const location = useLocation()
   const { id } = useParams() // 预留：后端接口就绪后用于请求当前应用的审批流配置
@@ -173,9 +234,79 @@ export default function ExamineManage() {
     setNodes((prev) => [...prev.slice(0, index), createNode(type), ...prev.slice(index)])
   }, [])
 
-  const handleRemoveNode = useCallback((nodeId) => {
-    setNodes((prev) => prev.filter((n) => n.id !== nodeId))
+  const handleRemoveNode = useCallback((nodeId, branchId, childId) => {
+    if (branchId && childId) {
+      // 删除条件分支下的节点
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === nodeId
+            ? {
+                ...n,
+                branches: n.branches.map((b) =>
+                  b.id === branchId
+                    ? { ...b, children: b.children.filter((c) => c.id !== childId) }
+                    : b,
+                ),
+              }
+            : n,
+        ),
+      )
+    } else {
+      // 删除主链节点
+      setNodes((prev) => prev.filter((n) => n.id !== nodeId))
+    }
     Message.success('节点已删除')
+  }, [])
+
+  // 条件节点：添加条件（分支）
+  const addBranch = useCallback((nodeId) => {
+    setNodes((prev) =>
+      prev.map((n) =>
+        n.id === nodeId
+          ? { ...n, branches: [...n.branches, createBranch(`条件${n.branches.length}`)] }
+          : n,
+      ),
+    )
+  }, [])
+
+  // 条件节点：删除条件（分支）。
+  // 级联删除：条件分支不能被直接一键删除，当删除后仅剩「默认」分支时，整个条件节点一并移除
+  const removeBranch = useCallback((nodeId, branchId) => {
+    setNodes((prev) =>
+      prev
+        .map((n) => {
+          if (n.id !== nodeId) return n
+          const branches = n.branches.filter((b) => b.id !== branchId)
+          if (branches.length === 1 && branches[0].isDefault) return null // 级联删除整个条件节点
+          return { ...n, branches }
+        })
+        .filter(Boolean),
+    )
+  }, [])
+
+  // 条件分支内：在指定位置插入节点
+  const insertBranchNode = useCallback((nodeId, branchId, index, type) => {
+    setNodes((prev) =>
+      prev.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              branches: n.branches.map((b) =>
+                b.id === branchId
+                  ? {
+                      ...b,
+                      children: [
+                        ...b.children.slice(0, index),
+                        createNode(type),
+                        ...b.children.slice(index),
+                      ],
+                    }
+                  : b,
+              ),
+            }
+          : n,
+      ),
+    )
   }, [])
 
   // 节点间「+」添加菜单（hover / 点击弹出，选择类型后在对应位置插入；发起人节点唯一，不提供添加入口）
@@ -196,6 +327,24 @@ export default function ExamineManage() {
     </Space>
   )
 
+  // 条件分支内「+」添加菜单（发起人唯一不可加；支持嵌套条件分支）
+  const buildBranchAddMenu = (nodeId, branchId, index) => (
+    <Space>
+      {Object.entries(NODE_TYPE_META)
+        .filter(([type]) => type !== 'initiator')
+        .map(([type, meta]) => (
+          <Button
+            size="small"
+            key={type}
+            onClick={() => insertBranchNode(nodeId, branchId, index, type)}
+            icon={<meta.icon />}
+          >
+            {meta.label}
+          </Button>
+        ))}
+    </Space>
+  )
+
   return (
     <Card title="审批流程配置">
       {/* 流程画布：底部固定「流程结束」标识 */}
@@ -205,7 +354,17 @@ export default function ExamineManage() {
             {nodes.map((node, i) => (
               <Fragment key={node.id}>
                 {i > 0 && <NodeConnector menu={buildAddMenu(i)} />}
-                <FlowNodeCard node={node} onRemove={handleRemoveNode} />
+                {node.type === 'condition' ? (
+                  <ConditionBlock
+                    node={node}
+                    onAddBranch={addBranch}
+                    onRemoveBranch={removeBranch}
+                    onRemoveNode={handleRemoveNode}
+                    buildBranchAddMenu={buildBranchAddMenu}
+                  />
+                ) : (
+                  <FlowNodeCard node={node} onRemove={handleRemoveNode} />
+                )}
               </Fragment>
             ))}
             {/* 末尾：连接线 + 添加按钮（指向流程结束） */}
