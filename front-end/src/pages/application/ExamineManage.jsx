@@ -7,7 +7,7 @@ import {
   IconStamp,
   IconUser,
 } from '@arco-design/web-react/icon'
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { useTabs } from '../../store/tab-context'
 
@@ -88,7 +88,7 @@ function FlowNodeCard({ node, onRemove }) {
   const meta = NODE_TYPE_META[node.type]
   const Icon = meta.icon
   return (
-    <div className="w-52 rounded border border-(--color-neutral-3) bg-white shadow">
+    <div className="relative w-52 rounded border border-(--color-neutral-3) bg-white shadow">
       <div
         className={`flex items-center justify-between border-b border-(--color-neutral-3) px-2 py-1 text-sm text-white ${meta.bg}`}
       >
@@ -136,7 +136,7 @@ function NodeConnector({ menu }) {
 /** 分支卡：以 FlowNodeCard 同款卡片样式渲染单个条件分支（条件: X + 摘要 + 非默认可删除） */
 function BranchCard({ branch, onRemove }) {
   return (
-    <div className="w-52 rounded border border-(--color-neutral-3) bg-white shadow">
+    <div className="relative mt-8 w-52 rounded border border-(--color-neutral-3) bg-white shadow">
       <div className="flex items-center justify-between border-b border-(--color-neutral-3) bg-purple-500 px-2 py-1 text-sm text-white">
         <div className="flex items-center gap-2 font-medium">
           条件: {branch.isDefault ? '默认' : branch.label || '未命名'}
@@ -182,36 +182,61 @@ function ConditionBlock({ node, onAddBranch, onRemoveBranch, onRemoveNode, build
             <div
               className={`absolute top-0 ${i === 0 ? 'right-0 left-1/2 w-1/2' : i === node.branches.length - 1 ? 'right-1/2 left-0 w-1/2' : 'w-full'} h-0 border-t border-gray-300`}
             />
-            <div className="h-8 w-px border-l border-gray-300" />
+            <div className="absolute z-0 h-full w-0 border-l border-gray-300" />
             <BranchCard
               branch={b}
               onRemove={b.isDefault ? undefined : () => onRemoveBranch(node.id, b.id)}
             />
-            <NodeConnector menu={buildBranchAddMenu(node.id, b.id, b.children?.length || 0)} />
+            <NodeConnector menu={buildBranchAddMenu(node.id, b.id, 0)} />
             <div
               className={`absolute bottom-0 ${i === 0 ? 'right-0 left-1/2 w-1/2' : i === node.branches.length - 1 ? 'right-1/2 left-0 w-1/2' : 'w-full'} h-0 border-t border-gray-300`}
             />
             {b.children?.map((child, ci) => (
-              <Fragment key={child.id}>
-                {ci > 0 && <NodeConnector menu={buildBranchAddMenu(node.id, b.id, ci + 1)} />}
-                {child.type === 'condition' ? (
-                  <ConditionBlock
-                    node={child}
-                    onAddBranch={onAddBranch}
-                    onRemoveBranch={onRemoveBranch}
-                    onRemoveNode={onRemoveNode}
-                    buildBranchAddMenu={buildBranchAddMenu}
-                  />
-                ) : (
-                  <FlowNodeCard node={child} onRemove={(cid) => onRemoveNode(node.id, b.id, cid)} />
-                )}
-              </Fragment>
+              <FlowNode
+                key={child.id}
+                node={child}
+                addMenu={buildBranchAddMenu(node.id, b.id, ci + 1)}
+                onRemove={(cid) => onRemoveNode(node.id, b.id, cid)}
+                onAddBranch={onAddBranch}
+                onRemoveBranch={onRemoveBranch}
+                onRemoveNode={onRemoveNode}
+                buildBranchAddMenu={buildBranchAddMenu}
+              />
             ))}
-            {/* 分支内末尾：添加节点（指向分支结束） */}
-            <NodeConnector menu={buildBranchAddMenu(node.id, b.id, b.children?.length || 0)} />
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * 流程节点单元：内容卡片（FlowNodeCard / ConditionBlock）与下方连接器（NodeConnector）内聚。
+ * 每个节点下方自带连接线 + 加号，主链与条件分支列统一复用，无需外部 Fragment 拼接。
+ */
+function FlowNode({
+  node,
+  addMenu,
+  onRemove,
+  onAddBranch,
+  onRemoveBranch,
+  onRemoveNode,
+  buildBranchAddMenu,
+}) {
+  return (
+    <div className="flex flex-col items-center">
+      {node.type === 'condition' ? (
+        <ConditionBlock
+          node={node}
+          onAddBranch={onAddBranch}
+          onRemoveBranch={onRemoveBranch}
+          onRemoveNode={onRemoveNode}
+          buildBranchAddMenu={buildBranchAddMenu}
+        />
+      ) : (
+        <FlowNodeCard node={node} onRemove={onRemove} />
+      )}
+      <NodeConnector menu={addMenu} />
     </div>
   )
 }
@@ -352,23 +377,17 @@ export default function ExamineManage() {
         <div className="flex-1">
           <div className="flex flex-col items-center">
             {nodes.map((node, i) => (
-              <Fragment key={node.id}>
-                {i > 0 && <NodeConnector menu={buildAddMenu(i)} />}
-                {node.type === 'condition' ? (
-                  <ConditionBlock
-                    node={node}
-                    onAddBranch={addBranch}
-                    onRemoveBranch={removeBranch}
-                    onRemoveNode={handleRemoveNode}
-                    buildBranchAddMenu={buildBranchAddMenu}
-                  />
-                ) : (
-                  <FlowNodeCard node={node} onRemove={handleRemoveNode} />
-                )}
-              </Fragment>
+              <FlowNode
+                key={node.id}
+                node={node}
+                addMenu={buildAddMenu(i + 1)}
+                onRemove={handleRemoveNode}
+                onAddBranch={addBranch}
+                onRemoveBranch={removeBranch}
+                onRemoveNode={handleRemoveNode}
+                buildBranchAddMenu={buildBranchAddMenu}
+              />
             ))}
-            {/* 末尾：连接线 + 添加按钮（指向流程结束） */}
-            <NodeConnector menu={buildAddMenu(nodes.length)} />
           </div>
         </div>
         <div className="text-gray-400">流程结束</div>
