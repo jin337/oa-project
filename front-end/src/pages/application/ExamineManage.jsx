@@ -1,4 +1,19 @@
-import { Button, Card, Message, Popconfirm, Popover, Space, Tag } from '@arco-design/web-react'
+import {
+  Button,
+  Card,
+  Checkbox,
+  Drawer,
+  Input,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Radio,
+  Select,
+  Space,
+  Tag,
+  Tree,
+} from '@arco-design/web-react'
 import {
   IconBranch,
   IconClose,
@@ -9,6 +24,7 @@ import {
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
+import * as applicationApi from '../../api/application'
 import { useTabs } from '../../store/tab-context'
 
 const MODULE_LABEL = '审批配置'
@@ -50,12 +66,96 @@ const createBranch = (label, isDefault = false) => ({
 // 按类型创建节点（发起人/抄送人带成员；审批人带策略；条件分支默认生成「默认 + 条件1」两个分支）
 const createNode = (type) => {
   const base = { id: genId('n'), type, label: NODE_TYPE_META[type].label }
-  if (type === 'initiator' || type === 'cc') return { ...base, members: [] }
-  if (type === 'approver') return { ...base, strategy: 'self_multi', members: [] }
+  if (type === 'initiator') return { ...base, members: [] }
+  if (type === 'cc') return { ...base, members: [], ccTiming: 'after_pass' }
+  if (type === 'approver')
+    return {
+      ...base,
+      approverType: 'user', // user 指定人员 / role 指定角色 / self 发起人自选
+      members: [],
+      selfSelect: 'single', // single 单选 / multi 多选
+      strategy: 'self_multi', // self_multi 依次审批 / self_single 会签 / or_sign 或签
+      emptyHandler: 'auto_pass', // auto_pass / auto_reject / to_admin / assign
+      emptyMembers: [],
+      permissions: ['reject'], // reject 拒绝 / transfer 转交 / add_sign 加签
+      fieldPerms: [], // 表单字段权限 [{ field, perm: read | hidden | edit }]
+    }
   if (type === 'condition')
-    return { ...base, branches: [createBranch('默认', true), createBranch('条件1')] }
+    return {
+      ...base,
+      relation: 'and',
+      branches: [createBranch('默认', true), createBranch('条件1')],
+    }
   return base
 }
+
+// 人员选择器条目类型（具体人员 / 角色 / 部门）
+const PERSON_TYPE_MAP = {
+  user: '具体人员',
+  role: '角色',
+  dept: '部门',
+}
+
+// 条件表达式：可选字段（示例，后续可对接表单字段接口）
+const CONDITION_FIELDS = ['金额', '部门', '申请人', '状态']
+
+// 条件表达式：逻辑运算符
+const OPERATOR_OPTIONS = [
+  { value: '>', label: '大于' },
+  { value: '<', label: '小于' },
+  { value: '=', label: '等于' },
+  { value: '!=', label: '不等于' },
+  { value: 'contains', label: '包含' },
+  { value: 'not_contains', label: '不包含' },
+]
+
+// 兼容旧数据：members 可能为字符串数组，统一转为 { type, label } 结构
+const normalizeMembers = (members) =>
+  (members || []).map((m) => (typeof m === 'string' ? { type: 'user', label: m } : m))
+
+// ==================== 对象选择器数据（示例，后续对接组织架构 / 角色接口） ====================
+
+// 组织架构树：部门节点 + 人员叶子（key 前缀区分类型）
+const ORG_TREE = [
+  {
+    key: 'dept_1',
+    title: '技术部',
+    children: [
+      { key: 'user_1', title: '张三' },
+      { key: 'user_2', title: '李四' },
+    ],
+  },
+  {
+    key: 'dept_2',
+    title: '财务部',
+    children: [{ key: 'user_3', title: '王五' }],
+  },
+  {
+    key: 'dept_3',
+    title: '人事部',
+    children: [{ key: 'user_4', title: '赵六' }],
+  },
+]
+
+// 组织架构 key → 选择条目映射（部门 / 人员）
+const ORG_ITEM_MAP = Object.fromEntries(
+  ORG_TREE.flatMap((d) => [
+    [d.key, { type: 'dept', label: d.title }],
+    ...d.children.map((u) => [u.key, { type: 'user', label: u.title }]),
+  ]),
+)
+
+// 角色列表
+const ROLE_LIST = [
+  { key: 'role_1', title: '部门经理' },
+  { key: 'role_2', title: '财务主管' },
+  { key: 'role_3', title: '人事专员' },
+  { key: 'role_4', title: '系统管理员' },
+]
+
+const ROLE_ITEM_MAP = Object.fromEntries(
+  ROLE_LIST.map((r) => [r.key, { key: r.key, type: 'role', label: r.title }]),
+)
 
 // ==================== 流程画布子组件 ====================
 
@@ -83,12 +183,15 @@ function renderNodeSummary(node) {
   )
 }
 
-/** 1. 节点卡片区域：渲染单个流程节点卡片（类型色标 + 图标 + 摘要 + 删除） */
-function FlowNodeCard({ node, onRemove }) {
+/** 1. 节点卡片区域：渲染单个流程节点卡片（类型色标 + 图标 + 摘要 + 删除），点击卡片弹出编辑抽屉 */
+function FlowNodeCard({ node, onRemove, onEdit }) {
   const meta = NODE_TYPE_META[node.type]
   const Icon = meta.icon
   return (
-    <div className="relative w-55 rounded border border-(--color-neutral-3) bg-white shadow">
+    <div
+      className="relative w-55 cursor-pointer rounded border border-(--color-neutral-3) bg-white shadow"
+      onClick={() => onEdit?.(node)}
+    >
       <div
         className={`flex items-center justify-between border-b border-(--color-neutral-3) px-2 py-1 text-white ${meta.bg}`}
       >
@@ -133,10 +236,13 @@ function NodeConnector({ menu }) {
   )
 }
 
-/** 分支卡：以 FlowNodeCard 同款卡片样式渲染单个条件分支（条件X + 摘要 + 非默认可删除） */
-function BranchCard({ branch, onRemove }) {
+/** 分支卡：以 FlowNodeCard 同款卡片样式渲染单个条件分支（条件X + 摘要 + 非默认可删除），点击卡片编辑条件 */
+function BranchCard({ branch, onRemove, onEdit }) {
   return (
-    <div className="relative mt-8 w-55 rounded border border-(--color-neutral-3) bg-white shadow">
+    <div
+      className="relative mt-8 w-55 cursor-pointer rounded border border-(--color-neutral-3) bg-white shadow"
+      onClick={() => onEdit?.()}
+    >
       <div className="flex items-center justify-between border-b border-(--color-neutral-3) bg-purple-500 px-2 py-1 text-white">
         <div className="flex items-center gap-2 font-medium">
           <IconBranch />
@@ -166,7 +272,15 @@ function BranchCard({ branch, onRemove }) {
  * 每个分支以 BranchCard（FlowNodeCard 同款样式）渲染，卡下接连接线 + 加号，再挂节点链（支持嵌套条件递归）。
  * 条件分支不能被直接删除：仅当删除某非默认分支后只剩「默认」分支时，级联删除整个条件节点。
  */
-function ConditionBlock({ node, onAddBranch, onRemoveBranch, onRemoveNode, buildBranchAddMenu }) {
+function ConditionBlock({
+  node,
+  onEdit,
+  onEditBranch,
+  onAddBranch,
+  onRemoveBranch,
+  onRemoveNode,
+  buildBranchAddMenu,
+}) {
   return (
     <div className="flex flex-col items-center">
       {/* 添加条件：灰色圆角胶囊 */}
@@ -187,6 +301,7 @@ function ConditionBlock({ node, onAddBranch, onRemoveBranch, onRemoveNode, build
             <BranchCard
               branch={b}
               onRemove={b.isDefault ? undefined : () => onRemoveBranch(node.id, b.id)}
+              onEdit={() => onEditBranch?.(node, b)}
             />
             <NodeConnector menu={buildBranchAddMenu(node.id, b.id, 0)} />
             <div
@@ -198,6 +313,8 @@ function ConditionBlock({ node, onAddBranch, onRemoveBranch, onRemoveNode, build
                 node={child}
                 addMenu={buildBranchAddMenu(node.id, b.id, ci + 1)}
                 onRemove={(cid) => onRemoveNode(node.id, b.id, cid)}
+                onEdit={onEdit}
+                onEditBranch={onEditBranch}
                 onAddBranch={onAddBranch}
                 onRemoveBranch={onRemoveBranch}
                 onRemoveNode={onRemoveNode}
@@ -212,6 +329,454 @@ function ConditionBlock({ node, onAddBranch, onRemoveBranch, onRemoveNode, build
 }
 
 /**
+ * 公共对象选择器（左右布局 Modal）：
+ * - 左侧：Tab 切换「按组织架构选择」（Tree 树形控件，部门/人员）与「按角色选择」（角色列表）
+ * - 右侧：已选中的条目（Tag 展示，可点击删除）
+ * 确认后通过 onChange 统一回传 { key, type, label } 结构的条目数组
+ */
+function PersonSelectorModal({ title = '选择人员', value = [], onChange, onCancel }) {
+  const [tab, setTab] = useState('org')
+  // 弹层内临时选择（统一带 key）
+  const [selected, setSelected] = useState(() =>
+    value.map((item) => ({ ...item, key: item.key || `${item.type}-${item.label}` })),
+  )
+
+  // 组织架构树选中 keys（部门/人员）
+  const orgCheckedKeys = selected.filter((s) => ORG_ITEM_MAP[s.key]).map((s) => s.key)
+  // 角色选中 keys
+  const roleCheckedKeys = selected.filter((s) => ROLE_ITEM_MAP[s.key]).map((s) => s.key)
+
+  const handleTreeCheck = (keys) => {
+    const orgItems = keys.map((k) => ORG_ITEM_MAP[k]).filter(Boolean)
+    const roleItems = selected.filter((s) => ROLE_ITEM_MAP[s.key])
+    setSelected([...orgItems, ...roleItems])
+  }
+
+  const handleRoleCheck = (keys) => {
+    const roleItems = keys.map((k) => ROLE_ITEM_MAP[k]).filter(Boolean)
+    const orgItems = selected.filter((s) => ORG_ITEM_MAP[s.key])
+    setSelected([...orgItems, ...roleItems])
+  }
+
+  const remove = (index) => setSelected(selected.filter((_, i) => i !== index))
+
+  return (
+    <Modal
+      title={title}
+      visible
+      onCancel={onCancel}
+      onOk={() => onChange(selected)}
+      style={{ width: 680 }}
+    >
+      <div className="flex gap-4">
+        {/* 左侧：数据源 */}
+        <div className="w-1/2 rounded border border-gray-200">
+          <div className="flex justify-center border-b border-gray-100 py-2">
+            <Radio.Group type="button" size="small" value={tab} onChange={setTab}>
+              <Radio value="org">按组织架构选择</Radio>
+              <Radio value="role">按角色选择</Radio>
+            </Radio.Group>
+          </div>
+          <div className="max-h-80 overflow-auto p-3">
+            {tab === 'org' ? (
+              <Tree
+                checkable
+                checkedKeys={orgCheckedKeys}
+                onCheck={handleTreeCheck}
+                treeData={ORG_TREE}
+              />
+            ) : (
+              <Checkbox.Group
+                direction="vertical"
+                value={roleCheckedKeys}
+                onChange={handleRoleCheck}
+              >
+                {ROLE_LIST.map((r) => (
+                  <Checkbox key={r.key} value={r.key}>
+                    {r.title}
+                  </Checkbox>
+                ))}
+              </Checkbox.Group>
+            )}
+          </div>
+        </div>
+        {/* 右侧：已选择 */}
+        <div className="w-1/2 rounded border border-gray-200 p-3">
+          <div className="mb-2 text-sm font-medium">已选择（{selected.length}）</div>
+          <div className="flex flex-wrap gap-2">
+            {selected.length ? (
+              selected.map((item, i) => (
+                <Tag key={`${item.type}-${item.label}-${i}`} closable onClose={() => remove(i)}>
+                  {PERSON_TYPE_MAP[item.type] || '人员'}：{item.label}
+                </Tag>
+              ))
+            ) : (
+              <span className="text-xs text-gray-400">未选择任何人员 / 角色 / 部门</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/** 人员选择器公共组件：展示已选条目 + 「选择」按钮，唤起 PersonSelectorModal（左右布局）统一选择 */
+function PersonPicker({ value = [], onChange, placeholder }) {
+  const [visible, setVisible] = useState(false)
+  const remove = (index) => onChange(value.filter((_, i) => i !== index))
+
+  return (
+    <>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {value.length ? (
+          value.map((item, i) => (
+            <Tag key={`${item.type}-${item.label}-${i}`} closable onClose={() => remove(i)}>
+              {PERSON_TYPE_MAP[item.type] || '人员'}：{item.label}
+            </Tag>
+          ))
+        ) : (
+          <span className="text-xs text-gray-400">未选择</span>
+        )}
+      </div>
+      <Button type="primary" size="small" icon={<IconPlus />} onClick={() => setVisible(true)}>
+        {placeholder || '选择人员'}
+      </Button>
+      {visible && (
+        <PersonSelectorModal
+          title={placeholder || '选择人员'}
+          value={value}
+          onChange={(items) => {
+            onChange(items)
+            setVisible(false)
+          }}
+          onCancel={() => setVisible(false)}
+        />
+      )}
+    </>
+  )
+}
+
+/** 发起人节点：点击卡片唤起 Modal，配置可发起人员（人员选择器） */
+function InitiatorEditModal({ node, onCancel, onSave }) {
+  const [members, setMembers] = useState(normalizeMembers(node.members))
+  return (
+    <Modal title="发起人设置" visible onCancel={onCancel} onOk={() => onSave({ ...node, members })}>
+      <div className="mb-1 text-sm font-medium">可发起人员</div>
+      <PersonPicker value={members} onChange={setMembers} placeholder="选择可发起人" />
+    </Modal>
+  )
+}
+
+/** 审批人节点：点击卡片唤起 Drawer，包含审批对象 / 审批方式 / 容错与权限 / 表单字段权限 四个配置模块 */
+function ApproverEditDrawer({ node, appId, onCancel, onSave }) {
+  const [approverType, setApproverType] = useState(node.approverType || 'user')
+  const [members, setMembers] = useState(normalizeMembers(node.members))
+  const [selfSelect, setSelfSelect] = useState(node.selfSelect || 'single')
+  const [strategy, setStrategy] = useState(node.strategy || 'self_multi')
+  const [emptyHandler, setEmptyHandler] = useState(node.emptyHandler || 'auto_pass')
+  const [emptyMembers, setEmptyMembers] = useState(normalizeMembers(node.emptyMembers))
+  const [permissions, setPermissions] = useState(node.permissions || ['reject'])
+  const [fieldPerms, setFieldPerms] = useState(node.fieldPerms || [])
+  // 应用表单元素列表（步骤四：表单字段权限的字段来源，关联 FormElementManage 管理的数据）
+  const [formFields, setFormFields] = useState([])
+  const [fieldsLoading, setFieldsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!appId) return
+    let cancelled = false
+    setFieldsLoading(true)
+    applicationApi
+      .listFormElements(appId, { page: 1, size: 999 })
+      .then((res) => {
+        if (!cancelled) setFormFields(res.data.list || [])
+      })
+      .catch(() => {
+        // 错误已在请求层提示
+      })
+      .finally(() => {
+        if (!cancelled) setFieldsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [appId])
+
+  const updateFieldPerm = (index, key, v) =>
+    setFieldPerms(fieldPerms.map((fp, i) => (i === index ? { ...fp, [key]: v } : fp)))
+
+  // 审批对象联动：仅「发起人自选 + 多选」时展示步骤二（审批方式）
+  const showStrategy = approverType === 'self' && selfSelect === 'multi'
+
+  return (
+    <Drawer
+      width={560}
+      title="审批人设置"
+      visible
+      onCancel={onCancel}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button onClick={onCancel}>取消</Button>
+          <Button
+            type="primary"
+            onClick={() =>
+              onSave({
+                ...node,
+                approverType,
+                members,
+                selfSelect,
+                strategy,
+                emptyHandler,
+                emptyMembers,
+                permissions,
+                fieldPerms,
+              })
+            }
+          >
+            保存
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-6">
+        {/* 步骤一：审批对象 */}
+        <div>
+          <div className="mb-2 font-medium">审批对象</div>
+          <Radio.Group value={approverType} onChange={setApproverType}>
+            <Radio value="user">指定人员</Radio>
+            <Radio value="role">指定角色</Radio>
+            <Radio value="self">发起人自选</Radio>
+          </Radio.Group>
+          {approverType !== 'self' ? (
+            <div className="mt-3">
+              <PersonPicker value={members} onChange={setMembers} placeholder="请选择" />
+            </div>
+          ) : (
+            <div className="mt-3">
+              <div className="mb-1 text-sm text-gray-500">选择类型</div>
+              <Radio.Group type="button" value={selfSelect} onChange={setSelfSelect}>
+                <Radio value="single">单选</Radio>
+                <Radio value="multi">多选</Radio>
+              </Radio.Group>
+            </div>
+          )}
+        </div>
+        {/* 步骤二：审批方式（仅发起人自选 + 多选时展示） */}
+        {showStrategy && (
+          <div>
+            <div className="mb-2 font-medium">审批方式</div>
+            <Radio.Group value={strategy} onChange={setStrategy} direction="vertical">
+              <Radio value="self_multi">依次审批：按顺序审批，上一个审批通过后流转到下一个</Radio>
+              <Radio value="self_single">会签：需要所有配置的审批人都同意，流程才能向下流转</Radio>
+              <Radio value="or_sign">或签：其中任意一名审批人同意，流程即向下流转</Radio>
+            </Radio.Group>
+          </div>
+        )}
+        {/* 步骤三：容错与权限 */}
+        <div>
+          <div className="mb-2 font-medium">容错与权限</div>
+          <div className="mb-1 text-sm text-gray-500">审批人为空的处理方式</div>
+          <Radio.Group value={emptyHandler} onChange={setEmptyHandler} direction="vertical">
+            <Radio value="auto_pass">自动通过</Radio>
+            <Radio value="auto_reject">自动拒绝</Radio>
+            <Radio value="to_admin">转交流程管理员</Radio>
+            <Radio value="assign">指定人员</Radio>
+          </Radio.Group>
+          {emptyHandler === 'assign' && (
+            <div className="mt-3">
+              <PersonPicker
+                value={emptyMembers}
+                onChange={setEmptyMembers}
+                placeholder="选择指定人员"
+              />
+            </div>
+          )}
+          <div className="mt-4 mb-1 text-sm text-gray-500">审批人操作权限</div>
+          <Checkbox.Group value={permissions} onChange={setPermissions}>
+            <Checkbox value="reject">拒绝</Checkbox>
+            <Checkbox value="transfer">转交</Checkbox>
+            <Checkbox value="add_sign">加签</Checkbox>
+          </Checkbox.Group>
+        </div>
+        {/* 步骤四：表单字段权限（字段来源于应用已配置的表单元素） */}
+        <div>
+          <div className="mb-2 font-medium">表单字段权限</div>
+          {fieldsLoading ? (
+            <div className="py-3 text-xs text-gray-400">字段加载中...</div>
+          ) : !formFields.length ? (
+            <div className="py-3 text-xs text-gray-400">
+              暂无表单元素，请先在「表单元素管理」中配置
+            </div>
+          ) : (
+            <>
+              {fieldPerms.map((fp, i) => (
+                <div key={i} className="mb-2 flex items-center gap-2">
+                  <Select
+                    style={{ flex: 1 }}
+                    value={fp.field}
+                    placeholder="选择表单字段"
+                    onChange={(v) => updateFieldPerm(i, 'field', v)}
+                  >
+                    {formFields.map((f) => (
+                      <Select.Option key={f.field_key} value={f.field_key}>
+                        {f.label || f.field_key}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                  <Select
+                    style={{ width: 110 }}
+                    value={fp.perm}
+                    onChange={(v) => updateFieldPerm(i, 'perm', v)}
+                  >
+                    <Select.Option value="read">只读</Select.Option>
+                    <Select.Option value="hidden">隐藏</Select.Option>
+                    <Select.Option value="edit">可编辑</Select.Option>
+                  </Select>
+                  <Button
+                    icon={<IconClose />}
+                    onClick={() => setFieldPerms(fieldPerms.filter((_, x) => x !== i))}
+                  />
+                </div>
+              ))}
+              <Button
+                size="small"
+                icon={<IconPlus />}
+                onClick={() => setFieldPerms([...fieldPerms, { field: '', perm: 'read' }])}
+              >
+                添加字段
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </Drawer>
+  )
+}
+
+/** 抄送人节点：点击卡片唤起 Drawer，配置抄送对象与抄送时机 */
+function CcEditDrawer({ node, onCancel, onSave }) {
+  const [members, setMembers] = useState(normalizeMembers(node.members))
+  const [ccTiming, setCcTiming] = useState(node.ccTiming || 'after_pass')
+  return (
+    <Drawer
+      width={480}
+      title="抄送人设置"
+      visible
+      onCancel={onCancel}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button onClick={onCancel}>取消</Button>
+          <Button type="primary" onClick={() => onSave({ ...node, members, ccTiming })}>
+            保存
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-6">
+        <div>
+          <div className="mb-2 font-medium">抄送对象</div>
+          <PersonPicker value={members} onChange={setMembers} placeholder="请选择" />
+        </div>
+        <div>
+          <div className="mb-2 font-medium">抄送时机</div>
+          <Radio.Group direction="vertical" value={ccTiming} onChange={setCcTiming}>
+            <Radio value="after_pass">审批通过后抄送</Radio>
+            <Radio value="on_end">流程结束时统一抄送</Radio>
+          </Radio.Group>
+        </div>
+      </div>
+    </Drawer>
+  )
+}
+
+/** 条件分支节点：点击分支卡唤起 Drawer，配置条件关系与具体条件表达式 */
+function ConditionEditDrawer({ node, branch, onCancel, onSave }) {
+  const [relation, setRelation] = useState(node.relation || 'and')
+  const [rules, setRules] = useState(
+    branch.rules?.length
+      ? branch.rules
+      : [{ field: CONDITION_FIELDS[0], operator: '=', value: '' }],
+  )
+
+  const updateRule = (index, key, v) =>
+    setRules(rules.map((r, i) => (i === index ? { ...r, [key]: v } : r)))
+
+  return (
+    <Drawer
+      width={560}
+      title={`编辑条件（${branch.isDefault ? '默认分支' : branch.label}）`}
+      visible
+      onCancel={onCancel}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button onClick={onCancel}>取消</Button>
+          <Button type="primary" onClick={() => onSave(node, branch, { relation, rules })}>
+            保存
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-6">
+        <div>
+          <div className="mb-2 font-medium">条件关系</div>
+          <Radio.Group type="button" value={relation} onChange={setRelation}>
+            <Radio value="and">且（AND）</Radio>
+            <Radio value="or">或（OR）</Radio>
+          </Radio.Group>
+        </div>
+        <div>
+          <div className="mb-2 font-medium">具体条件表达式</div>
+          {rules.map((r, i) => (
+            <div key={i} className="mb-2 flex items-center gap-2">
+              <Select
+                style={{ width: 120 }}
+                value={r.field}
+                onChange={(v) => updateRule(i, 'field', v)}
+              >
+                {CONDITION_FIELDS.map((f) => (
+                  <Select.Option key={f} value={f}>
+                    {f}
+                  </Select.Option>
+                ))}
+              </Select>
+              <Select
+                style={{ width: 110 }}
+                value={r.operator}
+                onChange={(v) => updateRule(i, 'operator', v)}
+              >
+                {OPERATOR_OPTIONS.map((o) => (
+                  <Select.Option key={o.value} value={o.value}>
+                    {o.label}
+                  </Select.Option>
+                ))}
+              </Select>
+              <Input
+                style={{ flex: 1 }}
+                value={r.value}
+                placeholder="输入具体的数值或状态"
+                onChange={(v) => updateRule(i, 'value', v)}
+              />
+              <Button
+                icon={<IconClose />}
+                onClick={() => setRules(rules.filter((_, x) => x !== i))}
+              />
+            </div>
+          ))}
+          <Button
+            size="small"
+            icon={<IconPlus />}
+            onClick={() =>
+              setRules([...rules, { field: CONDITION_FIELDS[0], operator: '=', value: '' }])
+            }
+          >
+            添加条件
+          </Button>
+        </div>
+      </div>
+    </Drawer>
+  )
+}
+
+/**
  * 流程节点单元：内容卡片（FlowNodeCard / ConditionBlock）与下方连接器（NodeConnector）内聚。
  * 每个节点下方自带连接线 + 加号，主链与条件分支列统一复用，无需外部 Fragment 拼接。
  */
@@ -219,6 +784,8 @@ function FlowNode({
   node,
   addMenu,
   onRemove,
+  onEdit,
+  onEditBranch,
   onAddBranch,
   onRemoveBranch,
   onRemoveNode,
@@ -229,13 +796,15 @@ function FlowNode({
       {node.type === 'condition' ? (
         <ConditionBlock
           node={node}
+          onEdit={onEdit}
+          onEditBranch={onEditBranch}
           onAddBranch={onAddBranch}
           onRemoveBranch={onRemoveBranch}
           onRemoveNode={onRemoveNode}
           buildBranchAddMenu={buildBranchAddMenu}
         />
       ) : (
-        <FlowNodeCard node={node} onRemove={onRemove} />
+        <FlowNodeCard node={node} onRemove={onRemove} onEdit={onEdit} />
       )}
       <NodeConnector menu={addMenu} />
     </div>
@@ -357,6 +926,35 @@ export default function ExamineManage() {
     )
   }, [])
 
+  // 节点/分支点击编辑：{ kind: 'node' | 'branch', node, branch? } 控制弹层显隐与类型
+  const [editing, setEditing] = useState(null)
+  const handleNodeEdit = useCallback((node) => setEditing({ kind: 'node', node }), [])
+  const handleBranchEdit = useCallback(
+    (node, branch) => setEditing({ kind: 'branch', node, branch }),
+    [],
+  )
+  const handleCloseEdit = useCallback(() => setEditing(null), [])
+
+  // 保存节点编辑：递归定位任意层级的节点并整体替换
+  const handleNodeSave = useCallback((updated) => {
+    setNodes((prev) => updateNodeInTree(prev, updated.id, () => updated))
+    setEditing(null)
+    Message.success('节点已保存')
+  }, [])
+
+  // 保存条件分支编辑：更新条件节点关系 + 指定分支的条件表达式
+  const handleBranchSave = useCallback((node, branch, payload) => {
+    setNodes((prev) =>
+      updateNodeInTree(prev, node.id, (n) => ({
+        ...n,
+        relation: payload.relation,
+        branches: n.branches.map((b) => (b.id === branch.id ? { ...b, rules: payload.rules } : b)),
+      })),
+    )
+    setEditing(null)
+    Message.success('条件已保存')
+  }, [])
+
   // 节点间「+」添加菜单（hover / 点击弹出，选择类型后在对应位置插入；发起人节点唯一，不提供添加入口）
   const buildAddMenu = (index) => (
     <Space>
@@ -405,6 +1003,8 @@ export default function ExamineManage() {
                 node={node}
                 addMenu={buildAddMenu(i + 1)}
                 onRemove={handleRemoveNode}
+                onEdit={handleNodeEdit}
+                onEditBranch={handleBranchEdit}
                 onAddBranch={addBranch}
                 onRemoveBranch={removeBranch}
                 onRemoveNode={handleRemoveNode}
@@ -415,6 +1015,41 @@ export default function ExamineManage() {
         </div>
         <div className="text-gray-400">流程结束</div>
       </div>
+      {/* 节点/条件编辑弹层：发起人用 Modal，审批人/抄送人/条件分支用 Drawer */}
+      {editing?.kind === 'node' && editing.node.type === 'initiator' && (
+        <InitiatorEditModal
+          key={editing.node.id}
+          node={editing.node}
+          onCancel={handleCloseEdit}
+          onSave={handleNodeSave}
+        />
+      )}
+      {editing?.kind === 'node' && editing.node.type === 'approver' && (
+        <ApproverEditDrawer
+          key={editing.node.id}
+          node={editing.node}
+          appId={id}
+          onCancel={handleCloseEdit}
+          onSave={handleNodeSave}
+        />
+      )}
+      {editing?.kind === 'node' && editing.node.type === 'cc' && (
+        <CcEditDrawer
+          key={editing.node.id}
+          node={editing.node}
+          onCancel={handleCloseEdit}
+          onSave={handleNodeSave}
+        />
+      )}
+      {editing?.kind === 'branch' && (
+        <ConditionEditDrawer
+          key={editing.branch.id}
+          node={editing.node}
+          branch={editing.branch}
+          onCancel={handleCloseEdit}
+          onSave={handleBranchSave}
+        />
+      )}
     </Card>
   )
 }
