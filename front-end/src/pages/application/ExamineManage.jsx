@@ -130,8 +130,8 @@ const ORG_TREE = [
 // 组织架构 key → 选择条目映射（部门 / 人员）
 const ORG_ITEM_MAP = Object.fromEntries(
   ORG_TREE.flatMap((d) => [
-    [d.key, { type: 'dept', label: d.title }],
-    ...d.children.map((u) => [u.key, { type: 'user', label: u.title }]),
+    [d.key, { key: d.key, type: 'dept', label: d.title }],
+    ...d.children.map((u) => [u.key, { key: u.key, type: 'user', label: u.title }]),
   ]),
 )
 
@@ -348,8 +348,7 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
   // 角色选中 keys
   const roleCheckedKeys = selected.filter((s) => ROLE_ITEM_MAP[s.key]).map((s) => s.key)
 
-  // Tree 勾选（级联模式：checkedKeys / onCheck 均为扁平数组；
-  // 部门节点已禁用勾选（只勾叶子），无父子级联带出干扰，多选与回显直接一致）
+  // Tree 勾选（checkStrictly 父子独立，避免 disableCheckbox 下级联干扰）
   const handleTreeCheck = (keys) => {
     const checked = Array.isArray(keys) ? keys : keys?.checked || []
     let orgItems = checked.map((k) => ORG_ITEM_MAP[k]).filter(Boolean)
@@ -400,11 +399,11 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
             {tab === 'org' && !isRoleOnly ? (
               <Tree
                 checkable
+                checkStrictly
                 checkedKeys={orgCheckedKeys}
                 onCheck={handleTreeCheck}
                 treeData={ORG_TREE}
                 disableCheckbox={(node) =>
-                  // 部门选择器：仅部门（非叶子）可勾选；人员选择器：仅人员（叶子）可勾选
                   isDeptOnly ? !node.children?.length : !!node.children?.length
                 }
               />
