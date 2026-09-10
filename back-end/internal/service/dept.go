@@ -8,6 +8,8 @@ import (
 )
 
 // DeptTree 部门树
+//   - 过滤、层级结构（Children）、排序（sort ASC, id ASC）与原有逻辑保持一致
+//   - req.WithUsers 为 true 时，额外为树中每个部门节点填充其下员工列表（Users）
 func DeptTree(req *model.DeptListReq) ([]*model.Dept, error) {
 	db := database.DB.Model(&model.Dept{})
 	if req.Name != "" {
@@ -17,7 +19,55 @@ func DeptTree(req *model.DeptListReq) ([]*model.Dept, error) {
 	if err := db.Order("sort ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err
 	}
-	return buildDeptTree(list, 0), nil
+	tree := buildDeptTree(list, 0)
+	if req.WithUsers {
+		if err := fillDeptUsers(tree); err != nil {
+			return nil, err
+		}
+	}
+	return tree, nil
+}
+
+// fillDeptUsers 批量查询树中所有部门下的员工（dept_id IN (...) 一次查出），按部门挂载到树节点
+func fillDeptUsers(nodes []*model.Dept) error {
+	ids := collectDeptIDs(nodes)
+	if len(ids) == 0 {
+		return nil
+	}
+	var users []model.User
+	if err := database.DB.Where("dept_id IN ?", ids).Order("id ASC").Find(&users).Error; err != nil {
+		return err
+	}
+	byDept := map[uint][]model.User{}
+	for _, u := range users {
+		byDept[u.DeptID] = append(byDept[u.DeptID], u)
+	}
+	assignDeptUsers(nodes, byDept)
+	return nil
+}
+
+// collectDeptIDs 收集树中所有部门 ID（含嵌套子部门）
+func collectDeptIDs(nodes []*model.Dept) []uint {
+	ids := make([]uint, 0, len(nodes))
+	for _, d := range nodes {
+		ids = append(ids, d.ID)
+		if len(d.Children) > 0 {
+			ids = append(ids, collectDeptIDs(d.Children)...)
+		}
+	}
+	return ids
+}
+
+// assignDeptUsers 将按部门分组的员工列表递归挂载到树节点
+func assignDeptUsers(nodes []*model.Dept, byDept map[uint][]model.User) {
+	for _, d := range nodes {
+		if users, ok := byDept[d.ID]; ok {
+			d.Users = users
+		}
+		if len(d.Children) > 0 {
+			assignDeptUsers(d.Children, byDept)
+		}
+	}
 }
 
 // DeptDetail 部门详情

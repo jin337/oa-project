@@ -159,11 +159,19 @@ const MODE_LABELS = { org: '按组织架构选择', role: '按角色选择' }
 
 // 节点摘要（纯信息展示）：成员 / 审批策略（条件分支由 ConditionBlock 独立渲染）
 function renderNodeSummary(node) {
+  // members 为 { key, type, label } 对象数组，需取 label 渲染
+  const renderMemberLabel = (m) =>
+    m.type === 'user' && USER_DEPT_MAP[m.key]
+      ? `${USER_DEPT_MAP[m.key]}：${m.label}`
+      : m.label || m.key
+
   if (node.type === 'approver') {
     return (
       <div className="flex flex-wrap items-center gap-1">
         {node.members?.length ? (
-          node.members.map((m) => <Tag key={m}>{m}</Tag>)
+          node.members.map((m, i) => (
+            <Tag key={m.key || `${m.type}-${m.label}-${i}`}>{renderMemberLabel(m)}</Tag>
+          ))
         ) : (
           <span className="cursor-pointer text-xs text-gray-400">未设置成员</span>
         )}
@@ -173,7 +181,9 @@ function renderNodeSummary(node) {
   return (
     <div className="flex flex-wrap gap-1">
       {node.members?.length ? (
-        node.members.map((m) => <Tag key={m}>{m}</Tag>)
+        node.members.map((m, i) => (
+          <Tag key={m.key || `${m.type}-${m.label}-${i}`}>{renderMemberLabel(m)}</Tag>
+        ))
       ) : (
         <span className="cursor-pointer text-xs text-gray-400">未设置成员</span>
       )}
@@ -403,7 +413,9 @@ function PersonSelectorModal({
             <div className="flex justify-center border-b border-gray-100 py-2">
               <Radio.Group type="button" size="small" value={tab} onChange={setTab}>
                 {modes.map((m) => (
-                  <Radio key={m} value={m}>{MODE_LABELS[m]}</Radio>
+                  <Radio key={m} value={m}>
+                    {MODE_LABELS[m]}
+                  </Radio>
                 ))}
               </Radio.Group>
             </div>
@@ -443,7 +455,11 @@ function PersonSelectorModal({
           <div className="flex flex-wrap gap-2">
             {selected.length ? (
               selected.map((item, i) => (
-                <Tag key={`${item.type}-${item.key || item.label}-${i}`} closable onClose={() => remove(i)}>
+                <Tag
+                  key={`${item.type}-${item.key || item.label}-${i}`}
+                  closable
+                  onClose={() => remove(i)}
+                >
                   {renderTagLabel(item)}
                 </Tag>
               ))
@@ -462,7 +478,13 @@ function PersonSelectorModal({
  * - modes: 数据源维度，如 ['org', 'role']（默认）、['role']、['org']
  * - checkTarget: org 树勾选目标 'user'（默认）| 'dept' | 'both'
  */
-function PersonPicker({ value = [], onChange, placeholder, modes = ['org', 'role'], checkTarget = 'user' }) {
+function PersonPicker({
+  value = [],
+  onChange,
+  placeholder,
+  modes = ['org', 'role'],
+  checkTarget = 'user',
+}) {
   const [visible, setVisible] = useState(false)
   const remove = (index) => onChange(value.filter((_, i) => i !== index))
 
@@ -471,7 +493,11 @@ function PersonPicker({ value = [], onChange, placeholder, modes = ['org', 'role
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {value.length ? (
           value.map((item, i) => (
-            <Tag key={`${item.type}-${item.key || item.label}-${i}`} closable onClose={() => remove(i)}>
+            <Tag
+              key={`${item.type}-${item.key || item.label}-${i}`}
+              closable
+              onClose={() => remove(i)}
+            >
               {item.type === 'user' && USER_DEPT_MAP[item.key]
                 ? `${USER_DEPT_MAP[item.key]}：${item.label}`
                 : item.label}
@@ -502,7 +528,14 @@ function PersonPicker({ value = [], onChange, placeholder, modes = ['org', 'role
 }
 
 /** 审批人节点：点击卡片唤起 Drawer，包含审批对象 / 审批方式 / 容错与权限 / 表单字段权限 四个配置模块 */
-function ApproverEditDrawer({ node, appId, formFields = [], fieldsLoading = false, onCancel, onSave }) {
+function ApproverEditDrawer({
+  node,
+  appId,
+  formFields = [],
+  fieldsLoading = false,
+  onCancel,
+  onSave,
+}) {
   const [approverType, setApproverType] = useState(node.approverType || 'user')
   const [members, setMembers] = useState(normalizeMembers(node.members))
   const [selfSelect, setSelfSelect] = useState(node.selfSelect || 'single')
@@ -632,7 +665,7 @@ function ApproverEditDrawer({ node, appId, formFields = [], fieldsLoading = fals
                 <div key={i} className="mb-2 flex items-center gap-2">
                   <Select
                     style={{ flex: 1 }}
-                    value={fp.field||undefined}
+                    value={fp.field || undefined}
                     placeholder="选择表单字段"
                     onChange={(v) => updateFieldPerm(i, 'field', v)}
                   >
@@ -709,7 +742,14 @@ function CcEditDrawer({ node, onCancel, onSave }) {
 }
 
 /** 条件分支节点：点击分支卡唤起 Drawer，配置条件关系与具体条件表达式（字段来源于应用表单元素列表） */
-function ConditionEditDrawer({ node, branch, formFields = [], fieldsLoading = false, onCancel, onSave }) {
+function ConditionEditDrawer({
+  node,
+  branch,
+  formFields = [],
+  fieldsLoading = false,
+  onCancel,
+  onSave,
+}) {
   const [relation, setRelation] = useState(node.relation || 'and')
   // 默认条件行：formFields 有数据时取第一个字段的 field_key，否则为空字符串
   const defaultField = formFields[0]?.field_key || ''
@@ -748,7 +788,9 @@ function ConditionEditDrawer({ node, branch, formFields = [], fieldsLoading = fa
           {fieldsLoading ? (
             <div className="py-3 text-xs text-gray-400">字段加载中...</div>
           ) : !formFields.length ? (
-            <div className="py-3 text-xs text-gray-400">暂无表单元素，请先在「表单元素管理」中配置</div>
+            <div className="py-3 text-xs text-gray-400">
+              暂无表单元素，请先在「表单元素管理」中配置
+            </div>
           ) : (
             <>
               {rules.map((r, i) => (

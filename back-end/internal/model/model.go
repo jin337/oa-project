@@ -98,6 +98,7 @@ type Dept struct {
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 
 	Children []*Dept `gorm:"foreignKey:ParentID" json:"children,omitempty"`
+	Users    []User  `gorm:"foreignKey:DeptID" json:"users,omitempty"` // 部门下员工列表，仅 GET /depts/users 接口返回
 }
 
 // ------------------------------------------------------------
