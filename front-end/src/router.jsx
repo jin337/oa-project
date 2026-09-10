@@ -28,6 +28,7 @@ const ApplicationManage = lazy(() => import('./pages/application/ApplicationMana
 const TableManage = lazy(() => import('./pages/application/TableManage.jsx'))
 const FormElementManage = lazy(() => import('./pages/application/FormElementManage.jsx'))
 const LayoutManage = lazy(() => import('./pages/application/LayoutManage.jsx'))
+const ExamineManage = lazy(() => import('./pages/application/ExamineManage.jsx'))
 const DynamicPage = lazy(() => import('./pages/application/DynamicPage.jsx'))
 
 // 错误页面
@@ -35,9 +36,6 @@ const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
 
 // 审批申请页：分类 + 申请项管理
 const ApprovalApply = lazy(() => import('./pages/approval/Apply.jsx'))
-
-// 审核配置（流程设计）管理
-const ExamineManage = lazy(() => import('./pages/examine/ExamineManage.jsx'))
 
 function PageLoading() {
   return (
@@ -207,21 +205,19 @@ const router = createBrowserRouter([
         ),
       },
       {
+        path: 'application/:id/examine',
+        element: (
+          <Page>
+            <ExamineManage />
+          </Page>
+        ),
+      },
+      {
         path: 'approval/apply',
         element: (
           <Page>
             <RequirePermission>
               <ApprovalApply />
-            </RequirePermission>
-          </Page>
-        ),
-      },
-      {
-        path: 'examine',
-        element: (
-          <Page>
-            <RequirePermission>
-              <ExamineManage />
             </RequirePermission>
           </Page>
         ),

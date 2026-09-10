@@ -16,7 +16,7 @@ import {
   Table,
   Tag,
 } from '@arco-design/web-react'
-import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
+import { IconDown, IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
@@ -163,6 +163,19 @@ export default function ApplicationManage() {
     navigate(path)
   }
 
+  // 操作列「更多」下拉菜单分发：仅含子页面入口，编辑/删除为平铺按钮
+  const handleActionMenu = (key, record) => {
+    if (key === 'tables') {
+      openSubPage(record, 'tables', '表管理')
+    } else if (key === 'form-elements') {
+      openSubPage(record, 'form-elements', '表单元素')
+    } else if (key === 'layout') {
+      openSubPage(record, 'layout', '布局管理')
+    } else if (key === 'examine') {
+      openSubPage(record, 'examine', '审批配置')
+    }
+  }
+
   // 表格密度下拉
   const sizeMenu = (
     <Menu onClickMenuItem={(key) => setTableSize(key)}>
@@ -210,34 +223,41 @@ export default function ApplicationManage() {
     {
       key: 'action',
       title: '操作',
-      width: 390,
-      render: (_, record) => (
-        <Space>
-          <Button size="mini" onClick={() => openSubPage(record, 'tables', '表管理')}>
-            表管理
-          </Button>
-          <Button size="mini" onClick={() => openSubPage(record, 'form-elements', '表单元素')}>
-            表单元素管理
-          </Button>
-          <Button size="mini" onClick={() => openSubPage(record, 'layout', '布局管理')}>
-            布局管理
-          </Button>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm
-            position="lb"
-            focusLock
-            title="确认删除该应用配置？"
-            content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
-            onOk={() => handleDelete(record)}
-          >
-            <Button size="mini" status="danger">
-              删除
+      width: 150,
+      render: (_, record) => {
+        // 「更多」下拉菜单：仅子页面入口；编辑 / 删除保持平铺展示
+        const actionMenu = (
+          <Menu onClickMenuItem={(key) => handleActionMenu(key, record)}>
+            <MenuItem key="tables">表管理</MenuItem>
+            <MenuItem key="form-elements">表单元素管理</MenuItem>
+            <MenuItem key="layout">布局管理</MenuItem>
+            <MenuItem key="examine">审批配置</MenuItem>
+          </Menu>
+        )
+        return (
+          <Space>
+            <Dropdown droplist={actionMenu} position="br">
+              <Button size="mini" type="text">
+                更多 <IconDown />
+              </Button>
+            </Dropdown>
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
+            <Popconfirm
+              position="lb"
+              focusLock
+              title="确认删除该应用配置？"
+              content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
+              onOk={() => handleDelete(record)}
+            >
+              <Button size="mini" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
+          </Space>
+        )
+      },
     },
   ]
 
