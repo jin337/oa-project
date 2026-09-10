@@ -122,7 +122,7 @@ function NodeConnector({ menu }) {
     <div className="flex flex-col items-center">
       <div className="h-4 w-px border-l border-gray-300" />
       <Popover
-        title={<div className="mb-2 font-bold">添加流程节点</div>}
+        title={<div className="mb-2 text-sm font-bold">添加流程节点</div>}
         content={menu}
         position="bl"
       >
@@ -152,7 +152,7 @@ function BranchCard({ branch, onRemove }) {
           />
         )}
       </div>
-      <div className="px-3 py-2 text-gray-400 text-xs">
+      <div className="px-3 py-2 text-xs text-gray-400">
         {branch.isDefault
           ? '不满足其他条件，进入此分支'
           : `已设置 (${branch.rules?.length || 0}) 个条件`}
