@@ -12,7 +12,7 @@ import {
   Select,
   Space,
   Tag,
-  Tree
+  Tree,
 } from '@arco-design/web-react'
 import {
   IconBranch,
@@ -22,7 +22,7 @@ import {
   IconStamp,
   IconUser,
 } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
 import * as deptApi from '../../api/dept'
@@ -147,8 +147,7 @@ const buildUserDeptMap = (tree) => {
 }
 
 // 接口角色数组 → 选择器列表格式：{ id, name, code } → { key: 'role_{id}', title: name }
-const transformRoleList = (data = []) =>
-  data.map((r) => ({ key: `role_${r.id}`, title: r.name }))
+const transformRoleList = (data = []) => data.map((r) => ({ key: `role_${r.id}`, title: r.name }))
 
 // 角色列表 → key 映射
 const buildRoleItemMap = (roles) =>
@@ -157,60 +156,40 @@ const buildRoleItemMap = (roles) =>
 // 选择器模式标签（可按需扩展更多维度）
 const MODE_LABELS = { org: '按组织架构选择', role: '按角色选择' }
 
+// 对象选择器数据上下文：组织架构树 / 角色列表 / 派生映射 / 加载态，由主组件请求后注入，
+// 各弹层（PersonSelectorModal / PersonPicker / ApproverEditDrawer / CcEditDrawer）统一从 Context 读取，
+// 避免多层 props 透传
+const SelectorDataContext = createContext(null)
+const useSelectorData = () => useContext(SelectorDataContext) || {}
+
 // ==================== 流程画布子组件 ====================
 
 // 节点摘要（纯信息展示）：成员 / 审批策略（条件分支由 ConditionBlock 独立渲染）
 function renderNodeSummary(node, userDeptMap = {}) {
   // members 为 { key, type, label } 对象数组，需取 label 渲染
   const renderMemberLabel = (m) =>
-    m.type === 'user' && userDeptMap[m.key]
-      ? `${userDeptMap[m.key]}：${m.label}`
-      : m.label || m.key
+    m.type === 'user' && userDeptMap[m.key] ? `${userDeptMap[m.key]}：${m.label}` : m.label || m.key
 
-  // 生成纯文本摘要（单行省略）
-  const renderTextSummary = () => {
-    if (!node.members?.length) return null
-    const labels = node.members.map(renderMemberLabel)
-    if (labels.length <= 3) {
-      return labels.join('、')
-    }
-    return `${labels.slice(0, 3).join('、')} 等 ${labels.length} 人`
+  if (!node.members?.length) {
+    return <span className="cursor-pointer text-xs text-gray-400">未设置成员</span>
   }
 
-  // Tooltip 内容：完整展示所有成员
-  const renderTooltipContent = () => (
+  const labels = node.members.map(renderMemberLabel)
+  const summaryText =
+    labels.length <= 3
+      ? labels.join('、')
+      : `${labels.slice(0, 3).join('、')} 等 ${labels.length} 人`
+  const tooltipContent = (
     <div className="flex max-h-80 flex-wrap gap-1 overflow-auto p-1">
       {node.members.map((m, i) => (
         <Tag key={m.key || `${m.type}-${m.label}-${i}`}>{renderMemberLabel(m)}</Tag>
       ))}
     </div>
   )
-
-  const summaryText = renderTextSummary()
-
-  if (node.type === 'approver') {
-    return (
-      <div className="flex items-center">
-        {summaryText ? (
-          <Popover position="right" content={renderTooltipContent()}>
-            <span className="block w-full truncate text-xs">{summaryText}</span>
-          </Popover>
-        ) : (
-          <span className="cursor-pointer text-xs text-gray-400">未设置成员</span>
-        )}
-      </div>
-    )
-  }
   return (
-    <div>
-      {summaryText ? (
-        <Popover position="right" content={renderTooltipContent()}>
-          <span className="block w-full truncate text-xs">{summaryText}</span>
-        </Popover>
-      ) : (
-        <span className="cursor-pointer text-xs text-gray-400">未设置成员</span>
-      )}
-    </div>
+    <Popover position="right" content={tooltipContent}>
+      <span className="block w-full truncate text-xs">{summaryText}</span>
+    </Popover>
   )
 }
 
@@ -298,6 +277,12 @@ function BranchCard({ branch, onRemove, onEdit }) {
   )
 }
 
+/** 分支列顶部/底部横向连线类名：首列右半、末列左半、中间整条 */
+const branchLineClass = (i, total, top) =>
+  `absolute ${top ? 'top-0' : 'bottom-0'} ${
+    i === 0 ? 'right-0 left-1/2 w-1/2' : i === total - 1 ? 'right-1/2 left-0 w-1/2' : 'w-full'
+  } h-0 border-t border-gray-300`
+
 /**
  * 条件分支节点：纯布局容器（无卡片外观），负责承载各条件分支列。
  * 每个分支以 BranchCard（FlowNodeCard 同款样式）渲染，卡下接连接线 + 加号，再挂节点链（支持嵌套条件递归）。
@@ -326,9 +311,7 @@ function ConditionBlock({
       <div className="relative flex bg-white">
         {node.branches?.map((b, i) => (
           <div key={b.id} className="relative flex flex-col items-center px-2">
-            <div
-              className={`absolute top-0 ${i === 0 ? 'right-0 left-1/2 w-1/2' : i === node.branches.length - 1 ? 'right-1/2 left-0 w-1/2' : 'w-full'} h-0 border-t border-gray-300`}
-            />
+            <div className={branchLineClass(i, node.branches.length, true)} />
             <div className="absolute z-0 h-full w-0 border-l border-gray-300" />
             <BranchCard
               branch={b}
@@ -336,9 +319,7 @@ function ConditionBlock({
               onEdit={() => onEditBranch?.(node, b)}
             />
             <NodeConnector menu={buildBranchAddMenu(node.id, b.id, 0)} />
-            <div
-              className={`absolute bottom-0 ${i === 0 ? 'right-0 left-1/2 w-1/2' : i === node.branches.length - 1 ? 'right-1/2 left-0 w-1/2' : 'w-full'} h-0 border-t border-gray-300`}
-            />
+            <div className={branchLineClass(i, node.branches.length, false)} />
             {b.children?.map((child, ci) => (
               <FlowNode
                 key={child.id}
@@ -379,13 +360,15 @@ function PersonSelectorModal({
   onCancel,
   modes = ['org', 'role'],
   checkTarget = 'user',
-  orgTree = [],
-  roleList = [],
-  orgItemMap = {},
-  roleItemMap = {},
-  userDeptMap = {},
-  loading = false,
 }) {
+  const {
+    orgTree = [],
+    roleList = [],
+    orgItemMap = {},
+    roleItemMap = {},
+    userDeptMap = {},
+    loading = false,
+  } = useSelectorData()
   const hasOrg = modes.includes('org')
   const isSingleMode = modes.length === 1
   const [tab, setTab] = useState(modes[0])
@@ -435,14 +418,22 @@ function PersonSelectorModal({
       visible
       onCancel={onCancel}
       onOk={() => onChange(selected)}
-      style={{ width: isSingleMode ? 480 : 680 }}
+      style={{ width: 680 }}
     >
       <div className="flex gap-4">
         {/* 左侧：数据源 */}
         <div className="w-1/2 rounded border border-gray-200">
           {!isSingleMode && (
             <div className="flex justify-center border-b border-gray-100 py-2">
-              <Radio.Group  type="button" size="small" value={tab} onChange={setTab}>
+              <Radio.Group
+                type="button"
+                size="small"
+                value={tab}
+                onChange={(e) => {
+                  setTab(e)
+                  setSelected([])
+                }}
+              >
                 {modes.map((m) => (
                   <Radio key={m} value={m}>
                     {MODE_LABELS[m]}
@@ -451,7 +442,7 @@ function PersonSelectorModal({
               </Radio.Group>
             </div>
           )}
-          <div className="max-h-80 overflow-auto p-3">
+          <div className="h-80 overflow-auto p-3">
             {loading ? (
               <div className="py-8 text-center text-xs text-gray-400">数据加载中...</div>
             ) : tab === 'org' && hasOrg ? (
@@ -523,13 +514,15 @@ function PersonPicker({
   placeholder,
   modes = ['org', 'role'],
   checkTarget = 'user',
-  orgTree = [],
-  roleList = [],
-  orgItemMap = {},
-  roleItemMap = {},
-  userDeptMap = {},
-  loading = false,
 }) {
+  const {
+    orgTree = [],
+    roleList = [],
+    orgItemMap = {},
+    roleItemMap = {},
+    userDeptMap = {},
+    loading = false,
+  } = useSelectorData()
   const [visible, setVisible] = useState(false)
   const remove = (index) => onChange(value.filter((_, i) => i !== index))
 
@@ -561,12 +554,6 @@ function PersonPicker({
           modes={modes}
           checkTarget={checkTarget}
           value={value}
-          orgTree={orgTree}
-          roleList={roleList}
-          orgItemMap={orgItemMap}
-          roleItemMap={roleItemMap}
-          userDeptMap={userDeptMap}
-          loading={loading}
           onChange={(items) => {
             onChange(items)
             setVisible(false)
@@ -579,20 +566,7 @@ function PersonPicker({
 }
 
 /** 审批人节点：点击卡片唤起 Drawer，包含审批对象 / 审批方式 / 容错与权限 / 表单字段权限 四个配置模块 */
-function ApproverEditDrawer({
-  node,
-  appId,
-  formFields = [],
-  fieldsLoading = false,
-  orgTree = [],
-  roleList = [],
-  orgItemMap = {},
-  roleItemMap = {},
-  userDeptMap = {},
-  selectorLoading = false,
-  onCancel,
-  onSave,
-}) {
+function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCancel, onSave }) {
   const [approverType, setApproverType] = useState(node.approverType || 'user')
   const [members, setMembers] = useState(normalizeMembers(node.members))
   const [selfSelect, setSelfSelect] = useState(node.selfSelect || 'single')
@@ -664,12 +638,6 @@ function ApproverEditDrawer({
                 value={members}
                 onChange={setMembers}
                 placeholder="请选择"
-                orgTree={orgTree}
-                roleList={roleList}
-                orgItemMap={orgItemMap}
-                roleItemMap={roleItemMap}
-                userDeptMap={userDeptMap}
-                loading={selectorLoading}
               />
             </div>
           ) : (
@@ -710,12 +678,6 @@ function ApproverEditDrawer({
                 value={emptyMembers}
                 onChange={setEmptyMembers}
                 placeholder="选择指定人员"
-                orgTree={orgTree}
-                roleList={roleList}
-                orgItemMap={orgItemMap}
-                roleItemMap={roleItemMap}
-                userDeptMap={userDeptMap}
-                loading={selectorLoading}
               />
             </div>
           )}
@@ -782,17 +744,7 @@ function ApproverEditDrawer({
 }
 
 /** 抄送人节点：点击卡片唤起 Drawer，配置抄送对象与抄送时机 */
-function CcEditDrawer({
-  node,
-  orgTree = [],
-  roleList = [],
-  orgItemMap = {},
-  roleItemMap = {},
-  userDeptMap = {},
-  selectorLoading = false,
-  onCancel,
-  onSave,
-}) {
+function CcEditDrawer({ node, onCancel, onSave }) {
   const [members, setMembers] = useState(normalizeMembers(node.members))
   const [ccTiming, setCcTiming] = useState(node.ccTiming || 'after_pass')
   return (
@@ -818,12 +770,6 @@ function CcEditDrawer({
             value={members}
             onChange={setMembers}
             placeholder="请选择"
-            orgTree={orgTree}
-            roleList={roleList}
-            orgItemMap={orgItemMap}
-            roleItemMap={roleItemMap}
-            userDeptMap={userDeptMap}
-            loading={selectorLoading}
           />
         </div>
         <div>
@@ -1068,6 +1014,12 @@ export default function ExamineManage() {
   const roleItemMap = useMemo(() => buildRoleItemMap(roleList), [roleList])
   const userDeptMap = useMemo(() => buildUserDeptMap(orgTree), [orgTree])
 
+  // 注入 Context：各弹层统一读取，避免多层 props 透传
+  const selectorData = useMemo(
+    () => ({ orgTree, roleList, orgItemMap, roleItemMap, userDeptMap, loading: selectorLoading }),
+    [orgTree, roleList, orgItemMap, roleItemMap, userDeptMap, selectorLoading],
+  )
+
   // 在指定位置插入新节点（节点之间 / 末尾）
   const insertNodeAt = useCallback((index, type) => {
     setNodes((prev) => [...prev.slice(0, index), createNode(type), ...prev.slice(index)])
@@ -1186,126 +1138,96 @@ export default function ExamineManage() {
     Message.success('条件已保存')
   }, [])
 
-  // 节点间「+」添加菜单（hover / 点击弹出，选择类型后在对应位置插入；发起人节点唯一，不提供添加入口）
-  const buildAddMenu = (index) => (
-    <Space>
-      {Object.entries(NODE_TYPE_META)
-        .filter(([type]) => type !== 'initiator')
-        .map(([type, meta]) => (
-          <Button
-            size="small"
-            key={type}
-            onClick={() => insertNodeAt(index, type)}
-            icon={<meta.icon />}
-          >
-            {meta.label}
-          </Button>
-        ))}
-    </Space>
+  // 节点间「+」添加菜单工厂：onPick(type) 决定插入位置与层级（发起人节点唯一，不提供添加入口）
+  const buildAddMenu = useCallback(
+    (onPick) => (
+      <Space>
+        {Object.entries(NODE_TYPE_META)
+          .filter(([type]) => type !== 'initiator')
+          .map(([type, meta]) => (
+            <Button size="small" key={type} onClick={() => onPick(type)} icon={<meta.icon />}>
+              {meta.label}
+            </Button>
+          ))}
+      </Space>
+    ),
+    [],
   )
 
-  // 条件分支内「+」添加菜单（发起人唯一不可加；支持嵌套条件分支）
-  const buildBranchAddMenu = (nodeId, branchId, index) => (
-    <Space>
-      {Object.entries(NODE_TYPE_META)
-        .filter(([type]) => type !== 'initiator')
-        .map(([type, meta]) => (
-          <Button
-            size="small"
-            key={type}
-            onClick={() => insertBranchNode(nodeId, branchId, index, type)}
-            icon={<meta.icon />}
-          >
-            {meta.label}
-          </Button>
-        ))}
-    </Space>
+  // 条件分支内「+」添加菜单（复用 buildAddMenu 工厂；发起人唯一不可加；支持嵌套条件分支）
+  const buildBranchAddMenu = useCallback(
+    (nodeId, branchId, index) =>
+      buildAddMenu((type) => insertBranchNode(nodeId, branchId, index, type)),
+    [buildAddMenu, insertBranchNode],
   )
 
   return (
-    <Card title="审批流程配置">
-      {/* 流程画布：底部固定「流程结束」标识 */}
-      <div className="flex w-fit min-w-full flex-col items-center">
-        <div className="flex-1">
-          <div className="flex flex-col items-center">
-            {nodes.map((node, i) => (
-              <FlowNode
-                key={node.id}
-                node={node}
-                addMenu={buildAddMenu(i + 1)}
-                userDeptMap={userDeptMap}
-                onRemove={handleRemoveNode}
-                onEdit={handleNodeEdit}
-                onEditBranch={handleBranchEdit}
-                onAddBranch={addBranch}
-                onRemoveBranch={removeBranch}
-                onRemoveNode={handleRemoveNode}
-                buildBranchAddMenu={buildBranchAddMenu}
-              />
-            ))}
+    <SelectorDataContext.Provider value={selectorData}>
+      <Card title="审批流程配置">
+        {/* 流程画布：底部固定「流程结束」标识 */}
+        <div className="flex w-fit min-w-full flex-col items-center">
+          <div className="flex-1">
+            <div className="flex flex-col items-center">
+              {nodes.map((node, i) => (
+                <FlowNode
+                  key={node.id}
+                  node={node}
+                  addMenu={buildAddMenu((type) => insertNodeAt(i + 1, type))}
+                  userDeptMap={userDeptMap}
+                  onRemove={handleRemoveNode}
+                  onEdit={handleNodeEdit}
+                  onEditBranch={handleBranchEdit}
+                  onAddBranch={addBranch}
+                  onRemoveBranch={removeBranch}
+                  onRemoveNode={handleRemoveNode}
+                  buildBranchAddMenu={buildBranchAddMenu}
+                />
+              ))}
+            </div>
           </div>
+          <div className="text-gray-400">流程结束</div>
         </div>
-        <div className="text-gray-400">流程结束</div>
-      </div>
-      {/* 节点/条件编辑弹层：发起人直接唤起人员选择器，审批人/抄送人/条件分支用 Drawer */}
-      {editing?.kind === 'initiator' && (
-        <PersonSelectorModal
-          title="选择可发起人"
-          modes={['org', 'role']}
-          checkTarget="user"
-          value={normalizeMembers(editing.node.members)}
-          orgTree={orgTree}
-          roleList={roleList}
-          orgItemMap={orgItemMap}
-          roleItemMap={roleItemMap}
-          userDeptMap={userDeptMap}
-          loading={selectorLoading}
-          onChange={(items) => handleNodeSave({ ...editing.node, members: items })}
-          onCancel={handleCloseEdit}
-        />
-      )}
-      {editing?.kind === 'node' && editing.node.type === 'approver' && (
-        <ApproverEditDrawer
-          key={editing.node.id}
-          node={editing.node}
-          appId={id}
-          formFields={formFields}
-          fieldsLoading={fieldsLoading}
-          orgTree={orgTree}
-          roleList={roleList}
-          orgItemMap={orgItemMap}
-          roleItemMap={roleItemMap}
-          userDeptMap={userDeptMap}
-          selectorLoading={selectorLoading}
-          onCancel={handleCloseEdit}
-          onSave={handleNodeSave}
-        />
-      )}
-      {editing?.kind === 'node' && editing.node.type === 'cc' && (
-        <CcEditDrawer
-          key={editing.node.id}
-          node={editing.node}
-          orgTree={orgTree}
-          roleList={roleList}
-          orgItemMap={orgItemMap}
-          roleItemMap={roleItemMap}
-          userDeptMap={userDeptMap}
-          selectorLoading={selectorLoading}
-          onCancel={handleCloseEdit}
-          onSave={handleNodeSave}
-        />
-      )}
-      {editing?.kind === 'branch' && (
-        <ConditionEditDrawer
-          key={editing.branch.id}
-          node={editing.node}
-          branch={editing.branch}
-          formFields={formFields}
-          fieldsLoading={fieldsLoading}
-          onCancel={handleCloseEdit}
-          onSave={handleBranchSave}
-        />
-      )}
-    </Card>
+        {/* 节点/条件编辑弹层：发起人直接唤起人员选择器，审批人/抄送人/条件分支用 Drawer */}
+        {editing?.kind === 'initiator' && (
+          <PersonSelectorModal
+            title="选择可发起人"
+            modes={['org', 'role']}
+            checkTarget="user"
+            value={normalizeMembers(editing.node.members)}
+            onChange={(items) => handleNodeSave({ ...editing.node, members: items })}
+            onCancel={handleCloseEdit}
+          />
+        )}
+        {editing?.kind === 'node' && editing.node.type === 'approver' && (
+          <ApproverEditDrawer
+            key={editing.node.id}
+            node={editing.node}
+            formFields={formFields}
+            fieldsLoading={fieldsLoading}
+            onCancel={handleCloseEdit}
+            onSave={handleNodeSave}
+          />
+        )}
+        {editing?.kind === 'node' && editing.node.type === 'cc' && (
+          <CcEditDrawer
+            key={editing.node.id}
+            node={editing.node}
+            onCancel={handleCloseEdit}
+            onSave={handleNodeSave}
+          />
+        )}
+        {editing?.kind === 'branch' && (
+          <ConditionEditDrawer
+            key={editing.branch.id}
+            node={editing.node}
+            branch={editing.branch}
+            formFields={formFields}
+            fieldsLoading={fieldsLoading}
+            onCancel={handleCloseEdit}
+            onSave={handleBranchSave}
+          />
+        )}
+      </Card>
+    </SelectorDataContext.Provider>
   )
 }
