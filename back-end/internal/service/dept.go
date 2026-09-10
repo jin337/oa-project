@@ -8,8 +8,6 @@ import (
 )
 
 // DeptTree 部门树
-//   - 过滤、层级结构（Children）、排序（sort ASC, id ASC）与原有逻辑保持一致
-//   - req.WithUsers 为 true 时，额外为树中每个部门节点填充其下员工列表（Users）
 func DeptTree(req *model.DeptListReq) ([]*model.Dept, error) {
 	db := database.DB.Model(&model.Dept{})
 	if req.Name != "" {
@@ -19,11 +17,19 @@ func DeptTree(req *model.DeptListReq) ([]*model.Dept, error) {
 	if err := db.Order("sort ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err
 	}
+	return buildDeptTree(list, 0), nil
+}
+
+// DeptUsers 所有公司部门树 + 每个部门下的用户列表（GET /depts/users）
+// 返回完整部门树（不过滤、含层级 Children），并为每个节点填充其下用户（Users）
+func DeptUsers() ([]*model.Dept, error) {
+	var list []*model.Dept
+	if err := database.DB.Order("sort ASC, id ASC").Find(&list).Error; err != nil {
+		return nil, err
+	}
 	tree := buildDeptTree(list, 0)
-	if req.WithUsers {
-		if err := fillDeptUsers(tree); err != nil {
-			return nil, err
-		}
+	if err := fillDeptUsers(tree); err != nil {
+		return nil, err
 	}
 	return tree, nil
 }

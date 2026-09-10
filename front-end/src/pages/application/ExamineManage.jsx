@@ -12,7 +12,7 @@ import {
   Select,
   Space,
   Tag,
-  Tree,
+  Tree
 } from '@arco-design/web-react'
 import {
   IconBranch,
@@ -165,13 +165,34 @@ function renderNodeSummary(node) {
       ? `${USER_DEPT_MAP[m.key]}：${m.label}`
       : m.label || m.key
 
+  // 生成纯文本摘要（单行省略）
+  const renderTextSummary = () => {
+    if (!node.members?.length) return null
+    const labels = node.members.map(renderMemberLabel)
+    if (labels.length <= 3) {
+      return labels.join('、')
+    }
+    return `${labels.slice(0, 3).join('、')} 等 ${labels.length} 人`
+  }
+
+  // Tooltip 内容：完整展示所有成员
+  const renderTooltipContent = () => (
+    <div className="flex max-h-80 flex-wrap gap-1 overflow-auto p-1">
+      {node.members.map((m, i) => (
+        <Tag key={m.key || `${m.type}-${m.label}-${i}`}>{renderMemberLabel(m)}</Tag>
+      ))}
+    </div>
+  )
+
+  const summaryText = renderTextSummary()
+
   if (node.type === 'approver') {
     return (
-      <div className="flex flex-wrap items-center gap-1">
-        {node.members?.length ? (
-          node.members.map((m, i) => (
-            <Tag key={m.key || `${m.type}-${m.label}-${i}`}>{renderMemberLabel(m)}</Tag>
-          ))
+      <div className="flex items-center">
+        {summaryText ? (
+          <Popover position="right" content={renderTooltipContent()}>
+            <span className="block w-full truncate text-xs">{summaryText}</span>
+          </Popover>
         ) : (
           <span className="cursor-pointer text-xs text-gray-400">未设置成员</span>
         )}
@@ -179,11 +200,11 @@ function renderNodeSummary(node) {
     )
   }
   return (
-    <div className="flex flex-wrap gap-1">
-      {node.members?.length ? (
-        node.members.map((m, i) => (
-          <Tag key={m.key || `${m.type}-${m.label}-${i}`}>{renderMemberLabel(m)}</Tag>
-        ))
+    <div>
+      {summaryText ? (
+        <Popover position="right" content={renderTooltipContent()}>
+          <span className="block w-full truncate text-xs">{summaryText}</span>
+        </Popover>
       ) : (
         <span className="cursor-pointer text-xs text-gray-400">未设置成员</span>
       )}
@@ -588,7 +609,13 @@ function ApproverEditDrawer({
         {/* 步骤一：审批对象 */}
         <div>
           <div className="mb-2 font-medium">审批对象</div>
-          <Radio.Group value={approverType} onChange={setApproverType}>
+          <Radio.Group
+            value={approverType}
+            onChange={(value) => {
+              setApproverType(value)
+              setMembers([])
+            }}
+          >
             <Radio value="user">指定人员</Radio>
             <Radio value="role">指定角色</Radio>
             <Radio value="self">发起人自选</Radio>
@@ -637,6 +664,7 @@ function ApproverEditDrawer({
           {emptyHandler === 'assign' && (
             <div className="mt-3">
               <PersonPicker
+                modes={['org']}
                 value={emptyMembers}
                 onChange={setEmptyMembers}
                 placeholder="选择指定人员"
@@ -727,7 +755,7 @@ function CcEditDrawer({ node, onCancel, onSave }) {
       <div className="space-y-6">
         <div>
           <div className="mb-2 font-medium">抄送对象</div>
-          <PersonPicker value={members} onChange={setMembers} placeholder="请选择" />
+          <PersonPicker modes={['org']} value={members} onChange={setMembers} placeholder="请选择" />
         </div>
         <div>
           <div className="mb-2 font-medium">抄送时机</div>

@@ -72,6 +72,7 @@ func Setup() *gin.Engine {
 	depts.Use(middleware.JWTAuth())
 	{
 		depts.GET("", handler.DeptTree)
+		depts.GET("/users", handler.DeptUsers) // 静态段须在 /:id 之前注册
 		depts.POST("", handler.DeptCreate)
 		depts.GET("/:id", handler.DeptDetail)
 		depts.PUT("/:id", handler.DeptUpdate)

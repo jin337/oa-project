@@ -25,6 +25,16 @@ func DeptTree(c *gin.Context) {
 	response.OK(c, tree)
 }
 
+// DeptUsers GET /api/v1/depts/users 所有部门树 + 每个部门下的用户列表
+func DeptUsers(c *gin.Context) {
+	tree, err := service.DeptUsers()
+	if err != nil {
+		response.Fail(c, response.CodeServerError, "查询部门及用户失败")
+		return
+	}
+	response.OK(c, tree)
+}
+
 // DeptDetail GET /api/v1/depts/:id
 func DeptDetail(c *gin.Context) {
 	id, ok := parseID(c)
