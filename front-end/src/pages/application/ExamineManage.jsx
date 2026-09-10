@@ -88,11 +88,11 @@ function FlowNodeCard({ node, onRemove }) {
   const meta = NODE_TYPE_META[node.type]
   const Icon = meta.icon
   return (
-    <div className="relative w-52 rounded border border-(--color-neutral-3) bg-white shadow">
+    <div className="relative w-55 rounded border border-(--color-neutral-3) bg-white shadow">
       <div
-        className={`flex items-center justify-between border-b border-(--color-neutral-3) px-2 py-1 text-sm text-white ${meta.bg}`}
+        className={`flex items-center justify-between border-b border-(--color-neutral-3) px-2 py-1 text-white ${meta.bg}`}
       >
-        <div className="flex items-center gap-2 text-sm font-medium">
+        <div className="flex items-center gap-2 font-medium">
           <Icon />
           {node.label}
         </div>
@@ -122,7 +122,7 @@ function NodeConnector({ menu }) {
     <div className="flex flex-col items-center">
       <div className="h-4 w-px border-l border-gray-300" />
       <Popover
-        title={<div className="mb-2 text-sm font-bold">添加流程节点</div>}
+        title={<div className="mb-2 font-bold">添加流程节点</div>}
         content={menu}
         position="bl"
       >
@@ -133,13 +133,14 @@ function NodeConnector({ menu }) {
   )
 }
 
-/** 分支卡：以 FlowNodeCard 同款卡片样式渲染单个条件分支（条件: X + 摘要 + 非默认可删除） */
+/** 分支卡：以 FlowNodeCard 同款卡片样式渲染单个条件分支（条件X + 摘要 + 非默认可删除） */
 function BranchCard({ branch, onRemove }) {
   return (
-    <div className="relative mt-8 w-52 rounded border border-(--color-neutral-3) bg-white shadow">
-      <div className="flex items-center justify-between border-b border-(--color-neutral-3) bg-purple-500 px-2 py-1 text-sm text-white">
+    <div className="relative mt-8 w-55 rounded border border-(--color-neutral-3) bg-white shadow">
+      <div className="flex items-center justify-between border-b border-(--color-neutral-3) bg-purple-500 px-2 py-1 text-white">
         <div className="flex items-center gap-2 font-medium">
-          条件: {branch.isDefault ? '默认' : branch.label || '未命名'}
+          <IconBranch />
+          {branch.isDefault ? '默认条件' : branch.label || '未命名'}
         </div>
         {onRemove && (
           <IconClose
@@ -151,7 +152,7 @@ function BranchCard({ branch, onRemove }) {
           />
         )}
       </div>
-      <div className="px-3 py-2 text-xs text-gray-400">
+      <div className="px-3 py-2 text-gray-400 text-xs">
         {branch.isDefault
           ? '不满足其他条件，进入此分支'
           : `已设置 (${branch.rules?.length || 0}) 个条件`}
@@ -241,6 +242,26 @@ function FlowNode({
   )
 }
 
+/**
+ * 递归遍历节点树：在任意层级（含条件分支内嵌套的条件节点）查找 nodeId，
+ * 命中则用 updater 更新该节点；条件节点的分支 children 会继续递归下探。
+ */
+function updateNodeInTree(list, nodeId, updater) {
+  return list.map((node) => {
+    if (node.id === nodeId) return updater(node)
+    if (node.type === 'condition') {
+      return {
+        ...node,
+        branches: node.branches.map((b) => ({
+          ...b,
+          children: updateNodeInTree(b.children, nodeId, updater),
+        })),
+      }
+    }
+    return node
+  })
+}
+
 export default function ExamineManage() {
   const location = useLocation()
   const { id } = useParams() // 预留：后端接口就绪后用于请求当前应用的审批流配置
@@ -261,20 +282,14 @@ export default function ExamineManage() {
 
   const handleRemoveNode = useCallback((nodeId, branchId, childId) => {
     if (branchId && childId) {
-      // 删除条件分支下的节点
+      // 删除条件分支下的节点（任意嵌套层级）
       setNodes((prev) =>
-        prev.map((n) =>
-          n.id === nodeId
-            ? {
-                ...n,
-                branches: n.branches.map((b) =>
-                  b.id === branchId
-                    ? { ...b, children: b.children.filter((c) => c.id !== childId) }
-                    : b,
-                ),
-              }
-            : n,
-        ),
+        updateNodeInTree(prev, nodeId, (n) => ({
+          ...n,
+          branches: n.branches.map((b) =>
+            b.id === branchId ? { ...b, children: b.children.filter((c) => c.id !== childId) } : b,
+          ),
+        })),
       )
     } else {
       // 删除主链节点
@@ -283,54 +298,62 @@ export default function ExamineManage() {
     Message.success('节点已删除')
   }, [])
 
-  // 条件节点：添加条件（分支）
+  // 条件节点：添加条件（分支）（任意嵌套层级）
   const addBranch = useCallback((nodeId) => {
     setNodes((prev) =>
-      prev.map((n) =>
-        n.id === nodeId
-          ? { ...n, branches: [...n.branches, createBranch(`条件${n.branches.length}`)] }
-          : n,
-      ),
+      updateNodeInTree(prev, nodeId, (n) => ({
+        ...n,
+        branches: [...n.branches, createBranch(`条件${n.branches.length}`)],
+      })),
     )
   }, [])
 
   // 条件节点：删除条件（分支）。
-  // 级联删除：条件分支不能被直接一键删除，当删除后仅剩「默认」分支时，整个条件节点一并移除
+  // 级联删除：条件分支不能被直接一键删除，当删除后仅剩「默认」分支时，整个条件节点一并移除（任意嵌套层级）
   const removeBranch = useCallback((nodeId, branchId) => {
-    setNodes((prev) =>
-      prev
-        .map((n) => {
-          if (n.id !== nodeId) return n
-          const branches = n.branches.filter((b) => b.id !== branchId)
-          if (branches.length === 1 && branches[0].isDefault) return null // 级联删除整个条件节点
-          return { ...n, branches }
+    setNodes((prev) => {
+      const visit = (list) => {
+        const result = []
+        list.forEach((node) => {
+          if (node.id === nodeId) {
+            const branches = node.branches.filter((b) => b.id !== branchId)
+            if (branches.length === 1 && branches[0].isDefault) return // 级联删除整个条件节点
+            result.push({ ...node, branches })
+            return
+          }
+          if (node.type === 'condition') {
+            result.push({
+              ...node,
+              branches: node.branches.map((b) => ({ ...b, children: visit(b.children) })),
+            })
+            return
+          }
+          result.push(node)
         })
-        .filter(Boolean),
-    )
+        return result
+      }
+      return visit(prev)
+    })
   }, [])
 
-  // 条件分支内：在指定位置插入节点
+  // 条件分支内：在指定位置插入节点（任意嵌套层级）
   const insertBranchNode = useCallback((nodeId, branchId, index, type) => {
     setNodes((prev) =>
-      prev.map((n) =>
-        n.id === nodeId
-          ? {
-              ...n,
-              branches: n.branches.map((b) =>
-                b.id === branchId
-                  ? {
-                      ...b,
-                      children: [
-                        ...b.children.slice(0, index),
-                        createNode(type),
-                        ...b.children.slice(index),
-                      ],
-                    }
-                  : b,
-              ),
-            }
-          : n,
-      ),
+      updateNodeInTree(prev, nodeId, (n) => ({
+        ...n,
+        branches: n.branches.map((b) =>
+          b.id === branchId
+            ? {
+                ...b,
+                children: [
+                  ...b.children.slice(0, index),
+                  createNode(type),
+                  ...b.children.slice(index),
+                ],
+              }
+            : b,
+        ),
+      })),
     )
   }, [])
 
