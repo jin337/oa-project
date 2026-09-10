@@ -152,8 +152,8 @@ const USER_DEPT_MAP = Object.fromEntries(
   ORG_TREE.flatMap((d) => d.children.map((u) => [u.key, d.title])),
 )
 
-// 选择器类型：1 人员选择器（组织架构 + 角色）/ 2 部门选择器（仅组织架构，只能勾选部门）/ 3 角色选择器（仅角色列表）
-const SELECTOR_TYPE = { PERSON: 1, DEPT: 2, ROLE: 3 }
+// 选择器模式标签（可按需扩展更多维度）
+const MODE_LABELS = { org: '按组织架构选择', role: '按角色选择' }
 
 // ==================== 流程画布子组件 ====================
 
@@ -327,17 +327,27 @@ function ConditionBlock({
 }
 
 /**
- * 公共对象选择器（左右布局 Modal）：
- * - type: SELECTOR_TYPE.PERSON(1) 人员选择器（组织架构 + 角色 Tab 均可选）
- *         SELECTOR_TYPE.DEPT(2)   部门选择器（仅组织架构 Tab，人员节点禁用勾选）
- *         SELECTOR_TYPE.ROLE(3)   角色选择器（仅角色列表）
- * - 左侧：数据源（组织架构 Tree / 角色列表），右侧：已选项（Tag，可删除）
+ * 通用对象选择器弹层（左右布局 Modal）：
+ * - modes: 数据源维度数组，如 ['org', 'role']；单项时自动隐藏 Tab 切换栏
+ *     'org'  — 组织架构树（部门 + 人员）
+ *     'role' — 角色列表
+ * - checkTarget: org 树可勾选类型
+ *     'user'（默认）— 仅人员可勾选
+ *     'dept'        — 仅部门可勾选
+ *     'both'        — 部门与人员均可勾选
  * 确认后通过 onChange 统一回传 { key, type, label } 结构的条目数组
  */
-function PersonSelectorModal({ title = '选择人员', value = [], onChange, onCancel, type = SELECTOR_TYPE.PERSON }) {
-  const isDeptOnly = type === SELECTOR_TYPE.DEPT
-  const isRoleOnly = type === SELECTOR_TYPE.ROLE
-  const [tab, setTab] = useState(isRoleOnly ? 'role' : 'org')
+function PersonSelectorModal({
+  title = '选择人员',
+  value = [],
+  onChange,
+  onCancel,
+  modes = ['org', 'role'],
+  checkTarget = 'user',
+}) {
+  const hasOrg = modes.includes('org')
+  const isSingleMode = modes.length === 1
+  const [tab, setTab] = useState(modes[0])
   // 弹层内临时选择（统一带 key）
   const [selected, setSelected] = useState(() =>
     value.map((item) => ({ ...item, key: item.key || `${item.type}-${item.label}` })),
@@ -352,8 +362,10 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
   const handleTreeCheck = (keys) => {
     const checked = Array.isArray(keys) ? keys : keys?.checked || []
     let orgItems = checked.map((k) => ORG_ITEM_MAP[k]).filter(Boolean)
-    // 部门选择器：仅保留部门条目
-    if (isDeptOnly) orgItems = orgItems.filter((s) => s.type === 'dept')
+    // 按 checkTarget 过滤：dept 仅保留部门，user 仅保留人员，both 全部保留
+    if (checkTarget !== 'both') {
+      orgItems = orgItems.filter((s) => s.type === checkTarget)
+    }
     const roleItems = selected.filter((s) => ROLE_ITEM_MAP[s.key])
     setSelected([...orgItems, ...roleItems])
   }
@@ -382,30 +394,33 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
       visible
       onCancel={onCancel}
       onOk={() => onChange(selected)}
-      style={{ width: 680 }}
+      style={{ width: isSingleMode ? 480 : 680 }}
     >
       <div className="flex gap-4">
         {/* 左侧：数据源 */}
         <div className="w-1/2 rounded border border-gray-200">
-          {!isDeptOnly && !isRoleOnly && (
+          {!isSingleMode && (
             <div className="flex justify-center border-b border-gray-100 py-2">
               <Radio.Group type="button" size="small" value={tab} onChange={setTab}>
-                <Radio value="org">按组织架构选择</Radio>
-                <Radio value="role">按角色选择</Radio>
+                {modes.map((m) => (
+                  <Radio key={m} value={m}>{MODE_LABELS[m]}</Radio>
+                ))}
               </Radio.Group>
             </div>
           )}
           <div className="max-h-80 overflow-auto p-3">
-            {tab === 'org' && !isRoleOnly ? (
+            {tab === 'org' && hasOrg ? (
               <Tree
                 checkable
                 checkStrictly
                 checkedKeys={orgCheckedKeys}
                 onCheck={handleTreeCheck}
                 treeData={ORG_TREE}
-                disableCheckbox={(node) =>
-                  isDeptOnly ? !node.children?.length : !!node.children?.length
-                }
+                disableCheckbox={(node) => {
+                  if (checkTarget === 'both') return false
+                  const hasChildren = !!node.children?.length
+                  return checkTarget === 'dept' ? !hasChildren : hasChildren
+                }}
               />
             ) : (
               <Checkbox.Group
@@ -442,8 +457,12 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
   )
 }
 
-/** 人员选择器公共组件：展示已选条目 + 「选择」按钮，唤起 PersonSelectorModal（左右布局）统一选择 */
-function PersonPicker({ value = [], onChange, placeholder, type = SELECTOR_TYPE.PERSON }) {
+/**
+ * 人员/部门/角色选择器公共组件：展示已选条目 + 「选择」按钮，唤起 PersonSelectorModal
+ * - modes: 数据源维度，如 ['org', 'role']（默认）、['role']、['org']
+ * - checkTarget: org 树勾选目标 'user'（默认）| 'dept' | 'both'
+ */
+function PersonPicker({ value = [], onChange, placeholder, modes = ['org', 'role'], checkTarget = 'user' }) {
   const [visible, setVisible] = useState(false)
   const remove = (index) => onChange(value.filter((_, i) => i !== index))
 
@@ -468,7 +487,8 @@ function PersonPicker({ value = [], onChange, placeholder, type = SELECTOR_TYPE.
       {visible && (
         <PersonSelectorModal
           title={placeholder || '选择人员'}
-          type={type}
+          modes={modes}
+          checkTarget={checkTarget}
           value={value}
           onChange={(items) => {
             onChange(items)
@@ -543,7 +563,8 @@ function ApproverEditDrawer({ node, appId, formFields = [], fieldsLoading = fals
           {approverType !== 'self' ? (
             <div className="mt-3">
               <PersonPicker
-                type={approverType === 'role' ? SELECTOR_TYPE.ROLE : SELECTOR_TYPE.PERSON}
+                modes={approverType === 'role' ? ['role'] : ['org']}
+                checkTarget={approverType === 'role' ? 'user' : 'user'}
                 value={members}
                 onChange={setMembers}
                 placeholder="请选择"
@@ -1058,6 +1079,8 @@ export default function ExamineManage() {
       {editing?.kind === 'initiator' && (
         <PersonSelectorModal
           title="选择可发起人"
+          modes={['org', 'role']}
+          checkTarget="user"
           value={normalizeMembers(editing.node.members)}
           onChange={(items) => handleNodeSave({ ...editing.node, members: items })}
           onCancel={handleCloseEdit}
