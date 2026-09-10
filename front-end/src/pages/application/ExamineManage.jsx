@@ -22,9 +22,11 @@ import {
   IconStamp,
   IconUser,
 } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
+import * as deptApi from '../../api/dept'
+import * as roleApi from '../../api/role'
 import { useTabs } from '../../store/tab-context'
 
 const MODULE_LABEL = '审批配置'
@@ -103,54 +105,53 @@ const OPERATOR_OPTIONS = [
 const normalizeMembers = (members) =>
   (members || []).map((m) => (typeof m === 'string' ? { type: 'user', label: m } : m))
 
-// ==================== 对象选择器数据（示例，后续对接组织架构 / 角色接口） ====================
+// ==================== 对象选择器数据（动态：组织架构 / 角色接口） ====================
 
-// 组织架构树：部门节点 + 人员叶子（key 前缀区分类型）
-const ORG_TREE = [
-  {
-    key: 'dept_1',
-    title: '技术部',
+// 接口部门树 → 选择器树格式：dept 节点带 isDept 标记，children 递归含子部门与员工
+// 接口部门：{ id, name, children: [] }
+const transformDeptTree = (data = []) =>
+  data.map((d) => ({
+    key: `dept_${d.id}`,
+    title: d.name,
+    isDept: true,
     children: [
-      { key: 'user_1', title: '张三' },
-      { key: 'user_2', title: '李四' },
+      ...transformDeptTree(d.children || []),
     ],
-  },
-  {
-    key: 'dept_2',
-    title: '财务部',
-    children: [{ key: 'user_3', title: '王五' }],
-  },
-  {
-    key: 'dept_3',
-    title: '人事部',
-    children: [{ key: 'user_4', title: '赵六' }],
-  },
-]
+  }))
 
-// 组织架构 key → 选择条目映射（部门 / 人员）
-const ORG_ITEM_MAP = Object.fromEntries(
-  ORG_TREE.flatMap((d) => [
-    [d.key, { key: d.key, type: 'dept', label: d.title }],
-    ...d.children.map((u) => [u.key, { key: u.key, type: 'user', label: u.title }]),
-  ]),
-)
+// 树节点 → key 映射：{ key: { key, type: 'dept' | 'user', label } }
+const buildOrgItemMap = (tree) => {
+  const map = {}
+  const walk = (nodes) => {
+    nodes.forEach((n) => {
+      map[n.key] = { key: n.key, type: n.isDept ? 'dept' : 'user', label: n.title }
+      if (n.children?.length) walk(n.children)
+    })
+  }
+  walk(tree)
+  return map
+}
 
-// 角色列表
-const ROLE_LIST = [
-  { key: 'role_1', title: '部门经理' },
-  { key: 'role_2', title: '财务主管' },
-  { key: 'role_3', title: '人事专员' },
-  { key: 'role_4', title: '系统管理员' },
-]
+// 人员 key → 所属部门标题（右侧展示「部门：姓名」用，人员归到最近祖先部门）
+const buildUserDeptMap = (tree) => {
+  const map = {}
+  const walk = (nodes, deptTitle) => {
+    nodes.forEach((n) => {
+      if (n.isDept) walk(n.children || [], n.title)
+      else map[n.key] = deptTitle
+    })
+  }
+  walk(tree)
+  return map
+}
 
-const ROLE_ITEM_MAP = Object.fromEntries(
-  ROLE_LIST.map((r) => [r.key, { key: r.key, type: 'role', label: r.title }]),
-)
+// 接口角色数组 → 选择器列表格式：{ id, name, code } → { key: 'role_{id}', title: name }
+const transformRoleList = (data = []) =>
+  data.map((r) => ({ key: `role_${r.id}`, title: r.name }))
 
-// 人员 key → 所属部门标题（右侧展示「部门：姓名」用）
-const USER_DEPT_MAP = Object.fromEntries(
-  ORG_TREE.flatMap((d) => d.children.map((u) => [u.key, d.title])),
-)
+// 角色列表 → key 映射
+const buildRoleItemMap = (roles) =>
+  Object.fromEntries(roles.map((r) => [r.key, { key: r.key, type: 'role', label: r.title }]))
 
 // 选择器模式标签（可按需扩展更多维度）
 const MODE_LABELS = { org: '按组织架构选择', role: '按角色选择' }
@@ -158,11 +159,11 @@ const MODE_LABELS = { org: '按组织架构选择', role: '按角色选择' }
 // ==================== 流程画布子组件 ====================
 
 // 节点摘要（纯信息展示）：成员 / 审批策略（条件分支由 ConditionBlock 独立渲染）
-function renderNodeSummary(node) {
+function renderNodeSummary(node, userDeptMap = {}) {
   // members 为 { key, type, label } 对象数组，需取 label 渲染
   const renderMemberLabel = (m) =>
-    m.type === 'user' && USER_DEPT_MAP[m.key]
-      ? `${USER_DEPT_MAP[m.key]}：${m.label}`
+    m.type === 'user' && userDeptMap[m.key]
+      ? `${userDeptMap[m.key]}：${m.label}`
       : m.label || m.key
 
   // 生成纯文本摘要（单行省略）
@@ -213,7 +214,7 @@ function renderNodeSummary(node) {
 }
 
 /** 1. 节点卡片区域：渲染单个流程节点卡片（类型色标 + 图标 + 摘要 + 删除），点击卡片弹出编辑抽屉 */
-function FlowNodeCard({ node, onRemove, onEdit }) {
+function FlowNodeCard({ node, userDeptMap = {}, onRemove, onEdit }) {
   const meta = NODE_TYPE_META[node.type]
   const Icon = meta.icon
   return (
@@ -243,7 +244,7 @@ function FlowNodeCard({ node, onRemove, onEdit }) {
           </Popconfirm>
         )}
       </div>
-      <div className="px-3 py-2">{renderNodeSummary(node)}</div>
+      <div className="px-3 py-2">{renderNodeSummary(node, userDeptMap)}</div>
     </div>
   )
 }
@@ -303,6 +304,7 @@ function BranchCard({ branch, onRemove, onEdit }) {
  */
 function ConditionBlock({
   node,
+  userDeptMap = {},
   onEdit,
   onEditBranch,
   onAddBranch,
@@ -341,6 +343,7 @@ function ConditionBlock({
                 key={child.id}
                 node={child}
                 addMenu={buildBranchAddMenu(node.id, b.id, ci + 1)}
+                userDeptMap={userDeptMap}
                 onRemove={(cid) => onRemoveNode(node.id, b.id, cid)}
                 onEdit={onEdit}
                 onEditBranch={onEditBranch}
@@ -375,6 +378,12 @@ function PersonSelectorModal({
   onCancel,
   modes = ['org', 'role'],
   checkTarget = 'user',
+  orgTree = [],
+  roleList = [],
+  orgItemMap = {},
+  roleItemMap = {},
+  userDeptMap = {},
+  loading = false,
 }) {
   const hasOrg = modes.includes('org')
   const isSingleMode = modes.length === 1
@@ -385,25 +394,25 @@ function PersonSelectorModal({
   )
 
   // 组织架构树选中 keys（部门/人员）
-  const orgCheckedKeys = selected.filter((s) => ORG_ITEM_MAP[s.key]).map((s) => s.key)
+  const orgCheckedKeys = selected.filter((s) => orgItemMap[s.key]).map((s) => s.key)
   // 角色选中 keys
-  const roleCheckedKeys = selected.filter((s) => ROLE_ITEM_MAP[s.key]).map((s) => s.key)
+  const roleCheckedKeys = selected.filter((s) => roleItemMap[s.key]).map((s) => s.key)
 
   // Tree 勾选（checkStrictly 父子独立，避免 disableCheckbox 下级联干扰）
   const handleTreeCheck = (keys) => {
     const checked = Array.isArray(keys) ? keys : keys?.checked || []
-    let orgItems = checked.map((k) => ORG_ITEM_MAP[k]).filter(Boolean)
+    let orgItems = checked.map((k) => orgItemMap[k]).filter(Boolean)
     // 按 checkTarget 过滤：dept 仅保留部门，user 仅保留人员，both 全部保留
     if (checkTarget !== 'both') {
       orgItems = orgItems.filter((s) => s.type === checkTarget)
     }
-    const roleItems = selected.filter((s) => ROLE_ITEM_MAP[s.key])
+    const roleItems = selected.filter((s) => roleItemMap[s.key])
     setSelected([...orgItems, ...roleItems])
   }
 
   const handleRoleCheck = (keys) => {
-    const roleItems = keys.map((k) => ROLE_ITEM_MAP[k]).filter(Boolean)
-    const orgItems = selected.filter((s) => ORG_ITEM_MAP[s.key])
+    const roleItems = keys.map((k) => roleItemMap[k]).filter(Boolean)
+    const orgItems = selected.filter((s) => orgItemMap[s.key])
     setSelected([...orgItems, ...roleItems])
   }
 
@@ -413,7 +422,7 @@ function PersonSelectorModal({
   // 右侧标签展示：人员「所属部门：姓名」/ 部门、角色直接显示名称
   const renderTagLabel = (item) => {
     if (item.type === 'user') {
-      const dept = USER_DEPT_MAP[item.key]
+      const dept = userDeptMap[item.key]
       return dept ? `${dept}：${item.label}` : item.label
     }
     return item.label
@@ -442,31 +451,39 @@ function PersonSelectorModal({
             </div>
           )}
           <div className="max-h-80 overflow-auto p-3">
-            {tab === 'org' && hasOrg ? (
-              <Tree
-                checkable
-                checkStrictly
-                checkedKeys={orgCheckedKeys}
-                onCheck={handleTreeCheck}
-                treeData={ORG_TREE}
-                disableCheckbox={(node) => {
-                  if (checkTarget === 'both') return false
-                  const hasChildren = !!node.children?.length
-                  return checkTarget === 'dept' ? !hasChildren : hasChildren
-                }}
-              />
-            ) : (
+            {loading ? (
+              <div className="py-8 text-center text-xs text-gray-400">数据加载中...</div>
+            ) : tab === 'org' && hasOrg ? (
+              orgTree.length ? (
+                <Tree
+                  checkable
+                  checkStrictly
+                  checkedKeys={orgCheckedKeys}
+                  onCheck={handleTreeCheck}
+                  treeData={orgTree}
+                  disableCheckbox={(node) => {
+                    if (checkTarget === 'both') return false
+                    const hasChildren = !!node.children?.length
+                    return checkTarget === 'dept' ? !hasChildren : hasChildren
+                  }}
+                />
+              ) : (
+                <div className="py-8 text-center text-xs text-gray-400">暂无组织架构数据</div>
+              )
+            ) : roleList.length ? (
               <Checkbox.Group
                 direction="vertical"
                 value={roleCheckedKeys}
                 onChange={handleRoleCheck}
               >
-                {ROLE_LIST.map((r) => (
+                {roleList.map((r) => (
                   <Checkbox key={r.key} value={r.key}>
                     {r.title}
                   </Checkbox>
                 ))}
               </Checkbox.Group>
+            ) : (
+              <div className="py-8 text-center text-xs text-gray-400">暂无角色数据</div>
             )}
           </div>
         </div>
@@ -505,6 +522,12 @@ function PersonPicker({
   placeholder,
   modes = ['org', 'role'],
   checkTarget = 'user',
+  orgTree = [],
+  roleList = [],
+  orgItemMap = {},
+  roleItemMap = {},
+  userDeptMap = {},
+  loading = false,
 }) {
   const [visible, setVisible] = useState(false)
   const remove = (index) => onChange(value.filter((_, i) => i !== index))
@@ -519,8 +542,8 @@ function PersonPicker({
               closable
               onClose={() => remove(i)}
             >
-              {item.type === 'user' && USER_DEPT_MAP[item.key]
-                ? `${USER_DEPT_MAP[item.key]}：${item.label}`
+              {item.type === 'user' && userDeptMap[item.key]
+                ? `${userDeptMap[item.key]}：${item.label}`
                 : item.label}
             </Tag>
           ))
@@ -537,6 +560,12 @@ function PersonPicker({
           modes={modes}
           checkTarget={checkTarget}
           value={value}
+          orgTree={orgTree}
+          roleList={roleList}
+          orgItemMap={orgItemMap}
+          roleItemMap={roleItemMap}
+          userDeptMap={userDeptMap}
+          loading={loading}
           onChange={(items) => {
             onChange(items)
             setVisible(false)
@@ -554,6 +583,12 @@ function ApproverEditDrawer({
   appId,
   formFields = [],
   fieldsLoading = false,
+  orgTree = [],
+  roleList = [],
+  orgItemMap = {},
+  roleItemMap = {},
+  userDeptMap = {},
+  selectorLoading = false,
   onCancel,
   onSave,
 }) {
@@ -624,10 +659,16 @@ function ApproverEditDrawer({
             <div className="mt-3">
               <PersonPicker
                 modes={approverType === 'role' ? ['role'] : ['org']}
-                checkTarget={approverType === 'role' ? 'user' : 'user'}
+                checkTarget="user"
                 value={members}
                 onChange={setMembers}
                 placeholder="请选择"
+                orgTree={orgTree}
+                roleList={roleList}
+                orgItemMap={orgItemMap}
+                roleItemMap={roleItemMap}
+                userDeptMap={userDeptMap}
+                loading={selectorLoading}
               />
             </div>
           ) : (
@@ -668,6 +709,12 @@ function ApproverEditDrawer({
                 value={emptyMembers}
                 onChange={setEmptyMembers}
                 placeholder="选择指定人员"
+                orgTree={orgTree}
+                roleList={roleList}
+                orgItemMap={orgItemMap}
+                roleItemMap={roleItemMap}
+                userDeptMap={userDeptMap}
+                loading={selectorLoading}
               />
             </div>
           )}
@@ -734,7 +781,17 @@ function ApproverEditDrawer({
 }
 
 /** 抄送人节点：点击卡片唤起 Drawer，配置抄送对象与抄送时机 */
-function CcEditDrawer({ node, onCancel, onSave }) {
+function CcEditDrawer({
+  node,
+  orgTree = [],
+  roleList = [],
+  orgItemMap = {},
+  roleItemMap = {},
+  userDeptMap = {},
+  selectorLoading = false,
+  onCancel,
+  onSave,
+}) {
   const [members, setMembers] = useState(normalizeMembers(node.members))
   const [ccTiming, setCcTiming] = useState(node.ccTiming || 'after_pass')
   return (
@@ -755,7 +812,18 @@ function CcEditDrawer({ node, onCancel, onSave }) {
       <div className="space-y-6">
         <div>
           <div className="mb-2 font-medium">抄送对象</div>
-          <PersonPicker modes={['org']} value={members} onChange={setMembers} placeholder="请选择" />
+          <PersonPicker
+            modes={['org']}
+            value={members}
+            onChange={setMembers}
+            placeholder="请选择"
+            orgTree={orgTree}
+            roleList={roleList}
+            orgItemMap={orgItemMap}
+            roleItemMap={roleItemMap}
+            userDeptMap={userDeptMap}
+            loading={selectorLoading}
+          />
         </div>
         <div>
           <div className="mb-2 font-medium">抄送时机</div>
@@ -882,6 +950,7 @@ function ConditionEditDrawer({
 function FlowNode({
   node,
   addMenu,
+  userDeptMap = {},
   onRemove,
   onEdit,
   onEditBranch,
@@ -895,6 +964,7 @@ function FlowNode({
       {node.type === 'condition' ? (
         <ConditionBlock
           node={node}
+          userDeptMap={userDeptMap}
           onEdit={onEdit}
           onEditBranch={onEditBranch}
           onAddBranch={onAddBranch}
@@ -903,7 +973,7 @@ function FlowNode({
           buildBranchAddMenu={buildBranchAddMenu}
         />
       ) : (
-        <FlowNodeCard node={node} onRemove={onRemove} onEdit={onEdit} />
+        <FlowNodeCard node={node} userDeptMap={userDeptMap} onRemove={onRemove} onEdit={onEdit} />
       )}
       <NodeConnector menu={addMenu} />
     </div>
@@ -966,6 +1036,36 @@ export default function ExamineManage() {
       cancelled = true
     }
   }, [id])
+
+  // 对象选择器数据源：组织架构树（部门+员工）/ 角色列表，挂载即请求一次
+  const [orgTree, setOrgTree] = useState([])
+  const [roleList, setRoleList] = useState([])
+  const [selectorLoading, setSelectorLoading] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setSelectorLoading(true)
+    Promise.all([deptApi.getDeptUsersTree(), roleApi.listRoles({ page: 1, size: 999 })])
+      .then(([deptRes, roleRes]) => {
+        if (cancelled) return
+        setOrgTree(transformDeptTree(deptRes.data?.list || deptRes.data || []))
+        setRoleList(transformRoleList(roleRes.data?.list || roleRes.data || []))
+      })
+      .catch(() => {
+        // 错误已在请求层提示
+      })
+      .finally(() => {
+        if (!cancelled) setSelectorLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // 选择器派生映射（随动态数据更新）
+  const orgItemMap = useMemo(() => buildOrgItemMap(orgTree), [orgTree])
+  const roleItemMap = useMemo(() => buildRoleItemMap(roleList), [roleList])
+  const userDeptMap = useMemo(() => buildUserDeptMap(orgTree), [orgTree])
 
   // 在指定位置插入新节点（节点之间 / 末尾）
   const insertNodeAt = useCallback((index, type) => {
@@ -1132,6 +1232,7 @@ export default function ExamineManage() {
                 key={node.id}
                 node={node}
                 addMenu={buildAddMenu(i + 1)}
+                userDeptMap={userDeptMap}
                 onRemove={handleRemoveNode}
                 onEdit={handleNodeEdit}
                 onEditBranch={handleBranchEdit}
@@ -1152,6 +1253,12 @@ export default function ExamineManage() {
           modes={['org', 'role']}
           checkTarget="user"
           value={normalizeMembers(editing.node.members)}
+          orgTree={orgTree}
+          roleList={roleList}
+          orgItemMap={orgItemMap}
+          roleItemMap={roleItemMap}
+          userDeptMap={userDeptMap}
+          loading={selectorLoading}
           onChange={(items) => handleNodeSave({ ...editing.node, members: items })}
           onCancel={handleCloseEdit}
         />
@@ -1163,6 +1270,12 @@ export default function ExamineManage() {
           appId={id}
           formFields={formFields}
           fieldsLoading={fieldsLoading}
+          orgTree={orgTree}
+          roleList={roleList}
+          orgItemMap={orgItemMap}
+          roleItemMap={roleItemMap}
+          userDeptMap={userDeptMap}
+          selectorLoading={selectorLoading}
           onCancel={handleCloseEdit}
           onSave={handleNodeSave}
         />
@@ -1171,6 +1284,12 @@ export default function ExamineManage() {
         <CcEditDrawer
           key={editing.node.id}
           node={editing.node}
+          orgTree={orgTree}
+          roleList={roleList}
+          orgItemMap={orgItemMap}
+          roleItemMap={roleItemMap}
+          userDeptMap={userDeptMap}
+          selectorLoading={selectorLoading}
           onCancel={handleCloseEdit}
           onSave={handleNodeSave}
         />
