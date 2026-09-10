@@ -85,6 +85,7 @@ func ApplicationByCode(code, state string, page, size int, filters map[string]st
 		// 列表场景不需要布局配置，置空减少冗余
 		result.FormLayoutJSON = nil
 		result.DetailLayoutJSON = nil
+		result.ApprovalFlowJSON = nil
 		// 搜索项与表格表头取自该应用的表单元素（visibility.search / visibility.list）
 		var elements []model.FormElement
 		if err := database.DB.Where("app_id = ?", app.ID).Order("id ASC").Find(&elements).Error; err != nil {
@@ -118,6 +119,7 @@ func ApplicationByCode(code, state string, page, size int, filters map[string]st
 		}
 	case "form":
 		result.DetailLayoutJSON = nil
+		result.ApprovalFlowJSON = nil
 	case "detail":
 		result.FormLayoutJSON = nil
 	default:
@@ -824,6 +826,9 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 	}
 	if req.DetailLayoutJSON != nil {
 		app.DetailLayoutJSON = *req.DetailLayoutJSON
+	}
+	if req.ApprovalFlowJSON != nil {
+		app.ApprovalFlowJSON = *req.ApprovalFlowJSON
 	}
 	if req.Status == 1 || req.Status == 2 {
 		app.Status = req.Status

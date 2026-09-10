@@ -11,6 +11,7 @@ import {
   Radio,
   Select,
   Space,
+  Spin,
   Tag,
   Tree,
 } from '@arco-design/web-react'
@@ -1009,6 +1010,42 @@ export default function ExamineManage() {
     }
   }, [])
 
+  // 审批流数据回显：挂载 / id 变化时获取应用配置，解析 approval_flow_json 还原画布；
+  // 空、不存在或解析失败时降级保持默认「发起人」节点
+  const [flowLoading, setFlowLoading] = useState(false)
+
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    setFlowLoading(true)
+    applicationApi
+      .getApplication(id)
+      .then((res) => {
+        if (cancelled) return
+        const raw = res.data?.approval_flow_json
+        let parsed = null
+        if (Array.isArray(raw)) parsed = raw
+        else if (typeof raw === 'string' && raw) {
+          try {
+            parsed = JSON.parse(raw)
+          } catch {
+            parsed = null
+          }
+        }
+        // 有效节点数组才还原；空 / 无效保持默认
+        if (Array.isArray(parsed) && parsed.length) setNodes(parsed)
+      })
+      .catch(() => {
+        // 错误已在请求层提示，画布保持默认发起人节点
+      })
+      .finally(() => {
+        if (!cancelled) setFlowLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
   // 选择器派生映射（随动态数据更新）
   const orgItemMap = useMemo(() => buildOrgItemMap(orgTree), [orgTree])
   const roleItemMap = useMemo(() => buildRoleItemMap(roleList), [roleList])
@@ -1161,13 +1198,36 @@ export default function ExamineManage() {
     [buildAddMenu, insertBranchNode],
   )
 
+  // 保存审批流：将画布节点数据写入应用 approval_flow_json 字段
+  const [saving, setSaving] = useState(false)
+  const handleSave = useCallback(async () => {
+    if (!id) return
+    setSaving(true)
+    try {
+      await applicationApi.updateApplication(id, { approval_flow_json: nodes })
+      Message.success('保存成功')
+    } catch {
+      // 错误已在请求层统一提示
+    } finally {
+      setSaving(false)
+    }
+  }, [id, nodes])
+
   return (
     <SelectorDataContext.Provider value={selectorData}>
-      <Card title="审批流程配置">
-        {/* 流程画布：底部固定「流程结束」标识 */}
-        <div className="flex w-fit min-w-full flex-col items-center">
-          <div className="flex-1">
-            <div className="flex flex-col items-center">
+      <Card
+        title="审批流程配置"
+        extra={
+          <Button type="primary" loading={saving} onClick={handleSave}>
+            保存
+          </Button>
+        }
+      >
+        {/* 流程画布：加载期间 Spin 遮罩，底部固定「流程结束」标识 */}
+        <Spin loading={flowLoading} className="w-full">
+          <div className="flex w-fit min-w-full flex-col items-center">
+            <div className="flex-1">
+              <div className="flex flex-col items-center">
               {nodes.map((node, i) => (
                 <FlowNode
                   key={node.id}
@@ -1187,6 +1247,7 @@ export default function ExamineManage() {
           </div>
           <div className="text-gray-400">流程结束</div>
         </div>
+        </Spin>
         {/* 节点/条件编辑弹层：发起人直接唤起人员选择器，审批人/抄送人/条件分支用 Drawer */}
         {editing?.kind === 'initiator' && (
           <PersonSelectorModal

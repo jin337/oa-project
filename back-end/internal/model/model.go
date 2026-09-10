@@ -272,6 +272,7 @@ type Application struct {
 	Status           int                    `gorm:"default:1;comment:状态 1启用 2停用" json:"status"`
 	FormLayoutJSON   map[string]interface{} `gorm:"serializer:json;type:json;comment:表单页布局配置" json:"form_layout_json"`
 	DetailLayoutJSON map[string]interface{} `gorm:"serializer:json;type:json;comment:详情页布局配置" json:"detail_layout_json"`
+	ApprovalFlowJSON any                    `gorm:"serializer:json;type:json;comment:审批流配置" json:"approval_flow_json"`
 }
 
 type ApplicationCreateReq struct {
@@ -282,6 +283,7 @@ type ApplicationCreateReq struct {
 	Status           int                    `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
 	FormLayoutJSON   map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
 	DetailLayoutJSON map[string]interface{} `json:"detail_layout_json" validate:"omitempty" label:"详情页布局"`
+	ApprovalFlowJSON any                    `json:"approval_flow_json" validate:"omitempty" label:"审批流配置"`
 }
 
 type ApplicationUpdateReq struct {
@@ -292,6 +294,7 @@ type ApplicationUpdateReq struct {
 	Status           int                     `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
 	FormLayoutJSON   *map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
 	DetailLayoutJSON *map[string]interface{} `json:"detail_layout_json" validate:"omitempty" label:"详情页布局"`
+	ApprovalFlowJSON *any                    `json:"approval_flow_json" validate:"omitempty" label:"审批流配置"`
 }
 
 type ApplicationListReq struct {
