@@ -231,7 +231,7 @@ export default function ApplicationManage() {
             <MenuItem key="tables">表管理</MenuItem>
             <MenuItem key="form-elements">表单元素管理</MenuItem>
             <MenuItem key="layout">布局管理</MenuItem>
-            <MenuItem key="examine">审批配置</MenuItem>
+            <MenuItem key="examine">审批管理</MenuItem>
           </Menu>
         )
         return (
