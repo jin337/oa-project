@@ -89,16 +89,6 @@ const createNode = (type) => {
   return base
 }
 
-// 人员选择器条目类型（具体人员 / 角色 / 部门）
-const PERSON_TYPE_MAP = {
-  user: '具体人员',
-  role: '角色',
-  dept: '部门',
-}
-
-// 条件表达式：可选字段（示例，后续可对接表单字段接口）
-const CONDITION_FIELDS = ['金额', '部门', '申请人', '状态']
-
 // 条件表达式：逻辑运算符
 const OPERATOR_OPTIONS = [
   { value: '>', label: '大于' },
@@ -156,6 +146,14 @@ const ROLE_LIST = [
 const ROLE_ITEM_MAP = Object.fromEntries(
   ROLE_LIST.map((r) => [r.key, { key: r.key, type: 'role', label: r.title }]),
 )
+
+// 人员 key → 所属部门标题（右侧展示「部门：姓名」用）
+const USER_DEPT_MAP = Object.fromEntries(
+  ORG_TREE.flatMap((d) => d.children.map((u) => [u.key, d.title])),
+)
+
+// 选择器类型：1 人员选择器（组织架构 + 角色）/ 2 部门选择器（仅组织架构，只能勾选部门）/ 3 角色选择器（仅角色列表）
+const SELECTOR_TYPE = { PERSON: 1, DEPT: 2, ROLE: 3 }
 
 // ==================== 流程画布子组件 ====================
 
@@ -330,12 +328,16 @@ function ConditionBlock({
 
 /**
  * 公共对象选择器（左右布局 Modal）：
- * - 左侧：Tab 切换「按组织架构选择」（Tree 树形控件，部门/人员）与「按角色选择」（角色列表）
- * - 右侧：已选中的条目（Tag 展示，可点击删除）
+ * - type: SELECTOR_TYPE.PERSON(1) 人员选择器（组织架构 + 角色 Tab 均可选）
+ *         SELECTOR_TYPE.DEPT(2)   部门选择器（仅组织架构 Tab，人员节点禁用勾选）
+ *         SELECTOR_TYPE.ROLE(3)   角色选择器（仅角色列表）
+ * - 左侧：数据源（组织架构 Tree / 角色列表），右侧：已选项（Tag，可删除）
  * 确认后通过 onChange 统一回传 { key, type, label } 结构的条目数组
  */
-function PersonSelectorModal({ title = '选择人员', value = [], onChange, onCancel }) {
-  const [tab, setTab] = useState('org')
+function PersonSelectorModal({ title = '选择人员', value = [], onChange, onCancel, type = SELECTOR_TYPE.PERSON }) {
+  const isDeptOnly = type === SELECTOR_TYPE.DEPT
+  const isRoleOnly = type === SELECTOR_TYPE.ROLE
+  const [tab, setTab] = useState(isRoleOnly ? 'role' : 'org')
   // 弹层内临时选择（统一带 key）
   const [selected, setSelected] = useState(() =>
     value.map((item) => ({ ...item, key: item.key || `${item.type}-${item.label}` })),
@@ -346,8 +348,13 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
   // 角色选中 keys
   const roleCheckedKeys = selected.filter((s) => ROLE_ITEM_MAP[s.key]).map((s) => s.key)
 
+  // Tree 勾选（级联模式：checkedKeys / onCheck 均为扁平数组；
+  // 部门节点已禁用勾选（只勾叶子），无父子级联带出干扰，多选与回显直接一致）
   const handleTreeCheck = (keys) => {
-    const orgItems = keys.map((k) => ORG_ITEM_MAP[k]).filter(Boolean)
+    const checked = Array.isArray(keys) ? keys : keys?.checked || []
+    let orgItems = checked.map((k) => ORG_ITEM_MAP[k]).filter(Boolean)
+    // 部门选择器：仅保留部门条目
+    if (isDeptOnly) orgItems = orgItems.filter((s) => s.type === 'dept')
     const roleItems = selected.filter((s) => ROLE_ITEM_MAP[s.key])
     setSelected([...orgItems, ...roleItems])
   }
@@ -358,7 +365,17 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
     setSelected([...orgItems, ...roleItems])
   }
 
+  // 删除已选项：checkStrictly 下父子独立，直接移除该项即可
   const remove = (index) => setSelected(selected.filter((_, i) => i !== index))
+
+  // 右侧标签展示：人员「所属部门：姓名」/ 部门、角色直接显示名称
+  const renderTagLabel = (item) => {
+    if (item.type === 'user') {
+      const dept = USER_DEPT_MAP[item.key]
+      return dept ? `${dept}：${item.label}` : item.label
+    }
+    return item.label
+  }
 
   return (
     <Modal
@@ -371,19 +388,25 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
       <div className="flex gap-4">
         {/* 左侧：数据源 */}
         <div className="w-1/2 rounded border border-gray-200">
-          <div className="flex justify-center border-b border-gray-100 py-2">
-            <Radio.Group type="button" size="small" value={tab} onChange={setTab}>
-              <Radio value="org">按组织架构选择</Radio>
-              <Radio value="role">按角色选择</Radio>
-            </Radio.Group>
-          </div>
+          {!isDeptOnly && !isRoleOnly && (
+            <div className="flex justify-center border-b border-gray-100 py-2">
+              <Radio.Group type="button" size="small" value={tab} onChange={setTab}>
+                <Radio value="org">按组织架构选择</Radio>
+                <Radio value="role">按角色选择</Radio>
+              </Radio.Group>
+            </div>
+          )}
           <div className="max-h-80 overflow-auto p-3">
-            {tab === 'org' ? (
+            {tab === 'org' && !isRoleOnly ? (
               <Tree
                 checkable
                 checkedKeys={orgCheckedKeys}
                 onCheck={handleTreeCheck}
                 treeData={ORG_TREE}
+                disableCheckbox={(node) =>
+                  // 部门选择器：仅部门（非叶子）可勾选；人员选择器：仅人员（叶子）可勾选
+                  isDeptOnly ? !node.children?.length : !!node.children?.length
+                }
               />
             ) : (
               <Checkbox.Group
@@ -406,8 +429,8 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
           <div className="flex flex-wrap gap-2">
             {selected.length ? (
               selected.map((item, i) => (
-                <Tag key={`${item.type}-${item.label}-${i}`} closable onClose={() => remove(i)}>
-                  {PERSON_TYPE_MAP[item.type] || '人员'}：{item.label}
+                <Tag key={`${item.type}-${item.key || item.label}-${i}`} closable onClose={() => remove(i)}>
+                  {renderTagLabel(item)}
                 </Tag>
               ))
             ) : (
@@ -421,7 +444,7 @@ function PersonSelectorModal({ title = '选择人员', value = [], onChange, onC
 }
 
 /** 人员选择器公共组件：展示已选条目 + 「选择」按钮，唤起 PersonSelectorModal（左右布局）统一选择 */
-function PersonPicker({ value = [], onChange, placeholder }) {
+function PersonPicker({ value = [], onChange, placeholder, type = SELECTOR_TYPE.PERSON }) {
   const [visible, setVisible] = useState(false)
   const remove = (index) => onChange(value.filter((_, i) => i !== index))
 
@@ -430,8 +453,10 @@ function PersonPicker({ value = [], onChange, placeholder }) {
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {value.length ? (
           value.map((item, i) => (
-            <Tag key={`${item.type}-${item.label}-${i}`} closable onClose={() => remove(i)}>
-              {PERSON_TYPE_MAP[item.type] || '人员'}：{item.label}
+            <Tag key={`${item.type}-${item.key || item.label}-${i}`} closable onClose={() => remove(i)}>
+              {item.type === 'user' && USER_DEPT_MAP[item.key]
+                ? `${USER_DEPT_MAP[item.key]}：${item.label}`
+                : item.label}
             </Tag>
           ))
         ) : (
@@ -444,6 +469,7 @@ function PersonPicker({ value = [], onChange, placeholder }) {
       {visible && (
         <PersonSelectorModal
           title={placeholder || '选择人员'}
+          type={type}
           value={value}
           onChange={(items) => {
             onChange(items)
@@ -456,19 +482,8 @@ function PersonPicker({ value = [], onChange, placeholder }) {
   )
 }
 
-/** 发起人节点：点击卡片唤起 Modal，配置可发起人员（人员选择器） */
-function InitiatorEditModal({ node, onCancel, onSave }) {
-  const [members, setMembers] = useState(normalizeMembers(node.members))
-  return (
-    <Modal title="发起人设置" visible onCancel={onCancel} onOk={() => onSave({ ...node, members })}>
-      <div className="mb-1 text-sm font-medium">可发起人员</div>
-      <PersonPicker value={members} onChange={setMembers} placeholder="选择可发起人" />
-    </Modal>
-  )
-}
-
 /** 审批人节点：点击卡片唤起 Drawer，包含审批对象 / 审批方式 / 容错与权限 / 表单字段权限 四个配置模块 */
-function ApproverEditDrawer({ node, appId, onCancel, onSave }) {
+function ApproverEditDrawer({ node, appId, formFields = [], fieldsLoading = false, onCancel, onSave }) {
   const [approverType, setApproverType] = useState(node.approverType || 'user')
   const [members, setMembers] = useState(normalizeMembers(node.members))
   const [selfSelect, setSelfSelect] = useState(node.selfSelect || 'single')
@@ -477,35 +492,15 @@ function ApproverEditDrawer({ node, appId, onCancel, onSave }) {
   const [emptyMembers, setEmptyMembers] = useState(normalizeMembers(node.emptyMembers))
   const [permissions, setPermissions] = useState(node.permissions || ['reject'])
   const [fieldPerms, setFieldPerms] = useState(node.fieldPerms || [])
-  // 应用表单元素列表（步骤四：表单字段权限的字段来源，关联 FormElementManage 管理的数据）
-  const [formFields, setFormFields] = useState([])
-  const [fieldsLoading, setFieldsLoading] = useState(false)
-
-  useEffect(() => {
-    if (!appId) return
-    let cancelled = false
-    setFieldsLoading(true)
-    applicationApi
-      .listFormElements(appId, { page: 1, size: 999 })
-      .then((res) => {
-        if (!cancelled) setFormFields(res.data.list || [])
-      })
-      .catch(() => {
-        // 错误已在请求层提示
-      })
-      .finally(() => {
-        if (!cancelled) setFieldsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [appId])
+  // 应用表单元素列表（步骤四：表单字段权限的字段来源，由主组件请求后通过 props 传入）
 
   const updateFieldPerm = (index, key, v) =>
     setFieldPerms(fieldPerms.map((fp, i) => (i === index ? { ...fp, [key]: v } : fp)))
 
-  // 审批对象联动：仅「发起人自选 + 多选」时展示步骤二（审批方式）
-  const showStrategy = approverType === 'self' && selfSelect === 'multi'
+  // 审批对象联动：发起人自选 + 多选时展示步骤二；指定人员/角色实际选择数量 > 1（事实多选）时同样展示
+  const showStrategy =
+    (approverType !== 'self' && members.length > 1) ||
+    (approverType === 'self' && selfSelect === 'multi')
 
   return (
     <Drawer
@@ -548,7 +543,12 @@ function ApproverEditDrawer({ node, appId, onCancel, onSave }) {
           </Radio.Group>
           {approverType !== 'self' ? (
             <div className="mt-3">
-              <PersonPicker value={members} onChange={setMembers} placeholder="请选择" />
+              <PersonPicker
+                type={approverType === 'role' ? SELECTOR_TYPE.ROLE : SELECTOR_TYPE.PERSON}
+                value={members}
+                onChange={setMembers}
+                placeholder="请选择"
+              />
             </div>
           ) : (
             <div className="mt-3">
@@ -612,7 +612,7 @@ function ApproverEditDrawer({ node, appId, onCancel, onSave }) {
                 <div key={i} className="mb-2 flex items-center gap-2">
                   <Select
                     style={{ flex: 1 }}
-                    value={fp.field}
+                    value={fp.field||undefined}
                     placeholder="选择表单字段"
                     onChange={(v) => updateFieldPerm(i, 'field', v)}
                   >
@@ -688,13 +688,13 @@ function CcEditDrawer({ node, onCancel, onSave }) {
   )
 }
 
-/** 条件分支节点：点击分支卡唤起 Drawer，配置条件关系与具体条件表达式 */
-function ConditionEditDrawer({ node, branch, onCancel, onSave }) {
+/** 条件分支节点：点击分支卡唤起 Drawer，配置条件关系与具体条件表达式（字段来源于应用表单元素列表） */
+function ConditionEditDrawer({ node, branch, formFields = [], fieldsLoading = false, onCancel, onSave }) {
   const [relation, setRelation] = useState(node.relation || 'and')
+  // 默认条件行：formFields 有数据时取第一个字段的 field_key，否则为空字符串
+  const defaultField = formFields[0]?.field_key || ''
   const [rules, setRules] = useState(
-    branch.rules?.length
-      ? branch.rules
-      : [{ field: CONDITION_FIELDS[0], operator: '=', value: '' }],
+    branch.rules?.length ? branch.rules : [{ field: defaultField, operator: '=', value: '' }],
   )
 
   const updateRule = (index, key, v) =>
@@ -703,7 +703,7 @@ function ConditionEditDrawer({ node, branch, onCancel, onSave }) {
   return (
     <Drawer
       width={560}
-      title={`编辑条件（${branch.isDefault ? '默认分支' : branch.label}）`}
+      title={`编辑条件 - ${branch.isDefault ? '默认分支' : branch.label}`}
       visible
       onCancel={onCancel}
       footer={
@@ -725,51 +725,60 @@ function ConditionEditDrawer({ node, branch, onCancel, onSave }) {
         </div>
         <div>
           <div className="mb-2 font-medium">具体条件表达式</div>
-          {rules.map((r, i) => (
-            <div key={i} className="mb-2 flex items-center gap-2">
-              <Select
-                style={{ width: 120 }}
-                value={r.field}
-                onChange={(v) => updateRule(i, 'field', v)}
-              >
-                {CONDITION_FIELDS.map((f) => (
-                  <Select.Option key={f} value={f}>
-                    {f}
-                  </Select.Option>
-                ))}
-              </Select>
-              <Select
-                style={{ width: 110 }}
-                value={r.operator}
-                onChange={(v) => updateRule(i, 'operator', v)}
-              >
-                {OPERATOR_OPTIONS.map((o) => (
-                  <Select.Option key={o.value} value={o.value}>
-                    {o.label}
-                  </Select.Option>
-                ))}
-              </Select>
-              <Input
-                style={{ flex: 1 }}
-                value={r.value}
-                placeholder="输入具体的数值或状态"
-                onChange={(v) => updateRule(i, 'value', v)}
-              />
+          {fieldsLoading ? (
+            <div className="py-3 text-xs text-gray-400">字段加载中...</div>
+          ) : !formFields.length ? (
+            <div className="py-3 text-xs text-gray-400">暂无表单元素，请先在「表单元素管理」中配置</div>
+          ) : (
+            <>
+              {rules.map((r, i) => (
+                <div key={i} className="mb-2 flex items-center gap-2">
+                  <Select
+                    style={{ width: 140 }}
+                    value={r.field}
+                    placeholder="选择字段"
+                    onChange={(v) => updateRule(i, 'field', v)}
+                  >
+                    {formFields.map((f) => (
+                      <Select.Option key={f.field_key} value={f.field_key}>
+                        {f.label || f.field_key}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                  <Select
+                    style={{ width: 110 }}
+                    value={r.operator}
+                    onChange={(v) => updateRule(i, 'operator', v)}
+                  >
+                    {OPERATOR_OPTIONS.map((o) => (
+                      <Select.Option key={o.value} value={o.value}>
+                        {o.label}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                  <Input
+                    style={{ flex: 1 }}
+                    value={r.value}
+                    placeholder="输入具体的数值或状态"
+                    onChange={(v) => updateRule(i, 'value', v)}
+                  />
+                  <Button
+                    icon={<IconClose />}
+                    onClick={() => setRules(rules.filter((_, x) => x !== i))}
+                  />
+                </div>
+              ))}
               <Button
-                icon={<IconClose />}
-                onClick={() => setRules(rules.filter((_, x) => x !== i))}
-              />
-            </div>
-          ))}
-          <Button
-            size="small"
-            icon={<IconPlus />}
-            onClick={() =>
-              setRules([...rules, { field: CONDITION_FIELDS[0], operator: '=', value: '' }])
-            }
-          >
-            添加条件
-          </Button>
+                size="small"
+                icon={<IconPlus />}
+                onClick={() =>
+                  setRules([...rules, { field: defaultField, operator: '=', value: '' }])
+                }
+              >
+                添加条件
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </Drawer>
@@ -843,6 +852,30 @@ export default function ExamineManage() {
   useEffect(() => {
     addTab({ path: location.pathname, title: MODULE_LABEL })
   }, [location.pathname, addTab])
+
+  // 应用表单元素列表（条件表达式字段来源 / 审批人表单字段权限），挂载即请求一次，供各弹层共享
+  const [formFields, setFormFields] = useState([])
+  const [fieldsLoading, setFieldsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    setFieldsLoading(true)
+    applicationApi
+      .listFormElements(id, { page: 1, size: 999 })
+      .then((res) => {
+        if (!cancelled) setFormFields(res.data.list || [])
+      })
+      .catch(() => {
+        // 错误已在请求层提示
+      })
+      .finally(() => {
+        if (!cancelled) setFieldsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
 
   // 在指定位置插入新节点（节点之间 / 末尾）
   const insertNodeAt = useCallback((index, type) => {
@@ -926,9 +959,16 @@ export default function ExamineManage() {
     )
   }, [])
 
-  // 节点/分支点击编辑：{ kind: 'node' | 'branch', node, branch? } 控制弹层显隐与类型
+  // 节点/分支点击编辑：{ kind: 'node' | 'branch' | 'initiator', node, branch? } 控制弹层显隐与类型
   const [editing, setEditing] = useState(null)
-  const handleNodeEdit = useCallback((node) => setEditing({ kind: 'node', node }), [])
+  const handleNodeEdit = useCallback((node) => {
+    // 发起人：跳过中间弹窗，直接唤起人员选择器（确认即保存 members）
+    if (node.type === 'initiator') {
+      setEditing({ kind: 'initiator', node })
+      return
+    }
+    setEditing({ kind: 'node', node })
+  }, [])
   const handleBranchEdit = useCallback(
     (node, branch) => setEditing({ kind: 'branch', node, branch }),
     [],
@@ -1015,13 +1055,13 @@ export default function ExamineManage() {
         </div>
         <div className="text-gray-400">流程结束</div>
       </div>
-      {/* 节点/条件编辑弹层：发起人用 Modal，审批人/抄送人/条件分支用 Drawer */}
-      {editing?.kind === 'node' && editing.node.type === 'initiator' && (
-        <InitiatorEditModal
-          key={editing.node.id}
-          node={editing.node}
+      {/* 节点/条件编辑弹层：发起人直接唤起人员选择器，审批人/抄送人/条件分支用 Drawer */}
+      {editing?.kind === 'initiator' && (
+        <PersonSelectorModal
+          title="选择可发起人"
+          value={normalizeMembers(editing.node.members)}
+          onChange={(items) => handleNodeSave({ ...editing.node, members: items })}
           onCancel={handleCloseEdit}
-          onSave={handleNodeSave}
         />
       )}
       {editing?.kind === 'node' && editing.node.type === 'approver' && (
@@ -1029,6 +1069,8 @@ export default function ExamineManage() {
           key={editing.node.id}
           node={editing.node}
           appId={id}
+          formFields={formFields}
+          fieldsLoading={fieldsLoading}
           onCancel={handleCloseEdit}
           onSave={handleNodeSave}
         />
@@ -1046,6 +1088,8 @@ export default function ExamineManage() {
           key={editing.branch.id}
           node={editing.node}
           branch={editing.branch}
+          formFields={formFields}
+          fieldsLoading={fieldsLoading}
           onCancel={handleCloseEdit}
           onSave={handleBranchSave}
         />
