@@ -98,7 +98,34 @@ type Dept struct {
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 
 	Children []*Dept `gorm:"foreignKey:ParentID" json:"children,omitempty"`
-	Users    []User  `gorm:"foreignKey:DeptID" json:"users,omitempty"` // 部门下员工列表，仅 GET /depts/users 接口返回
+}
+
+// 组织架构树节点类型（GET /depts/users 混合树）
+const (
+	OrgNodeTypeDept = "dept" // 部门节点
+	OrgNodeTypeUser = "user" // 用户节点
+)
+
+// OrgNode 部门与用户混合树节点：
+// 部门节点的 Children 同时包含子部门节点与用户节点，前端可统一遍历 children 获取完整组织架构；
+// 通过 Type 区分节点身份，部门/用户各自的专属字段以 omitempty 输出
+type OrgNode struct {
+	Type     string     `json:"type"` // dept 部门 / user 用户
+	ID       uint       `json:"id"`   // 部门 ID 或用户 ID
+	Name     string     `json:"name"` // 部门名称或用户名
+	Children []*OrgNode `json:"children,omitempty"`
+
+	// 部门专属字段
+	ParentID uint   `json:"parent_id,omitempty"`
+	Leader   string `json:"leader,omitempty"`
+	Sort     int    `json:"sort,omitempty"`
+
+	// 用户专属字段
+	Username string `json:"username,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Phone    string `json:"phone,omitempty"`
+
+	Status int `json:"status,omitempty"` // 部门状态(1启用 0停用)或用户状态(1启用 0停用)
 }
 
 // ------------------------------------------------------------
@@ -238,31 +265,31 @@ type DeptListReq struct {
 // Application 页面配置：对应表，供低代码/表单引擎使用
 type Application struct {
 	BaseModel
-	Name             string `gorm:"size:64;not null;comment:页面名称" json:"name"`
-	Code             string `gorm:"size:64;uniqueIndex;not null;comment:页面编码" json:"code"`
-	TableName        string `gorm:"size:128;not null;comment:对应表" json:"table_name"`
-	SubTableName     string `gorm:"size:255;comment:子表(多个用逗号分隔)" json:"sub_table_name"`
-	Status           int    `gorm:"default:1;comment:状态 1启用 2停用" json:"status"`
+	Name             string                 `gorm:"size:64;not null;comment:页面名称" json:"name"`
+	Code             string                 `gorm:"size:64;uniqueIndex;not null;comment:页面编码" json:"code"`
+	TableName        string                 `gorm:"size:128;not null;comment:对应表" json:"table_name"`
+	SubTableName     string                 `gorm:"size:255;comment:子表(多个用逗号分隔)" json:"sub_table_name"`
+	Status           int                    `gorm:"default:1;comment:状态 1启用 2停用" json:"status"`
 	FormLayoutJSON   map[string]interface{} `gorm:"serializer:json;type:json;comment:表单页布局配置" json:"form_layout_json"`
 	DetailLayoutJSON map[string]interface{} `gorm:"serializer:json;type:json;comment:详情页布局配置" json:"detail_layout_json"`
 }
 
 type ApplicationCreateReq struct {
-	Name             string `json:"name" validate:"required,min=2,max=64" label:"页面名称"`
-	Code             string `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"` // 新增时后端自动生成，忽略前端传入
-	TableName        string `json:"table_name" validate:"required,max=128" label:"对应表"`
-	SubTableName     string `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
-	Status           int    `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
+	Name             string                 `json:"name" validate:"required,min=2,max=64" label:"页面名称"`
+	Code             string                 `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"` // 新增时后端自动生成，忽略前端传入
+	TableName        string                 `json:"table_name" validate:"required,max=128" label:"对应表"`
+	SubTableName     string                 `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
+	Status           int                    `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
 	FormLayoutJSON   map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
 	DetailLayoutJSON map[string]interface{} `json:"detail_layout_json" validate:"omitempty" label:"详情页布局"`
 }
 
 type ApplicationUpdateReq struct {
-	Name             *string `json:"name" validate:"omitempty,min=2,max=64" label:"页面名称"`
-	Code             string  `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"`
-	TableName        *string `json:"table_name" validate:"omitempty,max=128" label:"对应表"`
-	SubTableName     *string `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
-	Status           int     `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
+	Name             *string                 `json:"name" validate:"omitempty,min=2,max=64" label:"页面名称"`
+	Code             string                  `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"`
+	TableName        *string                 `json:"table_name" validate:"omitempty,max=128" label:"对应表"`
+	SubTableName     *string                 `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
+	Status           int                     `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
 	FormLayoutJSON   *map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
 	DetailLayoutJSON *map[string]interface{} `json:"detail_layout_json" validate:"omitempty" label:"详情页布局"`
 }
@@ -362,49 +389,49 @@ type TableFieldDeleteReq struct {
 // FormElement 表单元素配置：绑定页面配置（Application）对应的物理表字段，用于低代码表单渲染
 type FormElement struct {
 	BaseModel
-	AppID         uint                   `gorm:"column:app_id;index;not null;comment:所属页面配置ID" json:"app_id"`
-	Label         string                 `gorm:"size:64;not null;comment:字段标签" json:"label"`
-	FieldKey      string                 `gorm:"size:64;not null;comment:关联物理表列名" json:"field_key"`
-	TableKey      string                 `gorm:"size:64;not null;comment:关联物理表" json:"table_key"`
-	ElementType   string                 `gorm:"size:32;not null;comment:元素类型" json:"element_type"`
-	Placeholder   string                 `gorm:"size:255;comment:占位提示" json:"placeholder"`
-	Required      int                    `gorm:"default:0;comment:是否必填 1是 0否" json:"required"`
-	DefaultValue  string                 `gorm:"size:255;comment:默认值" json:"default_value"`
-	ValidationRule string                `gorm:"size:255;comment:校验规则" json:"validation_rule"`
-	Visibility    map[string]interface{} `gorm:"serializer:json;type:json;comment:列表与搜索行为" json:"visibility"`
-	DynamicStates map[string]interface{} `gorm:"serializer:json;type:json;comment:动态状态控制" json:"dynamic_states"`
-	DataSource    map[string]interface{} `gorm:"serializer:json;type:json;comment:数据源配置" json:"data_source"`
-	Actions       map[string]interface{} `gorm:"serializer:json;type:json;comment:事件驱动配置" json:"actions"`
+	AppID          uint                   `gorm:"column:app_id;index;not null;comment:所属页面配置ID" json:"app_id"`
+	Label          string                 `gorm:"size:64;not null;comment:字段标签" json:"label"`
+	FieldKey       string                 `gorm:"size:64;not null;comment:关联物理表列名" json:"field_key"`
+	TableKey       string                 `gorm:"size:64;not null;comment:关联物理表" json:"table_key"`
+	ElementType    string                 `gorm:"size:32;not null;comment:元素类型" json:"element_type"`
+	Placeholder    string                 `gorm:"size:255;comment:占位提示" json:"placeholder"`
+	Required       int                    `gorm:"default:0;comment:是否必填 1是 0否" json:"required"`
+	DefaultValue   string                 `gorm:"size:255;comment:默认值" json:"default_value"`
+	ValidationRule string                 `gorm:"size:255;comment:校验规则" json:"validation_rule"`
+	Visibility     map[string]interface{} `gorm:"serializer:json;type:json;comment:列表与搜索行为" json:"visibility"`
+	DynamicStates  map[string]interface{} `gorm:"serializer:json;type:json;comment:动态状态控制" json:"dynamic_states"`
+	DataSource     map[string]interface{} `gorm:"serializer:json;type:json;comment:数据源配置" json:"data_source"`
+	Actions        map[string]interface{} `gorm:"serializer:json;type:json;comment:事件驱动配置" json:"actions"`
 }
 
 type FormElementCreateReq struct {
-	Label         string                 `json:"label" validate:"required,min=1,max=64" label:"名称"`
-	FieldKey      string                 `json:"field_key" validate:"required,min=1,max=64" label:"对应字段"`
-	TableKey      string                 `json:"table_key" validate:"required,min=1,max=64" label:"分类表"`
-	ElementType   string                 `json:"element_type" validate:"required" label:"元素类型"`
-	Placeholder   string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
-	Required      int                    `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"`
-	DefaultValue  string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
-	ValidationRule string                `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
-	Visibility    map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
-	DynamicStates map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
-	DataSource    map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
-	Actions       map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
+	Label          string                 `json:"label" validate:"required,min=1,max=64" label:"名称"`
+	FieldKey       string                 `json:"field_key" validate:"required,min=1,max=64" label:"对应字段"`
+	TableKey       string                 `json:"table_key" validate:"required,min=1,max=64" label:"分类表"`
+	ElementType    string                 `json:"element_type" validate:"required" label:"元素类型"`
+	Placeholder    string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
+	Required       int                    `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"`
+	DefaultValue   string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
+	ValidationRule string                 `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
+	Visibility     map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
+	DynamicStates  map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
+	DataSource     map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
+	Actions        map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
 }
 
 type FormElementUpdateReq struct {
-	Label         string                 `json:"label" validate:"omitempty,min=1,max=64" label:"名称"`
-	FieldKey      string                 `json:"field_key" validate:"omitempty,min=1,max=64" label:"对应字段"`
-	TableKey      string                 `json:"table_key" validate:"omitempty,min=1,max=64" label:"分类表"`
-	ElementType   string                 `json:"element_type" validate:"omitempty" label:"元素类型"`
-	Placeholder   string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
-	Required      *int                   `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"` // 指针区分未传与 0
-	DefaultValue  string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
-	ValidationRule string                `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
-	Visibility    map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
-	DynamicStates map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
-	DataSource    map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
-	Actions       map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
+	Label          string                 `json:"label" validate:"omitempty,min=1,max=64" label:"名称"`
+	FieldKey       string                 `json:"field_key" validate:"omitempty,min=1,max=64" label:"对应字段"`
+	TableKey       string                 `json:"table_key" validate:"omitempty,min=1,max=64" label:"分类表"`
+	ElementType    string                 `json:"element_type" validate:"omitempty" label:"元素类型"`
+	Placeholder    string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
+	Required       *int                   `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"` // 指针区分未传与 0
+	DefaultValue   string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
+	ValidationRule string                 `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
+	Visibility     map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
+	DynamicStates  map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
+	DataSource     map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
+	Actions        map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
 }
 
 type FormElementListReq struct {
@@ -419,8 +446,8 @@ type FormElementListReq struct {
 // ApprovalCategory 审批分类
 type ApprovalCategory struct {
 	BaseModel
-	Name   string `gorm:"size:64;not null;comment:分类名称" json:"name"`
-	Sort   int    `gorm:"default:0;comment:排序" json:"sort"`
+	Name string `gorm:"size:64;not null;comment:分类名称" json:"name"`
+	Sort int    `gorm:"default:0;comment:排序" json:"sort"`
 }
 
 type ApprovalCategoryCreateReq struct {
@@ -440,29 +467,29 @@ type ApprovalCategoryListReq struct {
 // ApprovalItem 申请项
 type ApprovalItem struct {
 	BaseModel
-	Name        string `gorm:"size:64;not null;comment:申请项名称" json:"name"`
-	Code        string `gorm:"size:64;comment:关联应用页面编码" json:"code"`
-	CategoryID  uint   `gorm:"index;not null;comment:所属分类ID" json:"category_id"`
-	Icon        string `gorm:"size:64;comment:图标" json:"icon"`
-	Sort        int    `gorm:"default:0;comment:排序" json:"sort"`
+	Name       string `gorm:"size:64;not null;comment:申请项名称" json:"name"`
+	Code       string `gorm:"size:64;comment:关联应用页面编码" json:"code"`
+	CategoryID uint   `gorm:"index;not null;comment:所属分类ID" json:"category_id"`
+	Icon       string `gorm:"size:64;comment:图标" json:"icon"`
+	Sort       int    `gorm:"default:0;comment:排序" json:"sort"`
 
 	Category *ApprovalCategory `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 }
 
 type ApprovalItemCreateReq struct {
-	Name        string `json:"name" validate:"required,min=1,max=64" label:"申请项名称"`
-	Code        string `json:"code" validate:"required,min=1,max=64" label:"页面编码"`
-	CategoryID  uint   `json:"category_id" validate:"required" label:"所属分类"`
-	Icon        string `json:"icon" validate:"omitempty,max=64" label:"图标"`
-	Sort        int    `json:"sort" validate:"omitempty" label:"排序"`
+	Name       string `json:"name" validate:"required,min=1,max=64" label:"申请项名称"`
+	Code       string `json:"code" validate:"required,min=1,max=64" label:"页面编码"`
+	CategoryID uint   `json:"category_id" validate:"required" label:"所属分类"`
+	Icon       string `json:"icon" validate:"omitempty,max=64" label:"图标"`
+	Sort       int    `json:"sort" validate:"omitempty" label:"排序"`
 }
 
 type ApprovalItemUpdateReq struct {
-	Name        string `json:"name" validate:"omitempty,min=1,max=64" label:"申请项名称"`
-	Code        string `json:"code" validate:"omitempty,min=1,max=64" label:"页面编码"`
-	CategoryID  uint   `json:"category_id" validate:"omitempty" label:"所属分类"`
-	Icon        string `json:"icon" validate:"omitempty,max=64" label:"图标"`
-	Sort        int    `json:"sort" validate:"omitempty" label:"排序"`
+	Name       string `json:"name" validate:"omitempty,min=1,max=64" label:"申请项名称"`
+	Code       string `json:"code" validate:"omitempty,min=1,max=64" label:"页面编码"`
+	CategoryID uint   `json:"category_id" validate:"omitempty" label:"所属分类"`
+	Icon       string `json:"icon" validate:"omitempty,max=64" label:"图标"`
+	Sort       int    `json:"sort" validate:"omitempty" label:"排序"`
 }
 
 type ApprovalItemListReq struct {

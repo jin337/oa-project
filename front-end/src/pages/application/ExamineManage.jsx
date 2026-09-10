@@ -107,16 +107,14 @@ const normalizeMembers = (members) =>
 
 // ==================== 对象选择器数据（动态：组织架构 / 角色接口） ====================
 
-// 接口部门树 → 选择器树格式：dept 节点带 isDept 标记，children 递归含子部门与员工
-// 接口部门：{ id, name, children: [] }
+// 接口部门树 → 选择器树格式：children 中同时包含子部门（type=dept）与用户（type=user）
+// 接口节点：{ type: 'dept'|'user', id, name, children?, ... }
 const transformDeptTree = (data = []) =>
   data.map((d) => ({
-    key: `dept_${d.id}`,
+    key: `${d.type}_${d.id}`,
     title: d.name,
-    isDept: true,
-    children: [
-      ...transformDeptTree(d.children || []),
-    ],
+    isDept: d.type === 'dept',
+    children: d.children?.length ? transformDeptTree(d.children) : undefined,
   }))
 
 // 树节点 → key 映射：{ key: { key, type: 'dept' | 'user', label } }
@@ -137,8 +135,11 @@ const buildUserDeptMap = (tree) => {
   const map = {}
   const walk = (nodes, deptTitle) => {
     nodes.forEach((n) => {
-      if (n.isDept) walk(n.children || [], n.title)
-      else map[n.key] = deptTitle
+      if (n.isDept) {
+        walk(n.children || [], n.title)
+      } else {
+        map[n.key] = deptTitle
+      }
     })
   }
   walk(tree)
@@ -441,7 +442,7 @@ function PersonSelectorModal({
         <div className="w-1/2 rounded border border-gray-200">
           {!isSingleMode && (
             <div className="flex justify-center border-b border-gray-100 py-2">
-              <Radio.Group type="button" size="small" value={tab} onChange={setTab}>
+              <Radio.Group  type="button" size="small" value={tab} onChange={setTab}>
                 {modes.map((m) => (
                   <Radio key={m} value={m}>
                     {MODE_LABELS[m]}

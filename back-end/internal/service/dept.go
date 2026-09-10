@@ -20,60 +20,70 @@ func DeptTree(req *model.DeptListReq) ([]*model.Dept, error) {
 	return buildDeptTree(list, 0), nil
 }
 
-// DeptUsers 所有公司部门树 + 每个部门下的用户列表（GET /depts/users）
-// 返回完整部门树（不过滤、含层级 Children），并为每个节点填充其下用户（Users）
-func DeptUsers() ([]*model.Dept, error) {
+// DeptUsers 所有公司部门 + 每个部门下的用户（GET /depts/users）
+// 返回部门与用户混合的统一树结构（OrgNode）：
+//   - 部门节点 Children 同时包含子部门节点与用户节点，前端统一遍历 children 即可拿到完整组织架构
+//   - 节点以 Type 区分：dept 部门 / user 用户
+//   - 子部门在前、用户在后；部门按 sort ASC, id ASC，用户按 id ASC
+//   - 仅挂载归属部门树内用户的用户（dept_id 无效/无部门的用户不返回）
+func DeptUsers() ([]*model.OrgNode, error) {
 	var list []*model.Dept
 	if err := database.DB.Order("sort ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err
 	}
-	tree := buildDeptTree(list, 0)
-	if err := fillDeptUsers(tree); err != nil {
-		return nil, err
-	}
-	return tree, nil
-}
+	deptTree := buildDeptTree(list, 0)
 
-// fillDeptUsers 批量查询树中所有部门下的员工（dept_id IN (...) 一次查出），按部门挂载到树节点
-func fillDeptUsers(nodes []*model.Dept) error {
-	ids := collectDeptIDs(nodes)
-	if len(ids) == 0 {
-		return nil
-	}
 	var users []model.User
-	if err := database.DB.Where("dept_id IN ?", ids).Order("id ASC").Find(&users).Error; err != nil {
-		return err
+	if err := database.DB.Preload("Profile").Order("id ASC").Find(&users).Error; err != nil {
+		return nil, err
 	}
 	byDept := map[uint][]model.User{}
 	for _, u := range users {
 		byDept[u.DeptID] = append(byDept[u.DeptID], u)
 	}
-	assignDeptUsers(nodes, byDept)
-	return nil
+
+	return buildOrgTree(deptTree, byDept), nil
 }
 
-// collectDeptIDs 收集树中所有部门 ID（含嵌套子部门）
-func collectDeptIDs(nodes []*model.Dept) []uint {
-	ids := make([]uint, 0, len(nodes))
-	for _, d := range nodes {
-		ids = append(ids, d.ID)
-		if len(d.Children) > 0 {
-			ids = append(ids, collectDeptIDs(d.Children)...)
+// buildOrgTree 将部门树转换为部门+用户混合树：每个部门节点的 Children = 子部门节点 + 用户节点
+func buildOrgTree(depts []*model.Dept, byDept map[uint][]model.User) []*model.OrgNode {
+	nodes := make([]*model.OrgNode, 0, len(depts))
+	for _, d := range depts {
+		node := &model.OrgNode{
+			Type:     model.OrgNodeTypeDept,
+			ID:       d.ID,
+			Name:     d.Name,
+			ParentID: d.ParentID,
+			Leader:   d.Leader,
+			Sort:     d.Sort,
+			Status:   d.Status,
 		}
+		// 子部门节点（在前）
+		node.Children = buildOrgTree(d.Children, byDept)
+		// 用户节点（在后）
+		for _, u := range byDept[d.ID] {
+			node.Children = append(node.Children, &model.OrgNode{
+				Type:     model.OrgNodeTypeUser,
+				ID:       u.ID,
+				Name:     userNickname(u),
+				Username: u.Username,
+				Email:    u.Email,
+				Phone:    u.Phone,
+				ParentID: u.DeptID,
+				Status:   u.Status,
+			})
+		}
+		nodes = append(nodes, node)
 	}
-	return ids
+	return nodes
 }
 
-// assignDeptUsers 将按部门分组的员工列表递归挂载到树节点
-func assignDeptUsers(nodes []*model.Dept, byDept map[uint][]model.User) {
-	for _, d := range nodes {
-		if users, ok := byDept[d.ID]; ok {
-			d.Users = users
-		}
-		if len(d.Children) > 0 {
-			assignDeptUsers(d.Children, byDept)
-		}
+// userNickname 取用户昵称：优先 Profile.Nickname，无档案时回退 Username
+func userNickname(u model.User) string {
+	if u.Profile != nil && u.Profile.Nickname != "" {
+		return u.Profile.Nickname
 	}
+	return u.Username
 }
 
 // DeptDetail 部门详情
