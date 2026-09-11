@@ -70,7 +70,7 @@ const createBranch = (label, isDefault = false) => ({
 const createNode = (type) => {
   const base = { id: genId('n'), type, label: NODE_TYPE_META[type].label }
   if (type === 'initiator') return { ...base, members: [] }
-  if (type === 'cc') return { ...base, members: [], ccTiming: 'after_pass' }
+  if (type === 'cc') return { ...base, members: [], ccTiming: 'on_end' }
   if (type === 'approver')
     return {
       ...base,
@@ -80,7 +80,7 @@ const createNode = (type) => {
       strategy: 'self_multi', // self_multi 依次审批 / self_single 会签 / or_sign 或签
       emptyHandler: 'auto_pass', // auto_pass / auto_reject / to_admin / assign
       emptyMembers: [],
-      permissions: ['reject'], // reject 拒绝 / transfer 转交 / add_sign 加签
+      permissions: ['reject','transfer','add_sign'], // reject 拒绝 / transfer 转交 / add_sign 加签
       fieldPerms: [], // 表单字段权限 [{ field, perm: read | hidden | edit }]
     }
   if (type === 'condition')
