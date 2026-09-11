@@ -193,8 +193,8 @@ func ApprovalItemDelete(id uint) error {
 //   - drafts    草稿箱    ：created_by = 当前用户 且 status = 0 草稿
 //
 // 每张业务表行数有限，采用"全量聚合 → 按发起时间倒序 → 内存分页"策略
-func ApprovalList(curUserID uint, scope string, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
-	if scope == "cc" {
+func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
+	if req.Scope == "cc" {
 		// 抄送暂无数据支撑（无抄送人字段），返回空结构
 		return []model.ApprovalRecord{}, 0, nil
 	}
@@ -217,7 +217,7 @@ func ApprovalList(curUserID uint, scope string, req *model.ApprovalListReq) ([]m
 
 		conds := []string{"`deleted_at` IS NULL"}
 		args := []interface{}{}
-		switch scope {
+		switch req.Scope {
 		case "initiated":
 			conds = append(conds, "`created_by` = ?", "`approval_status` <> ?")
 			args = append(args, curUserID, model.ApprovalStatusDraft)

@@ -3,13 +3,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import * as approvalApi from '../../api/approval'
 import { useTabs } from '../../store/tab-context'
-import ApprovalDetailDrawer from './ApprovalDetailDrawer'
-import { ApprovalStatusTag } from './approvalStatus.jsx'
+import ApprovalDetailDrawer from './DetailDrawer.jsx'
 
 const PAGE_TITLE = '我审批的'
 
 /** 我审批的：展示当前用户已处理完毕的历史审批记录（已通过 / 不通过 / 已驳回 / 已作废） */
-export default function ApprovalWorkplace() {
+export default function Workplace() {
   const location = useLocation()
   const { addTab } = useTabs()
   const [list, setList] = useState([])
@@ -26,7 +25,7 @@ export default function ApprovalWorkplace() {
   const fetchList = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await approvalApi.getMyApproved({ page, size })
+      const res = await approvalApi.getApprovalList({ page, size, scope: 'approved' })
       setList(res.data?.list || [])
       setTotal(res.data?.total || 0)
     } catch (e) {
@@ -41,12 +40,30 @@ export default function ApprovalWorkplace() {
   }, [fetchList])
 
   const columns = [
-    { title: '申请项名称', dataIndex: 'item_name', render: (v, r) => r.name || v || '-' },
-    { title: '申请人', dataIndex: 'applicant_name', render: (v) => v || '-' },
-    { title: '申请时间', dataIndex: 'created_at', width: 170 },
-    { title: '审批时间', dataIndex: 'updated_at', width: 170, render: (v) => v || '-' },
     {
-      title: '审批结果',
+      title: '序号',
+      key: 'index',
+      width: 62,
+      align: 'center',
+      render: (_, __, index) => index + 1,
+    },
+    { title: '模块', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '部门', dataIndex: 'dept_name', render: (v) => v || '-' },
+    { title: '申请人', dataIndex: 'created_name', render: (v) => v || '-' },
+    {
+      title: '申请时间',
+      dataIndex: 'created_at',
+      width: 170,
+      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
+    },
+    {
+      title: '完成时间',
+      dataIndex: 'finished_at',
+      width: 170,
+      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
+    },
+    {
+      title: '状态',
       dataIndex: 'approval_status',
       width: 110,
       render: (v) => <ApprovalStatusTag status={v} />,
@@ -58,7 +75,7 @@ export default function ApprovalWorkplace() {
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
-            查看详情
+            详情
           </Button>
         </Space>
       ),

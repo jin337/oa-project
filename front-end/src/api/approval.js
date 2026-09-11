@@ -46,27 +46,7 @@ export function deleteApprovalItem(id) {
 
 // ========== 审批列表（跨应用聚合查询，供我的发起/待办/已办/抄送/草稿箱使用） ==========
 
-// GET /approval/initiated 我的发起（排除草稿）
-export function getMyInitiated(params) {
-  return request.get('/approval/initiated', { params })
-}
-
-// GET /approval/todo 我的待办（状态：待审核 / 审核中）
-export function getMyTodo(params) {
-  return request.get('/approval/todo', { params })
-}
-
-// GET /approval/approved 我审批的（状态：已通过 / 不通过 / 已驳回 / 已作废）
-export function getMyApproved(params) {
-  return request.get('/approval/approved', { params })
-}
-
-// GET /approval/cc 抄送我的
-export function getMyCc(params) {
-  return request.get('/approval/cc', { params })
-}
-
-// GET /approval/drafts 草稿箱（状态：草稿）
-export function getMyDrafts(params) {
-  return request.get('/approval/drafts', { params })
+// GET /approval/list 审批列表
+export function getApprovalList(params) {
+  return request.get('/approval/list', { params })
 }

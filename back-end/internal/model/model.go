@@ -520,4 +520,5 @@ type ApprovalRecord struct {
 // ApprovalListReq 审批列表请求（分页）
 type ApprovalListReq struct {
 	BaseListReq
+	Scope      string `json:"scope" form:"scope" validate:"required" label:"范围"`
 }

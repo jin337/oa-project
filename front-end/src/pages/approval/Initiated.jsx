@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
 import * as approvalApi from '../../api/approval'
 import { useTabs } from '../../store/tab-context'
-import ApprovalDetailDrawer from './ApprovalDetailDrawer'
+import ApprovalDetailDrawer from './DetailDrawer'
 import { ApprovalStatusTag } from './approvalStatus.jsx'
 
 const PAGE_TITLE = '我的发起'
@@ -27,7 +27,7 @@ export default function Initiated() {
   const fetchList = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await approvalApi.getMyInitiated({ page, size })
+      const res = await approvalApi.getApprovalList({ page, size, scope: 'initiated' })
       setList(res.data?.list || [])
       setTotal(res.data?.total || 0)
     } catch (e) {
@@ -57,10 +57,29 @@ export default function Initiated() {
   }
 
   const columns = [
-    { title: '申请项名称', dataIndex: 'app_name' },
-    { title: '申请时间', dataIndex: 'created_at', width: 170 },
     {
-      title: '审核状态',
+      title: '序号',
+      key: 'index',
+      width: 62,
+      align: 'center',
+      render: (_, __, index) => index + 1,
+    },
+    { title: '模块', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '部门', dataIndex: 'dept_name', render: (v) => v || '-' },
+    {
+      title: '申请时间',
+      dataIndex: 'created_at',
+      width: 170,
+      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
+    },
+    {
+      title: '完成时间',
+      dataIndex: 'finished_at',
+      width: 170,
+      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
+    },
+    {
+      title: '状态',
       dataIndex: 'approval_status',
       width: 110,
       render: (v) => <ApprovalStatusTag status={v} />,
@@ -72,12 +91,12 @@ export default function Initiated() {
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
-            查看详情
+            详情
           </Button>
           {[1, 2].includes(r.approval_status) && (
             <Popconfirm title="撤回后该申请将转为草稿，确定撤回？" onOk={() => handleWithdraw(r)}>
               <Button type="text" size="small" status="danger">
-                撤回申请
+                撤回
               </Button>
             </Popconfirm>
           )}

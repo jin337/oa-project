@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from 'react'
 import {
   Button,
   Card,
@@ -10,9 +9,10 @@ import {
   Spin,
   Table,
 } from '@arco-design/web-react'
+import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import * as approvalApi from '../../api/approval'
 import * as applicationApi from '../../api/application'
+import * as approvalApi from '../../api/approval'
 import { useTabs } from '../../store/tab-context'
 import DynamicForm from '../application/DynamicForm'
 import { ApprovalStatusTag } from './approvalStatus.jsx'
@@ -44,7 +44,7 @@ export default function Drafts() {
   const fetchList = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await approvalApi.getMyDrafts({ page, size })
+      const res = await approvalApi.getApprovalList({ page, size, scope: 'drafts' })
       setList(res.data?.list || [])
       setTotal(res.data?.total || 0)
     } catch (e) {
@@ -133,8 +133,21 @@ export default function Drafts() {
   }
 
   const columns = [
-    { title: '申请项名称', dataIndex: 'item_name', render: (v, r) => r.name || v || '-' },
-    { title: '创建时间', dataIndex: 'created_at', width: 170 },
+    {
+      title: '序号',
+      key: 'index',
+      width: 62,
+      align: 'center',
+      render: (_, __, index) => index + 1,
+    },
+    { title: '模块', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '部门', dataIndex: 'dept_name', render: (v) => v || '-' },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 170,
+      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
+    },
     {
       title: '状态',
       dataIndex: 'approval_status',
@@ -144,14 +157,14 @@ export default function Drafts() {
     {
       title: '操作',
       key: 'action',
-      width: 240,
+      width: 230,
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => openDraftEdit(r)}>
-            继续编辑
+            编辑
           </Button>
           <Button type="text" size="small" onClick={() => handleSubmit(r)}>
-            提交审核
+            提交
           </Button>
           <Popconfirm title="确定删除该草稿吗？" onOk={() => handleDelete(r)}>
             <Button type="text" size="small" status="danger">

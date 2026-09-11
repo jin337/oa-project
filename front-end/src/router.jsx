@@ -39,7 +39,7 @@ const ApprovalApply = lazy(() => import('./pages/approval/Apply.jsx'))
 // 审批列表页：我的发起 / 我的待办 / 我审批的 / 抄送我的 / 草稿箱
 const ApprovalInitiated = lazy(() => import('./pages/approval/Initiated.jsx'))
 const ApprovalTodo = lazy(() => import('./pages/approval/Todo.jsx'))
-const ApprovalWorkplace = lazy(() => import('./pages/approval/ApprovalWorkplace.jsx'))
+const ApprovalWorkplace = lazy(() => import('./pages/approval/Workplace.jsx'))
 const ApprovalToMe = lazy(() => import('./pages/approval/ToMe.jsx'))
 const ApprovalDrafts = lazy(() => import('./pages/approval/Drafts.jsx'))
 
