@@ -16,6 +16,7 @@ import * as approvalApi from '../../api/approval'
 import { useTabs } from '../../store/tab-context'
 import DynamicForm from '../application/DynamicForm'
 import { ApprovalStatusTag } from './approvalStatus.jsx'
+import DetailDrawer from './DetailDrawer.jsx'
 
 const PAGE_TITLE = '草稿箱'
 
@@ -36,6 +37,9 @@ export default function Drafts() {
   const [drawerApp, setDrawerApp] = useState(null)
   const [draftRecord, setDraftRecord] = useState(null)
   const [drawerForm] = Form.useForm()
+
+  // 动态详情 Drawer（查看详情）
+  const [detailRecord, setDetailRecord] = useState(null)
 
   useEffect(() => {
     addTab({ path: location.pathname, title: PAGE_TITLE })
@@ -160,6 +164,9 @@ export default function Drafts() {
       width: 230,
       render: (_, r) => (
         <Space>
+          <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
+            详情
+          </Button>
           <Button type="text" size="small" onClick={() => openDraftEdit(r)}>
             编辑
           </Button>
@@ -220,6 +227,13 @@ export default function Drafts() {
           <DynamicForm app={drawerApp} form={drawerForm} pageType="form" />
         ) : null}
       </Drawer>
+
+      {/* 查看详情 Drawer：按记录的页面编码请求应用配置，渲染动态详情 */}
+      <DetailDrawer
+        record={detailRecord}
+        visible={Boolean(detailRecord)}
+        onCancel={() => setDetailRecord(null)}
+      />
     </Card>
   )
 }
