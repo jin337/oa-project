@@ -137,3 +137,45 @@ func ApprovalItemDelete(c *gin.Context) {
 	}
 	response.OKMsg(c, "删除成功")
 }
+
+// ==================== 审批列表（跨应用聚合） ====================
+
+// approvalListHandler 审批列表通用处理：按 scope 调 service 聚合查询
+func approvalListHandler(c *gin.Context, scope string) {
+	var req model.ApprovalListReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	list, total, err := service.ApprovalList(middleware.CurrentUserID(c), scope, &req)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
+}
+
+// ApprovalInitiated GET /api/v1/approval/initiated 我的发起（排除草稿）
+func ApprovalInitiated(c *gin.Context) {
+	approvalListHandler(c, "initiated")
+}
+
+// ApprovalTodo GET /api/v1/approval/todo 我的待办（待审核/审核中）
+func ApprovalTodo(c *gin.Context) {
+	approvalListHandler(c, "todo")
+}
+
+// ApprovalApproved GET /api/v1/approval/approved 我审批的（已通过/不通过/已驳回/已作废）
+func ApprovalApproved(c *gin.Context) {
+	approvalListHandler(c, "approved")
+}
+
+// ApprovalCc GET /api/v1/approval/cc 抄送我的（暂无抄送人字段，返回空）
+func ApprovalCc(c *gin.Context) {
+	approvalListHandler(c, "cc")
+}
+
+// ApprovalDrafts GET /api/v1/approval/drafts 草稿箱（草稿）
+func ApprovalDrafts(c *gin.Context) {
+	approvalListHandler(c, "drafts")
+}

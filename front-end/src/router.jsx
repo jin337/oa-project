@@ -36,6 +36,12 @@ const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
 
 // 审批申请页：分类 + 申请项管理
 const ApprovalApply = lazy(() => import('./pages/approval/Apply.jsx'))
+// 审批列表页：我的发起 / 我的待办 / 我审批的 / 抄送我的 / 草稿箱
+const ApprovalInitiated = lazy(() => import('./pages/approval/Initiated.jsx'))
+const ApprovalTodo = lazy(() => import('./pages/approval/Todo.jsx'))
+const ApprovalWorkplace = lazy(() => import('./pages/approval/ApprovalWorkplace.jsx'))
+const ApprovalToMe = lazy(() => import('./pages/approval/ToMe.jsx'))
+const ApprovalDrafts = lazy(() => import('./pages/approval/Drafts.jsx'))
 
 function PageLoading() {
   return (
@@ -219,6 +225,46 @@ const router = createBrowserRouter([
             <RequirePermission>
               <ApprovalApply />
             </RequirePermission>
+          </Page>
+        ),
+      },
+      {
+        path: 'approval/initiated',
+        element: (
+          <Page>
+            <ApprovalInitiated />
+          </Page>
+        ),
+      },
+      {
+        path: 'approval/todo',
+        element: (
+          <Page>
+            <ApprovalTodo />
+          </Page>
+        ),
+      },
+      {
+        path: 'approval/workplace',
+        element: (
+          <Page>
+            <ApprovalWorkplace />
+          </Page>
+        ),
+      },
+      {
+        path: 'approval/tome',
+        element: (
+          <Page>
+            <ApprovalToMe />
+          </Page>
+        ),
+      },
+      {
+        path: 'approval/drafts',
+        element: (
+          <Page>
+            <ApprovalDrafts />
           </Page>
         ),
       },

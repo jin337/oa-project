@@ -26,22 +26,11 @@ import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from '../../api/application'
 import * as approvalApi from '../../api/approval'
 import DynamicForm from '../application/DynamicForm'
+import { APPROVAL_STATUS } from './approvalStatus.jsx'
 
 const FormItem = Form.Item
 const Row = Grid.Row
 const Col = Grid.Col
-
-// 审核状态映射（列表 / 详情页状态展示复用；0 草稿，1 待审核）
-const APPROVAL_STATUS = {
-  0: '草稿',
-  1: '待审核',
-  2: '审核中',
-  3: '已通过',
-  4: '不通过',
-  5: '已驳回',
-  6: '已作废',
-  7: '已删除',
-}
 
 // 申请项图标映射（icon 字段存图标名，未匹配时使用默认图标）
 const ICON_MAP = {

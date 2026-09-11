@@ -2,6 +2,9 @@ package service
 
 import (
 	"errors"
+	"sort"
+	"strings"
+	"time"
 
 	"back-end/internal/database"
 	"back-end/internal/model"
@@ -107,11 +110,11 @@ func ApprovalItemCreate(curUserID uint, req *model.ApprovalItemCreateReq) (*mode
 		return nil, errors.New("该分类下已存在同名申请项")
 	}
 	item := model.ApprovalItem{
-		Name:        req.Name,
-		Code:        req.Code,
-		CategoryID:  req.CategoryID,
-		Icon:        req.Icon,
-		Sort:        req.Sort,
+		Name:       req.Name,
+		Code:       req.Code,
+		CategoryID: req.CategoryID,
+		Icon:       req.Icon,
+		Sort:       req.Sort,
 	}
 	item.CreatedBy, item.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&item).Error; err != nil {
@@ -177,4 +180,165 @@ func ApprovalItemDelete(id uint) error {
 		return errors.New("申请项不存在")
 	}
 	return database.DB.Delete(&model.ApprovalItem{}, id).Error
+}
+
+// ==================== 审批列表（跨应用聚合） ====================
+
+// ApprovalList 审批列表跨应用聚合查询：
+//   - 遍历所有未删除的页面配置（Application），在各自动态业务主表中按 scope 过滤后合并
+//   - initiated 我的发起  ：created_by = 当前用户 且 排除草稿（status ≠ 0）
+//   - todo      我的待办  ：status ∈ {1 待审核, 2 审核中}（无独立审批人体系，待办 = 全部已提交待审数据）
+//   - approved  我审批的  ：status ∈ {3 已通过, 4 不通过, 5 已驳回, 6 已作废} 且 updated_by = 当前用户
+//   - cc        抄送我的  ：当前无抄送人字段，返回空列表（结构预留）
+//   - drafts    草稿箱    ：created_by = 当前用户 且 status = 0 草稿
+//
+// 每张业务表行数有限，采用"全量聚合 → 按发起时间倒序 → 内存分页"策略
+func ApprovalList(curUserID uint, scope string, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
+	if scope == "cc" {
+		// 抄送暂无数据支撑（无抄送人字段），返回空结构
+		return []model.ApprovalRecord{}, 0, nil
+	}
+
+	var apps []model.Application
+	if err := database.DB.Unscoped().Where("deleted_at IS NULL").Order("id ASC").Find(&apps).Error; err != nil {
+		return nil, 0, err
+	}
+
+	records := []model.ApprovalRecord{}
+	for _, app := range apps {
+		if !isValidTableName(app.TableName) {
+			continue
+		}
+		real := bizTableName(app.TableName)
+		colSet, err := queryColumnSet(real)
+		if err != nil || !colSet["approval_status"] {
+			continue // 业务表缺失或旧表无审核功能，跳过
+		}
+
+		conds := []string{"`deleted_at` IS NULL"}
+		args := []interface{}{}
+		switch scope {
+		case "initiated":
+			conds = append(conds, "`created_by` = ?", "`approval_status` <> ?")
+			args = append(args, curUserID, model.ApprovalStatusDraft)
+		case "todo":
+			conds = append(conds, "`approval_status` IN (?, ?)")
+			args = append(args, model.ApprovalStatusPending, model.ApprovalStatusReviewing)
+		case "approved":
+			conds = append(conds, "`approval_status` IN (?, ?, ?, ?)", "`updated_by` = ?")
+			args = append(args,
+				model.ApprovalStatusPassed, model.ApprovalStatusRejected,
+				model.ApprovalStatusReturned, model.ApprovalStatusVoided,
+				curUserID)
+		case "drafts":
+			conds = append(conds, "`created_by` = ?", "`approval_status` = ?")
+			args = append(args, curUserID, model.ApprovalStatusDraft)
+		default:
+			return nil, 0, errors.New("非法的审批列表类型")
+		}
+
+		var rows []map[string]interface{}
+		if err := database.DB.Raw("SELECT * FROM `"+real+"` WHERE "+strings.Join(conds, " AND ")+" ORDER BY `id` DESC",
+			args...).Scan(&rows).Error; err != nil {
+			return nil, 0, err
+		}
+		for _, row := range rows {
+			rec := model.ApprovalRecord{
+				ID:         rowUint(row, "id"),
+				AppID:      app.ID,
+				AppCode:    app.Code,
+				AppName:    app.Name,
+				Status:     int(rowUint(row, "approval_status")),
+				StatusName: approvalStatusName(int(rowUint(row, "approval_status"))),
+				CreatedBy:  rowUint(row, "created_by"),
+				CreatedAt:  rowTime(row, "created_at"),
+				Data:       rowBizData(row),
+			}
+			records = append(records, rec)
+		}
+	}
+
+	// 按发起时间倒序（nil 时间排最后）
+	sort.SliceStable(records, func(i, j int) bool {
+		a, b := records[i].CreatedAt, records[j].CreatedAt
+		if a == nil {
+			return false
+		}
+		if b == nil {
+			return true
+		}
+		return a.After(*b)
+	})
+
+	total := int64(len(records))
+	offset, limit := req.Offset(), req.Limit()
+	if offset >= len(records) {
+		return []model.ApprovalRecord{}, total, nil
+	}
+	end := offset + limit
+	if end > len(records) {
+		end = len(records)
+	}
+	return records[offset:end], total, nil
+}
+
+// rowUint 从动态数据行中提取 uint 字段（tinyint/int/float 等类型兼容）
+func rowUint(row map[string]interface{}, key string) uint {
+	switch v := row[key].(type) {
+	case int8:
+		return uint(v)
+	case int16:
+		return uint(v)
+	case int32:
+		return uint(v)
+	case int64:
+		return uint(v)
+	case int:
+		return uint(v)
+	case uint8:
+		return uint(v)
+	case uint16:
+		return uint(v)
+	case uint32:
+		return uint(v)
+	case uint64:
+		return uint(v)
+	case uint:
+		return v
+	case float64:
+		return uint(v)
+	case nil:
+		return 0
+	default:
+		return 0
+	}
+}
+
+// rowTime 从动态数据行中提取时间字段
+func rowTime(row map[string]interface{}, key string) *time.Time {
+	switch v := row[key].(type) {
+	case time.Time:
+		t := v
+		return &t
+	case *time.Time:
+		return v
+	default:
+		return nil
+	}
+}
+
+// rowBizData 从动态数据行中剥离系统列与审核状态，仅保留业务字段作为列表摘要
+func rowBizData(row map[string]interface{}) map[string]interface{} {
+	biz := make(map[string]interface{}, len(row))
+	for k, v := range row {
+		switch k {
+		case "id", "created_at", "updated_at", "created_by", "updated_by", "deleted_at", "approval_status", "parent_id":
+			continue
+		}
+		biz[k] = v
+	}
+	if len(biz) == 0 {
+		return nil
+	}
+	return biz
 }

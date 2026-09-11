@@ -93,6 +93,12 @@ func Setup() *gin.Engine {
 		approval.POST("/item", handler.ApprovalItemCreate)
 		approval.PUT("/item/:id", handler.ApprovalItemUpdate)
 		approval.DELETE("/item/:id", handler.ApprovalItemDelete)
+		// 审批列表（跨应用聚合：我的发起/待办/已办/抄送/草稿箱）
+		approval.GET("/initiated", handler.ApprovalInitiated)
+		approval.GET("/todo", handler.ApprovalTodo)
+		approval.GET("/approved", handler.ApprovalApproved)
+		approval.GET("/cc", handler.ApprovalCc)
+		approval.GET("/drafts", handler.ApprovalDrafts)
 	}
 
 	// 页面配置管理

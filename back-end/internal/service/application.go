@@ -72,6 +72,7 @@ func visibilityFlag(vis map[string]interface{}, key string) bool {
 //   - form  ：基础信息 + form_layout_json，detail_layout_json 置空
 //   - detail：基础信息 + detail_layout_json，form_layout_json 置空
 //   - 空/未知：返回完整配置（兼容旧调用方）
+//
 // filters 为动态搜索字段（field_key → 值），仅 state=list 时作用于数据列表过滤
 func ApplicationByCode(code, state string, page, size int, filters map[string]string) (*model.ApplicationByCodeResult, error) {
 	var app model.Application
@@ -99,11 +100,12 @@ func ApplicationByCode(code, state string, page, size int, filters map[string]st
 				result.Columns = append(result.Columns, el)
 			}
 		}
-		// 主表数据列表（复用动态数据查询逻辑，filters 作为动态过滤条件，过滤软删除）
+		// 主表数据列表（复用动态数据查询逻辑，filters 作为动态过滤条件，过滤软删除；排除草稿——list 态为已提交数据视图）
 		list, total, err := ApplicationDataList(app.ID, &model.ApplicationDataListReq{
-			BaseListReq: model.BaseListReq{Page: page, Size: size},
-			TableName:   app.TableName,
-			Filters:     filters,
+			BaseListReq:  model.BaseListReq{Page: page, Size: size},
+			TableName:    app.TableName,
+			ExcludeDraft: true,
+			Filters:      filters,
 		})
 		if err != nil {
 			return nil, err
@@ -151,6 +153,11 @@ func ApplicationDataList(appID uint, req *model.ApplicationDataListReq) ([]map[s
 	if req.Status != nil && colSet["approval_status"] {
 		conds = append(conds, "`approval_status` = ?")
 		args = append(args, *req.Status)
+	}
+	// 排除草稿（审核人视角的已提交列表，如 by-code list 态）
+	if req.ExcludeDraft && colSet["approval_status"] {
+		conds = append(conds, "`approval_status` <> ?")
+		args = append(args, model.ApprovalStatusDraft)
 	}
 	for k, v := range req.Filters {
 		if !colSet[k] {
@@ -661,10 +668,10 @@ var approvalTransitions = map[int]map[int]bool{
 		model.ApprovalStatusReviewing: true, // 2 → 5 审核退回
 	},
 	model.ApprovalStatusVoided: {
-		model.ApprovalStatusDraft:      true, // 0 → 6 草稿作废
-		model.ApprovalStatusPending:    true, // 1 → 6 作废
-		model.ApprovalStatusReviewing:  true, // 2 → 6 作废
-		model.ApprovalStatusReturned:   true, // 5 → 6 作废
+		model.ApprovalStatusDraft:     true, // 0 → 6 草稿作废
+		model.ApprovalStatusPending:   true, // 1 → 6 作废
+		model.ApprovalStatusReviewing: true, // 2 → 6 作废
+		model.ApprovalStatusReturned:  true, // 5 → 6 作废
 	},
 }
 
@@ -673,6 +680,7 @@ var approvalTransitions = map[int]map[int]bool{
 //  2. 校验目标记录存在（过滤软删除），读取当前审核状态
 //  3. 按 approvalTransitions 状态机校验流转合法性（终态不可再流转、驳回可重新提交等）
 //  4. 更新审核状态（1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废），并刷新审计字段
+//
 // 已删除(7)由删除接口自动置位，不允许通过本接口设置
 func ApplicationDataApproval(appID, dataID uint, curUserID uint, status int) error {
 	app, err := ApplicationDetail(appID)
@@ -847,7 +855,7 @@ func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.
 //  2. 主表名（TableName）变化：RENAME TABLE 旧主表 TO 新主表，并同步新主表表注释
 //  3. 子表名（SubTableName）变化：对比新旧子表列表——新增的子表 CREATE TABLE（带注释），
 //     被移除的子表 DROP TABLE IF EXISTS 物理删除
-//  所有动态表名执行 DDL 前均经 isValidTableName 合法性校验（防 SQL 注入）
+//     所有动态表名执行 DDL 前均经 isValidTableName 合法性校验（防 SQL 注入）
 func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*model.Application, error) {
 	var app model.Application
 	if err := database.DB.First(&app, id).Error; err != nil {

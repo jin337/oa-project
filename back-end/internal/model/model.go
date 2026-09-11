@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 // ============================================================
 // RBAC 模型，对应架构图：
 //   用户 User ──拥有(多对多)── 角色 Role ──分配(多对多)── 导航/菜单 Menu(目录/页面菜单/按钮权限标识, parent_id 自关联)
@@ -318,9 +320,10 @@ const (
 // 动态搜索字段以 field_key 作为 Query 参数名，由 handler 从 URL 提取后填充到 Filters
 type ApplicationDataListReq struct {
 	BaseListReq
-	TableName string            `json:"table_name" form:"table_name" validate:"required" label:"表名"`
-	Status    *int              `json:"status" form:"status" validate:"omitempty,oneof=0 1 2 3 4 5 6 7" label:"审核状态"` // nil 表示不过滤；0 草稿 1 待审核 2 审核中 3 已通过 4 不通过 5 已驳回 6 已作废 7 已删除
-	Filters   map[string]string `json:"-" form:"-"` // 动态搜索字段（field_key → 值）
+	TableName    string            `json:"table_name" form:"table_name" validate:"required" label:"表名"`
+	Status       *int              `json:"status" form:"status" validate:"omitempty,oneof=0 1 2 3 4 5 6 7" label:"审核状态"` // nil 表示不过滤；0 草稿 1 待审核 2 审核中 3 已通过 4 不通过 5 已驳回 6 已作废 7 已删除
+	ExcludeDraft bool              `json:"exclude_draft" form:"exclude_draft" label:"是否排除草稿"` // 为 true 时不返回草稿(0)数据（如审核人视角的已提交列表）
+	Filters      map[string]string `json:"-" form:"-"` // 动态搜索字段（field_key → 值）
 }
 
 // ApplicationApprovalReq 动态业务数据审核请求：设置审核状态
@@ -499,4 +502,22 @@ type ApprovalItemUpdateReq struct {
 type ApprovalItemListReq struct {
 	BaseListReq
 	CategoryID uint `json:"category_id" form:"category_id" validate:"omitempty" label:"所属分类"`
+}
+
+// ApprovalRecord 审批列表聚合记录（跨应用汇总动态业务数据，供我的发起/待办/已办/抄送/草稿箱使用）
+type ApprovalRecord struct {
+	ID         uint                   `json:"id"`            // 动态业务数据行 ID
+	AppID      uint                   `json:"app_id"`        // 页面配置 ID
+	AppCode    string                 `json:"code"`          // 页面编码
+	AppName    string                 `json:"app_name"`      // 页面名称
+	Status     int                    `json:"approval_status"` // 审核状态 0草稿 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除
+	StatusName string                 `json:"status_name"`   // 审核状态中文名
+	CreatedBy  uint                   `json:"created_by"`    // 发起人 ID
+	CreatedAt  *time.Time             `json:"created_at"`    // 发起时间
+	Data       map[string]interface{} `json:"data,omitempty"` // 业务数据摘要（不含系统列与审核状态）
+}
+
+// ApprovalListReq 审批列表请求（分页）
+type ApprovalListReq struct {
+	BaseListReq
 }
