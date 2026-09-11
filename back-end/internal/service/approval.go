@@ -252,11 +252,15 @@ func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalR
 				StatusName: approvalStatusName(int(rowUint(row, "approval_status"))),
 				CreatedBy:  rowUint(row, "created_by"),
 				CreatedAt:  rowTime(row, "created_at"),
+				UpdatedAt:  rowTime(row, "updated_at"),
 				Data:       rowBizData(row),
 			}
 			records = append(records, rec)
 		}
 	}
+
+	// 批量填充发起人姓名、部门名称与完成时间（两次 IN 查询，避免 N+1）
+	fillApprovalUserInfo(records)
 
 	// 按发起时间倒序（nil 时间排最后）
 	sort.SliceStable(records, func(i, j int) bool {
@@ -280,6 +284,77 @@ func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalR
 		end = len(records)
 	}
 	return records[offset:end], total, nil
+}
+
+// fillApprovalUserInfo 批量填充审批记录的发起人信息与完成时间：
+//   - 发起人姓名：一次 `WHERE id IN (...)` 批量查询 User（Preload 档案），姓名规则与部门树一致
+//     （优先档案 Nickname，无档案回退 Username），使用 Unscoped 保证软删用户的历史记录仍可显示姓名
+//   - 发起人部门名称：收集去重后的 dept_id，再一次 `WHERE id IN (...)` 批量查询 Dept 名称
+//   - 完成时间：仅终态（已通过/不通过/已驳回/已作废）取记录 updated_at，草稿/待审核/审核中置空
+func fillApprovalUserInfo(records []model.ApprovalRecord) {
+	if len(records) == 0 {
+		return
+	}
+	// 收集所有涉及的发起人 ID（去重）
+	uidSet := map[uint]bool{}
+	for _, r := range records {
+		if r.CreatedBy > 0 {
+			uidSet[r.CreatedBy] = true
+		}
+	}
+	if len(uidSet) == 0 {
+		return
+	}
+	uidList := make([]uint, 0, len(uidSet))
+	for uid := range uidSet {
+		uidList = append(uidList, uid)
+	}
+
+	// 批量查询用户（含档案）：一次 IN 查询，避免 N+1
+	var users []model.User
+	if err := database.DB.Unscoped().Preload("Profile").Where("id IN ?", uidList).Find(&users).Error; err != nil {
+		return
+	}
+	userName := map[uint]string{} // 用户ID -> 姓名
+	userDept := map[uint]uint{}   // 用户ID -> 部门ID
+	deptIDSet := map[uint]bool{}
+	for _, u := range users {
+		userName[u.ID] = userNickname(u)
+		userDept[u.ID] = u.DeptID
+		if u.DeptID > 0 {
+			deptIDSet[u.DeptID] = true
+		}
+	}
+
+	// 批量查询部门名称：一次 IN 查询
+	deptName := map[uint]string{}
+	if len(deptIDSet) > 0 {
+		deptIDList := make([]uint, 0, len(deptIDSet))
+		for did := range deptIDSet {
+			deptIDList = append(deptIDList, did)
+		}
+		var depts []model.Dept
+		if err := database.DB.Unscoped().Where("id IN ?", deptIDList).Find(&depts).Error; err == nil {
+			for _, d := range depts {
+				deptName[d.ID] = d.Name
+			}
+		}
+	}
+
+	// 回填姓名、部门与完成时间
+	for i := range records {
+		r := &records[i]
+		r.CreatedName = userName[r.CreatedBy]
+		if did, ok := userDept[r.CreatedBy]; ok {
+			r.DeptName = deptName[did]
+		}
+		switch r.Status {
+		case model.ApprovalStatusPassed, model.ApprovalStatusRejected,
+			model.ApprovalStatusReturned, model.ApprovalStatusVoided:
+			// 终态：完成时间取底层记录更新时间
+			r.FinishedAt = r.UpdatedAt
+		}
+	}
 }
 
 // rowUint 从动态数据行中提取 uint 字段（tinyint/int/float 等类型兼容）

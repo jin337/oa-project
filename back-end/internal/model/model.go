@@ -506,18 +506,19 @@ type ApprovalItemListReq struct {
 
 // ApprovalRecord 审批列表聚合记录（跨应用汇总动态业务数据，供我的发起/待办/已办/抄送/草稿箱使用）
 type ApprovalRecord struct {
-	ID            uint                   `json:"id"`              // 动态业务数据行 ID
-	AppID         uint                   `json:"app_id"`          // 页面配置 ID
-	AppCode       string                 `json:"code"`            // 页面编码
-	AppName       string                 `json:"app_name"`        // 页面名称
-	Status        int                    `json:"approval_status"` // 审核状态 0草稿 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除
-	StatusName    string                 `json:"status_name"`     // 审核状态中文名
-	CreatedBy     uint                   `json:"created_by"`      // 发起人 ID
-	CreatedByName string                 `json:"created_by_name"` // 发起人名称
-	DeptName      string                 `json:"dept_name"`       // 部门名称
-	FinishedAt    *time.Time             `json:"finished_at"`     // 完成时间
-	CreatedAt     *time.Time             `json:"created_at"`      // 发起时间
-	Data          map[string]interface{} `json:"data,omitempty"`  // 业务数据摘要（不含系统列与审核状态）
+	ID          uint                   `json:"id"`              // 动态业务数据行 ID
+	AppID       uint                   `json:"app_id"`          // 页面配置 ID
+	AppCode     string                 `json:"code"`            // 页面编码
+	AppName     string                 `json:"app_name"`        // 页面名称
+	Status      int                    `json:"approval_status"` // 审核状态 0草稿 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除
+	StatusName  string                 `json:"status_name"`     // 审核状态中文名
+	CreatedBy   uint                   `json:"created_by"`      // 发起人 ID
+	CreatedName string                 `json:"created_name"`    // 发起人姓名
+	DeptName    string                 `json:"dept_name"`       // 发起人部门名称
+	FinishedAt  *time.Time             `json:"finished_at"`     // 完成时间
+	UpdatedAt   *time.Time             `json:"-"`               // 底层记录更新时间（终态时作为完成时间，不对外输出）
+	CreatedAt   *time.Time             `json:"created_at"`      // 发起时间
+	Data        map[string]interface{} `json:"data,omitempty"`  // 业务数据摘要（不含系统列与审核状态）
 }
 
 // ApprovalListReq 审批列表请求（分页）
