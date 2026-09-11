@@ -88,6 +88,12 @@ export function deleteApplicationData(appId, dataId) {
   return request.delete(`/application/${appId}/data/${dataId}`)
 }
 
+// PUT /application/:id/data/:dataId/approval 审核状态流转（body: { status }）
+// 规范备忘：撤回/退回草稿 → status: 0；提交审核 → status: 1（列表筛选草稿用 GET ?status=0）
+export function updateApplicationDataApproval(appId, dataId, status) {
+  return request.put(`/application/${appId}/data/${dataId}/approval`, { status })
+}
+
 // ========== 表单元素管理（/application/:appId/formelement） ==========
 
 // GET /application/:appId/formelement 表单元素列表

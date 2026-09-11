@@ -147,10 +147,10 @@ func ApplicationDataList(appID uint, req *model.ApplicationDataListReq) ([]map[s
 	if colSet["deleted_at"] {
 		conds = append(conds, "`deleted_at` IS NULL")
 	}
-	// 按审核状态过滤（业务表无该列时忽略，兼容旧表）
-	if req.Status > 0 && colSet["approval_status"] {
+	// 按审核状态过滤（Status 为 nil 表示不过滤；0 草稿可查；业务表无该列时忽略，兼容旧表）
+	if req.Status != nil && colSet["approval_status"] {
 		conds = append(conds, "`approval_status` = ?")
-		args = append(args, req.Status)
+		args = append(args, *req.Status)
 	}
 	for k, v := range req.Filters {
 		if !colSet[k] {
@@ -276,6 +276,26 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 		}
 	}
 
+	// 提取初始审核状态（仅允许 0 草稿 / 1 待审核，默认待审核）：
+	// 前端可在创建时传 approval_status=0 实现“保存草稿”，提交审核由审核接口 0→1 完成
+	initialStatus := model.ApprovalStatusPending
+	if v, ok := data["approval_status"]; ok {
+		if !mainColSet["approval_status"] {
+			return 0, errors.New("业务表缺少审核状态字段")
+		}
+		switch s := v.(type) {
+		case float64: // JSON 数字默认解析为 float64
+			if s == float64(model.ApprovalStatusDraft) {
+				initialStatus = model.ApprovalStatusDraft
+			} else if s != float64(model.ApprovalStatusPending) {
+				return 0, errors.New("非法的初始审核状态")
+			}
+		default:
+			return 0, errors.New("非法的初始审核状态")
+		}
+		delete(data, "approval_status") // 从动态字段中移除，不参与通用列校验
+	}
+
 	// 分离主表字段与子表数据
 	mainColumns := []string{}
 	mainPlaceholders := []string{}
@@ -303,11 +323,16 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 		mainArgs = append(mainArgs, v)
 	}
 
-	// 自动填充主表审计字段
+	// 自动填充主表审计字段与初始审核状态（旧表无 approval_status 列时仅填充审计字段）
 	now := time.Now()
 	mainColumns = append(mainColumns, "`created_at`", "`updated_at`", "`created_by`", "`updated_by`")
 	mainPlaceholders = append(mainPlaceholders, "?", "?", "?", "?")
 	mainArgs = append(mainArgs, now, now, curUserID, curUserID)
+	if mainColSet["approval_status"] {
+		mainColumns = append(mainColumns, "`approval_status`")
+		mainPlaceholders = append(mainPlaceholders, "?")
+		mainArgs = append(mainArgs, initialStatus)
+	}
 
 	mainSQL := fmt.Sprintf(
 		"INSERT INTO `%s` (%s) VALUES (%s)",
@@ -602,15 +627,21 @@ func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]i
 }
 
 // approvalTransitions 审核状态机流转表：目标状态 → 允许的当前状态集合
-// 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除
-//   - 待审核：仅已驳回可重新提交回到待审核
-//   - 审核中：待审核/已驳回可开始（或重新）审核
-//   - 已通过/不通过：待审核或审核中可直接给出结果（终态）
-//   - 已驳回：待审核或审核中可退回修改（非终态，可重新提交）
-//   - 已作废：待审核/审核中/已驳回可作废（终态）
-//   - 已删除：不在此表，仅由删除接口置位
+// 0草稿 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除
+//   - 草稿(0)：待审核撤回为草稿、已驳回退回草稿（草稿间编辑走更新接口，状态不变）
+//   - 待审核(1)：草稿提交、已驳回重新提交
+//   - 审核中(2)：待审核/已驳回可开始（或重新）审核
+//   - 已通过(3)/不通过(4)：待审核或审核中可直接给出结果（终态）
+//   - 已驳回(5)：待审核或审核中可退回修改（非终态，可重新提交或退回草稿）
+//   - 已作废(6)：草稿/待审核/审核中/已驳回可作废（终态）
+//   - 已删除(7)：不在此表，仅由删除接口置位
 var approvalTransitions = map[int]map[int]bool{
+	model.ApprovalStatusDraft: {
+		model.ApprovalStatusPending:  true, // 1 待审核 → 0 撤回为草稿
+		model.ApprovalStatusReturned: true, // 5 已驳回 → 0 退回草稿完善
+	},
 	model.ApprovalStatusPending: {
+		model.ApprovalStatusDraft:    true, // 0 草稿 → 1 提交审核
 		model.ApprovalStatusReturned: true, // 5 已驳回 → 1 重新提交
 	},
 	model.ApprovalStatusReviewing: {
@@ -630,9 +661,10 @@ var approvalTransitions = map[int]map[int]bool{
 		model.ApprovalStatusReviewing: true, // 2 → 5 审核退回
 	},
 	model.ApprovalStatusVoided: {
-		model.ApprovalStatusPending:   true, // 1 → 6 作废
-		model.ApprovalStatusReviewing: true, // 2 → 6 作废
-		model.ApprovalStatusReturned:  true, // 5 → 6 作废
+		model.ApprovalStatusDraft:      true, // 0 → 6 草稿作废
+		model.ApprovalStatusPending:    true, // 1 → 6 作废
+		model.ApprovalStatusReviewing:  true, // 2 → 6 作废
+		model.ApprovalStatusReturned:   true, // 5 → 6 作废
 	},
 }
 
@@ -663,15 +695,17 @@ func ApplicationDataApproval(appID, dataID uint, curUserID uint, status int) err
 		return errors.New("非法的审核状态")
 	}
 
-	var curStatus int
+	// 读取当前审核状态：用指针区分“记录不存在”（nil）与“草稿状态 0”
+	var curStatus *int
 	if err := database.DB.Raw("SELECT `approval_status` FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", dataID).Scan(&curStatus).Error; err != nil {
 		return err
 	}
-	if curStatus == 0 {
+	if curStatus == nil {
 		return errors.New("数据不存在")
 	}
-	if !approvalTransitions[status][curStatus] {
-		return fmt.Errorf("当前状态(%s)不允许变更为(%s)", approvalStatusName(curStatus), approvalStatusName(status))
+	cur := *curStatus
+	if !approvalTransitions[status][cur] {
+		return fmt.Errorf("当前状态(%s)不允许变更为(%s)", approvalStatusName(cur), approvalStatusName(status))
 	}
 
 	if err := database.DB.Exec("UPDATE `"+real+"` SET `approval_status` = ?, `updated_at` = ?, `updated_by` = ? WHERE `id` = ?",
@@ -684,6 +718,8 @@ func ApplicationDataApproval(appID, dataID uint, curUserID uint, status int) err
 // approvalStatusName 审核状态的中文名（用于状态机报错提示）
 func approvalStatusName(status int) string {
 	switch status {
+	case model.ApprovalStatusDraft:
+		return "草稿"
 	case model.ApprovalStatusPending:
 		return "待审核"
 	case model.ApprovalStatusReviewing:
@@ -743,7 +779,7 @@ func createBizTable(tableName string, withParent bool, comment string) error {
 	b.WriteString("`created_by` bigint unsigned DEFAULT NULL COMMENT '创建人',")
 	b.WriteString("`updated_by` bigint unsigned DEFAULT NULL COMMENT '更新人',")
 	b.WriteString("`deleted_at` datetime(3) DEFAULT NULL COMMENT '删除时间',")
-	b.WriteString("`approval_status` tinyint NOT NULL DEFAULT 1 COMMENT '审核状态 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除',")
+	b.WriteString("`approval_status` tinyint NOT NULL DEFAULT 1 COMMENT '审核状态 0草稿 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除',")
 	if withParent {
 		// 子表：额外添加关联主表的外键字段
 		b.WriteString("`parent_id` bigint unsigned DEFAULT NULL COMMENT '关联主表ID',")

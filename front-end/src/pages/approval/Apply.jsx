@@ -31,6 +31,18 @@ const FormItem = Form.Item
 const Row = Grid.Row
 const Col = Grid.Col
 
+// 审核状态映射（列表 / 详情页状态展示复用；0 草稿，1 待审核）
+const APPROVAL_STATUS = {
+  0: '草稿',
+  1: '待审核',
+  2: '审核中',
+  3: '已通过',
+  4: '不通过',
+  5: '已驳回',
+  6: '已作废',
+  7: '已删除',
+}
+
 // 申请项图标映射（icon 字段存图标名，未匹配时使用默认图标）
 const ICON_MAP = {
   user: <IconUser />,
@@ -68,6 +80,7 @@ export default function Apply() {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [drawerLoading, setDrawerLoading] = useState(false)
   const [drawerApp, setDrawerApp] = useState(null)
+  const [drawerSaving, setDrawerSaving] = useState(false)
   const [drawerForm] = Form.useForm()
 
   // 加载分类列表
@@ -224,21 +237,56 @@ export default function Apply() {
     }
   }
 
-  // 提交申请：校验动态表单内容
-  const handleDrawerSubmit = async () => {
-    if (!drawerApp) return
+  // 校验动态表单并落库为草稿（approval_status 强制为 0），返回保存记录（含 dataId）
+  const saveDraftData = async () => {
+    if (!drawerApp) return null
     let values
     try {
       values = await drawerForm.validate()
     } catch (e) {
-      return
+      return null
     }
+    const res = await applicationApi.createApplicationData(drawerApp.id, {
+      ...values,
+      approval_status: 0, // 强制草稿状态
+    })
+    return res.data
+  }
+
+  // 保存草稿：仅落库，状态保持草稿
+  const handleSaveDraft = async () => {
+    setDrawerSaving(true)
     try {
-      await applicationApi.createApplicationData(drawerApp.id,values)
-      Message.success('申请提交成功')
+      const data = await saveDraftData()
+      if (!data) return
+      Message.success('草稿保存成功')
       setDrawerVisible(false)
     } catch (e) {
-      Message.error('申请提交失败，请稍后重试')
+      Message.error('草稿保存失败，请稍后重试')
+    } finally {
+      setDrawerSaving(false)
+    }
+  }
+
+  // 提交审核：先落库草稿，再调用审核状态变更接口流转为「待审核」
+  const handleSubmitApproval = async () => {
+    setDrawerSaving(true)
+    try {
+      const data = await saveDraftData()
+      if (!data) return
+      const dataId = data.id ?? data.dataId
+      if (!dataId) {
+        Message.warning('数据已保存，但未能获取数据 ID，审核状态未流转')
+        setDrawerVisible(false)
+        return
+      }
+      await applicationApi.updateApplicationDataApproval(drawerApp.id, dataId, 1)
+      Message.success('提交成功，等待审核')
+      setDrawerVisible(false)
+    } catch (e) {
+      Message.error('提交审核失败，请稍后重试')
+    } finally {
+      setDrawerSaving(false)
     }
   }
 
@@ -427,9 +475,18 @@ export default function Apply() {
         width="50%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
-        onOk={handleDrawerSubmit}
         title={drawerApp?.name || '申请表单'}
         unmountOnExit
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button loading={drawerSaving} onClick={handleSaveDraft}>
+              保存草稿
+            </Button>
+            <Button type="primary" loading={drawerSaving} onClick={handleSubmitApproval}>
+              提交审核
+            </Button>
+          </div>
+        }
       >
         {drawerLoading ? (
           <div className="flex h-40 items-center justify-center">
