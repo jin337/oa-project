@@ -1,25 +1,25 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    InputNumber,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Radio,
-    Select,
-    Space,
-    Table,
-    Tag,
-    Tooltip,
-    Tree,
-    Typography,
+  Button,
+  Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Radio,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Tree,
+  Typography,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -53,10 +53,22 @@ const DATA_SCOPE_OPTIONS = [
 
 const DATA_SCOPE_MAP = Object.fromEntries(DATA_SCOPE_OPTIONS.map((o) => [o.value, o.label]))
 
+// 菜单类型标识：1-目录，2-菜单，3-按钮
+const MENU_TYPE_PREFIX = { 1: '目录', 2: '菜单', 3: '按钮' }
+// 菜单类型 Tag 颜色
+const MENU_TYPE_COLOR = { 1: 'orangered', 2: 'arcoblue', 3: 'gray' }
+
 function menuToTree(menus) {
   return (menus || []).map((m) => ({
     key: String(m.id),
-    title: m.name,
+    title: (
+      <span className="flex items-center gap-1">
+        <Tag size="small" color={MENU_TYPE_COLOR[m.type] || 'gray'}>
+          {MENU_TYPE_PREFIX[m.type] || '未知'}
+        </Tag>
+        {m.name}
+      </span>
+    ),
     children: m.children ? menuToTree(m.children) : undefined,
   }))
 }
@@ -514,10 +526,15 @@ export default function RoleManage() {
       >
         <Tree
           checkable
+          checkStrictly
           defaultExpandAll
           treeData={menuToTree(menuTree)}
           checkedKeys={checkedMenus}
-          onCheck={(keys) => setCheckedMenus(keys)}
+          onCheck={(keys) => {
+            // checkStrictly 模式下 onCheck 返回 { checked, halfChecked } 对象，提取实际勾选集合
+            const checked = Array.isArray(keys) ? keys : keys?.checked || []
+            setCheckedMenus(checked)
+          }}
           className="max-h-100 overflow-auto"
         />
       </Modal>
