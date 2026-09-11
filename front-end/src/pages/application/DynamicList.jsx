@@ -14,7 +14,7 @@ import {
   Spin,
   Table,
 } from '@arco-design/web-react'
-import { IconList, IconRefresh, IconSearch, IconSettings } from '@arco-design/web-react/icon'
+import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { cloneElement, useCallback, useEffect, useMemo, useState } from 'react'
 import * as applicationApi from '../../api/application'
 import DynamicDetail from './DynamicDetail'
@@ -262,11 +262,7 @@ export default function DynamicList({ app, code }) {
             <Button type="text" size="small" onClick={() => openDrawer(record, 'form')}>
               编辑
             </Button>
-            <Popconfirm
-              position="lb"
-              title="确认删除该条数据？"
-              onOk={() => handleDelete(record)}
-            >
+            <Popconfirm position="lb" title="确认删除该条数据？" onOk={() => handleDelete(record)}>
               <Button type="text" size="small" status="danger">
                 删除
               </Button>
@@ -391,12 +387,14 @@ export default function DynamicList({ app, code }) {
                 {renderSearchControl(field)}
               </FormItem>
             ))}
-            <Button type="primary" icon={<IconSearch />} onClick={handleSearch}>
-              搜索
-            </Button>
-            <Button icon={<IconRefresh />} onClick={handleReset}>
-              重置
-            </Button>
+            <FormItem>
+              <Space>
+                <Button type="primary" onClick={handleSearch}>
+                  搜索
+                </Button>
+                <Button onClick={handleReset}>重置</Button>
+              </Space>
+            </FormItem>
           </Form>
         </div>
       )}
