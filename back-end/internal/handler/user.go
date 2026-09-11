@@ -172,6 +172,27 @@ func UserProfileUpdate(c *gin.Context) {
 	response.OK(c, profile)
 }
 
+// UserSwitchDept PUT /api/v1/users/switch-dept 切换当前部门（目标必须属于多部门归属列表）
+func UserSwitchDept(c *gin.Context) {
+	var req model.SwitchDeptReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	if err := service.UserSwitchDept(middleware.CurrentUserID(c), req.DeptID); err != nil {
+		code := response.CodeServerError
+		switch err.Error() {
+		case "目标部门不在用户的归属部门列表中":
+			code = response.CodeParamError
+		case "用户不存在":
+			code = response.CodeNotFound
+		}
+		response.Fail(c, code, err.Error())
+		return
+	}
+	response.OKMsg(c, "切换部门成功")
+}
+
 // UserResetPassword PUT /api/v1/users/:id/reset-password 重置密码（管理员操作）
 func UserResetPassword(c *gin.Context) {
 	id, ok := parseID(c)

@@ -37,9 +37,28 @@ func DeptUsers() ([]*model.OrgNode, error) {
 	if err := database.DB.Preload("Profile").Order("id ASC").Find(&users).Error; err != nil {
 		return nil, err
 	}
-	byDept := map[uint][]model.User{}
+	userMap := map[uint]model.User{}
 	for _, u := range users {
-		byDept[u.DeptID] = append(byDept[u.DeptID], u)
+		userMap[u.ID] = u
+	}
+	// 按多部门归属(system_user_dept)挂载：一个用户可出现在多个部门节点下
+	var rels []struct{ UserID uint; DeptID uint }
+	if err := database.DB.Table("oa_sys_user_dept").Scan(&rels).Error; err != nil {
+		return nil, err
+	}
+	byDept := map[uint][]model.User{}
+	mounted := map[uint]bool{}
+	for _, r := range rels {
+		if u, ok := userMap[r.UserID]; ok {
+			byDept[r.DeptID] = append(byDept[r.DeptID], u)
+			mounted[r.UserID] = true
+		}
+	}
+	// 兼容兜底：无关联记录的用户（如旧数据）按当前部门挂载
+	for _, u := range users {
+		if !mounted[u.ID] && u.DeptID > 0 {
+			byDept[u.DeptID] = append(byDept[u.DeptID], u)
+		}
 	}
 
 	return buildOrgTree(deptTree, byDept), nil
@@ -69,7 +88,7 @@ func buildOrgTree(depts []*model.Dept, byDept map[uint][]model.User) []*model.Or
 				Username: u.Username,
 				Email:    u.Email,
 				Phone:    u.Phone,
-				ParentID: u.DeptID,
+				ParentID: d.ID,
 				Status:   u.Status,
 			})
 		}

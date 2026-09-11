@@ -1,28 +1,28 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    DatePicker,
-    Descriptions,
-    Divider,
-    Drawer,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Radio,
-    Select,
-    Space,
-    Spin,
-    Table,
-    Tag,
-    Tooltip,
-    TreeSelect,
+  Button,
+  Card,
+  Checkbox,
+  DatePicker,
+  Descriptions,
+  Divider,
+  Drawer,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Radio,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  Tooltip,
+  TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -71,19 +71,20 @@ const EMPTY_FORM = {
   phone: '',
   password: '',
   status: 1,
-  dept_id: undefined,
+  dept_ids: [],
   role_ids: [],
 }
 
-// 后端 dept_id 为数字类型、role_ids 为数字数组：
+// 后端 dept_ids 为数字数组、role_ids 为数字数组：
 // TreeSelect 选中值与编辑回填的角色 ID 可能是字符串，提交前统一转为数字，
 // 否则后端 JSON 绑定阶段直接报「请求参数格式错误」
 function normalizeUserPayload(values) {
   const payload = { ...values }
-  if (payload.dept_id !== undefined && payload.dept_id !== null && payload.dept_id !== '') {
-    payload.dept_id = Number(payload.dept_id)
+  if (Array.isArray(payload.dept_ids)) {
+    payload.dept_ids = payload.dept_ids.map((id) => Number(id))
+    if (!payload.dept_ids.length) delete payload.dept_ids
   } else {
-    delete payload.dept_id
+    delete payload.dept_ids
   }
   if (Array.isArray(payload.role_ids)) {
     payload.role_ids = payload.role_ids.map((id) => Number(id))
@@ -102,9 +103,9 @@ export default function UserManage() {
 
   // 草稿筛选条件（绑定输入控件，变化不触发请求）
   const [keyword, setKeyword] = useState('')
-  const [deptFilter, setDeptFilter] = useState(undefined)
+  const [deptFilter, setDeptFilter] = useState([])
   // 已生效的筛选条件（点击「搜索」后更新，驱动列表请求）
-  const [appliedFilters, setAppliedFilters] = useState({ keyword: '', deptFilter: undefined })
+  const [appliedFilters, setAppliedFilters] = useState({ keyword: '', deptFilter: [] })
 
   // 表格密度 & 列可见性
   const [tableSize, setTableSize] = useState('default')
@@ -137,7 +138,7 @@ export default function UserManage() {
       try {
         const params = { page: p, size: s }
         if (appliedFilters.keyword) params.username = appliedFilters.keyword
-        if (appliedFilters.deptFilter) params.dept_id = appliedFilters.deptFilter
+        if (appliedFilters.deptFilter?.length) params.dept_ids = appliedFilters.deptFilter
         const res = await userApi.listUsers(params)
         setList(res.data.list || [])
         setTotal(res.data.total || 0)
@@ -180,8 +181,8 @@ export default function UserManage() {
   // 重置：清空草稿与已生效条件，回到第一页并刷新
   const handleReset = () => {
     setKeyword('')
-    setDeptFilter(undefined)
-    setAppliedFilters({ keyword: '', deptFilter: undefined })
+    setDeptFilter([])
+    setAppliedFilters({ keyword: '', deptFilter: [] })
     setPage(1)
   }
 
@@ -199,7 +200,7 @@ export default function UserManage() {
       phone: record.phone,
       password: '',
       status: record.status,
-      dept_id: record.dept_id || undefined,
+      dept_ids: (record.dept_ids || []).map((d) => d.id),
       role_ids: (record.roles || []).map((r) => r.id),
     })
     setModalVisible(true)
@@ -343,8 +344,15 @@ export default function UserManage() {
     {
       key: 'dept',
       title: '部门',
-      dataIndex: 'dept',
-      render: (dept) => dept?.name || '-',
+      dataIndex: 'dept_ids',
+      render: (deptIds) =>
+        (deptIds || []).length
+          ? deptIds.map((d) => (
+              <Tag key={d.id} color="arcoblue" className="mr-1">
+                {d.name}
+              </Tag>
+            ))
+          : '-',
     },
     {
       key: 'roles',
@@ -442,8 +450,9 @@ export default function UserManage() {
             onPressEnter={handleSearch}
           />
           <TreeSelect
+            multiple
             className="w-50!"
-            placeholder="按部门筛选"
+            placeholder="按部门筛选（可多选）"
             allowClear
             treeData={toTreeData(deptTree)}
             value={deptFilter}
@@ -557,8 +566,13 @@ export default function UserManage() {
               </FormItem>
             </Col>
             <Col span={12}>
-              <FormItem label="所属部门" field="dept_id">
-                <TreeSelect placeholder="请选择部门" allowClear treeData={toTreeData(deptTree)} />
+              <FormItem label="所属部门" field="dept_ids">
+                <TreeSelect
+                  multiple
+                  placeholder="请选择部门（可多选）"
+                  allowClear
+                  treeData={toTreeData(deptTree)}
+                />
               </FormItem>
             </Col>
             <Col span={12}>
@@ -630,7 +644,18 @@ export default function UserManage() {
                 { label: '用户名', value: detailUser?.username || '-' },
                 { label: '邮箱', value: detailUser?.email || '-' },
                 { label: '手机号', value: detailUser?.phone || '-' },
-                { label: '所属部门', value: detailUser?.dept?.name || '-' },
+                {
+                  label: '所属部门',
+                  value: (detailUser?.dept_ids || []).length ? (
+                    detailUser.dept_ids.map((d) => (
+                      <Tag key={d.id} color="arcoblue" className="mr-1">
+                        {d.name}
+                      </Tag>
+                    ))
+                  ) : (
+                    '-'
+                  ),
+                },
                 {
                   label: '角色',
                   value:

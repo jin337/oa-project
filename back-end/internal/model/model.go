@@ -17,8 +17,9 @@ type User struct {
 	Phone    string `gorm:"size:20;comment:手机号" json:"phone"`
 	Password string `gorm:"size:255;not null;comment:密码" json:"-"`
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
-	DeptID   uint   `gorm:"index;comment:所属部门ID(属于 dept_id)" json:"dept_id"`
+	DeptID   uint   `gorm:"index;comment:当前所属部门ID" json:"dept_id"`
 
+	DeptIDs []*Dept      `gorm:"many2many:sys_user_dept;" json:"dept_ids,omitempty"` // 多部门归属(多对多，借鉴 Roles)，当前部门取 DeptID
 	Roles   []*Role      `gorm:"many2many:sys_user_role;" json:"roles,omitempty"`
 	Dept    *Dept        `gorm:"foreignKey:DeptID" json:"dept,omitempty"`
 	Profile *UserProfile `gorm:"foreignKey:UserID" json:"profile,omitempty"`
@@ -145,7 +146,8 @@ type UserCreateReq struct {
 	Phone    string `json:"phone" validate:"omitempty,max=20" label:"手机号"`
 	Password string `json:"password" validate:"required,min=6,max=64" label:"密码"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
-	DeptID   uint   `json:"dept_id" validate:"omitempty" label:"部门ID"`
+	DeptID   uint   `json:"dept_id" validate:"omitempty" label:"当前部门ID"`
+	DeptIDs  []uint `json:"dept_ids" validate:"omitempty,dive,gt=0" label:"所属部门ID列表"`
 	RoleIDs  []uint `json:"role_ids" validate:"omitempty" label:"角色ID列表"`
 }
 
@@ -154,7 +156,8 @@ type UserUpdateReq struct {
 	Email    string `json:"email" validate:"omitempty,email" label:"邮箱"`
 	Phone    string `json:"phone" validate:"omitempty,max=20" label:"手机号"`
 	Status   *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
-	DeptID   uint   `json:"dept_id" validate:"omitempty" label:"部门ID"`
+	DeptID   uint   `json:"dept_id" validate:"omitempty" label:"当前部门ID"`
+	DeptIDs  []uint `json:"dept_ids" validate:"omitempty,dive,gt=0" label:"所属部门ID列表"` // nil 表示不修改多部门归属
 	Password string `json:"password" validate:"omitempty,min=6,max=64" label:"密码"`
 }
 
@@ -162,6 +165,11 @@ type UserListReq struct {
 	BaseListReq
 	Username string `json:"username" form:"username" validate:"omitempty" label:"用户名"`
 	DeptID   uint   `json:"dept_id" form:"dept_id" validate:"omitempty" label:"部门ID"`
+}
+
+// SwitchDeptReq 切换当前部门请求：目标部门必须属于用户的多部门归属列表
+type SwitchDeptReq struct {
+	DeptID uint `json:"dept_id" validate:"required,gt=0" label:"目标部门ID"`
 }
 
 type AssignRolesReq struct {

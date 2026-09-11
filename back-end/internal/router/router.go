@@ -32,6 +32,7 @@ func Setup() *gin.Engine {
 	users.Use(middleware.JWTAuth())
 	{
 		users.GET("", handler.UserList)
+		users.PUT("/switch-dept", handler.UserSwitchDept) // 切换当前部门（目标须属于多部门归属列表）
 		users.POST("", handler.UserCreate)
 		users.GET("/:id", handler.UserDetail)
 		users.PUT("/:id", handler.UserUpdate)

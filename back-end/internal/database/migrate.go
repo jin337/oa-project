@@ -222,6 +222,9 @@ func seedInitData(db *gorm.DB) error {
 	if err := db.Create(&admin).Error; err != nil {
 		return err
 	}
+	if err := db.Model(&admin).Association("DeptIDs").Append(&rootDept); err != nil {
+		return err
+	}
 	return db.Model(&admin).Association("Roles").Append(&adminRole)
 }
 

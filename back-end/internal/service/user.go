@@ -19,14 +19,15 @@ func UserList(curUserID uint, req *model.UserListReq) ([]model.User, int64, erro
 		db = db.Where("username LIKE ?", "%"+req.Username+"%")
 	}
 	if req.DeptID > 0 {
-		db = db.Where("dept_id = ?", req.DeptID)
+		// 多部门归属过滤：命中任一关联部门即返回（oa_sys_user_dept 为 User.DeptIDs 的 many2many 关联表）
+		db = db.Where("id IN (SELECT user_id FROM oa_sys_user_dept WHERE dept_id = ?)", req.DeptID)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var list []model.User
-	err := db.Preload("Roles").Preload("Dept").
+	err := db.Preload("Roles").Preload("Dept").Preload("DeptIDs").
 		Order("id ASC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
 	return list, total, err
 }
@@ -34,7 +35,7 @@ func UserList(curUserID uint, req *model.UserListReq) ([]model.User, int64, erro
 // UserDetail 用户详情
 func UserDetail(id uint) (*model.User, error) {
 	var user model.User
-	if err := database.DB.Preload("Roles").Preload("Dept").Preload("Profile").First(&user, id).Error; err != nil {
+	if err := database.DB.Preload("Roles").Preload("Dept").Preload("DeptIDs").Preload("Profile").First(&user, id).Error; err != nil {
 		return nil, errors.New("用户不存在")
 	}
 	return &user, nil
@@ -65,13 +66,27 @@ func UserCreate(curUserID uint, req *model.UserCreateReq) (*model.User, error) {
 	if status == 0 {
 		status = 1
 	}
+	// 多部门归属校验（借鉴 Roles 的 many2many 绑定）：当前部门缺省时取列表第一个
+	deptID := req.DeptID
+	if len(req.DeptIDs) > 0 {
+		if deptID == 0 {
+			deptID = req.DeptIDs[0]
+		} else if !containsID(req.DeptIDs, deptID) {
+			return nil, errors.New("当前部门必须在所属部门列表中")
+		}
+	}
 	user := model.User{
 		Username: req.Username, Email: req.Email, Phone: req.Phone,
-		Password: string(hash), Status: status, DeptID: req.DeptID,
+		Password: string(hash), Status: status, DeptID: deptID,
 	}
 	user.CreatedBy, user.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&user).Error; err != nil {
 		return nil, err
+	}
+	if len(req.DeptIDs) > 0 {
+		if err := bindDepts(user.ID, req.DeptIDs); err != nil {
+			return nil, err
+		}
 	}
 	if len(req.RoleIDs) > 0 {
 		if err := bindRoles(user.ID, req.RoleIDs); err != nil {
@@ -102,7 +117,24 @@ func UserUpdate(curUserID, id uint, req *model.UserUpdateReq) (*model.User, erro
 	if req.Status != nil {
 		user.Status = *req.Status
 	}
+	if req.DeptIDs != nil {
+		if err := bindDepts(id, req.DeptIDs); err != nil {
+			return nil, err
+		}
+		// 当前部门不在新列表中时自动重置为第一个（仅当本次未显式指定新当前部门）
+		if req.DeptID == 0 && !containsID(req.DeptIDs, user.DeptID) {
+			user.DeptID = req.DeptIDs[0]
+		}
+	}
 	if req.DeptID > 0 {
+		// 用户已配置多部门归属时，当前部门必须属于该列表
+		if len(req.DeptIDs) == 0 {
+			var cnt int64
+			database.DB.Table("oa_sys_user_dept").Where("user_id = ? AND dept_id = ?", id, req.DeptID).Count(&cnt)
+			if cnt == 0 {
+				return nil, errors.New("当前部门必须属于用户的归属部门列表")
+			}
+		}
 		user.DeptID = req.DeptID
 	}
 	if req.Password != "" {
@@ -245,6 +277,47 @@ func bindRoles(userID uint, roleIDs []uint) error {
 		return errors.New("存在不存在的角色ID")
 	}
 	return database.DB.Model(&user).Association("Roles").Replace(roles)
+}
+
+// bindDepts 给用户绑定多部门归属（覆盖式，借鉴 bindRoles 的 many2many Association 用法）
+func bindDepts(userID uint, deptIDs []uint) error {
+	var user model.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+	var depts []*model.Dept
+	database.DB.Where("id IN ?", deptIDs).Find(&depts)
+	if len(depts) != len(unique(deptIDs)) {
+		return errors.New("存在不存在的部门ID")
+	}
+	return database.DB.Model(&user).Association("DeptIDs").Replace(depts)
+}
+
+// UserSwitchDept 切换当前部门（DeptID）：目标部门必须属于用户的多部门归属列表
+func UserSwitchDept(userID, deptID uint) error {
+	if deptID == 0 {
+		return errors.New("目标部门ID无效")
+	}
+	var user model.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+	var cnt int64
+	database.DB.Table("oa_sys_user_dept").Where("user_id = ? AND dept_id = ?", userID, deptID).Count(&cnt)
+	if cnt == 0 {
+		return errors.New("目标部门不在用户的归属部门列表中")
+	}
+	return database.DB.Model(&user).Update("dept_id", deptID).Error
+}
+
+// containsID 判断 uint 切片是否包含指定值
+func containsID(ids []uint, id uint) bool {
+	for _, v := range ids {
+		if v == id {
+			return true
+		}
+	}
+	return false
 }
 
 func unique(ids []uint) []uint {
