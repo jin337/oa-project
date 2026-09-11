@@ -172,6 +172,10 @@ func TableFieldList(appID uint, tableName string, req *model.TableFieldListReq) 
 	}
 	filtered := make([]model.TableColumn, 0, len(all))
 	for _, c := range all {
+		// 内部审核状态字段不暴露给前端（列管理界面不可见；系统列增删改已有 appFieldSystemCols 保护）
+		if c.Name == "approval_status" {
+			continue
+		}
 		if req.Name == "" || strings.Contains(c.Name, req.Name) {
 			filtered = append(filtered, c)
 		}
