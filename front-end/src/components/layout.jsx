@@ -54,7 +54,12 @@ function renderMenus(menus) {
       const children = m.children ? renderMenus(m.children) : []
       if (m.type === 1 && children.length > 0) {
         return (
-          <SubMenu key={`dir-${m.id}`} title={m.name} icon={menuIcon(m)}>
+          <SubMenu
+            key={`dir-${m.id}`}
+            title={m.name}
+            icon={menuIcon(m)}
+            triggerProps={{ popupStyle: { maxHeight: '600px' } }}
+          >
             {children}
           </SubMenu>
         )
@@ -107,7 +112,9 @@ function HeaderBar() {
   // 当前路径对应的菜单链（精确匹配或最长前缀匹配），用于顶部导航高亮
   const { chain: activeChain } = useMenuMeta(location.pathname)
   // 动态子路由时高亮其父级菜单项
-  const activeMenuKey = activeChain?.length ? activeChain[activeChain.length - 1].path : location.pathname
+  const activeMenuKey = activeChain?.length
+    ? activeChain[activeChain.length - 1].path
+    : location.pathname
 
   const profileMenu = (
     <Menu
@@ -162,9 +169,7 @@ function HeaderBar() {
           <Avatar size={32} className="bg-[#165dff]!">
             <IconUser />
           </Avatar>
-          <Typography.Text>
-            {user?.profile?.nickname || user?.username || '加载中'}
-          </Typography.Text>
+          <Typography.Text>{user?.profile?.nickname || user?.username || '加载中'}</Typography.Text>
         </Space>
       </Dropdown>
     </Header>

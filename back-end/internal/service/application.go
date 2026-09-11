@@ -724,7 +724,8 @@ func isValidTableName(name string) bool {
 
 // createBizTable 动态创建业务数据表（应用配置的表前缀）。
 // 基础结构：主键 + 审计字段 + 软删除标记；withParent 为 true（子表）时额外添加 parent_id 关联主表。
-func createBizTable(tableName string, withParent bool) error {
+// comment 为物理表注释（主表=页面名称，子表=页面名称+"子表"），注释中的单引号转义防 SQL 注入/语法错误。
+func createBizTable(tableName string, withParent bool, comment string) error {
 	if !isValidTableName(tableName) {
 		return fmt.Errorf("非法的表名: %q", tableName)
 	}
@@ -750,13 +751,18 @@ func createBizTable(tableName string, withParent bool) error {
 	b.WriteString("PRIMARY KEY (`id`),")
 	b.WriteString("KEY `idx_deleted_at` (`deleted_at`)")
 	b.WriteString(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
+	if comment != "" {
+		b.WriteString(" COMMENT='")
+		b.WriteString(strings.ReplaceAll(comment, "'", "''"))
+		b.WriteString("'")
+	}
 	return database.DB.Exec(b.String()).Error
 }
 
 // createBizTables 按逗号分隔的多个表名逐个建表（自动跳过空白项）：
-// 主表不添加 parent_id，子表添加 parent_id 关联主表
-func createBizTables(tableName, subTableName string) error {
-	if err := createBizTable(tableName, false); err != nil {
+// 主表不添加 parent_id、注释为页面名称；子表添加 parent_id 关联主表、注释为页面名称+"子表"
+func createBizTables(tableName, subTableName, pageName string) error {
+	if err := createBizTable(tableName, false, pageName); err != nil {
 		return fmt.Errorf("创建业务表失败: %w", err)
 	}
 	for _, sub := range strings.Split(subTableName, ",") {
@@ -764,7 +770,7 @@ func createBizTables(tableName, subTableName string) error {
 		if sub == "" {
 			continue
 		}
-		if err := createBizTable(sub, true); err != nil {
+		if err := createBizTable(sub, true, pageName+"子表"); err != nil {
 			return fmt.Errorf("创建子表失败: %w", err)
 		}
 	}
@@ -776,7 +782,7 @@ func createBizTables(tableName, subTableName string) error {
 //  2. 自动生成 code（app- + Unix 时间戳），忽略前端传入值
 //  3. 持久化配置（含布局 JSON）
 func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.Application, error) {
-	if err := createBizTables(req.TableName, req.SubTableName); err != nil {
+	if err := createBizTables(req.TableName, req.SubTableName, req.Name); err != nil {
 		return nil, err
 	}
 	status := req.Status
@@ -799,12 +805,115 @@ func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.
 	return &app, nil
 }
 
-// ApplicationUpdate 修改页面配置
+// ApplicationUpdate 修改页面配置，并同步变更到底层物理业务表（DDL 失败即中断，保证配置与物理表一致）：
+//  1. 页面名称（Name）变化：遍历主表和所有现存子表，ALTER TABLE ... COMMENT 更新表注释
+//     （主表注释=页面名称，子表注释=页面名称+"子表"）
+//  2. 主表名（TableName）变化：RENAME TABLE 旧主表 TO 新主表，并同步新主表表注释
+//  3. 子表名（SubTableName）变化：对比新旧子表列表——新增的子表 CREATE TABLE（带注释），
+//     被移除的子表 DROP TABLE IF EXISTS 物理删除
+//  所有动态表名执行 DDL 前均经 isValidTableName 合法性校验（防 SQL 注入）
 func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*model.Application, error) {
 	var app model.Application
 	if err := database.DB.First(&app, id).Error; err != nil {
 		return nil, errors.New("页面配置不存在")
 	}
+
+	// 计算字段变化（空串视为未变更，不触发 DDL）
+	nameChanged := req.Name != nil && *req.Name != "" && *req.Name != app.Name
+	tableChanged := req.TableName != nil && *req.TableName != "" && *req.TableName != app.TableName
+	subChanged := req.SubTableName != nil && *req.SubTableName != app.SubTableName
+
+	// 变更后生效的页面名称（用于表注释）
+	effectiveName := app.Name
+	if nameChanged {
+		effectiveName = *req.Name
+	}
+
+	// 1. 主表名变化：物理重命名 + 同步新主表注释
+	if tableChanged {
+		if !isValidTableName(*req.TableName) {
+			return nil, fmt.Errorf("非法的表名: %q", *req.TableName)
+		}
+		oldReal := bizTableName(app.TableName)
+		newReal := bizTableName(*req.TableName)
+		if !isValidTableName(oldReal) || !isValidTableName(newReal) {
+			return nil, errors.New("表名附加前缀后不合法")
+		}
+		if err := database.DB.Exec("RENAME TABLE `" + oldReal + "` TO `" + newReal + "`").Error; err != nil {
+			return nil, fmt.Errorf("重命名主表失败: %w", err)
+		}
+		// 同步新主表表注释（值为变更后生效的页面名称）
+		if err := alterTableComment(newReal, effectiveName); err != nil {
+			return nil, fmt.Errorf("更新主表注释失败: %w", err)
+		}
+	}
+
+	// 2. 子表名变化：新增子表建表（带注释），被移除的子表物理删除
+	if subChanged {
+		oldSubs := splitTableNames(app.SubTableName)
+		newSubs := splitTableNames(*req.SubTableName)
+		oldSet := tableNameSet(oldSubs)
+		newSet := tableNameSet(newSubs)
+
+		// 被移除的子表：DROP TABLE IF EXISTS 物理删除
+		for _, s := range oldSubs {
+			if newSet[s] {
+				continue
+			}
+			if !isValidTableName(s) {
+				return nil, fmt.Errorf("非法的子表名: %q", s)
+			}
+			real := bizTableName(s)
+			if !isValidTableName(real) {
+				return nil, fmt.Errorf("子表名附加前缀后不合法: %q", real)
+			}
+			if err := database.DB.Exec("DROP TABLE IF EXISTS `" + real + "`").Error; err != nil {
+				return nil, fmt.Errorf("删除子表 %s 失败: %w", s, err)
+			}
+		}
+
+		// 新增的子表：CREATE TABLE（带注释）
+		for _, s := range newSubs {
+			if oldSet[s] {
+				continue
+			}
+			if err := createBizTable(s, true, effectiveName+"子表"); err != nil {
+				return nil, fmt.Errorf("创建子表 %s 失败: %w", s, err)
+			}
+		}
+	}
+
+	// 3. 页面名称变化：刷新主表 + 所有现存子表的表注释
+	if nameChanged {
+		curMain := app.TableName
+		if tableChanged {
+			curMain = *req.TableName
+		}
+		curMainReal := bizTableName(curMain)
+		if !isValidTableName(curMainReal) {
+			return nil, errors.New("表名附加前缀后不合法")
+		}
+		if err := alterTableComment(curMainReal, effectiveName); err != nil {
+			return nil, fmt.Errorf("更新主表注释失败: %w", err)
+		}
+		curSubs := app.SubTableName
+		if subChanged {
+			curSubs = *req.SubTableName
+		}
+		for _, s := range splitTableNames(curSubs) {
+			if !isValidTableName(s) {
+				return nil, fmt.Errorf("非法的子表名: %q", s)
+			}
+			real := bizTableName(s)
+			if !isValidTableName(real) {
+				return nil, fmt.Errorf("子表名附加前缀后不合法: %q", real)
+			}
+			if err := alterTableComment(real, effectiveName+"子表"); err != nil {
+				return nil, fmt.Errorf("更新子表 %s 注释失败: %w", s, err)
+			}
+		}
+	}
+
 	if req.Code != "" && req.Code != app.Code {
 		if checkApplicationCodeExists(req.Code, id) {
 			return nil, errors.New("页面编码已存在")
@@ -838,6 +947,37 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 		return nil, err
 	}
 	return &app, nil
+}
+
+// splitTableNames 拆分逗号分隔的表名列表（去空白、跳过空项）
+func splitTableNames(s string) []string {
+	var out []string
+	for _, n := range strings.Split(s, ",") {
+		if n = strings.TrimSpace(n); n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// tableNameSet 表名列表转集合（用于新旧子表差集对比）
+func tableNameSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
+}
+
+// alterTableComment 更新物理表注释（ALTER TABLE ... COMMENT = '...'）。
+// 表名经合法性校验，注释中的单引号转义，防 SQL 注入/语法错误。
+func alterTableComment(realTableName, comment string) error {
+	if !isValidTableName(realTableName) {
+		return fmt.Errorf("非法的表名: %q", realTableName)
+	}
+	escaped := strings.ReplaceAll(comment, "'", "''")
+	sql := "ALTER TABLE `" + realTableName + "` COMMENT = '" + escaped + "'"
+	return database.DB.Exec(sql).Error
 }
 
 // ApplicationDelete 删除页面配置（软删除），并级联物理删除关联的业务数据表：
