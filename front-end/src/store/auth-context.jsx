@@ -36,6 +36,15 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // 局部更新当前用户信息（如切换部门后更新 dept_id），避免整包重新拉取
+  const updateUser = useCallback((patch) => {
+    setUser((prev) =>
+      prev
+        ? { ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }
+        : prev,
+    )
+  }, [])
+
   const logout = useCallback(() => {
     clearToken()
     setTokenState('')
@@ -50,7 +59,18 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ token, user, menus, perms, menusLoaded, login, logout, refreshProfile, hasPerm }}
+      value={{
+        token,
+        user,
+        menus,
+        perms,
+        menusLoaded,
+        login,
+        logout,
+        refreshProfile,
+        updateUser,
+        hasPerm,
+      }}
     >
       {children}
     </AuthContext.Provider>

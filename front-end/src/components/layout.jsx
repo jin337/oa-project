@@ -4,6 +4,8 @@ import {
   Dropdown,
   Layout,
   Menu,
+  Message,
+  Select,
   Space,
   Typography,
 } from '@arco-design/web-react'
@@ -17,6 +19,7 @@ import {
 } from '@arco-design/web-react/icon'
 import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import * as userApi from '../api/user'
 import { APP_NAME } from '../config/app.js'
 import { useMenuMeta } from '../hooks/useMenuMeta'
 import { useAuth } from '../store/auth-context'
@@ -108,13 +111,25 @@ function ContentBreadcrumb() {
 function HeaderBar() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, menus, logout } = useAuth()
+  const { user, menus, logout, updateUser } = useAuth()
   // 当前路径对应的菜单链（精确匹配或最长前缀匹配），用于顶部导航高亮
   const { chain: activeChain } = useMenuMeta(location.pathname)
   // 动态子路由时高亮其父级菜单项
   const activeMenuKey = activeChain?.length
     ? activeChain[activeChain.length - 1].path
     : location.pathname
+
+  // 切换当前部门：调用接口成功后更新全局用户状态中的 dept_id
+  const handleSwitchDept = async (deptId) => {
+    if (!deptId) return
+    try {
+      await userApi.switchDept(deptId)
+      updateUser({ dept_id: deptId })
+      Message.success('切换部门成功')
+    } catch (e) {
+      // 错误已在请求层提示
+    }
+  }
 
   const profileMenu = (
     <Menu
@@ -163,15 +178,27 @@ function HeaderBar() {
         {menus && menus.length > 0 ? renderMenus(menus) : null}
       </Menu>
 
-      {/* 右侧：用户信息 + 退出登录 */}
-      <Dropdown droplist={profileMenu} position="br">
-        <Space className="shrink-0 cursor-pointer">
-          <Avatar size={32} className="bg-[#165dff]!">
-            <IconUser />
-          </Avatar>
-          <Typography.Text>{user?.profile?.nickname || user?.username || '加载中'}</Typography.Text>
-        </Space>
-      </Dropdown>
+      {/* 右侧：切换部门 + 用户信息 + 退出登录 */}
+      <Space className="shrink-0">
+        <Select
+          bordered={false}
+          className="w-20!"
+          placeholder="切换部门"
+          value={user?.dept_id ?? undefined}
+          options={(user?.dept_ids || []).map((d) => ({ label: d.name, value: d.id }))}
+          onChange={handleSwitchDept}
+        />
+        <Dropdown droplist={profileMenu} position="br">
+          <Space className="cursor-pointer">
+            <Avatar size={32} className="bg-[#165dff]!">
+              <IconUser />
+            </Avatar>
+            <Typography.Text>
+              {user?.profile?.nickname || user?.username || '加载中'}
+            </Typography.Text>
+          </Space>
+        </Dropdown>
+      </Space>
     </Header>
   )
 }

@@ -38,7 +38,7 @@ func Login(req *model.LoginReq) (*LoginResult, error) {
 // Profile 当前登录用户资料：用户 + 角色 + 部门 + 菜单树 + 权限标识
 func Profile(userID uint) (map[string]any, error) {
 	var user model.User
-	if err := database.DB.Preload("Roles").Preload("Dept").Preload("Profile").First(&user, userID).Error; err != nil {
+	if err := database.DB.Preload("Roles").Preload("Dept").Preload("DeptIDs").Preload("Profile").First(&user, userID).Error; err != nil {
 		return nil, errors.New("用户不存在")
 	}
 	menus, perms := UserMenus(userID)

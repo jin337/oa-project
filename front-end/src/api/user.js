@@ -15,6 +15,11 @@ export function createUser(data) {
   return request.post('/users', data)
 }
 
+// PUT /users/switch-dept 切换当前部门（目标须属于多部门归属列表）
+export function switchDept(deptId) {
+  return request.put('/users/switch-dept', { dept_id: deptId })
+}
+
 // PUT /users/:id 修改
 export function updateUser(id, data) {
   return request.put(`/users/${id}`, data)
