@@ -42,6 +42,7 @@ export default function ExamineManage() {
     setFlowLoading,
     insertNodeAt,
     removeNode,
+    renameNode,
     addBranch,
     removeBranch,
     insertBranchNode,
@@ -207,6 +208,7 @@ export default function ExamineManage() {
                   onAddBranch={addBranch}
                   onRemoveBranch={removeBranch}
                   onRemoveNode={removeNode}
+                  onRename={renameNode}
                   buildBranchAddMenu={buildBranchAddMenu}
                 />
               ))}
@@ -219,7 +221,7 @@ export default function ExamineManage() {
           <PersonSelectorModal
             title="选择可发起人"
             modes={[1, 2]} // 1-组织架构 / 2-角色
-            checkTarget={1} // 1-人员
+            checkTarget={3} // 3-人员与部门：支持勾选具体人员，也支持勾选部门（如总公司）
             value={normalizeMembers(editing.node.members)}
             onChange={(items) => saveNode({ ...editing.node, members: items })}
             onCancel={closeEdit}

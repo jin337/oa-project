@@ -74,6 +74,11 @@ function approvalFlowReducer(state, action) {
       const { node } = action
       return { ...state, nodes: updateNodeInTree(state.nodes, node.id, () => node), editing: null }
     }
+    case 'RENAME_NODE': {
+      // 就地重命名节点标题（审批人 / 抄送人卡片），支持任意层级
+      const { nodeId, label } = action
+      return { ...state, nodes: updateNodeInTree(state.nodes, nodeId, (n) => ({ ...n, label })) }
+    }
 
     // ---- 条件分支操作 ----
     case 'ADD_BRANCH': {
@@ -171,6 +176,7 @@ function approvalFlowReducer(state, action) {
  *   setFlowLoading: (loading: boolean) => void,
  *   insertNodeAt: (index: number, type: number) => void,
  *   removeNode: (nodeId: string, branchId?: string, childId?: string) => void,
+ *   renameNode: (nodeId: string, label: string) => void,
  *   addBranch: (nodeId: string) => void,
  *   removeBranch: (nodeId: string, branchId: string) => void,
  *   insertBranchNode: (nodeId: string, branchId: string, index: number, type: number) => void,
@@ -201,6 +207,7 @@ export function useApprovalFlow() {
     dispatch({ type: 'REMOVE_NODE', nodeId, branchId, childId })
     Message.success('节点已删除')
   }, [])
+  const renameNode = useCallback((nodeId, label) => dispatch({ type: 'RENAME_NODE', nodeId, label }), [])
   const saveNode = useCallback((node) => {
     dispatch({ type: 'SAVE_NODE', node })
     Message.success('节点已保存')
@@ -250,6 +257,7 @@ export function useApprovalFlow() {
     setFlowLoading,
     insertNodeAt,
     removeNode,
+    renameNode,
     addBranch,
     removeBranch,
     insertBranchNode,

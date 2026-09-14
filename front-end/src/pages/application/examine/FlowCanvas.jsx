@@ -82,6 +82,7 @@ export const ConditionBlock = memo(function ConditionBlock({
   onAddBranch,
   onRemoveBranch,
   onRemoveNode,
+  onRename,
   buildBranchAddMenu,
 }) {
   return (
@@ -118,6 +119,7 @@ export const ConditionBlock = memo(function ConditionBlock({
                 onAddBranch={onAddBranch}
                 onRemoveBranch={onRemoveBranch}
                 onRemoveNode={onRemoveNode}
+                onRename={onRename}
                 buildBranchAddMenu={buildBranchAddMenu}
               />
             ))}
@@ -142,6 +144,7 @@ export const FlowNode = memo(function FlowNode({
   onAddBranch,
   onRemoveBranch,
   onRemoveNode,
+  onRename,
   buildBranchAddMenu,
 }) {
   return (
@@ -155,10 +158,17 @@ export const FlowNode = memo(function FlowNode({
           onAddBranch={onAddBranch}
           onRemoveBranch={onRemoveBranch}
           onRemoveNode={onRemoveNode}
+          onRename={onRename}
           buildBranchAddMenu={buildBranchAddMenu}
         />
       ) : (
-        <FlowNodeCard node={node} userDeptMap={userDeptMap} onRemove={onRemove} onEdit={onEdit} />
+        <FlowNodeCard
+          node={node}
+          userDeptMap={userDeptMap}
+          onRemove={onRemove}
+          onEdit={onEdit}
+          onRename={onRename}
+        />
       )}
       <NodeConnector menu={addMenu} />
     </div>

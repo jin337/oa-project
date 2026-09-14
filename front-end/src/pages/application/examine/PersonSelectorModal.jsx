@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { Button, Checkbox, Modal, Radio, Tag, Tree } from '@arco-design/web-react'
 import { IconPlus } from '@arco-design/web-react/icon'
+import { useState } from 'react'
 import { MODE_LABELS } from './constants'
 import { useSelectorData } from './selector-context'
 
@@ -108,7 +108,7 @@ export function PersonSelectorModal({
               orgTree.length ? (
                 <Tree
                   checkable
-                  checkStrictly
+                  checkStrictly={checkTarget !== 3}
                   checkedKeys={orgCheckedKeys}
                   onCheck={handleTreeCheck}
                   treeData={orgTree}
