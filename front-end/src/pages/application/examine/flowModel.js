@@ -8,7 +8,7 @@ import { NODE_TYPE_META } from './constants'
 
 /**
  * @typedef {Object} ApprovalMember 审批成员条目
- * @property {'user'|'dept'|'role'} type 成员类型（后端接口数据契约）
+ * @property {1|2|3} type 成员类型（数字枚举：1-人员 / 2-部门 / 3-角色）
  * @property {string} key 唯一标识（如 user_1 / dept_2 / role_3）
  * @property {string} label 展示名称
  */
@@ -106,13 +106,14 @@ export const createNode = (type) => {
  * @returns {ApprovalMember[]}
  */
 export const normalizeMembers = (members) =>
-  (members || []).map((m) => (typeof m === 'string' ? { type: 'user', label: m } : m))
+  // 旧字符串数组成员兜底：默认按 1-人员 处理
+  (members || []).map((m) => (typeof m === 'string' ? { type: 1, label: m } : m))
 
 // ==================== 对象选择器数据转换（组织架构 / 角色接口） ====================
 
 /**
  * 接口部门树 → 选择器树格式（children 中同时包含子部门与用户节点）
- * 接口节点：{ type: 'dept'|'user', id, name, children?, ... }
+ * 接口节点：{ type: 'dept'|'user', id, name, children?, ... }（type 为接口字符串契约，仅此处判断用）
  */
 export const transformDeptTree = (data = []) =>
   data.map((d) => ({
@@ -123,13 +124,13 @@ export const transformDeptTree = (data = []) =>
   }))
 
 /**
- * 树节点 → key 映射：{ key: { key, type: 'dept'|'user', label } }
+ * 树节点 → key 映射：{ key: { key, type, label } }，type 为数字枚举（1-人员 / 2-部门）
  */
 export const buildOrgItemMap = (tree) => {
   const map = {}
   const walk = (nodes) => {
     nodes.forEach((n) => {
-      map[n.key] = { key: n.key, type: n.isDept ? 'dept' : 'user', label: n.title }
+      map[n.key] = { key: n.key, type: n.isDept ? 2 : 1, label: n.title } // 2-部门 / 1-人员
       if (n.children?.length) walk(n.children)
     })
   }
@@ -161,10 +162,10 @@ export const buildUserDeptMap = (tree) => {
 export const transformRoleList = (data = []) => data.map((r) => ({ key: `role_${r.id}`, title: r.name }))
 
 /**
- * 角色列表 → key 映射：{ key: { key, type: 'role', label } }
+ * 角色列表 → key 映射：{ key: { key, type, label } }，type 为数字枚举（3-角色）
  */
 export const buildRoleItemMap = (roles) =>
-  Object.fromEntries(roles.map((r) => [r.key, { key: r.key, type: 'role', label: r.title }]))
+  Object.fromEntries(roles.map((r) => [r.key, { key: r.key, type: 3, label: r.title }])) // 3-角色
 
 // ==================== 节点树递归工具 ====================
 

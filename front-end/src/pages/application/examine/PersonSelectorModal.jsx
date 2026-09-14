@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Button, Checkbox, Modal, Radio, Tag, Tree } from '@arco-design/web-react'
 import { IconPlus } from '@arco-design/web-react/icon'
-import { MODE_LABELS, MEMBER_TYPE_TO_TARGET } from './constants'
+import { MODE_LABELS } from './constants'
 import { useSelectorData } from './selector-context'
 
 /**
  * 通用对象选择器弹层（左右布局 Modal）：
  * - modes: 数据源维度数组（数字枚举：1-组织架构 / 2-角色），如 [1, 2]；单项时自动隐藏 Tab 切换栏
  * - checkTarget: org 树可勾选类型（数字枚举：1-人员 / 2-部门 / 3-人员与部门），默认 1-人员
- * 确认后通过 onChange 统一回传 { key, type, label } 结构的条目数组
+ * 确认后通过 onChange 统一回传 { key, type, label } 结构的条目数组，type 为数字枚举（1-人员 / 2-部门 / 3-角色）
  */
 export function PersonSelectorModal({
   title = '选择人员',
@@ -45,7 +45,7 @@ export function PersonSelectorModal({
     let orgItems = checked.map((k) => orgItemMap[k]).filter(Boolean)
     // 按 checkTarget 过滤：1-人员 仅保留人员，2-部门 仅保留部门，3-人员与部门 全部保留
     if (checkTarget !== 3) {
-      orgItems = orgItems.filter((s) => MEMBER_TYPE_TO_TARGET[s.type] === checkTarget)
+      orgItems = orgItems.filter((s) => s.type === checkTarget)
     }
     const roleItems = selected.filter((s) => roleItemMap[s.key])
     setSelected([...orgItems, ...roleItems])
@@ -62,7 +62,8 @@ export function PersonSelectorModal({
 
   // 右侧标签展示：人员「所属部门：姓名」/ 部门、角色直接显示名称
   const renderTagLabel = (item) => {
-    if (item.type === 'user') {
+    if (item.type === 1) {
+      // 1-人员
       const dept = userDeptMap[item.key]
       return dept ? `${dept}：${item.label}` : item.label
     }
@@ -194,7 +195,7 @@ export function PersonPicker({
               closable
               onClose={() => remove(i)}
             >
-              {item.type === 'user' && userDeptMap[item.key]
+              {item.type === 1 && userDeptMap[item.key] // 1-人员：附所属部门
                 ? `${userDeptMap[item.key]}：${item.label}`
                 : item.label}
             </Tag>

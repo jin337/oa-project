@@ -9,7 +9,8 @@ import { NODE_TYPE_META } from './constants'
  */
 export function renderNodeSummary(node, userDeptMap = {}) {
   const renderMemberLabel = (m) =>
-    m.type === 'user' && userDeptMap[m.key] ? `${userDeptMap[m.key]}：${m.label}` : m.label || m.key
+    // m.type 为数字枚举：1-人员（附所属部门）/ 2-部门 / 3-角色
+    m.type === 1 && userDeptMap[m.key] ? `${userDeptMap[m.key]}：${m.label}` : m.label || m.key
 
   // 审批人 / 抄送人节点：对象为「发起人自选」（approverType=3）时无需配置成员，摘要直接展示类型
   if (node.approverType === 3 && (node.type === 2 || node.type === 3)) {

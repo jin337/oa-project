@@ -35,8 +35,16 @@ export const OPERATOR_OPTIONS = [
 /** 选择器数据源维度标签（key 为数字枚举：1-组织架构 / 2-角色） */
 export const MODE_LABELS = { 1: '按组织架构选择', 2: '按角色选择' }
 
-/** 成员/接口节点类型（'user'/'dept'）→ checkTarget 数字枚举（1-人员 / 2-部门）映射 */
-export const MEMBER_TYPE_TO_TARGET = { user: 1, dept: 2 }
+/**
+ * 成员类型（数字枚举：1-人员 / 2-部门 / 3-角色）
+ * 成员条目结构 { key, type, label }，type 使用该数字枚举（不再使用 'user'/'dept'/'role' 字符串）
+ * @type {{ value: number, label: string }[]}
+ */
+export const MEMBER_TYPE_OPTIONS = [
+  { value: 1, label: '人员' }, // 1-人员（对应接口 user）
+  { value: 2, label: '部门' }, // 2-部门（对应接口 dept）
+  { value: 3, label: '角色' }, // 3-角色（对应接口 role）
+]
 
 /** 审批对象（1-指定人员 / 2-指定角色 / 3-发起人自选） */
 export const APPROVER_TYPE_OPTIONS = [
