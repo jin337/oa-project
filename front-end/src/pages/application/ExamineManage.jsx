@@ -5,7 +5,7 @@ import * as applicationApi from 'src/api/application'
 import * as deptApi from 'src/api/dept'
 import * as roleApi from 'src/api/role'
 import { useTabs } from 'src/store/tab-context'
-import { ADDABLE_NODE_TYPES, MODULE_LABEL, NODE_TYPE_META } from 'src/pages/application/examine/constants'
+import { ADDABLE_NODE_TYPES, MODULE_LABEL, NODE_TYPE_META } from 'src/pages/application/constants'
 import {
   buildDeptDescMap,
   buildOrgItemMap,
@@ -62,6 +62,8 @@ export default function ExamineManage() {
   // 应用表单元素列表（条件表达式字段来源 / 审批人表单字段权限），挂载即请求一次，供各弹层共享
   const [formFields, setFormFields] = useState([])
   const [fieldsLoading, setFieldsLoading] = useState(false)
+  // 应用主表名（table_name）：供条件编辑抽屉区分主表 / 子表字段分组
+  const [mainTable, setMainTable] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -118,6 +120,8 @@ export default function ExamineManage() {
       .getApplication(id)
       .then((res) => {
         if (cancelled) return
+        // 记录应用主表名（供条件字段分组区分主表 / 子表）
+        setMainTable(res.data?.table_name || '')
         const raw = res.data?.approval_flow_json
         let parsed = null
         if (Array.isArray(raw)) parsed = raw
@@ -256,6 +260,7 @@ export default function ExamineManage() {
             branch={editing.branch}
             formFields={formFields}
             fieldsLoading={fieldsLoading}
+            mainTable={mainTable}
             onCancel={closeEdit}
             onSave={saveBranch}
           />

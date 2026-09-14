@@ -8,7 +8,7 @@ import {
   PERMISSION_OPTIONS,
   SELF_SELECT_OPTIONS,
   STRATEGY_OPTIONS,
-} from 'src/pages/application/examine/constants'
+} from 'src/pages/application/constants'
 import { normalizeMembers } from 'src/pages/application/examine/flowModel'
 import { PersonPicker } from 'src/pages/application/examine/PersonSelectorModal'
 

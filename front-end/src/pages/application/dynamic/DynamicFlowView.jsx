@@ -51,13 +51,13 @@ const buildNodeSummary = (node) => {
     return t ? `可发起人：${t}` : '未配置可发起人'
   }
   if (node.type === 2) {
-    // 2-审批人：成员数量 + 审批人为空处理
+    // 2-审批人：成员数量 + 审批人为空处理；未配置成员时提示「请选择审批人」
     if (node.approverType === 3) {
       // 3-发起人自选：附自选类型（1-单选 / 2-多选）
       return `发起人自选（${SELF_SELECT_MAP[node.selfSelect] || '—'}）`
     }
     const n = (node.members || []).length
-    const parts = [n ? `${n}人审批` : '未配置审批人']
+    const parts = [n ? `${n}人审批` : '请选择审批人']
     // 审批人为空处理：3-转交流程管理员 / 4-指定人员（附兜底成员）
     if (node.emptyHandler === 3) parts.push('找不到主管，将自动转交给管理员')
     else if (node.emptyHandler === 4) {
@@ -67,13 +67,13 @@ const buildNodeSummary = (node) => {
     return parts.join('，')
   }
   if (node.type === 3) {
-    // 3-抄送人：抄送数量
+    // 3-抄送人：抄送数量；未配置成员时提示「请选择抄送人」
     if (node.approverType === 3) {
       // 3-发起人自选：附自选类型（1-单选 / 2-多选）
       return `发起人自选（${SELF_SELECT_MAP[node.selfSelect] || '—'}）`
     }
     const n = (node.members || []).length
-    return n ? `抄送${n}人` : '未配置抄送人'
+    return n ? `抄送${n}人` : '请选择抄送人'
   }
   if (node.type === 4) {
     // 4-条件分支：条件关系 + 分支数量
@@ -193,26 +193,28 @@ const ApprovalNodeView = ({ node, isLast }) => {
 
 /**
  * 审批流程展示组件（仿钉钉审批单样式：左侧步骤节点 + 右侧成员，纯只读）。
+ * 隐藏发起人节点与「流程结束」标识，仅展示审批 / 抄送 / 条件分支等流转节点。
  * @param {object} props
  * @param {string|Array} props.raw 应用配置的 approval_flow_json（JSON 字符串或节点数组）
  */
 export default function DynamicFlowView({ raw }) {
   const nodes = useMemo(() => parseApprovalFlow(raw), [raw])
-  if (!nodes?.length) return null
+  // 隐藏发起人（type=1）：发起人节点仅用于流程起始说明，不在流转展示中呈现
+  const visibleNodes = (nodes || []).filter((node) => node.type !== 1)
+  if (!visibleNodes.length) return null
   return (
     <>
       <Divider orientation="left">
         <span className="text-sm font-medium text-gray-700">审批流程</span>
       </Divider>
       <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-        {nodes.map((node, i) => (
+        {visibleNodes.map((node, i) => (
           <ApprovalNodeView
             key={node.id || `node_${i}`}
             node={node}
-            isLast={i === nodes.length - 1}
+            isLast={i === visibleNodes.length - 1}
           />
         ))}
-        <div className="py-2 pl-10 text-xs text-gray-400">流程结束</div>
       </div>
     </>
   )

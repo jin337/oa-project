@@ -1,7 +1,7 @@
 import { Button, Checkbox, Modal, Radio, Tag, Tree } from '@arco-design/web-react'
 import { IconPlus } from '@arco-design/web-react/icon'
 import { useState } from 'react'
-import { MODE_LABELS } from 'src/pages/application/examine/constants'
+import { MODE_LABELS } from 'src/pages/application/constants'
 import { useSelectorData } from 'src/pages/application/examine/selector-context'
 
 /**

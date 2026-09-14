@@ -62,9 +62,7 @@ export default function DetailDrawer({ record, visible, onCancel }) {
           <Spin />
         </div>
       ) : app ? (
-        <>
-          <DynamicDetail app={app} dataId={dataId} />
-        </>
+        <DynamicDetail app={app} dataId={dataId} />
       ) : (
         <Empty description={loadError ? '应用配置加载失败' : '该记录未关联页面编码'} />
       )}

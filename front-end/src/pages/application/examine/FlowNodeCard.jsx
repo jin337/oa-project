@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Input, Popconfirm, Popover, Tag } from '@arco-design/web-react'
 import { IconBranch, IconClose, IconEdit } from '@arco-design/web-react/icon'
 import { memo } from 'react'
-import { NODE_TYPE_META } from 'src/pages/application/examine/constants'
+import { NODE_TYPE_META } from 'src/pages/application/constants'
 import { foldDeptMembers } from 'src/pages/application/examine/flowModel'
 
 /**
