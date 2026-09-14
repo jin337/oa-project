@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, Spin } from '@arco-design/web-react'
 import { useLocation, useParams } from 'react-router-dom'
-import * as applicationApi from '../../api/application'
-import * as deptApi from '../../api/dept'
-import * as roleApi from '../../api/role'
-import { useTabs } from '../../store/tab-context'
-import { ADDABLE_NODE_TYPES, MODULE_LABEL, NODE_TYPE_META } from './examine/constants'
+import * as applicationApi from 'src/api/application'
+import * as deptApi from 'src/api/dept'
+import * as roleApi from 'src/api/role'
+import { useTabs } from 'src/store/tab-context'
+import { ADDABLE_NODE_TYPES, MODULE_LABEL, NODE_TYPE_META } from 'src/pages/application/examine/constants'
 import {
   buildDeptDescMap,
   buildOrgItemMap,
@@ -14,14 +14,14 @@ import {
   normalizeMembers,
   transformDeptTree,
   transformRoleList,
-} from './examine/flowModel'
-import { SelectorDataContext } from './examine/selector-context'
-import { ApproverEditDrawer } from './examine/ApproverEditDrawer'
-import { CcEditDrawer } from './examine/CcEditDrawer'
-import { ConditionEditDrawer } from './examine/ConditionEditDrawer'
-import { FlowNode } from './examine/FlowCanvas'
-import { PersonSelectorModal } from './examine/PersonSelectorModal'
-import { useApprovalFlow } from './examine/useApprovalFlow'
+} from 'src/pages/application/examine/flowModel'
+import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
+import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
+import { CcEditDrawer } from 'src/pages/application/examine/CcEditDrawer'
+import { ConditionEditDrawer } from 'src/pages/application/examine/ConditionEditDrawer'
+import { FlowNode } from 'src/pages/application/examine/FlowCanvas'
+import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
+import { useApprovalFlow } from 'src/pages/application/examine/useApprovalFlow'
 
 /**
  * 审批流程配置管理页（/examine/:id？）：流程画布设计器。

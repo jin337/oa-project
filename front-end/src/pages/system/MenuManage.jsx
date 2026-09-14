@@ -21,7 +21,7 @@ import {
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
-import * as menuApi from '../../api/menu'
+import * as menuApi from 'src/api/menu'
 
 const FormItem = Form.Item
 const Row = Grid.Row

@@ -17,15 +17,15 @@ import {
 import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { cloneElement, useCallback, useEffect, useMemo, useState } from 'react'
 import * as applicationApi from 'src/api/application'
-import DynamicDetail from './DynamicDetail'
+import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
 import DynamicForm, {
   formatTimeValue,
   getStaticOptions,
   parseLayoutJson,
   renderPreviewConfig,
   TIME_ELEMENT_TYPES,
-} from './DynamicForm'
-import { useApplicationDetailData } from './useApplicationDetailData'
+} from 'src/pages/application/dynamic/DynamicForm'
+import { useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
 
 const FormItem = Form.Item
 const MenuItem = Menu.Item

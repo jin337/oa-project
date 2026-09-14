@@ -1,7 +1,7 @@
 import { Card, Descriptions, Grid, Spin, Tag, Typography } from '@arco-design/web-react'
 import axios from 'axios'
 import { useEffect, useState } from 'react'
-import { useAuth } from '../store/auth-context'
+import { useAuth } from 'src/store/auth-context'
 
 const { Row, Col } = Grid
 

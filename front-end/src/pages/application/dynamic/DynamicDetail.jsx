@@ -1,7 +1,7 @@
 import { Empty, Form, Spin } from '@arco-design/web-react'
 import { useParams } from 'react-router-dom'
-import DynamicForm from './DynamicForm'
-import { useApplicationDetailData } from './useApplicationDetailData'
+import DynamicForm from 'src/pages/application/dynamic/DynamicForm'
+import { useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
 
 /**
  * 动态详情还原组件：根据应用配置（state=detail）还原只读详情展示页面。

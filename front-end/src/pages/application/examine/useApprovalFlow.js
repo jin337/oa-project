@@ -1,7 +1,7 @@
 import { useCallback, useReducer } from 'react'
 import { Message } from '@arco-design/web-react'
-import * as applicationApi from '../../../api/application'
-import { createBranch, createNode, updateNodeInTree } from './flowModel'
+import * as applicationApi from 'src/api/application'
+import { createBranch, createNode, updateNodeInTree } from 'src/pages/application/examine/flowModel'
 
 /**
  * ==================== 审批流状态管理（useReducer） ====================

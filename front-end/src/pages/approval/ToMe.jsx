@@ -1,10 +1,10 @@
 import { Button, Card, Space, Table } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import * as approvalApi from '../../api/approval'
-import { useTabs } from '../../store/tab-context'
-import { ApprovalStatusTag } from './approvalStatus.jsx'
-import ApprovalDetailDrawer from './DetailDrawer'
+import * as approvalApi from 'src/api/approval'
+import { useTabs } from 'src/store/tab-context'
+import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 
 const PAGE_TITLE = '抄送我的'
 

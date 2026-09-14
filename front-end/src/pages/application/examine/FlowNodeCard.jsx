@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Input, Popconfirm, Popover, Tag } from '@arco-design/web-react'
 import { IconBranch, IconClose, IconEdit } from '@arco-design/web-react/icon'
 import { memo } from 'react'
-import { NODE_TYPE_META } from './constants'
-import { foldDeptMembers } from './flowModel'
+import { NODE_TYPE_META } from 'src/pages/application/examine/constants'
+import { foldDeptMembers } from 'src/pages/application/examine/flowModel'
 
 /**
  * 节点摘要（纯信息展示）：成员 / 审批策略（条件分支由 ConditionBlock 独立渲染）

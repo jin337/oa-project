@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { Button, Popover } from '@arco-design/web-react'
 import { IconBranch, IconClose, IconPlus } from '@arco-design/web-react/icon'
-import { FlowNodeCard } from './FlowNodeCard'
+import { FlowNodeCard } from 'src/pages/application/examine/FlowNodeCard'
 
 /**
  * ==================== 流程画布递归渲染单元 ====================

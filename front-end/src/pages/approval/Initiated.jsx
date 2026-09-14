@@ -1,11 +1,11 @@
 import { Button, Card, Message, Popconfirm, Space, Table } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import * as applicationApi from '../../api/application'
-import * as approvalApi from '../../api/approval'
-import { useTabs } from '../../store/tab-context'
-import ApprovalDetailDrawer from './DetailDrawer'
-import { ApprovalStatusTag } from './approvalStatus.jsx'
+import * as applicationApi from 'src/api/application'
+import * as approvalApi from 'src/api/approval'
+import { useTabs } from 'src/store/tab-context'
+import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
+import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
 
 const PAGE_TITLE = '我的发起'
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Drawer, Input, Radio, Select } from '@arco-design/web-react'
 import { IconClose, IconPlus } from '@arco-design/web-react/icon'
-import { OPERATOR_OPTIONS, RELATION_OPTIONS } from './constants'
+import { OPERATOR_OPTIONS, RELATION_OPTIONS } from 'src/pages/application/examine/constants'
 
 /**
  * 条件分支设置抽屉：配置条件关系与具体条件表达式（字段来源于应用表单元素列表）。

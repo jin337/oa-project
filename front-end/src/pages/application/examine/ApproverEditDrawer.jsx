@@ -8,9 +8,9 @@ import {
   PERMISSION_OPTIONS,
   SELF_SELECT_OPTIONS,
   STRATEGY_OPTIONS,
-} from './constants'
-import { normalizeMembers } from './flowModel'
-import { PersonPicker } from './PersonSelectorModal'
+} from 'src/pages/application/examine/constants'
+import { normalizeMembers } from 'src/pages/application/examine/flowModel'
+import { PersonPicker } from 'src/pages/application/examine/PersonSelectorModal'
 
 /**
  * 审批人节点设置抽屉：审批对象 / 审批方式 / 容错与权限 / 表单字段权限 四个配置模块。

@@ -26,9 +26,9 @@ import {
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
-import * as deptApi from '../../api/dept'
-import * as roleApi from '../../api/role'
-import * as userApi from '../../api/user'
+import * as deptApi from 'src/api/dept'
+import * as roleApi from 'src/api/role'
+import * as userApi from 'src/api/user'
 
 const FormItem = Form.Item
 const Row = Grid.Row

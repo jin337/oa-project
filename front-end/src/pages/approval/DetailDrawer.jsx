@@ -1,8 +1,8 @@
 import { Drawer, Empty, Spin } from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
-import * as applicationApi from '../../api/application'
-import DynamicDetail from '../application/dynamic/DynamicDetail'
-import DynamicFlowView from '../application/dynamic/DynamicFlowView.jsx'
+import * as applicationApi from 'src/api/application'
+import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
+import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView.jsx'
 
 /**
  * 审批记录动态详情 Drawer：根据记录的页面编码（record.code，兼容 "code:state" 格式）请求

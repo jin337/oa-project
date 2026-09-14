@@ -1,4 +1,4 @@
-import { NODE_TYPE_META } from './constants'
+import { NODE_TYPE_META } from 'src/pages/application/examine/constants'
 
 /**
  * ==================== 审批流数据模型 ====================

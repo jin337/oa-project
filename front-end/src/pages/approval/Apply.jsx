@@ -23,10 +23,10 @@ import {
   IconUser,
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
-import * as applicationApi from '../../api/application'
-import * as approvalApi from '../../api/approval'
-import DynamicFlowView from '../application/dynamic/DynamicFlowView.jsx'
-import DynamicForm from '../application/dynamic/DynamicForm'
+import * as applicationApi from 'src/api/application'
+import * as approvalApi from 'src/api/approval'
+import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView.jsx'
+import DynamicForm from 'src/pages/application/dynamic/DynamicForm'
 
 const FormItem = Form.Item
 const Row = Grid.Row

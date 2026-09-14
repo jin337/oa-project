@@ -1,13 +1,13 @@
 import { Button, Empty, Form, Spin } from '@arco-design/web-react'
 import { useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
-import { findMenuByPath } from '../../../hooks/useMenuMeta'
-import { useAuth } from '../../../store/auth-context'
-import NotFound from '../../error/NotFound'
-import DynamicDetail from './DynamicDetail'
-import DynamicForm from './DynamicForm'
-import DynamicList from './DynamicList'
-import { useApplicationData } from './useApplicationData'
+import { findMenuByPath } from 'src/hooks/useMenuMeta'
+import { useAuth } from 'src/store/auth-context'
+import NotFound from 'src/pages/error/NotFound'
+import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
+import DynamicForm from 'src/pages/application/dynamic/DynamicForm'
+import DynamicList from 'src/pages/application/dynamic/DynamicList'
+import { useApplicationData } from 'src/pages/application/dynamic/useApplicationData'
 
 // 合法页面状态与默认降级状态
 const VALID_STATES = ['list', 'form', 'detail']

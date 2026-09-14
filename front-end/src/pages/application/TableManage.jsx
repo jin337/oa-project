@@ -22,8 +22,8 @@ import {
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import * as applicationApi from '../../api/application'
-import { useTabs } from '../../store/tab-context'
+import * as applicationApi from 'src/api/application'
+import { useTabs } from 'src/store/tab-context'
 
 const FormItem = Form.Item
 const Row = Grid.Row

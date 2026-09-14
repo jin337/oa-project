@@ -11,14 +11,14 @@ import {
 import { IconDelete, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import * as applicationApi from '../../api/application'
-import { useTabs } from '../../store/tab-context'
+import * as applicationApi from 'src/api/application'
+import { useTabs } from 'src/store/tab-context'
 import DynamicForm, {
   BASE_LAYOUT_ELEMENTS,
   DEFAULT_FORM_CONFIG,
   parseLayoutJson,
   renderElementSettings,
-} from './dynamic/DynamicForm'
+} from 'src/pages/application/dynamic/DynamicForm'
 
 const TabPane = Tabs.TabPane
 

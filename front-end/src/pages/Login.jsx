@@ -2,9 +2,9 @@ import { Button, Checkbox, Form, Input, Message } from '@arco-design/web-react'
 import { IconApps, IconLock, IconStorage, IconUser, IconUserGroup } from '@arco-design/web-react/icon'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../store/auth-context'
-import { clearCredentials, getCredentials, saveCredentials } from '../utils/auth'
-import { APP_NAME, LOGIN_CONFIG } from '../config/app.js'
+import { useAuth } from 'src/store/auth-context'
+import { clearCredentials, getCredentials, saveCredentials } from 'src/utils/auth'
+import { APP_NAME, LOGIN_CONFIG } from 'src/config/app.js'
 
 const FormItem = Form.Item
 
