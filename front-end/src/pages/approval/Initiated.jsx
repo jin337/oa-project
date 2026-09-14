@@ -87,14 +87,14 @@ export default function Initiated() {
     {
       title: '操作',
       key: 'action',
-      width: 180,
+      width: 160,
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
             详情
           </Button>
           {[1, 2].includes(r.approval_status) && (
-            <Popconfirm title="撤回后该申请将转为草稿，确定撤回？" onOk={() => handleWithdraw(r)}>
+            <Popconfirm position='lb' title="撤回后该申请将转为草稿，确定撤回？" onOk={() => handleWithdraw(r)}>
               <Button type="text" size="small" status="danger">
                 撤回
               </Button>

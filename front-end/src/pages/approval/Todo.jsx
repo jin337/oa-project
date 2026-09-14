@@ -77,7 +77,7 @@ export default function Todo() {
     {
       title: '操作',
       key: 'action',
-      width: 170,
+      width: 160,
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => setDetailRecord(r)}>

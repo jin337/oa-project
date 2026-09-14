@@ -208,6 +208,10 @@ func ApplicationDataApproval(c *gin.Context) {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
+	if req.Status == nil {
+		response.Fail(c, response.CodeParamError, "审核状态为必填字段")
+		return
+	}
 	if err := service.ApplicationDataApproval(id, uint(dataID), middleware.CurrentUserID(c), req.Status); err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return

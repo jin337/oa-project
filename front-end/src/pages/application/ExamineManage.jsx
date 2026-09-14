@@ -213,7 +213,7 @@ function FlowNodeCard({ node, userDeptMap = {}, onRemove, onEdit }) {
         {/* 发起人节点唯一且不可删除，隐藏删除入口 */}
         {node.type !== 'initiator' && (
           <Popconfirm
-            position="right"
+            position="lb"
             focusLock
             title="确认删除该节点？"
             onOk={() => onRemove(node.id)}

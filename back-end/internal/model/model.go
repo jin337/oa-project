@@ -338,7 +338,8 @@ type ApplicationDataListReq struct {
 // 0草稿(存草稿/撤回) 1待审核(提交/重新提交) 2审核中 3已通过 4不通过 5已驳回 6已作废；已删除(7)由删除接口自动置位，不允许设置
 // 状态流转合法性由 Service 层按状态机校验（如：草稿可提交回到待审核，已驳回可退回草稿，终态不可再流转）
 type ApplicationApprovalReq struct {
-	Status int `json:"status" validate:"required,oneof=0 1 2 3 4 5 6" label:"审核状态"`
+	// Status 指针类型：区分“未传参”(nil) 与“传入 0 草稿”，避免 int 零值被 required 判为空
+	Status *int `json:"status" validate:"required,oneof=0 1 2 3 4 5 6" label:"审核状态"`
 }
 
 // ApplicationDataDetailReq 动态数据详情查询：主键为路径参数 dataId，目标表以应用配置为准

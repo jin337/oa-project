@@ -161,7 +161,7 @@ export default function Drafts() {
     {
       title: '操作',
       key: 'action',
-      width: 230,
+      width: 300,
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
@@ -173,7 +173,7 @@ export default function Drafts() {
           <Button type="text" size="small" onClick={() => handleSubmit(r)}>
             提交
           </Button>
-          <Popconfirm title="确定删除该草稿吗？" onOk={() => handleDelete(r)}>
+          <Popconfirm position='lb' title="确定删除该草稿吗？" onOk={() => handleDelete(r)}>
             <Button type="text" size="small" status="danger">
               删除
             </Button>

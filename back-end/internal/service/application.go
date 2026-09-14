@@ -682,7 +682,12 @@ var approvalTransitions = map[int]map[int]bool{
 //  4. 更新审核状态（1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废），并刷新审计字段
 //
 // 已删除(7)由删除接口自动置位，不允许通过本接口设置
-func ApplicationDataApproval(appID, dataID uint, curUserID uint, status int) error {
+func ApplicationDataApproval(appID, dataID uint, curUserID uint, status *int) error {
+	// 指针解引用：未传参（nil）直接报错；正常值为审核状态数值（含 0 草稿）
+	if status == nil {
+		return errors.New("审核状态为必填字段")
+	}
+	statusVal := *status
 	app, err := ApplicationDetail(appID)
 	if err != nil {
 		return err
@@ -699,7 +704,7 @@ func ApplicationDataApproval(appID, dataID uint, curUserID uint, status int) err
 	if !mainColSet["approval_status"] {
 		return errors.New("业务表缺少审核状态字段")
 	}
-	if _, ok := approvalTransitions[status]; !ok {
+	if _, ok := approvalTransitions[statusVal]; !ok {
 		return errors.New("非法的审核状态")
 	}
 
@@ -712,12 +717,12 @@ func ApplicationDataApproval(appID, dataID uint, curUserID uint, status int) err
 		return errors.New("数据不存在")
 	}
 	cur := *curStatus
-	if !approvalTransitions[status][cur] {
-		return fmt.Errorf("当前状态(%s)不允许变更为(%s)", approvalStatusName(cur), approvalStatusName(status))
+	if !approvalTransitions[statusVal][cur] {
+		return fmt.Errorf("当前状态(%s)不允许变更为(%s)", approvalStatusName(cur), approvalStatusName(statusVal))
 	}
 
 	if err := database.DB.Exec("UPDATE `"+real+"` SET `approval_status` = ?, `updated_at` = ?, `updated_by` = ? WHERE `id` = ?",
-		status, time.Now(), curUserID, dataID).Error; err != nil {
+		statusVal, time.Now(), curUserID, dataID).Error; err != nil {
 		return fmt.Errorf("更新审核状态失败: %w", err)
 	}
 	return nil
