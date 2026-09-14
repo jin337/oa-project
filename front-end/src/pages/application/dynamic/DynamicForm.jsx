@@ -810,6 +810,7 @@ export default function DynamicForm({
   pageType = 'form',
   selectedId = null,
   dragOverIndex = null,
+  onValuesChange,
   onSelectElement,
   onRemoveElement,
   onElementDragStart,
@@ -849,6 +850,7 @@ export default function DynamicForm({
       labelAlign={formConfig.labelAlign}
       disabled={pageType !== 'form'}
       autoComplete="off"
+      onValuesChange={(changed, allValues) => onValuesChange?.(allValues)}
     >
       <Row>
         {isMoveMode

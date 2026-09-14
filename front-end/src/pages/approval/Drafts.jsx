@@ -38,6 +38,8 @@ export default function Drafts() {
   const [drawerApp, setDrawerApp] = useState(null)
   const [draftRecord, setDraftRecord] = useState(null)
   const [drawerForm] = Form.useForm()
+  // 抽屉内动态表单实时值（供审批流程条件分支命中评估使用）
+  const [formValues, setFormValues] = useState({})
 
   // 动态详情 Drawer（查看详情）
   const [detailRecord, setDetailRecord] = useState(null)
@@ -78,6 +80,8 @@ export default function Drafts() {
       ])
       setDrawerApp(appRes.data)
       drawerForm.setFieldsValue(dataRes.data || {})
+      // 同步表单值到审批流程评估（setFieldsValue 不触发 onValuesChange）
+      setFormValues(dataRes.data || {})
     } catch (e) {
       Message.error('草稿加载失败，请稍后重试')
       setDrawerVisible(false)
@@ -226,9 +230,9 @@ export default function Drafts() {
           </div>
         ) : drawerApp ? (
           <>
-            <DynamicForm app={drawerApp} form={drawerForm} pageType="form" />
-            {/* 审批流程：抽屉内独立渲染审批流配置只读还原 */}
-            <DynamicFlowView raw={drawerApp?.approval_flow_json} />
+            <DynamicForm app={drawerApp} form={drawerForm} pageType="form" onValuesChange={setFormValues} />
+            {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
+            <DynamicFlowView raw={drawerApp?.approval_flow_json} formData={formValues} />
           </>
         ) : null}
       </Drawer>
