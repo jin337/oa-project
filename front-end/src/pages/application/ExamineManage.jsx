@@ -32,28 +32,12 @@ import { useTabs } from '../../store/tab-context'
 
 const MODULE_LABEL = '审批配置'
 
-// 节点类型元信息（label / 颜色 / 图标）
+// 节点类型元信息（key 为数字枚举：1-发起人 / 2-审批人 / 3-抄送人 / 4-条件分支）
 const NODE_TYPE_META = {
-  initiator: {
-    label: '发起人',
-    bg: 'bg-emerald-500',
-    icon: IconUser,
-  },
-  approver: {
-    label: '审批人',
-    bg: 'bg-amber-500',
-    icon: IconStamp,
-  },
-  cc: {
-    label: '抄送人',
-    bg: 'bg-blue-500',
-    icon: IconSend,
-  },
-  condition: {
-    label: '条件分支',
-    bg: 'bg-purple-500',
-    icon: IconBranch,
-  },
+  1: { label: '发起人', bg: 'bg-emerald-500', icon: IconUser }, // 1-发起人
+  2: { label: '审批人', bg: 'bg-amber-500', icon: IconStamp }, // 2-审批人
+  3: { label: '抄送人', bg: 'bg-blue-500', icon: IconSend }, // 3-抄送人
+  4: { label: '条件分支', bg: 'bg-purple-500', icon: IconBranch }, // 4-条件分支
 }
 
 const genId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -66,41 +50,42 @@ const createBranch = (label, isDefault = false) => ({
   children: [], // 分支下的流程节点链
 })
 
-// 按类型创建节点（发起人/抄送人带成员；审批人带策略；条件分支默认生成「默认 + 条件1」两个分支）
+// 按类型创建节点（type 数字枚举：1-发起人 / 2-审批人 / 3-抄送人 / 4-条件分支）
 const createNode = (type) => {
   const base = { id: genId('n'), type, label: NODE_TYPE_META[type].label }
-  if (type === 'initiator') return { ...base, members: [] }
-  if (type === 'cc') return { ...base, members: [], ccTiming: 'on_end' }
-  if (type === 'approver')
+  if (type === 1) return { ...base, members: [] } // 1-发起人
+  if (type === 3) return { ...base, members: [], ccTiming: 2 } // 3-抄送人；ccTiming 2-流程结束时统一抄送
+  if (type === 2)
     return {
       ...base,
-      approverType: 'user', // user 指定人员 / role 指定角色 / self 发起人自选
+      approverType: 1, // 审批对象：1-指定人员 / 2-指定角色 / 3-发起人自选
       members: [],
-      selfSelect: 'single', // single 单选 / multi 多选
-      strategy: 'self_multi', // self_multi 依次审批 / self_single 会签 / or_sign 或签
-      emptyHandler: 'auto_pass', // auto_pass / auto_reject / to_admin / assign
+      selfSelect: 1, // 发起人自选类型：1-单选 / 2-多选
+      strategy: 1, // 审批方式：1-依次审批 / 2-会签 / 3-或签
+      emptyHandler: 1, // 审批人为空处理：1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员
       emptyMembers: [],
-      permissions: ['reject','transfer','add_sign'], // reject 拒绝 / transfer 转交 / add_sign 加签
-      fieldPerms: [], // 表单字段权限 [{ field, perm: read | hidden | edit }]
+      permissions: [1, 2, 3], // 审批人操作权限：1-拒绝 / 2-转交 / 3-加签
+      fieldPerms: [], // 表单字段权限 [{ field, perm: 1-只读 | 2-隐藏 | 3-可编辑 }]
     }
-  if (type === 'condition')
+  if (type === 4)
     return {
       ...base,
-      relation: 'and',
+      relation: 1, // 条件关系：1-且(AND) / 2-或(OR)
       branches: [createBranch('默认', true), createBranch('条件1')],
     }
   return base
 }
 
-// 条件表达式：逻辑运算符
+// 条件表达式：逻辑运算符（数字枚举 1-大于 / 2-小于 / 3-等于 / 4-不等于 / 5-包含 / 6-不包含）
 const OPERATOR_OPTIONS = [
-  { value: '>', label: '大于' },
-  { value: '<', label: '小于' },
-  { value: '=', label: '等于' },
-  { value: '!=', label: '不等于' },
-  { value: 'contains', label: '包含' },
-  { value: 'not_contains', label: '不包含' },
+  { value: 1, label: '大于' },
+  { value: 2, label: '小于' },
+  { value: 3, label: '等于' },
+  { value: 4, label: '不等于' },
+  { value: 5, label: '包含' },
+  { value: 6, label: '不包含' },
 ]
+
 
 // 兼容旧数据：members 可能为字符串数组，统一转为 { type, label } 结构
 const normalizeMembers = (members) =>
@@ -196,7 +181,8 @@ function renderNodeSummary(node, userDeptMap = {}) {
 
 /** 1. 节点卡片区域：渲染单个流程节点卡片（类型色标 + 图标 + 摘要 + 删除），点击卡片弹出编辑抽屉 */
 function FlowNodeCard({ node, userDeptMap = {}, onRemove, onEdit }) {
-  const meta = NODE_TYPE_META[node.type]
+  // 兜底：未知或未归一化的旧类型不崩溃，按普通节点渲染
+  const meta = NODE_TYPE_META[node.type] || { label: '未知节点', bg: 'bg-gray-500', icon: IconBranch }
   const Icon = meta.icon
   return (
     <div
@@ -210,8 +196,8 @@ function FlowNodeCard({ node, userDeptMap = {}, onRemove, onEdit }) {
           <Icon />
           {node.label}
         </div>
-        {/* 发起人节点唯一且不可删除，隐藏删除入口 */}
-        {node.type !== 'initiator' && (
+        {/* 1-发起人节点唯一且不可删除，隐藏删除入口 */}
+        {node.type !== 1 && (
           <Popconfirm
             position="lb"
             focusLock
@@ -420,6 +406,7 @@ function PersonSelectorModal({
       onCancel={onCancel}
       onOk={() => onChange(selected)}
       style={{ width: 680 }}
+      autoFocus={false}
     >
       <div className="flex gap-4">
         {/* 左侧：数据源 */}
@@ -568,23 +555,29 @@ function PersonPicker({
 
 /** 审批人节点：点击卡片唤起 Drawer，包含审批对象 / 审批方式 / 容错与权限 / 表单字段权限 四个配置模块 */
 function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCancel, onSave }) {
-  const [approverType, setApproverType] = useState(node.approverType || 'user')
+  // 审批对象：1-指定人员 / 2-指定角色 / 3-发起人自选
+  const [approverType, setApproverType] = useState(node.approverType || 1)
   const [members, setMembers] = useState(normalizeMembers(node.members))
-  const [selfSelect, setSelfSelect] = useState(node.selfSelect || 'single')
-  const [strategy, setStrategy] = useState(node.strategy || 'self_multi')
-  const [emptyHandler, setEmptyHandler] = useState(node.emptyHandler || 'auto_pass')
+  // 发起人自选类型：1-单选 / 2-多选
+  const [selfSelect, setSelfSelect] = useState(node.selfSelect || 1)
+  // 审批方式：1-依次审批 / 2-会签 / 3-或签
+  const [strategy, setStrategy] = useState(node.strategy || 1)
+  // 审批人为空处理：1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员
+  const [emptyHandler, setEmptyHandler] = useState(node.emptyHandler || 1)
   const [emptyMembers, setEmptyMembers] = useState(normalizeMembers(node.emptyMembers))
-  const [permissions, setPermissions] = useState(node.permissions || ['reject'])
+  // 审批人操作权限数组元素：1-拒绝 / 2-转交 / 3-加签
+  const [permissions, setPermissions] = useState(node.permissions || [1])
   const [fieldPerms, setFieldPerms] = useState(node.fieldPerms || [])
   // 应用表单元素列表（步骤四：表单字段权限的字段来源，由主组件请求后通过 props 传入）
 
   const updateFieldPerm = (index, key, v) =>
     setFieldPerms(fieldPerms.map((fp, i) => (i === index ? { ...fp, [key]: v } : fp)))
 
-  // 审批对象联动：发起人自选 + 多选时展示步骤二；指定人员/角色实际选择数量 > 1（事实多选）时同样展示
+  // 审批对象联动：展示步骤二「审批方式」的条件：
+  // 3-发起人自选 + 2-多选；或 1-指定人员 / 2-指定角色 实际选择数量 > 1（事实多选）
   const showStrategy =
-    (approverType !== 'self' && members.length > 1) ||
-    (approverType === 'self' && selfSelect === 'multi')
+    (approverType !== 3 && members.length > 1) ||
+    (approverType === 3 && selfSelect === 2)
 
   return (
     <Drawer
@@ -627,14 +620,14 @@ function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCa
               setMembers([])
             }}
           >
-            <Radio value="user">指定人员</Radio>
-            <Radio value="role">指定角色</Radio>
-            <Radio value="self">发起人自选</Radio>
+            <Radio value={1}>指定人员</Radio>
+            <Radio value={2}>指定角色</Radio>
+            <Radio value={3}>发起人自选</Radio>
           </Radio.Group>
-          {approverType !== 'self' ? (
+          {approverType !== 3 ? ( // 3-发起人自选：自选时不展示成员选择器，改为选择类型
             <div className="mt-3">
               <PersonPicker
-                modes={approverType === 'role' ? ['role'] : ['org']}
+                modes={approverType === 2 ? ['role'] : ['org']} // 2-指定角色：仅角色维度
                 checkTarget="user"
                 value={members}
                 onChange={setMembers}
@@ -645,8 +638,8 @@ function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCa
             <div className="mt-3">
               <div className="mb-1 text-sm text-gray-500">选择类型</div>
               <Radio.Group type="button" value={selfSelect} onChange={setSelfSelect}>
-                <Radio value="single">单选</Radio>
-                <Radio value="multi">多选</Radio>
+                <Radio value={1}>单选</Radio>
+                <Radio value={2}>多选</Radio>
               </Radio.Group>
             </div>
           )}
@@ -656,9 +649,9 @@ function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCa
           <div>
             <div className="mb-2 font-medium">审批方式</div>
             <Radio.Group value={strategy} onChange={setStrategy} direction="vertical">
-              <Radio value="self_multi">依次审批：按顺序审批，上一个审批通过后流转到下一个</Radio>
-              <Radio value="self_single">会签：需要所有配置的审批人都同意，流程才能向下流转</Radio>
-              <Radio value="or_sign">或签：其中任意一名审批人同意，流程即向下流转</Radio>
+              <Radio value={1}>依次审批：按顺序审批，上一个审批通过后流转到下一个</Radio>
+              <Radio value={2}>会签：需要所有配置的审批人都同意，流程才能向下流转</Radio>
+              <Radio value={3}>或签：其中任意一名审批人同意，流程即向下流转</Radio>
             </Radio.Group>
           </div>
         )}
@@ -667,12 +660,12 @@ function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCa
           <div className="mb-2 font-medium">容错与权限</div>
           <div className="mb-1 text-sm text-gray-500">审批人为空的处理方式</div>
           <Radio.Group value={emptyHandler} onChange={setEmptyHandler} direction="vertical">
-            <Radio value="auto_pass">自动通过</Radio>
-            <Radio value="auto_reject">自动拒绝</Radio>
-            <Radio value="to_admin">转交流程管理员</Radio>
-            <Radio value="assign">指定人员</Radio>
+            <Radio value={1}>自动通过</Radio>
+            <Radio value={2}>自动拒绝</Radio>
+            <Radio value={3}>转交流程管理员</Radio>
+            <Radio value={4}>指定人员</Radio>
           </Radio.Group>
-          {emptyHandler === 'assign' && (
+          {emptyHandler === 4 && ( // 4-指定人员：展示指定人员选择器
             <div className="mt-3">
               <PersonPicker
                 modes={['org']}
@@ -684,9 +677,9 @@ function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCa
           )}
           <div className="mt-4 mb-1 text-sm text-gray-500">审批人操作权限</div>
           <Checkbox.Group value={permissions} onChange={setPermissions}>
-            <Checkbox value="reject">拒绝</Checkbox>
-            <Checkbox value="transfer">转交</Checkbox>
-            <Checkbox value="add_sign">加签</Checkbox>
+            <Checkbox value={1}>拒绝</Checkbox>
+            <Checkbox value={2}>转交</Checkbox>
+            <Checkbox value={3}>加签</Checkbox>
           </Checkbox.Group>
         </div>
         {/* 步骤四：表单字段权限（字段来源于应用已配置的表单元素） */}
@@ -719,9 +712,9 @@ function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCa
                     value={fp.perm}
                     onChange={(v) => updateFieldPerm(i, 'perm', v)}
                   >
-                    <Select.Option value="read">只读</Select.Option>
-                    <Select.Option value="hidden">隐藏</Select.Option>
-                    <Select.Option value="edit">可编辑</Select.Option>
+                    <Select.Option value={1}>只读</Select.Option>
+                    <Select.Option value={2}>隐藏</Select.Option>
+                    <Select.Option value={3}>可编辑</Select.Option>
                   </Select>
                   <Button
                     icon={<IconClose />}
@@ -732,7 +725,7 @@ function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCa
               <Button
                 size="small"
                 icon={<IconPlus />}
-                onClick={() => setFieldPerms([...fieldPerms, { field: '', perm: 'read' }])}
+                onClick={() => setFieldPerms([...fieldPerms, { field: '', perm: 1 }])} // 新字段默认 1-只读
               >
                 添加字段
               </Button>
@@ -747,7 +740,8 @@ function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCa
 /** 抄送人节点：点击卡片唤起 Drawer，配置抄送对象与抄送时机 */
 function CcEditDrawer({ node, onCancel, onSave }) {
   const [members, setMembers] = useState(normalizeMembers(node.members))
-  const [ccTiming, setCcTiming] = useState(node.ccTiming || 'after_pass')
+  // 抄送时机：1-审批通过后抄送 / 2-流程结束时统一抄送
+  const [ccTiming, setCcTiming] = useState(node.ccTiming || 1)
   return (
     <Drawer
       width={480}
@@ -776,8 +770,8 @@ function CcEditDrawer({ node, onCancel, onSave }) {
         <div>
           <div className="mb-2 font-medium">抄送时机</div>
           <Radio.Group direction="vertical" value={ccTiming} onChange={setCcTiming}>
-            <Radio value="after_pass">审批通过后抄送</Radio>
-            <Radio value="on_end">流程结束时统一抄送</Radio>
+            <Radio value={1}>审批通过后抄送</Radio>
+            <Radio value={2}>流程结束时统一抄送</Radio>
           </Radio.Group>
         </div>
       </div>
@@ -794,11 +788,13 @@ function ConditionEditDrawer({
   onCancel,
   onSave,
 }) {
-  const [relation, setRelation] = useState(node.relation || 'and')
+  // 条件关系：1-且(AND) / 2-或(OR)
+  const [relation, setRelation] = useState(node.relation || 1)
   // 默认条件行：formFields 有数据时取第一个字段的 field_key，否则为空字符串
   const defaultField = formFields[0]?.field_key || ''
+  // 条件规则列表：operator 为数字枚举（1-大于 / 2-小于 / 3-等于 / 4-不等于 / 5-包含 / 6-不包含）
   const [rules, setRules] = useState(
-    branch.rules?.length ? branch.rules : [{ field: defaultField, operator: '=', value: '' }],
+    branch.rules?.length ? branch.rules : [{ field: defaultField, operator: 3, value: '' }],
   )
 
   const updateRule = (index, key, v) =>
@@ -823,8 +819,8 @@ function ConditionEditDrawer({
         <div>
           <div className="mb-2 font-medium">条件关系</div>
           <Radio.Group type="button" value={relation} onChange={setRelation}>
-            <Radio value="and">且（AND）</Radio>
-            <Radio value="or">或（OR）</Radio>
+            <Radio value={1}>且（AND）</Radio>
+            <Radio value={2}>或（OR）</Radio>
           </Radio.Group>
         </div>
         <div>
@@ -878,7 +874,7 @@ function ConditionEditDrawer({
                 size="small"
                 icon={<IconPlus />}
                 onClick={() =>
-                  setRules([...rules, { field: defaultField, operator: '=', value: '' }])
+                  setRules([...rules, { field: defaultField, operator: 3, value: '' }]) // 3-等于
                 }
               >
                 添加条件
@@ -909,7 +905,7 @@ function FlowNode({
 }) {
   return (
     <div className="flex flex-col items-center">
-      {node.type === 'condition' ? (
+      {node.type === 4 ? ( // 4-条件分支：渲染 ConditionBlock 布局容器
         <ConditionBlock
           node={node}
           userDeptMap={userDeptMap}
@@ -935,7 +931,7 @@ function FlowNode({
 function updateNodeInTree(list, nodeId, updater) {
   return list.map((node) => {
     if (node.id === nodeId) return updater(node)
-    if (node.type === 'condition') {
+    if (node.type === 4) { // 4-条件分支：递归处理其分支 children
       return {
         ...node,
         branches: node.branches.map((b) => ({
@@ -954,7 +950,7 @@ export default function ExamineManage() {
   const { addTab } = useTabs()
 
   // 默认流程：始终包含一个「发起人」起始节点
-  const [nodes, setNodes] = useState(() => [createNode('initiator')])
+  const [nodes, setNodes] = useState(() => [createNode(1)]) // 1-发起人：默认流程始终包含一个发起人节点
 
   // 挂载：确保页签存在（接口请求暂未接入，先以纯前端流程设计为主）
   useEffect(() => {
@@ -1103,7 +1099,7 @@ export default function ExamineManage() {
             result.push({ ...node, branches })
             return
           }
-          if (node.type === 'condition') {
+          if (node.type === 4) { // 4-条件分支：递归处理其分支 children
             result.push({
               ...node,
               branches: node.branches.map((b) => ({ ...b, children: visit(b.children) })),
@@ -1142,8 +1138,8 @@ export default function ExamineManage() {
   // 节点/分支点击编辑：{ kind: 'node' | 'branch' | 'initiator', node, branch? } 控制弹层显隐与类型
   const [editing, setEditing] = useState(null)
   const handleNodeEdit = useCallback((node) => {
-    // 发起人：跳过中间弹窗，直接唤起人员选择器（确认即保存 members）
-    if (node.type === 'initiator') {
+    // 1-发起人：跳过中间弹窗，直接唤起人员选择器（确认即保存 members）
+    if (node.type === 1) {
       setEditing({ kind: 'initiator', node })
       return
     }
@@ -1180,9 +1176,9 @@ export default function ExamineManage() {
     (onPick) => (
       <Space>
         {Object.entries(NODE_TYPE_META)
-          .filter(([type]) => type !== 'initiator')
+          .filter(([type]) => Number(type) !== 1) // 1-发起人节点唯一，不提供添加入口
           .map(([type, meta]) => (
-            <Button size="small" key={type} onClick={() => onPick(type)} icon={<meta.icon />}>
+            <Button size="small" key={type} onClick={() => onPick(Number(type))} icon={<meta.icon />}>
               {meta.label}
             </Button>
           ))}
@@ -1259,7 +1255,7 @@ export default function ExamineManage() {
             onCancel={handleCloseEdit}
           />
         )}
-        {editing?.kind === 'node' && editing.node.type === 'approver' && (
+        {editing?.kind === 'node' && editing.node.type === 2 && ( // 2-审批人
           <ApproverEditDrawer
             key={editing.node.id}
             node={editing.node}
@@ -1269,7 +1265,7 @@ export default function ExamineManage() {
             onSave={handleNodeSave}
           />
         )}
-        {editing?.kind === 'node' && editing.node.type === 'cc' && (
+        {editing?.kind === 'node' && editing.node.type === 3 && ( // 3-抄送人
           <CcEditDrawer
             key={editing.node.id}
             node={editing.node}

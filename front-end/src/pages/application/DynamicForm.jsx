@@ -843,6 +843,7 @@ export default function DynamicForm({
       layout={formConfig.layout}
       labelAlign={formConfig.labelAlign}
       disabled={pageType !== 'form'}
+      autoComplete="off"
     >
       <Row>
         {isMoveMode
