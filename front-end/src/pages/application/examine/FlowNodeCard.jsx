@@ -3,12 +3,14 @@ import { Input, Popconfirm, Popover, Tag } from '@arco-design/web-react'
 import { IconBranch, IconClose, IconEdit } from '@arco-design/web-react/icon'
 import { memo } from 'react'
 import { NODE_TYPE_META } from './constants'
+import { foldDeptMembers } from './flowModel'
 
 /**
  * 节点摘要（纯信息展示）：成员 / 审批策略（条件分支由 ConditionBlock 独立渲染）
  * members 为 { key, type, label } 对象数组，取 label 渲染；人员附带「所属部门：姓名」
+ * 发起人节点（type=1）：若勾选了部门，则折叠该部门下所有子级（子部门 / 人员），只显示部门本身
  */
-export function renderNodeSummary(node, userDeptMap = {}) {
+export function renderNodeSummary(node, userDeptMap = {}, deptDescMap = {}) {
   const renderMemberLabel = (m) =>
     // m.type 为数字枚举：1-人员（附所属部门）/ 2-部门 / 3-角色
     m.type === 1 && userDeptMap[m.key] ? `${userDeptMap[m.key]}：${m.label}` : m.label || m.key
@@ -18,18 +20,21 @@ export function renderNodeSummary(node, userDeptMap = {}) {
     return <span className="block w-full truncate text-xs">发起人自选</span>
   }
 
-  if (!node.members?.length) {
+  // 发起人节点按已选部门折叠子级（如选了「总公司」则其下部门/人员均不重复展示）
+  const members = node.type === 1 ? foldDeptMembers(node.members, deptDescMap) : node.members
+
+  if (!members?.length) {
     return <span className="cursor-pointer text-xs text-gray-400">未设置成员</span>
   }
 
-  const labels = node.members.map(renderMemberLabel)
+  const labels = members.map(renderMemberLabel)
   const summaryText =
     labels.length <= 3
       ? labels.join('、')
       : `${labels.slice(0, 3).join('、')} 等 ${labels.length} 人`
   const tooltipContent = (
     <div className="flex max-h-80 flex-wrap gap-1 overflow-auto p-1">
-      {node.members.map((m, i) => (
+      {members.map((m, i) => (
         <Tag key={m.key || `${m.type}-${m.label}-${i}`}>{renderMemberLabel(m)}</Tag>
       ))}
     </div>
@@ -110,7 +115,14 @@ function NodeTitle({ node, onRename, icon }) {
  * 节点卡片：渲染单个流程节点卡片（类型色标 + 标题（可编辑） + 摘要 + 删除），点击卡片弹出编辑弹层。
  * 纯展示组件，memo 包裹避免画布局部更新引发全局重渲染。
  */
-export const FlowNodeCard = memo(function FlowNodeCard({ node, userDeptMap = {}, onRemove, onEdit, onRename }) {
+export const FlowNodeCard = memo(function FlowNodeCard({
+  node,
+  userDeptMap = {},
+  deptDescMap = {},
+  onRemove,
+  onEdit,
+  onRename,
+}) {
   // 兜底：未知或未归一化的旧类型不崩溃，按普通节点渲染
   const meta = NODE_TYPE_META[node.type] || { label: '未知节点', bg: 'bg-gray-500', icon: IconBranch }
   const Icon = meta.icon
@@ -143,7 +155,7 @@ export const FlowNodeCard = memo(function FlowNodeCard({ node, userDeptMap = {},
           </Popconfirm>
         )}
       </div>
-      <div className="px-3 py-2">{renderNodeSummary(node, userDeptMap)}</div>
+      <div className="px-3 py-2">{renderNodeSummary(node, userDeptMap, deptDescMap)}</div>
     </div>
   )
 })

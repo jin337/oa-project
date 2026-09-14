@@ -77,6 +77,7 @@ export const NodeConnector = memo(function NodeConnector({ menu }) {
 export const ConditionBlock = memo(function ConditionBlock({
   node,
   userDeptMap = {},
+  deptDescMap = {},
   onEdit,
   onEditBranch,
   onAddBranch,
@@ -113,6 +114,7 @@ export const ConditionBlock = memo(function ConditionBlock({
                 node={child}
                 addMenu={buildBranchAddMenu(node.id, b.id, ci + 1)}
                 userDeptMap={userDeptMap}
+                deptDescMap={deptDescMap}
                 onRemove={(cid) => onRemoveNode(node.id, b.id, cid)}
                 onEdit={onEdit}
                 onEditBranch={onEditBranch}
@@ -138,6 +140,7 @@ export const FlowNode = memo(function FlowNode({
   node,
   addMenu,
   userDeptMap = {},
+  deptDescMap = {},
   onRemove,
   onEdit,
   onEditBranch,
@@ -153,6 +156,7 @@ export const FlowNode = memo(function FlowNode({
         <ConditionBlock
           node={node}
           userDeptMap={userDeptMap}
+          deptDescMap={deptDescMap}
           onEdit={onEdit}
           onEditBranch={onEditBranch}
           onAddBranch={onAddBranch}
@@ -165,6 +169,7 @@ export const FlowNode = memo(function FlowNode({
         <FlowNodeCard
           node={node}
           userDeptMap={userDeptMap}
+          deptDescMap={deptDescMap}
           onRemove={onRemove}
           onEdit={onEdit}
           onRename={onRename}

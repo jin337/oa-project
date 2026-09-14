@@ -7,6 +7,7 @@ import * as roleApi from '../../api/role'
 import { useTabs } from '../../store/tab-context'
 import { ADDABLE_NODE_TYPES, MODULE_LABEL, NODE_TYPE_META } from './examine/constants'
 import {
+  buildDeptDescMap,
   buildOrgItemMap,
   buildRoleItemMap,
   buildUserDeptMap,
@@ -145,6 +146,8 @@ export default function ExamineManage() {
   const orgItemMap = useMemo(() => buildOrgItemMap(orgTree), [orgTree])
   const roleItemMap = useMemo(() => buildRoleItemMap(roleList), [roleList])
   const userDeptMap = useMemo(() => buildUserDeptMap(orgTree), [orgTree])
+  // 部门 → 后代节点映射（发起人卡片按部门折叠展示用）
+  const deptDescMap = useMemo(() => buildDeptDescMap(orgTree), [orgTree])
 
   // 注入 Context：各弹层统一读取，避免多层 props 透传
   const selectorData = useMemo(
@@ -202,6 +205,7 @@ export default function ExamineManage() {
                   node={node}
                   addMenu={buildAddMenu((type) => insertNodeAt(i + 1, type))}
                   userDeptMap={userDeptMap}
+                  deptDescMap={deptDescMap}
                   onRemove={removeNode}
                   onEdit={handleNodeEdit}
                   onEditBranch={handleBranchEdit}

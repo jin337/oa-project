@@ -139,6 +139,56 @@ export const buildOrgItemMap = (tree) => {
 }
 
 /**
+ * 构建「部门 key → 后代节点 key 集合」映射（含子部门与人员 key，不含自身）
+ * 用于发起人卡片折叠展示：勾选部门后，其下所有子级（子部门/人员）不再重复显示。
+ * @param {Array} tree 选择器树（transformDeptTree 输出）
+ * @returns {Object<string, Set<string>>}
+ */
+export const buildDeptDescMap = (tree) => {
+  const map = {}
+  // 收集某节点数组的全部后代 key（含节点自身）
+  const collectKeys = (nodes) => {
+    const keys = new Set()
+    nodes.forEach((n) => {
+      keys.add(n.key)
+      if (n.children?.length) collectKeys(n.children).forEach((k) => keys.add(k))
+    })
+    return keys
+  }
+  const walk = (nodes) => {
+    nodes.forEach((n) => {
+      if (n.isDept && n.children?.length) {
+        map[n.key] = collectKeys(n.children)
+        walk(n.children)
+      }
+    })
+  }
+  walk(tree)
+  return map
+}
+
+/**
+ * 发起人卡片折叠展示：已勾选部门（type=2）后，该部门下所有子级成员（子部门 / 人员）不再展示，
+ * 只保留未被更大部门覆盖的顶级部门 + 不属于任何已选部门的人员。
+ * @param {ApprovalMember[]} members 原始成员数组
+ * @param {Object<string, Set<string>>} deptDescMap 部门 key → 后代 key 集合
+ * @returns {ApprovalMember[]} 折叠后的成员数组
+ */
+export const foldDeptMembers = (members = [], deptDescMap = {}) => {
+  const deptKeys = members.filter((m) => m.type === 2).map((m) => m.key) // 2-部门
+  if (!deptKeys.length) return members
+  // 已被某已选部门覆盖（属于其后代）的 key 集合
+  const covered = new Set()
+  deptKeys.forEach((k) => deptDescMap[k]?.forEach((dk) => covered.add(dk)))
+  // 多个已选部门存在层级包含关系时，仅保留最顶层部门
+  const keepDepts = deptKeys.filter((k) => !covered.has(k))
+  return members.filter((m) => {
+    if (m.type === 2) return keepDepts.includes(m.key)
+    return !covered.has(m.key)
+  })
+}
+
+/**
  * 人员 key → 所属部门标题（右侧展示「部门：姓名」用，人员归到最近祖先部门）
  */
 export const buildUserDeptMap = (tree) => {
