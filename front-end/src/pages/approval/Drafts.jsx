@@ -13,11 +13,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import * as approvalApi from 'src/api/approval'
-import { useTabs } from 'src/store/tab-context'
+import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm from 'src/pages/application/dynamic/DynamicForm'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
-import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DetailDrawer from 'src/pages/approval/DetailDrawer.jsx'
+import { useTabs } from 'src/store/tab-context'
 
 const PAGE_TITLE = '草稿箱'
 
@@ -209,7 +209,7 @@ export default function Drafts() {
         width="50%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
-        title={`编辑草稿 - ${draftRecord?.item_name || draftRecord?.name || ''}`}
+        title={`编辑草稿 - ${drawerApp?.item_name || drawerApp?.name || ''}`}
         unmountOnExit
         footer={
           <div className="flex justify-end gap-2">
