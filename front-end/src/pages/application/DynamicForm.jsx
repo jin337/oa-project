@@ -13,10 +13,19 @@ import {
   Switch,
   Table,
   Tag,
+  Timeline,
   TimePicker,
   Upload,
 } from '@arco-design/web-react'
-import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon'
+import {
+  IconBranch,
+  IconDelete,
+  IconDragArrow,
+  IconPlus,
+  IconSend,
+  IconStamp,
+  IconUser,
+} from '@arco-design/web-react/icon'
 import { memo, useMemo } from 'react'
 import { ELEMENT_TYPE_OPTIONS } from '../../config/app.js'
 
@@ -145,6 +154,174 @@ export const isNoLabelElement = (element_type) => NO_LABEL_TYPES.includes(elemen
 
 /** 获取基础组件配置（含 renderPreview / renderSettings） */
 export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[element_type] || null
+
+// ==================== 审批流程只读展示 ====================
+
+// 审批节点类型元信息（与 ExamineManage.jsx 数字枚举保持一致；color 供 Timeline 节点/标签使用，bg/icon 供自定义节点图标使用）
+const APPROVAL_NODE_META = {
+  1: { label: '发起人', color: 'green', bg: 'bg-emerald-500', icon: IconUser }, // 1-发起人
+  2: { label: '审批人', color: 'orange', bg: 'bg-amber-500', icon: IconStamp }, // 2-审批人
+  3: { label: '抄送人', color: 'blue', bg: 'bg-blue-500', icon: IconSend }, // 3-抄送人
+  4: { label: '条件分支', color: 'purple', bg: 'bg-purple-500', icon: IconBranch }, // 4-条件分支
+}
+// 审批对象：1-指定人员 / 2-指定角色 / 3-发起人自选
+const APPROVER_TYPE_MAP = { 1: '指定人员', 2: '指定角色', 3: '发起人自选' }
+// 发起人自选类型：1-单选 / 2-多选
+const SELF_SELECT_MAP = { 1: '单选', 2: '多选' }
+// 审批方式：1-依次审批 / 2-会签 / 3-或签
+const STRATEGY_MAP = { 1: '依次审批', 2: '会签', 3: '或签' }
+// 抄送时机：1-审批通过后抄送 / 2-流程结束时统一抄送
+const CC_TIMING_MAP = { 1: '审批通过后抄送', 2: '流程结束时统一抄送' }
+// 条件关系：1-且(AND) / 2-或(OR)
+const RELATION_MAP = { 1: '且（AND）', 2: '或（OR）' }
+// 逻辑运算符：1-大于 / 2-小于 / 3-等于 / 4-不等于 / 5-包含 / 6-不包含
+const OPERATOR_MAP = { 1: '大于', 2: '小于', 3: '等于', 4: '不等于', 5: '包含', 6: '不包含' }
+
+/** 解析 approval_flow_json：兼容 JSON 字符串与数组，空值/解析失败返回 null */
+const parseApprovalFlow = (raw) => {
+  if (!raw) return null
+  try {
+    const data = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return Array.isArray(data) ? data : null
+  } catch {
+    return null
+  }
+}
+
+/** 渲染成员/部门/角色文本（兼容字符串数组与 { type, label } 对象数组），无成员返回空串 */
+const getMembersText = (members) => {
+  const list = Array.isArray(members) ? members : []
+  return list
+    .map((m) => (typeof m === 'string' ? m : m.label || m.name || m.title || ''))
+    .filter(Boolean)
+    .join('、')
+}
+
+/** 构建节点摘要文本（仿钉钉节点行第二行灰色提示） */
+const buildNodeSummary = (node) => {
+  if (node.type === 1) {
+    // 1-发起人
+    const t = getMembersText(node.members)
+    return t ? `可发起人：${t}` : '未配置可发起人'
+  }
+  if (node.type === 2) {
+    // 2-审批人：审批对象 + 审批方式
+    const obj = APPROVER_TYPE_MAP[node.approverType] || node.approverType || '—'
+    const parts = []
+    if (node.approverType === 3) {
+      // 3-发起人自选：附自选类型（1-单选 / 2-多选）
+      parts.push(`${obj}（${SELF_SELECT_MAP[node.selfSelect] || '—'}）`)
+    } else {
+      const t = getMembersText(node.members)
+      parts.push(`${obj}：${t || '未配置'}`)
+    }
+    parts.push(`审批方式：${STRATEGY_MAP[node.strategy] || node.strategy || '—'}`)
+    return parts.join(' · ')
+  }
+  if (node.type === 3) {
+    // 3-抄送人：抄送对象 + 抄送时机
+    const t = getMembersText(node.members)
+    return `抄送对象：${t || '未配置'} · 抄送时机：${CC_TIMING_MAP[node.ccTiming] || node.ccTiming || '—'}`
+  }
+  if (node.type === 4) {
+    // 4-条件分支：条件关系 + 分支数量
+    const branchCount = node.branches?.length || 0
+    return `条件关系：${RELATION_MAP[node.relation] || node.relation || '—'} · 共 ${branchCount} 个分支`
+  }
+  return ''
+}
+
+/**
+ * 审批节点行（仿钉钉审批流视觉：Timeline 图标列 + 节点名/摘要两行文本）。
+ * 条件分支（type=4）在节点行下方展开分支条件与嵌套子节点链。
+ */
+const ApprovalNodeView = ({ node }) => {
+  const meta =
+    APPROVAL_NODE_META[node.type] ||
+    { label: `未知节点(${node.type})`, color: 'gray', bg: 'bg-gray-400', icon: IconBranch }
+
+  // 4-条件分支：展开各分支（条件表达式 + 分支内节点链递归）
+  if (node.type === 4) {
+    return (
+      <div className="py-0.5">
+        <div className="text-sm font-medium">{node.label || meta.label}</div>
+        <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node)}</div>
+        <div className="mt-2 space-y-2 rounded-lg border border-purple-100 bg-purple-50/40 p-2">
+          {(node.branches || []).map((b) => (
+            <div key={b.id || b.label} className="rounded border border-white bg-white/60 p-2">
+              <div className="mb-1 text-xs font-medium text-purple-600">
+                {b.isDefault ? '默认分支' : b.label || '未命名分支'}
+              </div>
+              {(b.rules || []).length ? (
+                <div className="mb-2 space-y-0.5">
+                  {b.rules.map((r, i) => (
+                    <div key={i} className="text-xs text-gray-600">
+                      {r.field} {OPERATOR_MAP[r.operator] || r.operator} {r.value}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mb-2 text-xs text-gray-400">无条件（默认进入）</div>
+              )}
+              {(b.children || []).length > 0 && (
+                <div className="mt-2 space-y-1 border-t border-purple-100 pt-2">
+                  {b.children.map((c) => (
+                    <div key={c.id || c.label} className="ml-1 border-l border-gray-200 pl-2">
+                      <ApprovalNodeView node={c} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="py-0.5">
+      <div className="text-sm font-medium">{node.label || meta.label}</div>
+      <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node)}</div>
+    </div>
+  )
+}
+
+/** 审批流程展示区块：Timeline 垂直时间轴还原审批流走向（仿钉钉风格，纯只读） */
+const ApprovalFlowView = ({ raw }) => {
+  const nodes = useMemo(() => parseApprovalFlow(raw), [raw])
+  if (!nodes?.length) return null
+  return (
+    <>
+      <Divider orientation="left">
+        <span className="text-sm font-medium text-gray-700">审批流程</span>
+      </Divider>
+      <Timeline pending={<span className="text-xs text-gray-400">流程结束</span>}>
+        {nodes.map((node, i) => {
+          const meta =
+            APPROVAL_NODE_META[node.type] ||
+            { label: `未知节点(${node.type})`, color: 'gray', bg: 'bg-gray-400', icon: IconBranch }
+          return (
+            <Timeline.Item
+              key={node.id || `node_${i}`}
+              color={meta.color}
+              // 自定义节点图标：按节点类型着色，仿钉钉审批流节点样式
+              dot={
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full text-white ${meta.bg}`}
+                >
+                  <meta.icon style={{ fontSize: 14 }} />
+                </span>
+              }
+            >
+              <ApprovalNodeView node={node} />
+            </Timeline.Item>
+          )
+        })}
+      </Timeline>
+    </>
+  )
+}
 
 // ==================== 渲染配置中心 ====================
 
@@ -821,6 +998,8 @@ export default function DynamicForm({
   const formConfig = layout?.formConfig || DEFAULT_FORM_CONFIG
 
   const isMoveMode = pageType === 'move-form' || pageType === 'move-detail'
+  // 表单填写 / 详情只读模式：在表单下方展示审批流程（画布模式不展示）
+  const showApprovalFlow = !isMoveMode && (pageType === 'form' || pageType === 'detail')
   // 表单渲染上下文（画布元素 memo 依赖）：仅当 formConfig / pageType 变化时重建，
   // 拖拽悬停、选中等高频状态更新不改变该引用，CanvasElement 可跳过无关重渲染
   const formCtx = useMemo(
@@ -893,8 +1072,18 @@ export default function DynamicForm({
   }
 
   if (!elements.length) {
-    return <Empty description="该应用暂未配置表单布局" />
+    return (
+      <>
+        <Empty description="该应用暂未配置表单布局" />
+        {showApprovalFlow && <ApprovalFlowView raw={app?.approval_flow_json} />}
+      </>
+    )
   }
 
-  return formNode
+  return (
+    <>
+      {formNode}
+      {showApprovalFlow && <ApprovalFlowView raw={app?.approval_flow_json} />}
+    </>
+  )
 }
