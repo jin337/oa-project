@@ -1,6 +1,6 @@
 import { Message } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
-import * as applicationApi from '../../api/application'
+import * as applicationApi from 'src/api/application'
 
 /**
  * 动态业务数据详情加载 Hook：

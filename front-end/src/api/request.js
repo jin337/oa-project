@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { Message } from '@arco-design/web-react'
-import { getToken, clearToken } from '../utils/auth'
+import { getToken, clearToken } from 'src/utils/auth'
 
 // 后端统一返回：{ code, msg, data, timestamp }，code=0 为成功
 const request = axios.create({

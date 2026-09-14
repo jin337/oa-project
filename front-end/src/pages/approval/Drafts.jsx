@@ -14,8 +14,9 @@ import { useLocation } from 'react-router-dom'
 import * as applicationApi from '../../api/application'
 import * as approvalApi from '../../api/approval'
 import { useTabs } from '../../store/tab-context'
-import DynamicForm from '../application/DynamicForm'
+import DynamicForm from '../application/dynamic/DynamicForm'
 import { ApprovalStatusTag } from './approvalStatus.jsx'
+import DynamicFlowView from '../application/dynamic/DynamicFlowView'
 import DetailDrawer from './DetailDrawer.jsx'
 
 const PAGE_TITLE = '草稿箱'
@@ -224,7 +225,11 @@ export default function Drafts() {
             <Spin />
           </div>
         ) : drawerApp ? (
-          <DynamicForm app={drawerApp} form={drawerForm} pageType="form" />
+          <>
+            <DynamicForm app={drawerApp} form={drawerForm} pageType="form" />
+            {/* 审批流程：抽屉内独立渲染审批流配置只读还原 */}
+            <DynamicFlowView raw={drawerApp?.approval_flow_json} />
+          </>
         ) : null}
       </Drawer>
 

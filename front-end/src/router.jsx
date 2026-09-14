@@ -7,41 +7,41 @@ import {
   RouterProvider,
   useLocation,
 } from 'react-router-dom'
-import MainLayout from './components/layout.jsx'
-import { useAuth } from './store/auth-context'
-import { getToken } from './utils/auth'
+import MainLayout from 'src/components/layout.jsx'
+import { useAuth } from 'src/store/auth-context'
+import { getToken } from 'src/utils/auth'
 
 // 路由页面全部懒加载：每个页面单独分包，按需下载
-const Login = lazy(() => import('./pages/Login.jsx'))
-const Dashboard = lazy(() => import('./pages/Dashboard.jsx'))
+const Login = lazy(() => import('src/pages/Login.jsx'))
+const Dashboard = lazy(() => import('src/pages/Dashboard.jsx'))
 // 系统管理
-const UserManage = lazy(() => import('./pages/system/UserManage.jsx'))
-const RoleManage = lazy(() => import('./pages/system/RoleManage.jsx'))
-const MenuManage = lazy(() => import('./pages/system/MenuManage.jsx'))
-const DeptManage = lazy(() => import('./pages/system/DeptManage.jsx'))
+const UserManage = lazy(() => import('src/pages/system/UserManage.jsx'))
+const RoleManage = lazy(() => import('src/pages/system/RoleManage.jsx'))
+const MenuManage = lazy(() => import('src/pages/system/MenuManage.jsx'))
+const DeptManage = lazy(() => import('src/pages/system/DeptManage.jsx'))
 
 // 个人中心
-const Profile = lazy(() => import('./pages/profile/Profile.jsx'))
+const Profile = lazy(() => import('src/pages/profile/Profile.jsx'))
 
 // 应用管理
-const ApplicationManage = lazy(() => import('./pages/application/ApplicationManage.jsx'))
-const TableManage = lazy(() => import('./pages/application/TableManage.jsx'))
-const FormElementManage = lazy(() => import('./pages/application/FormElementManage.jsx'))
-const LayoutManage = lazy(() => import('./pages/application/LayoutManage.jsx'))
-const ExamineManage = lazy(() => import('./pages/application/ExamineManage.jsx'))
-const DynamicPage = lazy(() => import('./pages/application/DynamicPage.jsx'))
+const ApplicationManage = lazy(() => import('src/pages/application/ApplicationManage.jsx'))
+const TableManage = lazy(() => import('src/pages/application/TableManage.jsx'))
+const FormElementManage = lazy(() => import('src/pages/application/FormElementManage.jsx'))
+const LayoutManage = lazy(() => import('src/pages/application/LayoutManage.jsx'))
+const ExamineManage = lazy(() => import('src/pages/application/ExamineManage.jsx'))
+const DynamicPage = lazy(() => import('src/pages/application/dynamic/DynamicPage.jsx'))
 
 // 错误页面
-const Forbidden = lazy(() => import('./pages/error/Forbidden.jsx'))
+const Forbidden = lazy(() => import('src/pages/error/Forbidden.jsx'))
 
 // 审批申请页：分类 + 申请项管理
-const ApprovalApply = lazy(() => import('./pages/approval/Apply.jsx'))
+const ApprovalApply = lazy(() => import('src/pages/approval/Apply.jsx'))
 // 审批列表页：我的发起 / 我的待办 / 我审批的 / 抄送我的 / 草稿箱
-const ApprovalInitiated = lazy(() => import('./pages/approval/Initiated.jsx'))
-const ApprovalTodo = lazy(() => import('./pages/approval/Todo.jsx'))
-const ApprovalWorkplace = lazy(() => import('./pages/approval/Workplace.jsx'))
-const ApprovalToMe = lazy(() => import('./pages/approval/ToMe.jsx'))
-const ApprovalDrafts = lazy(() => import('./pages/approval/Drafts.jsx'))
+const ApprovalInitiated = lazy(() => import('src/pages/approval/Initiated.jsx'))
+const ApprovalTodo = lazy(() => import('src/pages/approval/Todo.jsx'))
+const ApprovalWorkplace = lazy(() => import('src/pages/approval/Workplace.jsx'))
+const ApprovalToMe = lazy(() => import('src/pages/approval/ToMe.jsx'))
+const ApprovalDrafts = lazy(() => import('src/pages/approval/Drafts.jsx'))
 
 function PageLoading() {
   return (

@@ -1,4 +1,4 @@
-import request from './request'
+import request from 'src/api/request'
 
 // GET /application 分页列表
 export function listApplications(params) {

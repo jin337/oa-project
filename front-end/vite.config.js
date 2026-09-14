@@ -22,6 +22,11 @@ export default defineConfig({
       threshold: 10240,
     }),
   ],
+  resolve: {
+    alias: {
+      src: '/src',
+    },
+  },
   server: {
     port: 8181,
     open: true,

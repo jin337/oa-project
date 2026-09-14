@@ -16,7 +16,7 @@ import {
 } from '@arco-design/web-react'
 import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { cloneElement, useCallback, useEffect, useMemo, useState } from 'react'
-import * as applicationApi from '../../api/application'
+import * as applicationApi from 'src/api/application'
 import DynamicDetail from './DynamicDetail'
 import DynamicForm, {
   formatTimeValue,

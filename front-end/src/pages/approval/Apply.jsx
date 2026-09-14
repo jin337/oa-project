@@ -25,8 +25,8 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from '../../api/application'
 import * as approvalApi from '../../api/approval'
-import DynamicForm from '../application/DynamicForm'
-import { APPROVAL_STATUS } from './approvalStatus.jsx'
+import DynamicFlowView from '../application/dynamic/DynamicFlowView.jsx'
+import DynamicForm from '../application/dynamic/DynamicForm'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -482,7 +482,11 @@ export default function Apply() {
             <Spin />
           </div>
         ) : drawerApp ? (
-          <DynamicForm app={drawerApp} form={drawerForm} pageType="form" />
+          <>
+            <DynamicForm app={drawerApp} form={drawerForm} pageType="form" />
+            {/* 审批流程：抽屉内独立渲染审批流配置只读还原 */}
+            <DynamicFlowView raw={drawerApp?.approval_flow_json} />
+          </>
         ) : null}
       </Drawer>
     </Card>

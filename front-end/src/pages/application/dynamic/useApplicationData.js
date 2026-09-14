@@ -1,6 +1,6 @@
 import { Message } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
-import * as applicationApi from '../../api/application'
+import * as applicationApi from 'src/api/application'
 
 /**
  * 按页面编码 + 页面状态加载应用配置的自定义 Hook：

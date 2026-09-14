@@ -18,7 +18,7 @@ import DynamicForm, {
   DEFAULT_FORM_CONFIG,
   parseLayoutJson,
   renderElementSettings,
-} from './DynamicForm'
+} from './dynamic/DynamicForm'
 
 const TabPane = Tabs.TabPane
 

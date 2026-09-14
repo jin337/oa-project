@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useState } from 'react'
-import * as authApi from '../api/auth'
-import { clearToken, getToken, setToken } from '../utils/auth'
+import * as authApi from 'src/api/auth'
+import { clearToken, getToken, setToken } from 'src/utils/auth'
 
 const AuthContext = createContext(null)
 

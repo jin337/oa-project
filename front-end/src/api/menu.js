@@ -1,4 +1,4 @@
-import request from './request'
+import request from 'src/api/request'
 
 // GET /menus 菜单树
 export function getMenuTree() {

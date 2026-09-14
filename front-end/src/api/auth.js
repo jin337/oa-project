@@ -1,4 +1,4 @@
-import request from './request'
+import request from 'src/api/request'
 
 // POST /auth/login 登录，返回 { token, user }
 export function login(data) {

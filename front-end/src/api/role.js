@@ -1,4 +1,4 @@
-import request from './request'
+import request from 'src/api/request'
 
 // GET /roles 分页列表（支持 name 过滤）
 export function listRoles(params) {

@@ -1,4 +1,4 @@
-import request from './request'
+import request from 'src/api/request'
 
 // GET /depts 部门树
 export function getDeptTree() {

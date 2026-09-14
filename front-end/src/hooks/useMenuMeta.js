@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useAuth } from '../store/auth-context'
+import { useAuth } from 'src/store/auth-context'
 
 /**
  * 菜单树路径解析公共模块：

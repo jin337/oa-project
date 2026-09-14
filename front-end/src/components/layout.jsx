@@ -19,12 +19,12 @@ import {
 } from '@arco-design/web-react/icon'
 import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import * as userApi from '../api/user'
-import { APP_NAME } from '../config/app.js'
-import { useMenuMeta } from '../hooks/useMenuMeta'
-import { useAuth } from '../store/auth-context'
-import { TabProvider, useTabs } from '../store/tab-context'
-import TabsBar from './tabs-bar'
+import * as userApi from 'src/api/user'
+import TabsBar from 'src/components/tabs-bar'
+import { APP_NAME } from 'src/config/app.js'
+import { useMenuMeta } from 'src/hooks/useMenuMeta'
+import { useAuth } from 'src/store/auth-context'
+import { TabProvider, useTabs } from 'src/store/tab-context'
 
 const Header = Layout.Header
 const Content = Layout.Content

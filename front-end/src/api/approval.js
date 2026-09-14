@@ -1,4 +1,4 @@
-import request from './request'
+import request from 'src/api/request'
 
 // ========== 审批分类（/approval/category） ==========
 

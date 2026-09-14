@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from './auth-context'
-import { findChildBySegments, findMenuChain } from '../hooks/useMenuMeta'
+import { findChildBySegments, findMenuChain } from 'src/hooks/useMenuMeta'
+import { useAuth } from 'src/store/auth-context'
 
 const HOME_PATH = '/'
 // 固定首页页签：禁止关闭，元信息以此为唯一数据源

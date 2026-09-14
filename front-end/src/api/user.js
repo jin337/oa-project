@@ -1,4 +1,4 @@
-import request from './request'
+import request from 'src/api/request'
 
 // GET /users 分页列表（支持 username / dept_id 过滤）
 export function listUsers(params) {
