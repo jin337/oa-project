@@ -1,0 +1,194 @@
+import { NODE_TYPE_META } from './constants'
+
+/**
+ * ==================== 审批流数据模型 ====================
+ * 节点树结构：主链节点数组（ApprovalNode[]），条件分支节点（type=4）内含 branches（ApprovalBranch[]），
+ * 每个分支可继续挂 children 节点链（支持任意层级嵌套）。
+ */
+
+/**
+ * @typedef {Object} ApprovalMember 审批成员条目
+ * @property {'user'|'dept'|'role'} type 成员类型（后端接口数据契约）
+ * @property {string} key 唯一标识（如 user_1 / dept_2 / role_3）
+ * @property {string} label 展示名称
+ */
+
+/**
+ * @typedef {Object} ApprovalRule 条件规则
+ * @property {string} field 表单字段标识（field_key）
+ * @property {number} operator 逻辑运算符（1-大于 / 2-小于 / 3-等于 / 4-不等于 / 5-包含 / 6-不包含）
+ * @property {string} value 条件值
+ */
+
+/**
+ * @typedef {Object} ApprovalBranch 条件分支
+ * @property {string} id 分支 id
+ * @property {string} label 分支名称
+ * @property {boolean} isDefault 是否默认分支（默认分支不可删除）
+ * @property {ApprovalRule[]} rules 条件规则列表
+ * @property {ApprovalNode[]} children 分支下的流程节点链
+ */
+
+/**
+ * @typedef {Object} ApprovalFieldPerm 表单字段权限
+ * @property {string} field 表单字段标识
+ * @property {number} perm 权限（1-只读 / 2-隐藏 / 3-可编辑）
+ */
+
+/**
+ * @typedef {Object} ApprovalNode 审批节点
+ * @property {string} id 节点 id
+ * @property {1|2|3|4} type 节点类型（1-发起人 / 2-审批人 / 3-抄送人 / 4-条件分支）
+ * @property {string} label 节点名称
+ * @property {ApprovalMember[]} [members] 成员（发起人 / 审批人 / 抄送人）
+ * @property {number} [approverType] 审批对象（1-指定人员 / 2-指定角色 / 3-发起人自选）
+ * @property {number} [selfSelect] 发起人自选类型（1-单选 / 2-多选）
+ * @property {number} [strategy] 审批方式（1-依次审批 / 2-会签 / 3-或签）
+ * @property {number} [emptyHandler] 审批人为空处理（1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员）
+ * @property {ApprovalMember[]} [emptyMembers] 为空时指定的兜底人员
+ * @property {number[]} [permissions] 审批人操作权限（1-拒绝 / 2-转交 / 3-加签）
+ * @property {ApprovalFieldPerm[]} [fieldPerms] 表单字段权限
+ * @property {number} [ccTiming] 抄送时机（1-审批通过后抄送 / 2-流程结束时统一抄送）
+ * @property {number} [relation] 条件关系（1-且(AND) / 2-或(OR)）
+ * @property {ApprovalBranch[]} [branches] 条件分支列表（仅 type=4）
+ */
+
+/** 生成唯一 id（前缀 + 时间戳 + 随机串） */
+export const genId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+/**
+ * 创建条件分支
+ * @param {string} label 分支名称
+ * @param {boolean} [isDefault] 是否默认分支
+ * @returns {ApprovalBranch}
+ */
+export const createBranch = (label, isDefault = false) => ({
+  id: genId('b'),
+  label,
+  isDefault,
+  rules: [],
+  children: [], // 分支下的流程节点链
+})
+
+/**
+ * 按类型创建节点
+ * @param {1|2|3|4} type 节点类型（1-发起人 / 2-审批人 / 3-抄送人 / 4-条件分支）
+ * @returns {ApprovalNode}
+ */
+export const createNode = (type) => {
+  const base = { id: genId('n'), type, label: NODE_TYPE_META[type].label }
+  if (type === 1) return { ...base, members: [] } // 1-发起人
+  if (type === 3) return { ...base, members: [], ccTiming: 2 } // 3-抄送人；ccTiming 2-流程结束时统一抄送
+  if (type === 2)
+    return {
+      ...base,
+      approverType: 1, // 审批对象：1-指定人员 / 2-指定角色 / 3-发起人自选
+      members: [],
+      selfSelect: 1, // 发起人自选类型：1-单选 / 2-多选
+      strategy: 1, // 审批方式：1-依次审批 / 2-会签 / 3-或签
+      emptyHandler: 1, // 审批人为空处理：1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员
+      emptyMembers: [],
+      permissions: [1, 2, 3], // 审批人操作权限：1-拒绝 / 2-转交 / 3-加签
+      fieldPerms: [], // 表单字段权限 [{ field, perm: 1-只读 | 2-隐藏 | 3-可编辑 }]
+    }
+  if (type === 4)
+    return {
+      ...base,
+      relation: 1, // 条件关系：1-且(AND) / 2-或(OR)
+      branches: [createBranch('默认', true), createBranch('条件1')],
+    }
+  return base
+}
+
+/**
+ * 兼容旧数据：members 可能为字符串数组，统一转为 { type, label } 结构
+ * @param {Array<string|ApprovalMember>} members
+ * @returns {ApprovalMember[]}
+ */
+export const normalizeMembers = (members) =>
+  (members || []).map((m) => (typeof m === 'string' ? { type: 'user', label: m } : m))
+
+// ==================== 对象选择器数据转换（组织架构 / 角色接口） ====================
+
+/**
+ * 接口部门树 → 选择器树格式（children 中同时包含子部门与用户节点）
+ * 接口节点：{ type: 'dept'|'user', id, name, children?, ... }
+ */
+export const transformDeptTree = (data = []) =>
+  data.map((d) => ({
+    key: `${d.type}_${d.id}`,
+    title: d.name,
+    isDept: d.type === 'dept',
+    children: d.children?.length ? transformDeptTree(d.children) : undefined,
+  }))
+
+/**
+ * 树节点 → key 映射：{ key: { key, type: 'dept'|'user', label } }
+ */
+export const buildOrgItemMap = (tree) => {
+  const map = {}
+  const walk = (nodes) => {
+    nodes.forEach((n) => {
+      map[n.key] = { key: n.key, type: n.isDept ? 'dept' : 'user', label: n.title }
+      if (n.children?.length) walk(n.children)
+    })
+  }
+  walk(tree)
+  return map
+}
+
+/**
+ * 人员 key → 所属部门标题（右侧展示「部门：姓名」用，人员归到最近祖先部门）
+ */
+export const buildUserDeptMap = (tree) => {
+  const map = {}
+  const walk = (nodes, deptTitle) => {
+    nodes.forEach((n) => {
+      if (n.isDept) {
+        walk(n.children || [], n.title)
+      } else {
+        map[n.key] = deptTitle
+      }
+    })
+  }
+  walk(tree)
+  return map
+}
+
+/**
+ * 接口角色数组 → 选择器列表格式：{ id, name, code } → { key: 'role_{id}', title: name }
+ */
+export const transformRoleList = (data = []) => data.map((r) => ({ key: `role_${r.id}`, title: r.name }))
+
+/**
+ * 角色列表 → key 映射：{ key: { key, type: 'role', label } }
+ */
+export const buildRoleItemMap = (roles) =>
+  Object.fromEntries(roles.map((r) => [r.key, { key: r.key, type: 'role', label: r.title }]))
+
+// ==================== 节点树递归工具 ====================
+
+/**
+ * 递归遍历节点树：在任意层级（含条件分支内嵌套的条件节点）查找 nodeId，
+ * 命中则用 updater 更新该节点；条件节点的分支 children 会继续递归下探。
+ * @param {ApprovalNode[]} list 节点数组
+ * @param {string} nodeId 目标节点 id
+ * @param {(node: ApprovalNode) => ApprovalNode} updater 更新函数
+ * @returns {ApprovalNode[]} 新节点数组（不可变更新）
+ */
+export function updateNodeInTree(list, nodeId, updater) {
+  return list.map((node) => {
+    if (node.id === nodeId) return updater(node)
+    if (node.type === 4) {
+      // 4-条件分支：递归处理其分支 children
+      return {
+        ...node,
+        branches: node.branches.map((b) => ({
+          ...b,
+          children: updateNodeInTree(b.children, nodeId, updater),
+        })),
+      }
+    }
+    return node
+  })
+}

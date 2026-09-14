@@ -220,8 +220,17 @@ const buildNodeSummary = (node) => {
   }
   if (node.type === 3) {
     // 3-抄送人：抄送对象 + 抄送时机
-    const t = getMembersText(node.members)
-    return `抄送对象：${t || '未配置'} · 抄送时机：${CC_TIMING_MAP[node.ccTiming] || node.ccTiming || '—'}`
+    const obj = APPROVER_TYPE_MAP[node.approverType] || node.approverType || '—'
+    const parts = []
+    if (node.approverType === 3) {
+      // 3-发起人自选：附自选类型（1-单选 / 2-多选）
+      parts.push(`${obj}（${SELF_SELECT_MAP[node.selfSelect] || '—'}）`)
+    } else {
+      const t = getMembersText(node.members)
+      parts.push(`${obj}：${t || '未配置'}`)
+    }
+    parts.push(`抄送时机：${CC_TIMING_MAP[node.ccTiming] || node.ccTiming || '—'}`)
+    return parts.join(' · ')
   }
   if (node.type === 4) {
     // 4-条件分支：条件关系 + 分支数量
