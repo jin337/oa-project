@@ -121,7 +121,6 @@ func ApplicationByCode(code, state string, page, size int, filters map[string]st
 		}
 	case "form":
 		result.DetailLayoutJSON = nil
-		result.ApprovalFlowJSON = nil
 	case "detail":
 		result.FormLayoutJSON = nil
 	default:

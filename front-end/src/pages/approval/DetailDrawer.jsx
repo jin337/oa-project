@@ -2,7 +2,6 @@ import { Drawer, Empty, Spin } from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
-import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView.jsx'
 
 /**
  * 审批记录动态详情 Drawer：根据记录的页面编码（record.code，兼容 "code:state" 格式）请求
@@ -65,8 +64,6 @@ export default function DetailDrawer({ record, visible, onCancel }) {
       ) : app ? (
         <>
           <DynamicDetail app={app} dataId={dataId} />
-          {/* 审批流程：抽屉内独立渲染审批流配置（approval_flow_json）只读还原 */}
-          <DynamicFlowView raw={app?.approval_flow_json} />
         </>
       ) : (
         <Empty description={loadError ? '应用配置加载失败' : '该记录未关联页面编码'} />
