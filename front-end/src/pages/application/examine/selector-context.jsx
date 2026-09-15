@@ -5,7 +5,7 @@ import { createContext, useContext } from 'react'
  * 由主组件请求后注入，各弹层（PersonSelectorModal / PersonPicker / 各编辑抽屉）统一从 Context 读取，避免多层 props 透传。
  * @type {React.Context<{
  *   orgTree: Object[],
- *   roleTree: Object[],
+ *   roleList: Object[],
  *   orgItemMap: Record<string, Object>,
  *   roleItemMap: Record<string, Object>,
  *   userDeptMap: Record<string, string>,

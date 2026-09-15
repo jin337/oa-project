@@ -207,38 +207,20 @@ export const buildUserDeptMap = (tree) => {
 }
 
 /**
- * 接口角色-用户树（/roles/users）→ 选择器树格式：角色节点含下属用户子节点
- * 接口与 /depts/users 同为 OrgNode 混合树：角色节点 { type: 'role', id, name, children: [用户节点] }，
- * 角色节点 { key: 'role_{id}', title: name, isRole: true, children: [...] }
- * 用户节点 { type: 'user', id, name, username }（name 为昵称/显示名，与组织树一致）。
- * 用户节点 { key: 'user_{id}', title: name, isRole: false }
+ * 角色分页列表（GET /roles）→ 选择器数据格式：扁平角色数组（钉钉模式：勾选「角色」本身，
+ * 无需角色下属用户树，成员由角色带出）。角色节点 { key: 'role_{id}', title: name, isRole: true }
  */
-export const transformRoleTree = (data = []) =>
-  data.map((r) => ({
-    key: `role_${r.id}`,
-    title: r.name,
-    isRole: true,
-    children: r.children?.length
-      ? r.children.map((u) => ({ key: `user_${u.id}`, title: u.name, isRole: false }))
-      : undefined,
-  }))
+export const transformRoleList = (data = []) =>
+  data.map((r) => ({ key: `role_${r.id}`, title: r.name, isRole: true }))
 
 /**
- * 角色树 → key 映射（递归遍历）：{ key: { key, type, label, roleLabel } }，
- * type 为数字枚举（3-角色 / 1-人员），角色节点与其下属用户节点均映射；
- * roleLabel 记录人员所属角色名（角色维度选中时右侧展示「角色名：人名」用），组织维度条目无该字段
+ * 角色列表 → key 映射：{ key: { key, type, label } }，type 为数字枚举（3-角色）
  */
-export const buildRoleItemMap = (roleTree) => {
-  const map = {}
-  const walk = (nodes, roleLabel) => {
-    nodes.forEach((n) => {
-      map[n.key] = { key: n.key, type: n.isRole ? 3 : 1, label: n.title, roleLabel } // 3-角色 / 1-人员
-      if (n.children?.length) walk(n.children, n.isRole ? n.title : roleLabel)
-    })
-  }
-  walk(roleTree, '')
-  return map
-}
+export const buildRoleItemMap = (roleList) =>
+  roleList.reduce((map, r) => {
+    map[r.key] = { key: r.key, type: 3, label: r.title } // 3-角色
+    return map
+  }, {})
 
 // ==================== 节点树递归工具 ====================
 
