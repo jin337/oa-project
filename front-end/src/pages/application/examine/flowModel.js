@@ -224,18 +224,19 @@ export const transformRoleTree = (data = []) =>
   }))
 
 /**
- * 角色树 → key 映射（递归遍历）：{ key: { key, type, label } }，
- * type 为数字枚举（3-角色 / 1-人员），角色节点与其下属用户节点均映射
+ * 角色树 → key 映射（递归遍历）：{ key: { key, type, label, roleLabel } }，
+ * type 为数字枚举（3-角色 / 1-人员），角色节点与其下属用户节点均映射；
+ * roleLabel 记录人员所属角色名（角色维度选中时右侧展示「角色名：人名」用），组织维度条目无该字段
  */
 export const buildRoleItemMap = (roleTree) => {
   const map = {}
-  const walk = (nodes) => {
+  const walk = (nodes, roleLabel) => {
     nodes.forEach((n) => {
-      map[n.key] = { key: n.key, type: n.isRole ? 3 : 1, label: n.title } // 3-角色 / 1-人员
-      if (n.children?.length) walk(n.children)
+      map[n.key] = { key: n.key, type: n.isRole ? 3 : 1, label: n.title, roleLabel } // 3-角色 / 1-人员
+      if (n.children?.length) walk(n.children, n.isRole ? n.title : roleLabel)
     })
   }
-  walk(roleTree)
+  walk(roleTree, '')
   return map
 }
 

@@ -1,6 +1,6 @@
 import { Button, Modal, Radio, Tag, Tree } from '@arco-design/web-react'
 import { IconPlus } from '@arco-design/web-react/icon'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { MODE_LABELS } from 'src/pages/application/constants'
 import { useSelectorData } from 'src/pages/application/examine/selector-context'
 
@@ -39,6 +39,31 @@ export function PersonSelectorModal({
   // 角色选中 keys
   const roleCheckedKeys = selected.filter((s) => roleItemMap[s.key]).map((s) => s.key)
 
+  // Arco Tree 的 disableCheckbox 仅支持节点数据字段（不支持函数 prop），
+  // 故按 checkTarget 派生带禁用标记的树数据：
+  // - 组织树：1-仅人员 → 部门节点禁用；2-仅部门 → 用户节点禁用；3-人员与部门 → 全不禁用
+  const orgTreeData = useMemo(() => {
+    const apply = (nodes) =>
+      nodes.map((n) => ({
+        ...n,
+        // 1-仅人员 → 部门（isDept）全部禁用；2-仅部门 → 人员禁用；3-人员与部门 → 全不禁用
+        disableCheckbox: checkTarget === 3 ? false : checkTarget === 2 ? !n.isDept : n.isDept,
+        children: n.children ? apply(n.children) : undefined,
+      }))
+    return apply(orgTree)
+  }, [orgTree, checkTarget])
+  // 角色树：角色本身（isRole）永远不可勾选，仅支持勾选角色下属人员；
+  // checkTarget=2（仅部门）时角色树无部门可选项，人员一并禁用
+  const roleTreeData = useMemo(() => {
+    const apply = (nodes) =>
+      nodes.map((n) => ({
+        ...n,
+        disableCheckbox: n.isRole ? true : checkTarget === 2,
+        children: n.children ? apply(n.children) : undefined,
+      }))
+    return apply(roleTree)
+  }, [roleTree, checkTarget])
+
   // Tree 勾选（checkStrictly 父子独立，避免 disableCheckbox 下级联干扰）
   const handleTreeCheck = (keys) => {
     const checked = Array.isArray(keys) ? keys : keys?.checked || []
@@ -66,10 +91,12 @@ export function PersonSelectorModal({
   // 删除已选项：checkStrictly 下父子独立，直接移除该项即可
   const remove = (index) => setSelected(selected.filter((_, i) => i !== index))
 
-  // 右侧标签展示：人员「所属部门：姓名」/ 部门、角色直接显示名称
+  // 右侧标签展示：1-人员 优先「所属角色：姓名」（角色维度选中），否则「所属部门：姓名」（组织维度选中）；
+  // 2-部门 / 3-角色 直接显示名称
   const renderTagLabel = (item) => {
     if (item.type === 1) {
       // 1-人员
+      if (item.roleLabel) return `${item.roleLabel}：${item.label}`
       const dept = userDeptMap[item.key]
       return dept ? `${dept}：${item.label}` : item.label
     }
@@ -113,33 +140,24 @@ export function PersonSelectorModal({
             ) : tab === 1 && hasOrg ? ( // 1-组织架构
               orgTree.length ? (
                 <Tree
+                  key="org-tree"
                   checkable
                   checkStrictly={checkTarget !== 3}
                   checkedKeys={orgCheckedKeys}
                   onCheck={handleTreeCheck}
-                  treeData={orgTree}
-                  disableCheckbox={(node) => {
-                    if (checkTarget === 3) return false // 3-人员与部门
-                    const hasChildren = !!node.children?.length
-                    return checkTarget === 2 ? !hasChildren : hasChildren // 2-部门
-                  }}
+                  treeData={orgTreeData}
                 />
               ) : (
                 <div className="py-8 text-center text-xs text-gray-400">暂无组织架构数据</div>
               )
             ) : roleTree.length ? (
               <Tree
+                key="role-tree"
                 checkable
                 checkStrictly={checkTarget !== 3}
                 checkedKeys={roleCheckedKeys}
                 onCheck={handleRoleCheck}
-                treeData={roleTree}
-                disableCheckbox={(node) => {
-                  // 角色维度下角色本身（isRole）不可勾选，仅支持勾选角色下属的人员；
-                  // 当 checkTarget=2（仅部门）时角色树无部门可选项，人员一并禁用
-                  if (node.isRole) return true
-                  return checkTarget === 2
-                }}
+                treeData={roleTreeData}
               />
             ) : (
               <div className="py-8 text-center text-xs text-gray-400">暂无角色数据</div>
@@ -203,8 +221,12 @@ export function PersonPicker({
               closable
               onClose={() => remove(i)}
             >
-              {item.type === 1 && userDeptMap[item.key] // 1-人员：附所属部门
-                ? `${userDeptMap[item.key]}：${item.label}`
+              {item.type === 1 // 1-人员：优先附所属角色（角色维度），否则附所属部门（组织维度）
+                ? item.roleLabel
+                  ? `${item.roleLabel}：${item.label}`
+                  : userDeptMap[item.key]
+                    ? `${userDeptMap[item.key]}：${item.label}`
+                    : item.label
                 : item.label}
             </Tag>
           ))
