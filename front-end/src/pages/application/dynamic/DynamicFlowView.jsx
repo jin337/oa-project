@@ -41,8 +41,8 @@ const APPROVAL_NODE_META = {
 const SELF_SELECT_MAP = { 1: '单选', 2: '多选' }
 // 审批方式：1-依次审批 / 2-会签 / 3-或签（多选审批人摘要展示用，如「2人依次审批」）
 const STRATEGY_MAP = { 1: '依次审批', 2: '会签', 3: '或签' }
-// 审批方式连接符（渲染在右侧成员之间）：1-依次审批(>) / 2-会签(+) / 3-或签(∨)
-const STRATEGY_SYMBOL = { 1: '>', 2: '+', 3: '∨' }
+// 审批方式连接符（渲染在右侧成员之间）：1-依次审批(>) / 2-会签(+) / 3-或签(/)
+const STRATEGY_SYMBOL = { 1: '>', 2: '+', 3: '/' }
 // 条件关系：1-且(AND) / 2-或(OR)
 const RELATION_MAP = { 1: '且（AND）', 2: '或（OR）' }
 // 逻辑运算符 value 枚举：与 constants.js 的 OPERATOR_OPTIONS 严格一致（1-大于 / 2-小于 / 3-等于 / 4-不等于 / 5-包含 / 6-不包含）
@@ -357,7 +357,6 @@ export default function DynamicFlowView({ raw, formData, onMembersChange }) {
         if (cancelled) return
         const orgTree = transformDeptTree(deptRes.data?.list || deptRes.data || [])
         const roleTree = transformRoleTree(roleRes.data?.list || roleRes.data || [])
-        console.log(roleTree)
         setSelectorData({
           orgTree,
           roleTree,

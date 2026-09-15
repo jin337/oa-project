@@ -332,7 +332,12 @@ export default function LayoutManage() {
     if (selectedElement?.element_type === 'table' && tk && !tableFieldsMap[tk]) {
       loadTableFields(tk)
     }
-  }, [selectedElement, tableFieldsMap])
+    // 表格"合计"配置需要主表字段选项：确保主表字段缓存也已加载
+    const mainKey = appTables?.tableName
+    if (selectedElement?.element_type === 'table' && mainKey && !tableFieldsMap[mainKey]) {
+      loadTableFields(mainKey)
+    }
+  }, [selectedElement, tableFieldsMap, appTables?.tableName])
 
   // 选择字段：自动将字段的 label 赋给 title、field_key 赋给 dataIndex
   const handleColumnFieldChange = (colId, tableKey, fieldKey) => {

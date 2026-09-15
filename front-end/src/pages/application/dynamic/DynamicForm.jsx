@@ -16,11 +16,7 @@ import {
   TimePicker,
   Upload,
 } from '@arco-design/web-react'
-import {
-  IconDelete,
-  IconDragArrow,
-  IconPlus,
-} from '@arco-design/web-react/icon'
+import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon'
 import { memo, useMemo } from 'react'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 
@@ -28,6 +24,9 @@ const FormItem = Form.Item
 const FormList = Form.List
 const Row = Grid.Row
 const Col = Grid.Col
+// Table 合计行：summary 回调必须返回 Table.Summary.Row / Cell 组合元素
+const SummaryRow = Table.Summary.Row
+const SummaryCell = Table.Summary.Cell
 
 // ==================== 常量与全局配置 ====================
 
@@ -149,7 +148,6 @@ export const isNoLabelElement = (element_type) => NO_LABEL_TYPES.includes(elemen
 
 /** 获取基础组件配置（含 renderPreview / renderSettings） */
 export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[element_type] || null
-
 
 // ==================== 渲染配置中心 ====================
 
@@ -299,6 +297,53 @@ const TableElementField = ({ el, pageType }) => {
               pagination={false}
               columns={finalColumns}
               data={fields}
+              summary={
+                // 表格合计/汇总：showSummary 开启时渲染底部汇总行。
+                // 注意：Arco Table 的 summary 回调必须返回 JSX（Table.Summary.Row / Cell 组合），
+                // 而非数据对象（Tfoot 直接渲染其返回值，返回对象会触发 "Objects are not valid as a React child"）
+                el.showSummary
+                  ? () => {
+                      // Table 的 data 为 Form.List 注册数组（fields，不含单元格值），
+                      // 需从 Form store 读取该子表的实际行数据用于合计计算
+                      const rows = Array.isArray(form?.getFieldValue?.(listField))
+                        ? form.getFieldValue(listField)
+                        : []
+                      // 按"列合计"规则逐列计算：展示层始终显示明细行实时求和的总计值（保证合计行准确）；
+                      // rule.target 用于配置该合计关联的主表字段（数据来源/回填目标），仅作数据关联存储，
+                      // 不覆盖展示值（避免主表旧值未同步时合计行显示错误）
+                      const values = {}
+                      ;(el.summaryRules || []).forEach((rule) => {
+                        if (!rule?.colKey) return
+                        const sum = rows.reduce((acc, row) => {
+                          const n = Number.parseFloat(row?.[rule.colKey])
+                          return acc + (Number.isNaN(n) ? 0 : n)
+                        }, 0)
+                        values[rule.colKey] = Math.round(sum * 100) / 100
+                      })
+                      // 合计行单元格样式：与数据行网格线保持一致（Arco body td 用 border-left + border-bottom
+                      // 勾勒表格线，而 tfoot 的 td 默认无边框，导致合计行最左侧缺边框），内容统一居中对齐
+                      const summaryCellStyle = {
+                        fontWeight: 600,
+                        textAlign: 'center',
+                        borderLeft: '1px solid var(--color-border-2)',
+                        borderBottom: '1px solid var(--color-border-2)',
+                      }
+
+                      const cellStyle = { fontWeight: 600, textAlign: 'center' }
+                      return (
+                        <SummaryRow>
+                          <SummaryCell style={summaryCellStyle}>合计</SummaryCell>
+                          {columns.map((col) => (
+                            <SummaryCell key={col.dataIndex} style={cellStyle}>
+                              {values[col.dataIndex] ?? ''}
+                            </SummaryCell>
+                          ))}
+                          {isEditable && <SummaryCell style={cellStyle} />}
+                        </SummaryRow>
+                      )
+                    }
+                  : undefined
+              }
             />
             {isEditable && (
               <div className="mt-2 flex justify-between">
@@ -380,7 +425,13 @@ export const BASE_ELEMENT_CONFIGS = {
       element_type: 'table',
       label: '表格',
       width: 24,
-      defaultProps: { columns: [], table_key: '', editable: true },
+      defaultProps: {
+        columns: [],
+        table_key: '',
+        editable: true,
+        showSummary: false,
+        summaryRules: [],
+      },
     },
     renderPreview: (el, pageType) => <TableElementField el={el} pageType={pageType} />,
     renderSettings: ({
@@ -440,6 +491,65 @@ export const BASE_ELEMENT_CONFIGS = {
         >
           添加列
         </Button>
+        <div className='flex justify-between'>
+          <div className="text-sm text-gray-600">开启合计</div>
+          <Switch
+            size="small"
+            checked={Boolean(selectedElement.showSummary)}
+            onChange={(v) => updateSelectedElement({ showSummary: v })}
+          />
+        </div>
+        {selectedElement.showSummary && (
+          <>
+            <div className="text-sm text-gray-600">列合计配置</div>
+            {(selectedElement.summaryRules || []).map((rule, idx) => (
+              <div key={idx} className="flex items-center gap-1">
+                <Select
+                  size="small"
+                  placeholder="选择参与合计的表格列"
+                  value={rule.colKey || undefined}
+                  options={(selectedElement.columns || [])
+                    .filter((c) => c.dataIndex || c.field_key)
+                    .map((c) => ({
+                      label: c.title || c.dataIndex || c.field_key,
+                      value: c.dataIndex || c.field_key,
+                    }))}
+                  onChange={(v) =>
+                    updateSelectedElement({
+                      summaryRules: (selectedElement.summaryRules || []).map((r, i) =>
+                        i === idx ? { ...r, colKey: v } : r,
+                      ),
+                    })
+                  }
+                />
+
+                <Button
+                  size="small"
+                  status="danger"
+                  icon={<IconDelete />}
+                  onClick={() =>
+                    updateSelectedElement({
+                      summaryRules: (selectedElement.summaryRules || []).filter(
+                        (_, i) => i !== idx,
+                      ),
+                    })
+                  }
+                />
+              </div>
+            ))}
+            <Button
+              size="mini"
+              icon={<IconPlus />}
+              onClick={() =>
+                updateSelectedElement({
+                  summaryRules: [...(selectedElement.summaryRules || []), { colKey: '' }],
+                })
+              }
+            >
+              添加合计项
+            </Button>
+          </>
+        )}
       </>
     ),
   },
@@ -907,9 +1017,5 @@ export default function DynamicForm({
     )
   }
 
-  return (
-    <>
-      {formNode}
-    </>
-  )
+  return <>{formNode}</>
 }
