@@ -1,5 +1,12 @@
 import { Avatar, Divider, Timeline } from '@arco-design/web-react'
-import { IconBranch, IconClose, IconPlus, IconSend, IconStamp, IconUser } from '@arco-design/web-react/icon'
+import {
+  IconBranch,
+  IconClose,
+  IconPlus,
+  IconSend,
+  IconStamp,
+  IconUser,
+} from '@arco-design/web-react/icon'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import * as roleApi from 'src/api/role'
@@ -218,7 +225,7 @@ const MemberChip = ({ member, onRemove }) => {
         {onRemove && (
           // 发起人自选运行期已选成员：右上角小 X 删除按钮，点击移除该成员
           <span
-            className="absolute -right-1.5 -top-1.5 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-gray-200 text-gray-500 transition-colors hover:bg-red-500 hover:text-white"
+            className="absolute -top-1.5 -right-1.5 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-gray-200 text-gray-500 transition-colors hover:bg-red-500 hover:text-white"
             onClick={(e) => {
               e.stopPropagation()
               onRemove(member)
@@ -253,12 +260,6 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
           <>
             {(node.members || []).map((m, i) => (
               <Fragment key={m.key || `${m.type}-${m.label}-${i}`}>
-                {// 成员之间的连接符：审批人按审批方式（> 依次 / + 会签 / ∨ 或签），抄送人统一 +
-                i > 0 && (
-                  <span className="h-8.75 text-gray-400 leading-8.75">
-                    {node.type === 2 ? STRATEGY_SYMBOL[node.strategy] || '>' : '+'}
-                  </span>
-                )}
                 <MemberChip
                   member={m}
                   // 发起人自选运行期已选成员支持删除：移除后经回调更新成员覆盖
@@ -267,9 +268,12 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
                     onRemoveMember?.(node, updated)
                   }}
                 />
+                <span className="h-8.75 leading-8.75 text-gray-400">
+                  {node.type === 2 ? STRATEGY_SYMBOL[node.strategy] || '>' : '+'}
+                </span>
               </Fragment>
             ))}
-            <Avatar shape="square" size={35}>
+            <Avatar shape="square" size={35} className="ml-1 cursor-pointer">
               <IconPlus onClick={() => onSelectNode?.(node)} />
             </Avatar>
           </>
