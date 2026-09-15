@@ -1,6 +1,6 @@
 import { Avatar, Divider, Timeline } from '@arco-design/web-react'
-import { IconBranch, IconPlus, IconSend, IconStamp, IconUser } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { IconBranch, IconClose, IconPlus, IconSend, IconStamp, IconUser } from '@arco-design/web-react/icon'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import * as roleApi from 'src/api/role'
 import { OPERATOR_OPTIONS } from 'src/pages/application/constants'
@@ -32,6 +32,10 @@ const APPROVAL_NODE_META = {
 }
 // 发起人自选类型：1-单选 / 2-多选
 const SELF_SELECT_MAP = { 1: '单选', 2: '多选' }
+// 审批方式：1-依次审批 / 2-会签 / 3-或签（多选审批人摘要展示用，如「2人依次审批」）
+const STRATEGY_MAP = { 1: '依次审批', 2: '会签', 3: '或签' }
+// 审批方式连接符（渲染在右侧成员之间）：1-依次审批(>) / 2-会签(+) / 3-或签(∨)
+const STRATEGY_SYMBOL = { 1: '>', 2: '+', 3: '∨' }
 // 条件关系：1-且(AND) / 2-或(OR)
 const RELATION_MAP = { 1: '且（AND）', 2: '或（OR）' }
 // 逻辑运算符 value 枚举：与 constants.js 的 OPERATOR_OPTIONS 严格一致（1-大于 / 2-小于 / 3-等于 / 4-不等于 / 5-包含 / 6-不包含）
@@ -166,9 +170,11 @@ const buildNodeSummary = (node) => {
   if (node.type === 2) {
     // 2-审批人：成员数量 + 审批人为空处理
     if (node.approverType === 3) {
-      // 3-发起人自选：已选择显示自选类型，未选择提示「请选择审批人」
+      // 3-发起人自选：未选择提示「请选择审批人」；仅 1 人显示「1人审批」，多人（多选）显示「N人 + 审批方式」（如「2人依次审批」）
       const n = (node.members || []).length
-      return n ? `发起人自选（${SELF_SELECT_MAP[node.selfSelect] || '—'}）` : '请选择审批人'
+      if (!n) return '请选择审批人'
+      if (n === 1) return '1人审批'
+      return `${n}人${STRATEGY_MAP[node.strategy] || '审批'}`
     }
     const n = (node.members || []).length
     const parts = [n ? `${n}人审批` : '请选择审批人']
@@ -183,9 +189,9 @@ const buildNodeSummary = (node) => {
   if (node.type === 3) {
     // 3-抄送人：抄送数量
     if (node.approverType === 3) {
-      // 3-发起人自选：已选择显示自选类型，未选择提示「请选择抄送人」
+      // 3-发起人自选：未选择提示「请选择抄送人」；已选择显示「抄送N人」（如「抄送2人」）
       const n = (node.members || []).length
-      return n ? `发起人自选（${SELF_SELECT_MAP[node.selfSelect] || '—'}）` : '请选择抄送人'
+      return n ? `抄送${n}人` : '请选择抄送人'
     }
     const n = (node.members || []).length
     return n ? `抄送${n}人` : '请选择抄送人'
@@ -201,13 +207,27 @@ const buildNodeSummary = (node) => {
 /**
  * 成员展示 chip（仿参考图右侧成员区）：
  */
-const MemberChip = ({ member }) => {
+const MemberChip = ({ member, onRemove }) => {
   const name = member.label || member.name || member.title || ''
   return (
     <div className="flex w-11.75 flex-col items-center">
-      <Avatar shape="square" size={35} style={{ backgroundColor: 'rgb(var(--primary-6))' }}>
-        {name.slice(0, 1) || '?'}
-      </Avatar>
+      <div className="relative">
+        <Avatar shape="square" size={35} style={{ backgroundColor: 'rgb(var(--primary-6))' }}>
+          {name.slice(0, 1) || '?'}
+        </Avatar>
+        {onRemove && (
+          // 发起人自选运行期已选成员：右上角小 X 删除按钮，点击移除该成员
+          <span
+            className="absolute -right-1.5 -top-1.5 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-gray-200 text-gray-500 transition-colors hover:bg-red-500 hover:text-white"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove(member)
+            }}
+          >
+            <IconClose style={{ fontSize: 10 }} />
+          </span>
+        )}
+      </div>
       <span className="w-full truncate text-center text-xs text-gray-600">{name}</span>
     </div>
   )
@@ -218,7 +238,7 @@ const MemberChip = ({ member }) => {
  * 左侧标题/摘要两行，右侧成员头像区；仿钉钉审批单样式。
  * 「发起人自选」（approverType=3）节点右侧提供「+」按钮，点击唤起 PersonSelectorModal 选择人员。
  */
-const ApprovalNodeView = ({ node, onSelectNode }) => {
+const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
   return (
     <div className="flex h-13 justify-between gap-4">
       <div className="w-1/3">
@@ -232,7 +252,22 @@ const ApprovalNodeView = ({ node, onSelectNode }) => {
           // 3-发起人自选：已选择渲染头像+姓名，未选择仅展示「+」按钮；均可点击唤起选择器
           <>
             {(node.members || []).map((m, i) => (
-              <MemberChip key={m.key || `${m.type}-${m.label}-${i}`} member={m} />
+              <Fragment key={m.key || `${m.type}-${m.label}-${i}`}>
+                {// 成员之间的连接符：审批人按审批方式（> 依次 / + 会签 / ∨ 或签），抄送人统一 +
+                i > 0 && (
+                  <span className="h-8.75 text-gray-400 leading-8.75">
+                    {node.type === 2 ? STRATEGY_SYMBOL[node.strategy] || '>' : '+'}
+                  </span>
+                )}
+                <MemberChip
+                  member={m}
+                  // 发起人自选运行期已选成员支持删除：移除后经回调更新成员覆盖
+                  onRemove={() => {
+                    const updated = (node.members || []).filter((x) => x !== m)
+                    onRemoveMember?.(node, updated)
+                  }}
+                />
+              </Fragment>
             ))}
             <Avatar shape="square" size={35}>
               <IconPlus onClick={() => onSelectNode?.(node)} />
@@ -335,6 +370,15 @@ export default function DynamicFlowView({ raw, formData, onMembersChange }) {
     }
   }, [selectorNode])
 
+  // 发起人自选成员删除：更新节点成员覆盖并回调父组件
+  const handleRemoveMember = useCallback(
+    (node, updatedMembers) => {
+      setMemberOverrides((prev) => ({ ...prev, [node.id]: updatedMembers }))
+      onMembersChange?.(node.id, updatedMembers)
+    },
+    [onMembersChange],
+  )
+
   // 选择器确认：更新节点成员覆盖并回调父组件
   const handleMembersChange = useCallback(
     (items) => {
@@ -373,7 +417,11 @@ export default function DynamicFlowView({ raw, formData, onMembersChange }) {
                   </span>
                 }
               >
-                <ApprovalNodeView node={n} onSelectNode={setSelectorNode} />
+                <ApprovalNodeView
+                  node={n}
+                  onSelectNode={setSelectorNode}
+                  onRemoveMember={handleRemoveMember}
+                />
               </Timeline.Item>
             )
           })}
