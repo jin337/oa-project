@@ -32,16 +32,16 @@ func Setup() *gin.Engine {
 	users.Use(middleware.JWTAuth())
 	{
 		users.GET("", handler.UserList)
-		users.PUT("/switch-dept", handler.UserSwitchDept) // 切换当前部门（目标须属于多部门归属列表）
+		users.PUT("/switch-dept", handler.UserSwitchDept)
 		users.POST("", handler.UserCreate)
 		users.GET("/:id", handler.UserDetail)
 		users.PUT("/:id", handler.UserUpdate)
 		users.DELETE("/:id", handler.UserDelete)
-		users.PUT("/:id/roles", handler.UserAssignRoles)            // 用户-角色 多对多
-		users.PUT("/:id/password", handler.UserUpdatePassword)      // 修改密码（仅限本人）
-		users.PUT("/:id/reset-password", handler.UserResetPassword) // 重置密码（管理员操作）
-		users.GET("/:id/profile", handler.UserProfileGet)           // 获取员工档案
-		users.PUT("/:id/profile", handler.UserProfileUpdate)        // 更新员工档案
+		users.PUT("/:id/roles", handler.UserAssignRoles)
+		users.PUT("/:id/password", handler.UserUpdatePassword)
+		users.PUT("/:id/reset-password", handler.UserResetPassword)
+		users.GET("/:id/profile", handler.UserProfileGet)
+		users.PUT("/:id/profile", handler.UserProfileUpdate)
 	}
 
 	// 角色管理
@@ -53,8 +53,8 @@ func Setup() *gin.Engine {
 		roles.GET("/:id", handler.RoleDetail)
 		roles.PUT("/:id", handler.RoleUpdate)
 		roles.DELETE("/:id", handler.RoleDelete)
-		roles.PUT("/:id/menus", handler.RoleAssignMenus) // 角色-菜单 多对多
-		roles.PUT("/:id/depts", handler.RoleAssignDepts) // 自定义数据范围绑定部门
+		roles.PUT("/:id/menus", handler.RoleAssignMenus)
+		roles.PUT("/:id/depts", handler.RoleAssignDepts)
 	}
 
 	// 导航/菜单管理
@@ -73,7 +73,7 @@ func Setup() *gin.Engine {
 	depts.Use(middleware.JWTAuth())
 	{
 		depts.GET("", handler.DeptTree)
-		depts.GET("/users", handler.DeptUsers) // 静态段须在 /:id 之前注册
+		depts.GET("/users", handler.DeptUsers)
 		depts.POST("", handler.DeptCreate)
 		depts.GET("/:id", handler.DeptDetail)
 		depts.PUT("/:id", handler.DeptUpdate)
