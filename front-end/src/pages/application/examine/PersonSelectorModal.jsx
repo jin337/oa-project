@@ -1,4 +1,4 @@
-import { Button, Checkbox, Modal, Radio, Tag, Tree } from '@arco-design/web-react'
+import { Button, Modal, Radio, Tag, Tree } from '@arco-design/web-react'
 import { IconPlus } from '@arco-design/web-react/icon'
 import { useState } from 'react'
 import { MODE_LABELS } from 'src/pages/application/constants'
@@ -20,7 +20,7 @@ export function PersonSelectorModal({
 }) {
   const {
     orgTree = [],
-    roleList = [],
+    roleTree = [],
     orgItemMap = {},
     roleItemMap = {},
     userDeptMap = {},
@@ -51,8 +51,14 @@ export function PersonSelectorModal({
     setSelected([...orgItems, ...roleItems])
   }
 
+  // 角色树勾选（checkStrictly 父子独立）：角色维度下角色本身不可勾选，仅支持勾选角色下属的人员
   const handleRoleCheck = (keys) => {
-    const roleItems = keys.map((k) => roleItemMap[k]).filter(Boolean)
+    const checked = Array.isArray(keys) ? keys : keys?.checked || []
+    let roleItems = checked.map((k) => roleItemMap[k]).filter(Boolean)
+    // 彻底过滤角色类型（3-角色）：角色本身不可选，仅保留角色下属的人员（1-人员）
+    roleItems = roleItems.filter((s) => s.type === 1)
+    // 若 checkTarget=2（仅部门），角色树无可用选项（人员亦被禁用），结果为空
+    if (checkTarget === 2) roleItems = []
     const orgItems = selected.filter((s) => orgItemMap[s.key])
     setSelected([...orgItems, ...roleItems])
   }
@@ -121,18 +127,20 @@ export function PersonSelectorModal({
               ) : (
                 <div className="py-8 text-center text-xs text-gray-400">暂无组织架构数据</div>
               )
-            ) : roleList.length ? (
-              <Checkbox.Group
-                direction="vertical"
-                value={roleCheckedKeys}
-                onChange={handleRoleCheck}
-              >
-                {roleList.map((r) => (
-                  <Checkbox key={r.key} value={r.key}>
-                    {r.title}
-                  </Checkbox>
-                ))}
-              </Checkbox.Group>
+            ) : roleTree.length ? (
+              <Tree
+                checkable
+                checkStrictly={checkTarget !== 3}
+                checkedKeys={roleCheckedKeys}
+                onCheck={handleRoleCheck}
+                treeData={roleTree}
+                disableCheckbox={(node) => {
+                  // 角色维度下角色本身（isRole）不可勾选，仅支持勾选角色下属的人员；
+                  // 当 checkTarget=2（仅部门）时角色树无部门可选项，人员一并禁用
+                  if (node.isRole) return true
+                  return checkTarget === 2
+                }}
+              />
             ) : (
               <div className="py-8 text-center text-xs text-gray-400">暂无角色数据</div>
             )}
@@ -141,7 +149,7 @@ export function PersonSelectorModal({
         {/* 右侧：已选择 */}
         <div className="w-1/2 rounded border border-gray-200 p-3">
           <div className="mb-2 text-sm font-medium">已选择（{selected.length}）</div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 overflow-auto h-80">
             {selected.length ? (
               selected.map((item, i) => (
                 <Tag
@@ -176,7 +184,7 @@ export function PersonPicker({
 }) {
   const {
     orgTree = [],
-    roleList = [],
+    roleTree = [],
     orgItemMap = {},
     roleItemMap = {},
     userDeptMap = {},

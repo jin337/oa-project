@@ -16,7 +16,7 @@ import {
   buildRoleItemMap,
   buildUserDeptMap,
   transformDeptTree,
-  transformRoleList,
+  transformRoleTree,
 } from 'src/pages/application/examine/flowModel'
 import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
 import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
@@ -340,7 +340,7 @@ export default function DynamicFlowView({ raw, formData, onMembersChange }) {
   // 对象选择器数据源（组织架构树 / 角色列表 / 派生映射），首次唤起选择器时懒加载
   const [selectorData, setSelectorData] = useState({
     orgTree: [],
-    roleList: [],
+    roleTree: [],
     orgItemMap: {},
     roleItemMap: {},
     userDeptMap: {},
@@ -352,16 +352,17 @@ export default function DynamicFlowView({ raw, formData, onMembersChange }) {
     if (!selectorNode) return
     let cancelled = false
     setSelectorData((d) => ({ ...d, loading: true }))
-    Promise.all([deptApi.getDeptUsersTree(), roleApi.listRoles({ page: 1, size: 999 })])
+    Promise.all([deptApi.getDeptUsersTree(), roleApi.getRoleUsers()])
       .then(([deptRes, roleRes]) => {
         if (cancelled) return
         const orgTree = transformDeptTree(deptRes.data?.list || deptRes.data || [])
-        const roleList = transformRoleList(roleRes.data?.list || roleRes.data || [])
+        const roleTree = transformRoleTree(roleRes.data?.list || roleRes.data || [])
+        console.log(roleTree)
         setSelectorData({
           orgTree,
-          roleList,
+          roleTree,
           orgItemMap: buildOrgItemMap(orgTree),
-          roleItemMap: buildRoleItemMap(roleList),
+          roleItemMap: buildRoleItemMap(roleTree),
           userDeptMap: buildUserDeptMap(orgTree),
           loading: false,
         })

@@ -5,6 +5,11 @@ export function listRoles(params) {
   return request.get('/roles', { params })
 }
 
+// GET /roles/users 角色-用户树（含角色及其下属用户，供选择器按角色维度选择人员）
+export function getRoleUsers() {
+  return request.get('/roles/users')
+}
+
 // GET /roles/:id 详情
 export function getRole(id) {
   return request.get(`/roles/${id}`)
