@@ -14,7 +14,7 @@ import (
 // UserList 用户分页列表：按当前操作者的数据范围过滤 dept_id
 func UserList(curUserID uint, req *model.UserListReq) ([]model.User, int64, error) {
 	db := database.DB.Model(&model.User{})
-	db = middleware.ApplyDataScope(db, curUserID, "users.dept_id")
+	db = middleware.ApplyDataScope(db, curUserID, "dept_id")
 	if req.Username != "" {
 		db = db.Where("username LIKE ?", "%"+req.Username+"%")
 	}

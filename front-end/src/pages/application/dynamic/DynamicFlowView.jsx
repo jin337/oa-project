@@ -204,11 +204,11 @@ const buildNodeSummary = (node) => {
 const MemberChip = ({ member }) => {
   const name = member.label || member.name || member.title || ''
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex w-11.75 flex-col items-center">
       <Avatar shape="square" size={35} style={{ backgroundColor: 'rgb(var(--primary-6))' }}>
         {name.slice(0, 1) || '?'}
       </Avatar>
-      <span className="text-xs text-gray-600">{name}</span>
+      <span className="w-full truncate text-center text-xs text-gray-600">{name}</span>
     </div>
   )
 }
@@ -227,7 +227,7 @@ const ApprovalNodeView = ({ node, onSelectNode }) => {
         </div>
         <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node)}</div>
       </div>
-      <div className="flex shrink-0 flex-wrap justify-end gap-x-3 gap-y-1">
+      <div className="flex shrink-0 flex-wrap justify-end gap-y-1">
         {node.approverType === 3 ? (
           // 3-发起人自选：已选择渲染头像+姓名，未选择仅展示「+」按钮；均可点击唤起选择器
           <>
