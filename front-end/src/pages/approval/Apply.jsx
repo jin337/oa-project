@@ -26,7 +26,10 @@ import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView.jsx'
-import DynamicForm from 'src/pages/application/dynamic/DynamicForm'
+import DynamicForm, {
+  parseLayoutJson,
+  serializeTimeFields,
+} from 'src/pages/application/dynamic/DynamicForm'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -237,8 +240,13 @@ export default function Apply() {
     } catch (e) {
       return null
     }
+    // 时间字段（date/datetime/time 等）统一序列化为 MySQL 兼容格式
+    // （YYYY-MM-DD / YYYY-MM-DD HH:mm:ss / HH:mm:ss），避免前端 ISO 8601
+    // （如 2026-09-14T00:00:00+08:00）导致 MySQL Error 1292 更新失败
+    const layout = parseLayoutJson(drawerApp?.form_layout_json)
+    const payload = serializeTimeFields(values, layout?.elements || [])
     const res = await applicationApi.createApplicationData(drawerApp.id, {
-      ...values,
+      ...payload,
       approval_status: 0, // 强制草稿状态
     })
     return res.data

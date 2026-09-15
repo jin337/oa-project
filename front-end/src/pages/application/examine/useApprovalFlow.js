@@ -205,12 +205,10 @@ export function useApprovalFlow() {
   )
   const removeNode = useCallback((nodeId, branchId, childId) => {
     dispatch({ type: 'REMOVE_NODE', nodeId, branchId, childId })
-    Message.success('节点已删除')
   }, [])
   const renameNode = useCallback((nodeId, label) => dispatch({ type: 'RENAME_NODE', nodeId, label }), [])
   const saveNode = useCallback((node) => {
     dispatch({ type: 'SAVE_NODE', node })
-    Message.success('节点已保存')
   }, [])
 
   // ---- 条件分支操作 ----
@@ -227,7 +225,6 @@ export function useApprovalFlow() {
   )
   const saveBranch = useCallback((node, branch, payload) => {
     dispatch({ type: 'SAVE_BRANCH', node, branch, payload })
-    Message.success('条件已保存')
   }, [])
 
   // ---- 编辑弹层 ----

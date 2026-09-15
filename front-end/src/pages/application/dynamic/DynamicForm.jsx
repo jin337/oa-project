@@ -735,6 +735,56 @@ export function formatTimeValue(value, elementType, emptyValue = '-') {
 }
 
 /**
+ * 将表单 values 中的时间字段序列化为 MySQL 兼容格式（提交前统一调用）：
+ * 依据表单元素配置（含 table 子表的列配置）识别时间类型字段（TIME_ELEMENT_TYPES），
+ * 主表字段与子表行内字段均转换：
+ * - date / datepicker → YYYY-MM-DD
+ * - datetime         → YYYY-MM-DD HH:mm:ss
+ * - time / timepicker → HH:mm:ss
+ * 统一复用 formatTimeValue，第三个参数传原值（value）实现空值透传，避免污染提交数据。
+ * @param {Object} values   表单校验后的提交值
+ * @param {Object[]} elements 表单元素配置（form_layout_json.elements / detail_layout_json.elements）
+ * @returns {Object} 序列化后的提交值
+ */
+export function serializeTimeFields(values, elements) {
+  if (!values || !Array.isArray(elements)) return values
+  const next = { ...values }
+  for (const el of elements || []) {
+    const key = el?.field_key
+    if (!key) continue
+    if (el.element_type === 'table') {
+      // 子表（Form.List）：遍历行内时间列
+      const rows = next[key]
+      if (Array.isArray(rows)) {
+        next[key] = rows.map((row) => {
+          if (!row || typeof row !== 'object') return row
+          const nr = { ...row }
+          for (const col of el.columns || []) {
+            const colKey = col.dataIndex || col.field_key
+            if (
+              colKey &&
+              TIME_ELEMENT_TYPES.includes(col.element_type) &&
+              nr[colKey] != null &&
+              nr[colKey] !== ''
+            ) {
+              nr[colKey] = formatTimeValue(nr[colKey], col.element_type, nr[colKey])
+            }
+          }
+          return nr
+        })
+      }
+    } else if (
+      TIME_ELEMENT_TYPES.includes(el.element_type) &&
+      next[key] != null &&
+      next[key] !== ''
+    ) {
+      next[key] = formatTimeValue(next[key], el.element_type, next[key])
+    }
+  }
+  return next
+}
+
+/**
  * 详情只读模式（pageType='detail'）下的纯文本展示组件：
  * 作为 FormItem 单子元素接收 Arco 注入的 value，直接输出数据值（数组值以 ", " 连接），空值显示 '-'。
  * elementType 为时间/日期类型时，value 经 formatTimeValue 格式化为标准可读的日期/时间字符串。

@@ -23,6 +23,7 @@ import DynamicForm, {
   getStaticOptions,
   parseLayoutJson,
   renderPreviewConfig,
+  serializeTimeFields,
   TIME_ELEMENT_TYPES,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
@@ -37,50 +38,6 @@ const SIZE_OPTIONS = [
   { label: '紧凑', value: 'small' },
   { label: '迷你', value: 'mini' },
 ]
-
-/**
- * 将表单 values 中的时间字段序列化为 MySQL 兼容格式（提交前调用）：
- * 依据表单元素配置（含 table 子表的列配置）识别时间类型字段（TIME_ELEMENT_TYPES），
- * 主表字段与子表行内字段均转换；
- * 统一复用 formatTimeValue，第三个参数传原值（value）实现空值透传，避免污染提交数据
- */
-function serializeTimeFields(values, elements) {
-  if (!values || !Array.isArray(elements)) return values
-  const next = { ...values }
-  for (const el of elements || []) {
-    const key = el?.field_key
-    if (!key) continue
-    if (el.element_type === 'table') {
-      // 子表（Form.List）：遍历行内时间列
-      const rows = next[key]
-      if (Array.isArray(rows)) {
-        next[key] = rows.map((row) => {
-          if (!row || typeof row !== 'object') return row
-          const nr = { ...row }
-          for (const col of el.columns || []) {
-            const colKey = col.dataIndex || col.field_key
-            if (
-              colKey &&
-              TIME_ELEMENT_TYPES.includes(col.element_type) &&
-              nr[colKey] != null &&
-              nr[colKey] !== ''
-            ) {
-              nr[colKey] = formatTimeValue(nr[colKey], col.element_type, nr[colKey])
-            }
-          }
-          return nr
-        })
-      }
-    } else if (
-      TIME_ELEMENT_TYPES.includes(el.element_type) &&
-      next[key] != null &&
-      next[key] !== ''
-    ) {
-      next[key] = formatTimeValue(next[key], el.element_type, next[key])
-    }
-  }
-  return next
-}
 
 /**
  * 根据元素类型获取单元格的展示文本：
