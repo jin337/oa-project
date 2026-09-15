@@ -10,6 +10,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// RoleUsers GET /api/v1/roles/users 所有角色 + 每个角色下的用户列表
+func RoleUsers(c *gin.Context) {
+	tree, err := service.RoleUsers()
+	if err != nil {
+		response.Fail(c, response.CodeServerError, "查询角色及用户失败")
+		return
+	}
+	response.OK(c, tree)
+}
+
 // RoleList GET /api/v1/roles
 func RoleList(c *gin.Context) {
 	var req model.RoleListReq

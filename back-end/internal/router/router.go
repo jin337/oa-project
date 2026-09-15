@@ -49,6 +49,7 @@ func Setup() *gin.Engine {
 	roles.Use(middleware.JWTAuth())
 	{
 		roles.GET("", handler.RoleList)
+		roles.GET("/users", handler.RoleUsers)
 		roles.POST("", handler.RoleCreate)
 		roles.GET("/:id", handler.RoleDetail)
 		roles.PUT("/:id", handler.RoleUpdate)

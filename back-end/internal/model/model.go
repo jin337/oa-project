@@ -103,10 +103,11 @@ type Dept struct {
 	Children []*Dept `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
 
-// 组织架构树节点类型（GET /depts/users 混合树）
+// 组织架构树节点类型（GET /depts/users、GET /roles/users 混合树）
 const (
 	OrgNodeTypeDept = "dept" // 部门节点
 	OrgNodeTypeUser = "user" // 用户节点
+	OrgNodeTypeRole = "role" // 角色节点（GET /roles/users）
 )
 
 // OrgNode 部门与用户混合树节点：
@@ -118,9 +119,10 @@ type OrgNode struct {
 	Name     string     `json:"name"` // 部门名称或用户名
 	Children []*OrgNode `json:"children,omitempty"`
 
-	// 部门专属字段
+	// 部门/角色专属字段
 	ParentID uint   `json:"parent_id,omitempty"`
 	Leader   string `json:"leader,omitempty"`
+	Code     string `json:"code,omitempty"` // 角色编码（角色节点输出）
 	Sort     int    `json:"sort,omitempty"`
 
 	// 用户专属字段
