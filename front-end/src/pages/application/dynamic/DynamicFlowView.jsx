@@ -1,16 +1,29 @@
-import { Avatar, Divider } from '@arco-design/web-react'
-import { IconBranch, IconSend, IconStamp, IconUser } from '@arco-design/web-react/icon'
-import { useMemo } from 'react'
+import { Avatar, Divider, Timeline } from '@arco-design/web-react'
+import { IconBranch, IconPlus, IconSend, IconStamp, IconUser } from '@arco-design/web-react/icon'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import * as deptApi from 'src/api/dept'
+import * as roleApi from 'src/api/role'
 import { OPERATOR_OPTIONS } from 'src/pages/application/constants'
+import {
+  buildOrgItemMap,
+  buildRoleItemMap,
+  buildUserDeptMap,
+  transformDeptTree,
+  transformRoleList,
+} from 'src/pages/application/examine/flowModel'
+import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
+import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
 
 /**
  * ==================== 审批流程只读展示（独立组件） ====================
  * 从 DynamicForm.jsx 抽离并迁移至 dynamic 目录：审批流配置（approval_flow_json）的
- * 只读可视化还原，供审批模块各 Drawer（详情 / 编辑 / 申请）在抽屉内独立渲染使用。
+ * 可视化还原，供审批模块各 Drawer（详情 / 编辑 / 申请）在抽屉内独立渲染使用。
  * 节点类型数字枚举与 ExamineManage.jsx 保持一致。
+ * 左侧使用 Arco Timeline（时间轴）组件呈现审批流走向（仿钉钉审批单），
+ * 右侧成员头像区；「发起人自选」（approverType=3）节点支持点击「+」唤起 PersonSelectorModal 选择人员。
  */
 
-// 审批节点类型元信息（与 ExamineManage.jsx 数字枚举保持一致；bg/icon 供自定义节点图标使用）
+// 审批节点类型元信息（与 ExamineManage.jsx 数字枚举保持一致；bg/icon 供 Timeline 节点 dot 使用）
 const APPROVAL_NODE_META = {
   1: { label: '发起人', color: 'green', bg: 'bg-emerald-500', icon: IconUser }, // 1-发起人
   2: { label: '审批人', color: 'orange', bg: 'bg-amber-500', icon: IconStamp }, // 2-审批人
@@ -39,7 +52,7 @@ const compareEqual = (a, b) => {
 
 /**
  * 获取规则字段在表单数据中的实际值：
- * - 子表字段（rule.table_key 对应 formData 中为数组）取该表首行数据
+ * - 子表字段（rule.table_key 对应 formData 中为数组）按子表逻辑取值
  * - 主表字段（无 table_key 或 table_key 对应数据非数组）直接取 formData[field]
  */
 const resolveFieldValue = (rule, formData) => {
@@ -47,7 +60,7 @@ const resolveFieldValue = (rule, formData) => {
   const tk = rule.table_key
   if (tk) {
     const tableData = formData[tk]
-    // 子表字段：table_key 对应数据为数组（如 cgsq_detail: [...]），按子表逻辑取值
+    // 子表字段：table_key 对应数据为数组（如 cgsq_detail: [...]）
     if (Array.isArray(tableData) && tableData.length) {
       const values = tableData
         .map((row) => row[rule.field])
@@ -143,17 +156,19 @@ const getMembersText = (members) => {
     .join('、')
 }
 
-/** 构建节点摘要文本（仿钉钉审批单样式：第二行灰色提示，如「1人审批」「抄送5人」） */const buildNodeSummary = (node) => {
+/** 构建节点摘要文本（仿钉钉审批单样式：第二行灰色提示，如「1人审批」「抄送5人」「请选择审批人」） */
+const buildNodeSummary = (node) => {
   if (node.type === 1) {
     // 1-发起人
     const t = getMembersText(node.members)
     return t ? `可发起人：${t}` : '未配置可发起人'
   }
   if (node.type === 2) {
-    // 2-审批人：成员数量 + 审批人为空处理；未配置成员时提示「请选择审批人」
+    // 2-审批人：成员数量 + 审批人为空处理
     if (node.approverType === 3) {
-      // 3-发起人自选：附自选类型（1-单选 / 2-多选）
-      return `发起人自选（${SELF_SELECT_MAP[node.selfSelect] || '—'}）`
+      // 3-发起人自选：已选择显示自选类型，未选择提示「请选择审批人」
+      const n = (node.members || []).length
+      return n ? `发起人自选（${SELF_SELECT_MAP[node.selfSelect] || '—'}）` : '请选择审批人'
     }
     const n = (node.members || []).length
     const parts = [n ? `${n}人审批` : '请选择审批人']
@@ -166,10 +181,11 @@ const getMembersText = (members) => {
     return parts.join('，')
   }
   if (node.type === 3) {
-    // 3-抄送人：抄送数量；未配置成员时提示「请选择抄送人」
+    // 3-抄送人：抄送数量
     if (node.approverType === 3) {
-      // 3-发起人自选：附自选类型（1-单选 / 2-多选）
-      return `发起人自选（${SELF_SELECT_MAP[node.selfSelect] || '—'}）`
+      // 3-发起人自选：已选择显示自选类型，未选择提示「请选择抄送人」
+      const n = (node.members || []).length
+      return n ? `发起人自选（${SELF_SELECT_MAP[node.selfSelect] || '—'}）` : '请选择抄送人'
     }
     const n = (node.members || []).length
     return n ? `抄送${n}人` : '请选择抄送人'
@@ -184,22 +200,12 @@ const getMembersText = (members) => {
 
 /**
  * 成员展示 chip（仿参考图右侧成员区）：
- * - 1-人员：圆形头像（姓名首字）+ 姓名
- * - 2-部门 / 3-角色：灰底文本标签
  */
 const MemberChip = ({ member }) => {
-  if (member.type !== 1) {
-    // 2-部门 / 3-角色
-    return (
-      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
-        {member.label || member.name || member.title || ''}
-      </span>
-    )
-  }
   const name = member.label || member.name || member.title || ''
   return (
-    <div className="flex items-center gap-1">
-      <Avatar size={22} style={{ backgroundColor: 'rgb(var(--primary-6))' }}>
+    <div className="flex flex-col items-center">
+      <Avatar shape="square" size={35} style={{ backgroundColor: 'rgb(var(--primary-6))' }}>
         {name.slice(0, 1) || '?'}
       </Avatar>
       <span className="text-xs text-gray-600">{name}</span>
@@ -208,89 +214,184 @@ const MemberChip = ({ member }) => {
 }
 
 /**
- * 审批节点行（仿钉钉审批单：左侧节点图标圆 + 标题/摘要两行，右侧成员头像区）。
- * 条件分支（type=4）在节点行下方展开分支条件与嵌套子节点链；
- * 当传入 formData 时按规则评估各分支命中情况：命中分支正常展示，未命中分支置灰弱化。
+ * 审批节点行内容（不含时间轴竖线与节点 dot，由外层 Timeline.Item 承载）：
+ * 左侧标题/摘要两行，右侧成员头像区；仿钉钉审批单样式。
+ * 「发起人自选」（approverType=3）节点右侧提供「+」按钮，点击唤起 PersonSelectorModal 选择人员。
  */
-const ApprovalNodeView = ({ node, isLast, formData }) => {
-  const meta =
-    APPROVAL_NODE_META[node.type] ||
-    { label: `未知节点(${node.type})`, color: 'gray', bg: 'bg-gray-400', icon: IconBranch }
-  const Icon = meta.icon
-  // 4-条件分支：视觉穿透——不渲染条件节点容器（标题/摘要/分支卡片），
-  // 仅直接渲染命中分支（pickHitBranch 评估）下的 children 节点链，与前后流程节点直接衔接
-  if (node.type === 4) {
-    // 收集所有命中分支（或关系下可能多个），平铺其 children 节点链直接衔接
-    const hitBranches = pickHitBranches(node, formData)
-    const children = hitBranches.flatMap((b) => b.children || [])
-    if (!children.length) return null
-    return (
-      <>
-        {children.map((c, ci) => (
-          <ApprovalNodeView
-            key={c.id || c.label}
-            node={c}
-            isLast={ci === children.length - 1 ? isLast : false}
-            formData={formData}
-          />
-        ))}
-      </>
-    )
-  }
+const ApprovalNodeView = ({ node, onSelectNode }) => {
   return (
-    <div className="relative py-2 pl-10">
-      {!isLast && <div className="absolute bottom-0 left-4 top-3 w-px bg-gray-200" />}
-      <div
-        className={`absolute left-0 top-2 flex h-8 w-8 items-center justify-center rounded-full text-white ${meta.bg}`}
-      >
-        <Icon style={{ fontSize: 15 }} />
+    <div className="flex h-13 justify-between gap-4">
+      <div className="w-1/3">
+        <div className="text-base font-medium">
+          {node.label || APPROVAL_NODE_META[node.type]?.label}
+        </div>
+        <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node)}</div>
       </div>
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-sm font-medium">{node.label || meta.label}</div>
-          <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node)}</div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
-          {/* 发起人自选（approverType=3）无预置成员，不渲染成员区 */}
-          {node.approverType === 3
-            ? null
-            : (node.members || []).map((m, i) => (
-                <MemberChip key={m.key || `${m.type}-${m.label}-${i}`} member={m} />
-              ))}
-        </div>
+      <div className="flex shrink-0 flex-wrap justify-end gap-x-3 gap-y-1">
+        {node.approverType === 3 ? (
+          // 3-发起人自选：已选择渲染头像+姓名，未选择仅展示「+」按钮；均可点击唤起选择器
+          <>
+            {(node.members || []).map((m, i) => (
+              <MemberChip key={m.key || `${m.type}-${m.label}-${i}`} member={m} />
+            ))}
+            <Avatar shape="square" size={35}>
+              <IconPlus onClick={() => onSelectNode?.(node)} />
+            </Avatar>
+          </>
+        ) : (
+          // 非发起人自选（1-指定人员 / 2-指定角色）：保持原有成员渲染
+          (node.members || []).map((m, i) => (
+            <MemberChip key={m.key || `${m.type}-${m.label}-${i}`} member={m} />
+          ))
+        )}
       </div>
     </div>
   )
 }
 
 /**
- * 审批流程展示组件（仿钉钉审批单样式：左侧步骤节点 + 右侧成员，纯只读）。
- * 隐藏发起人节点与「流程结束」标识，仅展示审批 / 抄送 / 条件分支等流转节点。
- * 传入 formData（实际填报业务数据）时，条件分支按规则动态评估命中情况并差异化渲染。
+ * 审批流程展示组件（左侧 Arco Timeline 时间轴 + 右侧成员区，供申请 / 编辑 / 详情抽屉渲染）。
+ * 隐藏发起人节点与「流程结束」标识；条件分支（type=4）视觉穿透：按 formData 评估命中分支后
+ * 扁平化展开其 children 节点链，直接衔接前后节点。传入 formData 时条件分支按规则动态评估。
+ * 「发起人自选」节点支持点击「+」唤起 PersonSelectorModal 选择人员（选择结果经 onMembersChange 回调）。
  * @param {object} props
  * @param {string|Array} props.raw 应用配置的 approval_flow_json（JSON 字符串或节点数组）
  * @param {object} [props.formData] 实际填报的表单数据（主表字段 + 子表数组），用于条件分支命中评估
+ * @param {Function} [props.onMembersChange] 发起人自选节点成员变化回调 (nodeId, members) => void
  */
-export default function DynamicFlowView({ raw, formData }) {
+export default function DynamicFlowView({ raw, formData, onMembersChange }) {
   const nodes = useMemo(() => parseApprovalFlow(raw), [raw])
+  // 发起人自选节点运行期成员覆盖：nodeId -> members（选择后展示用）
+  const [memberOverrides, setMemberOverrides] = useState({})
+  // 合并成员覆盖进节点树（含条件分支 children 递归），供渲染统一按 node.members 展示
+  const mergedNodes = useMemo(() => {
+    if (!nodes) return nodes
+    const merge = (list) =>
+      (list || []).map((n) => {
+        const m = { ...n }
+        if (memberOverrides[n.id]) m.members = memberOverrides[n.id]
+        if (n.type === 4 && Array.isArray(n.branches)) {
+          m.branches = n.branches.map((b) => ({ ...b, children: merge(b.children) }))
+        }
+        return m
+      })
+    return merge(nodes)
+  }, [nodes, memberOverrides])
   // 隐藏发起人（type=1）：发起人节点仅用于流程起始说明，不在流转展示中呈现
-  const visibleNodes = (nodes || []).filter((node) => node.type !== 1)
-  if (!visibleNodes.length) return null
+  const visibleNodes = (mergedNodes || []).filter((node) => node.type !== 1)
+  // 条件分支视觉穿透：扁平化展开命中分支的 children，得到 Timeline 上的线性节点链
+  const flattenedNodes = useMemo(() => {
+    const flat = []
+    const walk = (list) => {
+      ;(list || []).forEach((n) => {
+        if (n.type === 4) {
+          // 4-条件分支：不渲染节点本身，直接穿透展开命中分支的 children
+          const hitBranches = pickHitBranches(n, formData)
+          walk(hitBranches.flatMap((b) => b.children || []))
+        } else {
+          flat.push(n)
+        }
+      })
+    }
+    walk(visibleNodes)
+    return flat
+  }, [visibleNodes, formData])
+  // 当前唤起选择器的节点
+  const [selectorNode, setSelectorNode] = useState(null)
+  // 对象选择器数据源（组织架构树 / 角色列表 / 派生映射），首次唤起选择器时懒加载
+  const [selectorData, setSelectorData] = useState({
+    orgTree: [],
+    roleList: [],
+    orgItemMap: {},
+    roleItemMap: {},
+    userDeptMap: {},
+    loading: false,
+  })
+
+  // 懒加载选择器数据源：与 ExamineManage 一致（depts/users + roles），挂载到 Context 供 PersonSelectorModal 使用
+  useEffect(() => {
+    if (!selectorNode) return
+    let cancelled = false
+    setSelectorData((d) => ({ ...d, loading: true }))
+    Promise.all([deptApi.getDeptUsersTree(), roleApi.listRoles({ page: 1, size: 999 })])
+      .then(([deptRes, roleRes]) => {
+        if (cancelled) return
+        const orgTree = transformDeptTree(deptRes.data?.list || deptRes.data || [])
+        const roleList = transformRoleList(roleRes.data?.list || roleRes.data || [])
+        setSelectorData({
+          orgTree,
+          roleList,
+          orgItemMap: buildOrgItemMap(orgTree),
+          roleItemMap: buildRoleItemMap(roleList),
+          userDeptMap: buildUserDeptMap(orgTree),
+          loading: false,
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setSelectorData((d) => ({ ...d, loading: false }))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectorNode])
+
+  // 选择器确认：更新节点成员覆盖并回调父组件
+  const handleMembersChange = useCallback(
+    (items) => {
+      if (!selectorNode) return
+      setMemberOverrides((prev) => ({ ...prev, [selectorNode.id]: items }))
+      setSelectorNode(null)
+      onMembersChange?.(selectorNode.id, items)
+    },
+    [selectorNode, onMembersChange],
+  )
+
+  if (!flattenedNodes.length) return null
+
   return (
     <>
       <Divider orientation="left">
         <span className="text-sm font-medium text-gray-700">审批流程</span>
       </Divider>
       <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-        {visibleNodes.map((node, i) => (
-          <ApprovalNodeView
-            key={node.id || `node_${i}`}
-            node={node}
-            isLast={i === visibleNodes.length - 1}
-            formData={formData}
-          />
-        ))}
+        <Timeline>
+          {flattenedNodes.map((n) => {
+            const meta = APPROVAL_NODE_META[n.type] || {
+              label: `未知节点(${n.type})`,
+              bg: 'bg-gray-400',
+              icon: IconBranch,
+            }
+            const Icon = meta.icon
+            return (
+              <Timeline.Item
+                key={n.id || n.label}
+                dot={
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center rounded-full text-white ${meta.bg}`}
+                  >
+                    <Icon style={{ fontSize: 13 }} />
+                  </span>
+                }
+              >
+                <ApprovalNodeView node={n} onSelectNode={setSelectorNode} />
+              </Timeline.Item>
+            )
+          })}
+        </Timeline>
       </div>
+      {/* 发起人自选成员选择弹层：复用 PersonSelectorModal（组织架构 + 角色，仅可勾选人员） */}
+      {selectorNode && (
+        <SelectorDataContext.Provider value={selectorData}>
+          <PersonSelectorModal
+            title={`选择${selectorNode.type === 2 ? '审批人' : '抄送人'}`}
+            value={selectorNode.members || []}
+            modes={[1, 2]} // 1-组织架构 / 2-角色
+            checkTarget={1} // 1-人员
+            onChange={handleMembersChange}
+            onCancel={() => setSelectorNode(null)}
+          />
+        </SelectorDataContext.Provider>
+      )}
     </>
   )
 }
