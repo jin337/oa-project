@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"back-end/internal/database"
 	"back-end/internal/model"
@@ -28,7 +29,8 @@ func checkFormElementTableKey(appID uint, tableKey string) error {
 
 // FormElementList 表单元素分页列表：keyword 模糊匹配 label 或 field_key
 func FormElementList(appID uint, req *model.FormElementListReq) ([]model.FormElement, int64, error) {
-	if _, err := ApplicationDetail(appID); err != nil {
+	app, err := ApplicationDetail(appID)
+	if err != nil {
 		return nil, 0, err
 	}
 	db := database.DB.Model(&model.FormElement{}).Where("app_id = ?", appID)
@@ -40,9 +42,39 @@ func FormElementList(appID uint, req *model.FormElementListReq) ([]model.FormEle
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
+
+	// SQL 层表级排序：主表元素优先，各子表元素随后，未匹配业务表的记录排最后；表内按 id ASC
+	// 仅影响 Find 的 ORDER BY，Count 总数统计不受影响，Offset/Limit 分页照常生效
 	var list []model.FormElement
-	err := db.Order("id ASC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
+	err = db.Order(buildFormElementTableOrder(app.TableName, app.SubTableName)).
+		Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
 	return list, total, err
+}
+
+// buildFormElementTableOrder 生成表单元素列表的表级排序表达式：
+// ORDER BY FIELD(table_key, 主表名, 子表名1, 子表名2, ...) ASC, id ASC
+// FIELD 未命中的 table_key 返回 0，因此主表(1)最前、子表(2..n)随后、其余排最后
+func buildFormElementTableOrder(tableName, subTableName string) string {
+	keys := make([]string, 0, 4)
+	seen := map[string]bool{}
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		// 只允许合法的物理表名参与拼接，防止非法字符破坏 SQL
+		if name != "" && isValidTableName(name) && !seen[name] {
+			seen[name] = true
+			keys = append(keys, name)
+		}
+	}
+	add(tableName)
+	if subTableName != "" {
+		for _, s := range strings.Split(subTableName, ",") {
+			add(s)
+		}
+	}
+	if len(keys) == 0 {
+		return "id ASC"
+	}
+	return "FIELD(table_key, '" + strings.Join(keys, "', '") + "') ASC, id ASC"
 }
 
 // FormElementCreate 新增表单元素

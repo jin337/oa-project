@@ -41,28 +41,44 @@ export function PersonSelectorModal({
 
   // Arco Tree 的 disableCheckbox 仅支持节点数据字段（不支持函数 prop），
   // 故按 checkTarget 派生带禁用标记的树数据：
-  // - 组织树：1-仅人员 → 部门节点禁用；2-仅部门 → 用户节点禁用；3-人员与部门 → 全不禁用
+  // - 组织树：1-仅人员 → 部门节点可勾选（勾选=批量选中其下所有人员）；2-仅部门 → 用户节点禁用；
+  //   3-人员与部门 → 全不禁用
   const orgTreeData = useMemo(() => {
     const apply = (nodes) =>
       nodes.map((n) => ({
         ...n,
-        // 1-仅人员 → 部门（isDept）全部禁用；2-仅部门 → 人员禁用；3-人员与部门 → 全不禁用
-        disableCheckbox: checkTarget === 3 ? false : checkTarget === 2 ? !n.isDept : n.isDept,
+        // 2-仅部门 → 人员（!isDept）禁用；1-仅人员 / 3-人员与部门 → 均不禁用（部门可勾选批量选人）
+        disableCheckbox: checkTarget === 2 ? !n.isDept : false,
         children: n.children ? apply(n.children) : undefined,
       }))
     return apply(orgTree)
   }, [orgTree, checkTarget])
-  // 角色树：角色本身（isRole）永远不可勾选，仅支持勾选角色下属人员；
-  // checkTarget=2（仅部门）时角色树无部门可选项，人员一并禁用
+  // 角色树：角色节点可勾选（勾选=批量选中其下人员，人员作为独立成员入已选，角色本身不入已选）；
+  // 仅 checkTarget=2（仅部门）时角色树无部门可选项，整体禁用
   const roleTreeData = useMemo(() => {
     const apply = (nodes) =>
       nodes.map((n) => ({
         ...n,
-        disableCheckbox: n.isRole ? true : checkTarget === 2,
+        disableCheckbox: checkTarget === 2,
         children: n.children ? apply(n.children) : undefined,
       }))
     return apply(roleTree)
   }, [roleTree, checkTarget])
+
+  // 已选去重：同一 key（同一用户/部门/角色，如 user_5）可能同时被组织树与角色树选中，
+  // 此处按 key 只保留一条；人员条目优先保留带 roleLabel 的（角色维度展示「角色：姓名」），
+  // 否则保留组织维度（展示「部门：姓名」），与右侧 renderTagLabel 的优先级保持一致
+  const dedupe = (items) => {
+    const map = new Map()
+    items.forEach((it) => {
+      if (!map.has(it.key)) {
+        map.set(it.key, it)
+      } else if (it.roleLabel && !map.get(it.key).roleLabel) {
+        map.set(it.key, it)
+      }
+    })
+    return Array.from(map.values())
+  }
 
   // Tree 勾选（checkStrictly 父子独立，避免 disableCheckbox 下级联干扰）
   const handleTreeCheck = (keys) => {
@@ -73,7 +89,7 @@ export function PersonSelectorModal({
       orgItems = orgItems.filter((s) => s.type === checkTarget)
     }
     const roleItems = selected.filter((s) => roleItemMap[s.key])
-    setSelected([...orgItems, ...roleItems])
+    setSelected(dedupe([...orgItems, ...roleItems]))
   }
 
   // 角色树勾选（checkStrictly 父子独立）：角色维度下角色本身不可勾选，仅支持勾选角色下属的人员
@@ -85,7 +101,7 @@ export function PersonSelectorModal({
     // 若 checkTarget=2（仅部门），角色树无可用选项（人员亦被禁用），结果为空
     if (checkTarget === 2) roleItems = []
     const orgItems = selected.filter((s) => orgItemMap[s.key])
-    setSelected([...orgItems, ...roleItems])
+    setSelected(dedupe([...orgItems, ...roleItems]))
   }
 
   // 删除已选项：checkStrictly 下父子独立，直接移除该项即可
@@ -142,7 +158,7 @@ export function PersonSelectorModal({
                 <Tree
                   key="org-tree"
                   checkable
-                  checkStrictly={checkTarget !== 3}
+                  checkStrictly={checkTarget !== 1}
                   checkedKeys={orgCheckedKeys}
                   onCheck={handleTreeCheck}
                   treeData={orgTreeData}
@@ -154,7 +170,7 @@ export function PersonSelectorModal({
               <Tree
                 key="role-tree"
                 checkable
-                checkStrictly={checkTarget !== 3}
+                checkStrictly={checkTarget !== 1}
                 checkedKeys={roleCheckedKeys}
                 onCheck={handleRoleCheck}
                 treeData={roleTreeData}
@@ -167,7 +183,7 @@ export function PersonSelectorModal({
         {/* 右侧：已选择 */}
         <div className="w-1/2 rounded border border-gray-200 p-3">
           <div className="mb-2 text-sm font-medium">已选择（{selected.length}）</div>
-          <div className="flex flex-wrap gap-2 overflow-auto h-80">
+          <div className="flex flex-wrap gap-2 overflow-auto max-h-80">
             {selected.length ? (
               selected.map((item, i) => (
                 <Tag
