@@ -226,9 +226,12 @@ export default function LayoutManage() {
   }
 
   // 将表单页布局深拷贝后完整覆盖到详情页：过滤 table 的操作列（action）
+  // 布局数据本质为 JSON 序列化结构（保存到后端 form_layout_json），这里用 JSON 深拷贝与后端
+  // 序列化口径保持一致；避免 structuredClone 在数据中混入不可序列化值（函数 / Symbol / React 元素）时
+  // 抛出 DataCloneError，也能防止克隆破坏元素内部引用导致渲染异常
   const handleSyncLayout = () => {
     setLayouts((prev) => {
-      const cloned = structuredClone(prev.form)
+      const cloned = JSON.parse(JSON.stringify(prev.form))
       cloned.elements = (cloned.elements || []).map((el) => {
         if (el.element_type === 'table') {
           return {

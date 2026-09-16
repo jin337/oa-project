@@ -330,17 +330,27 @@ const TableElementField = ({ el, pageType }) => {
                       }
 
                       const cellStyle = { fontWeight: 600, textAlign: 'center' }
-                      return (
-                        <SummaryRow>
-                          <SummaryCell style={summaryCellStyle}>合计</SummaryCell>
-                          {columns.map((col) => (
-                            <SummaryCell key={col.dataIndex} style={cellStyle}>
-                              {values[col.dataIndex] ?? ''}
-                            </SummaryCell>
-                          ))}
-                          {isEditable && <SummaryCell style={cellStyle} />}
-                        </SummaryRow>
-                      )
+                      // 合计单元格统一放入数组后展开渲染：isEditable 为 false 时用空数组展开，
+                      // 避免向 SummaryRow 传入 false/null 子节点——Arco Table.Summary.Row 内部通过
+                      // React.Children.map(child => child.props.colSpan) 处理子节点，React 会把
+                      // false/null 归一为 null 后仍调用回调，从而触发 null.props 崩溃
+                      const cells = [
+                        <SummaryCell key="summary-label" style={summaryCellStyle}>
+                          合计
+                        </SummaryCell>,
+                        ...columns.map((col) => (
+                          <SummaryCell
+                            key={col.dataIndex || col.field_key || col.key || 'col'}
+                            style={cellStyle}
+                          >
+                            {values[col.dataIndex ?? col.field_key] ?? ''}
+                          </SummaryCell>
+                        )),
+                        ...(isEditable
+                          ? [<SummaryCell key="summary-action" style={cellStyle} />]
+                          : []),
+                      ]
+                      return <SummaryRow>{cells}</SummaryRow>
                     }
                   : undefined
               }
