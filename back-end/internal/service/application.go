@@ -102,10 +102,9 @@ func ApplicationByCode(code, state string, page, size int, filters map[string]st
 		}
 		// 主表数据列表（复用动态数据查询逻辑，filters 作为动态过滤条件，过滤软删除；排除草稿——list 态为已提交数据视图）
 		list, total, err := ApplicationDataList(app.ID, &model.ApplicationDataListReq{
-			BaseListReq:  model.BaseListReq{Page: page, Size: size},
-			TableName:    app.TableName,
-			ExcludeDraft: true,
-			Filters:      filters,
+			BaseListReq: model.BaseListReq{Page: page, Size: size},
+			TableName:   app.TableName,
+			Filters:     filters,
 		})
 		if err != nil {
 			return nil, err
@@ -147,16 +146,6 @@ func ApplicationDataList(appID uint, req *model.ApplicationDataListReq) ([]map[s
 	args := []interface{}{}
 	if colSet["deleted_at"] {
 		conds = append(conds, "`deleted_at` IS NULL")
-	}
-	// 按审核状态过滤（Status 为 nil 表示不过滤；0 草稿可查；业务表无该列时忽略，兼容旧表）
-	if req.Status != nil && colSet["approval_status"] {
-		conds = append(conds, "`approval_status` = ?")
-		args = append(args, *req.Status)
-	}
-	// 排除草稿（审核人视角的已提交列表，如 by-code list 态）
-	if req.ExcludeDraft && colSet["approval_status"] {
-		conds = append(conds, "`approval_status` <> ?")
-		args = append(args, model.ApprovalStatusDraft)
 	}
 	for k, v := range req.Filters {
 		if !colSet[k] {
@@ -246,7 +235,6 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 var appSystemCols = map[string]bool{
 	"id": true, "created_at": true, "updated_at": true,
 	"deleted_at": true, "created_by": true, "updated_by": true,
-	"approval_status": true, // 审核状态由审核接口/默认值管理
 }
 
 // ApplicationDataCreate 动态业务数据新增（支持主表 + 子表）：
@@ -282,26 +270,6 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 		}
 	}
 
-	// 提取初始审核状态（仅允许 0 草稿 / 1 待审核，默认待审核）：
-	// 前端可在创建时传 approval_status=0 实现“保存草稿”，提交审核由审核接口 0→1 完成
-	initialStatus := model.ApprovalStatusPending
-	if v, ok := data["approval_status"]; ok {
-		if !mainColSet["approval_status"] {
-			return 0, errors.New("业务表缺少审核状态字段")
-		}
-		switch s := v.(type) {
-		case float64: // JSON 数字默认解析为 float64
-			if s == float64(model.ApprovalStatusDraft) {
-				initialStatus = model.ApprovalStatusDraft
-			} else if s != float64(model.ApprovalStatusPending) {
-				return 0, errors.New("非法的初始审核状态")
-			}
-		default:
-			return 0, errors.New("非法的初始审核状态")
-		}
-		delete(data, "approval_status") // 从动态字段中移除，不参与通用列校验
-	}
-
 	// 分离主表字段与子表数据
 	mainColumns := []string{}
 	mainPlaceholders := []string{}
@@ -329,16 +297,11 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 		mainArgs = append(mainArgs, v)
 	}
 
-	// 自动填充主表审计字段与初始审核状态（旧表无 approval_status 列时仅填充审计字段）
+	// 自动填充主表审计字段
 	now := time.Now()
 	mainColumns = append(mainColumns, "`created_at`", "`updated_at`", "`created_by`", "`updated_by`")
 	mainPlaceholders = append(mainPlaceholders, "?", "?", "?", "?")
 	mainArgs = append(mainArgs, now, now, curUserID, curUserID)
-	if mainColSet["approval_status"] {
-		mainColumns = append(mainColumns, "`approval_status`")
-		mainPlaceholders = append(mainPlaceholders, "?")
-		mainArgs = append(mainArgs, initialStatus)
-	}
 
 	mainSQL := fmt.Sprintf(
 		"INSERT INTO `%s` (%s) VALUES (%s)",
@@ -444,16 +407,9 @@ func ApplicationDataDelete(appID, dataID uint) error {
 		return fmt.Errorf("查询表结构失败: %w", err)
 	}
 	if mainColSet["deleted_at"] {
-		// 软删除：置 deleted_at，并同步审核状态为已删除（表无该列时仅置 deleted_at，兼容旧表）
-		if mainColSet["approval_status"] {
-			if err := database.DB.Exec("UPDATE `"+real+"` SET `deleted_at` = ?, `approval_status` = ? WHERE `id` = ?",
-				time.Now(), model.ApprovalStatusDeleted, dataID).Error; err != nil {
-				return fmt.Errorf("删除数据失败: %w", err)
-			}
-		} else {
-			if err := database.DB.Exec("UPDATE `"+real+"` SET `deleted_at` = ? WHERE `id` = ?", time.Now(), dataID).Error; err != nil {
-				return fmt.Errorf("删除数据失败: %w", err)
-			}
+		// 软删除：置 deleted_at
+		if err := database.DB.Exec("UPDATE `"+real+"` SET `deleted_at` = ? WHERE `id` = ?", time.Now(), dataID).Error; err != nil {
+			return fmt.Errorf("删除数据失败: %w", err)
 		}
 	} else {
 		if err := database.DB.Exec("DELETE FROM `"+real+"` WHERE `id` = ?", dataID).Error; err != nil {
@@ -696,7 +652,6 @@ func createBizTable(tableName string, withParent bool, comment string) error {
 	b.WriteString("`created_by` bigint unsigned DEFAULT NULL COMMENT '创建人',")
 	b.WriteString("`updated_by` bigint unsigned DEFAULT NULL COMMENT '更新人',")
 	b.WriteString("`deleted_at` datetime(3) DEFAULT NULL COMMENT '删除时间',")
-	b.WriteString("`approval_status` tinyint NOT NULL DEFAULT 1 COMMENT '审核状态 0草稿 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除',")
 	if withParent {
 		// 子表：额外添加关联主表的外键字段
 		b.WriteString("`parent_id` bigint unsigned DEFAULT NULL COMMENT '关联主表ID',")

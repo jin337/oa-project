@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -204,7 +203,7 @@ func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalR
 	case "cc":
 		return []model.ApprovalRecord{}, 0, nil
 	case "approved", "drafts":
-		return approvalListFromBizTables(curUserID, req)
+		return approvalListFromInstances(curUserID, req)
 	default:
 		return nil, 0, errors.New("非法的审批列表类型")
 	}
@@ -303,108 +302,70 @@ func approvalListInitiated(curUserID uint, req *model.ApprovalListReq) ([]model.
 	return records, total, nil
 }
 
-// approvalListFromBizTables 从业务表聚合审批列表（approved / drafts 场景保持原逻辑）
-func approvalListFromBizTables(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
-	var apps []model.Application
-	if err := database.DB.Unscoped().Where("deleted_at IS NULL").Order("id ASC").Find(&apps).Error; err != nil {
+// approvalListFromInstances 从 approval_instances 表聚合审批列表（approved / drafts 场景）
+func approvalListFromInstances(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
+	// 按 scope 确定实例状态过滤条件
+	var statusFilter string
+	var statusArgs []interface{}
+	switch req.Scope {
+	case "approved":
+		statusFilter = "status IN (?, ?, ?, ?)"
+		statusArgs = []interface{}{
+			model.InstanceStatusPassed, model.InstanceStatusRejected,
+			model.InstanceStatusReturned, model.InstanceStatusVoided,
+		}
+	case "drafts":
+		statusFilter = "status = ?"
+		statusArgs = []interface{}{model.InstanceStatusDraft}
+	default:
+		return nil, 0, errors.New("非法的审批列表类型")
+	}
+
+	baseWhere := "created_by = ? AND deleted_at IS NULL AND " + statusFilter
+	countArgs := append([]interface{}{curUserID}, statusArgs...)
+
+	var total int64
+	if err := database.DB.Model(&model.ApprovalInstance{}).
+		Where(baseWhere, countArgs...).
+		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	records := []model.ApprovalRecord{}
-	// 收集 (business_table, business_data_id) 对，用于批量查询 instance_id
-	type bizKey struct {
-		table  string
-		dataID uint
-	}
-	bizKeyToRecord := map[bizKey]*model.ApprovalRecord{}
-
-	for _, app := range apps {
-		if !isValidTableName(app.TableName) {
-			continue
-		}
-		real := bizTableName(app.TableName)
-		colSet, err := queryColumnSet(real)
-		if err != nil || !colSet["approval_status"] {
-			continue
-		}
-
-		conds := []string{"`deleted_at` IS NULL"}
-		args := []interface{}{}
-		switch req.Scope {
-		case "approved":
-			conds = append(conds, "`approval_status` IN (?, ?, ?, ?)", "`updated_by` = ?")
-			args = append(args,
-				model.ApprovalStatusPassed, model.ApprovalStatusRejected,
-				model.ApprovalStatusReturned, model.ApprovalStatusVoided,
-				curUserID)
-		case "drafts":
-			conds = append(conds, "`created_by` = ?", "`approval_status` = ?")
-			args = append(args, curUserID, model.ApprovalStatusDraft)
-		}
-
-		var rows []map[string]interface{}
-		if err := database.DB.Raw("SELECT * FROM `"+real+"` WHERE "+strings.Join(conds, " AND ")+" ORDER BY `id` DESC",
-			args...).Scan(&rows).Error; err != nil {
-			return nil, 0, err
-		}
-		for _, row := range rows {
-			dataID := rowUint(row, "id")
-			rec := model.ApprovalRecord{
-				ID:             dataID,
-				BusinessDataID: dataID,
-				AppID:          app.ID,
-				AppCode:        app.Code,
-				AppName:        app.Name,
-				Status:         int(rowUint(row, "approval_status")),
-				StatusName:     approvalStatusName(int(rowUint(row, "approval_status"))),
-				CreatedBy:      rowUint(row, "created_by"),
-				CreatedAt:      rowTime(row, "created_at"),
-				UpdatedAt:      rowTime(row, "updated_at"),
-				Data:           rowBizData(row),
-			}
-			records = append(records, rec)
-			// 用 app.TableName（无前缀）作为 key，与 ApprovalInstance.BusinessTable 保持一致
-			bizKeyToRecord[bizKey{table: app.TableName, dataID: dataID}] = &records[len(records)-1]
-		}
+	var instances []model.ApprovalInstance
+	queryArgs := append([]interface{}{curUserID}, statusArgs...)
+	if err := database.DB.
+		Where(baseWhere, queryArgs...).
+		Order("id DESC").
+		Offset(req.Offset()).Limit(req.Limit()).
+		Find(&instances).Error; err != nil {
+		return nil, 0, err
 	}
 
-	// 批量查询 approval_instances 填充 instance_id
-	if len(bizKeyToRecord) > 0 {
-		var instances []model.ApprovalInstance
-		if err := database.DB.Where("deleted_at IS NULL").Find(&instances).Error; err == nil {
-			for i := range instances {
-				inst := &instances[i]
-				key := bizKey{table: inst.BusinessTable, dataID: inst.BusinessDataID}
-				if rec, ok := bizKeyToRecord[key]; ok {
-					rec.InstanceID = inst.ID
-				}
-			}
+	records := make([]model.ApprovalRecord, 0, len(instances))
+	for _, inst := range instances {
+		var app model.Application
+		if err := database.DB.First(&app, inst.AppID).Error; err != nil {
+			continue
 		}
+		bizStatus := instanceStatusToBizStatus(inst.Status)
+		rec := model.ApprovalRecord{
+			ID:             inst.ID,
+			InstanceID:     inst.ID,
+			BusinessDataID: inst.BusinessDataID,
+			AppID:          app.ID,
+			AppCode:        app.Code,
+			AppName:        app.Name,
+			Status:         bizStatus,
+			StatusName:     approvalStatusName(bizStatus),
+			CreatedBy:      inst.CreatedBy,
+			CreatedAt:      &inst.CreatedAt,
+			FinishedAt:     inst.FinishedAt,
+		}
+		records = append(records, rec)
 	}
 
 	fillApprovalUserInfo(records)
-
-	sort.SliceStable(records, func(i, j int) bool {
-		a, b := records[i].CreatedAt, records[j].CreatedAt
-		if a == nil {
-			return false
-		}
-		if b == nil {
-			return true
-		}
-		return a.After(*b)
-	})
-
-	total := int64(len(records))
-	offset, limit := req.Offset(), req.Limit()
-	if offset >= len(records) {
-		return []model.ApprovalRecord{}, total, nil
-	}
-	end := offset + limit
-	if end > len(records) {
-		end = len(records)
-	}
-	return records[offset:end], total, nil
+	return records, total, nil
 }
 
 // fillApprovalUserInfo 批量填充审批记录的发起人信息与完成时间：
@@ -528,7 +489,7 @@ func rowBizData(row map[string]interface{}) map[string]interface{} {
 	biz := make(map[string]interface{}, len(row))
 	for k, v := range row {
 		switch k {
-		case "id", "created_at", "updated_at", "created_by", "updated_by", "deleted_at", "approval_status", "parent_id":
+		case "id", "created_at", "updated_at", "created_by", "updated_by", "deleted_at", "parent_id":
 			continue
 		}
 		biz[k] = v
@@ -1010,8 +971,7 @@ func resolveBusinessDataID(curUserID uint, req *model.ApprovalInstanceCreateReq)
 	if len(req.BusinessData) == 0 {
 		return 0, errors.New("business_data_id 与 business_data 必须提供其一")
 	}
-	// 强制草稿状态（使用 float64 类型，与 ApplicationDataCreate 中 JSON 数字类型断言一致）
-	req.BusinessData["approval_status"] = float64(model.ApprovalStatusDraft)
+	// 自动创建业务数据行
 	dataID, err := ApplicationDataCreate(req.AppID, curUserID, req.BusinessData)
 	if err != nil {
 		return 0, fmt.Errorf("自动创建业务数据失败: %w", err)
@@ -1021,12 +981,11 @@ func resolveBusinessDataID(curUserID uint, req *model.ApprovalInstanceCreateReq)
 }
 
 // ApprovalInstanceCreate 发起审批：
-//  1. 校验业务数据存在且为草稿状态
+//  1. 校验业务数据存在
 //  2. 快照审批流配置 + 表单数据
 //  3. 评估条件分支，得到执行路径
 //  4. 创建流程实例
 //  5. 为首个审批节点生成任务
-//  6. 更新业务表 approval_status 为审核中(2)
 func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
 	// 0. 解析业务数据 ID（支持自动创建）
 	if _, err := resolveBusinessDataID(curUserID, req); err != nil {
@@ -1045,25 +1004,18 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		return nil, errors.New("该应用未配置审批流程")
 	}
 
-	// 2. 校验业务数据存在且为草稿
+	// 2. 校验业务数据存在
 	real := bizTableName(app.TableName)
-	colSet, err := queryColumnSet(real)
-	if err != nil {
+	if _, err := queryColumnSet(real); err != nil {
 		return nil, fmt.Errorf("查询表结构失败: %w", err)
 	}
-	if !colSet["approval_status"] {
-		return nil, errors.New("业务表缺少审核状态字段")
-	}
 
-	var curStatus *int
-	if err := database.DB.Raw("SELECT `approval_status` FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", req.BusinessDataID).Scan(&curStatus).Error; err != nil {
+	var cnt int64
+	if err := database.DB.Raw("SELECT COUNT(*) FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", req.BusinessDataID).Scan(&cnt).Error; err != nil {
 		return nil, err
 	}
-	if curStatus == nil {
+	if cnt == 0 {
 		return nil, errors.New("业务数据不存在")
-	}
-	if *curStatus != model.ApprovalStatusDraft {
-		return nil, errors.New("仅草稿状态的数据可发起审批")
 	}
 
 	// 3. 解析流程节点 & 读取业务数据快照
@@ -1115,13 +1067,6 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 			return err
 		}
 
-		// 7. 更新业务表 approval_status 为审核中(2)
-		now := time.Now()
-		if err := tx.Exec("UPDATE `"+real+"` SET `approval_status` = ?, `updated_at` = ?, `updated_by` = ? WHERE `id` = ?",
-			model.ApprovalStatusReviewing, now, curUserID, req.BusinessDataID).Error; err != nil {
-			return fmt.Errorf("更新审核状态失败: %w", err)
-		}
-
 		return nil
 	})
 	if err != nil {
@@ -1131,9 +1076,9 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 }
 
 // ApprovalInstanceSaveDraft 保存审批草稿：
-//  1. 校验业务数据存在且为草稿状态
+//  1. 校验业务数据存在
 //  2. 快照审批流配置 + 表单数据 + 评估执行路径
-//  3. 创建流程实例（状态=草稿），不生成审批任务、不更新业务表审核状态
+//  3. 创建流程实例（状态=草稿），不生成审批任务
 //  4. 暂存发起人自选审批人，供后续从草稿提交时使用
 func ApprovalInstanceSaveDraft(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
 	// 0. 解析业务数据 ID（支持自动创建）
@@ -1153,25 +1098,18 @@ func ApprovalInstanceSaveDraft(curUserID uint, req *model.ApprovalInstanceCreate
 		return nil, errors.New("该应用未配置审批流程")
 	}
 
-	// 2. 校验业务数据存在且为草稿
+	// 2. 校验业务数据存在
 	real := bizTableName(app.TableName)
-	colSet, err := queryColumnSet(real)
-	if err != nil {
+	if _, err := queryColumnSet(real); err != nil {
 		return nil, fmt.Errorf("查询表结构失败: %w", err)
 	}
-	if !colSet["approval_status"] {
-		return nil, errors.New("业务表缺少审核状态字段")
-	}
 
-	var curStatus *int
-	if err := database.DB.Raw("SELECT `approval_status` FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", req.BusinessDataID).Scan(&curStatus).Error; err != nil {
+	var cnt int64
+	if err := database.DB.Raw("SELECT COUNT(*) FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", req.BusinessDataID).Scan(&cnt).Error; err != nil {
 		return nil, err
 	}
-	if curStatus == nil {
+	if cnt == 0 {
 		return nil, errors.New("业务数据不存在")
-	}
-	if *curStatus != model.ApprovalStatusDraft {
-		return nil, errors.New("仅草稿状态的数据可保存审批草稿")
 	}
 
 	// 3. 解析流程节点 & 读取业务数据快照 & 评估执行路径
@@ -1218,7 +1156,6 @@ func ApprovalInstanceSaveDraft(curUserID uint, req *model.ApprovalInstanceCreate
 //  1. 校验草稿实例存在、状态=草稿、属于当前用户
 //  2. 重新读取业务数据、重新评估执行路径（业务数据可能已修改）
 //  3. 更新实例状态为进行中，生成首个审批节点任务
-//  4. 更新业务表 approval_status 为审核中(2)
 func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.ApprovalInstanceSubmitDraftReq) (*model.ApprovalInstance, error) {
 	// 1. 加载草稿实例
 	var instance model.ApprovalInstance
@@ -1242,24 +1179,17 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 	}
 
 	real := bizTableName(app.TableName)
-	colSet, err := queryColumnSet(real)
-	if err != nil {
+	if _, err := queryColumnSet(real); err != nil {
 		return nil, fmt.Errorf("查询表结构失败: %w", err)
 	}
-	if !colSet["approval_status"] {
-		return nil, errors.New("业务表缺少审核状态字段")
-	}
 
-	// 校验业务数据仍为草稿状态
-	var curStatus *int
-	if err := database.DB.Raw("SELECT `approval_status` FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", instance.BusinessDataID).Scan(&curStatus).Error; err != nil {
+	// 校验业务数据存在
+	var cnt int64
+	if err := database.DB.Raw("SELECT COUNT(*) FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", instance.BusinessDataID).Scan(&cnt).Error; err != nil {
 		return nil, err
 	}
-	if curStatus == nil {
+	if cnt == 0 {
 		return nil, errors.New("业务数据不存在")
-	}
-	if *curStatus != model.ApprovalStatusDraft {
-		return nil, errors.New("业务数据已不在草稿状态，无法提交")
 	}
 
 	// 3. 重新解析流程节点 & 读取业务数据 & 评估执行路径
@@ -1321,13 +1251,6 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		// 生成首个审批节点任务（自选成员已在快照 members 中，无需额外传入）
 		if err := generateTasksForCurrentNode(tx, &instance, injectedNodes, curUserID); err != nil {
 			return err
-		}
-
-		// 更新业务表 approval_status 为审核中(2)
-		now := time.Now()
-		if err := tx.Exec("UPDATE `"+real+"` SET `approval_status` = ?, `updated_at` = ?, `updated_by` = ? WHERE `id` = ?",
-			model.ApprovalStatusReviewing, now, curUserID, instance.BusinessDataID).Error; err != nil {
-			return fmt.Errorf("更新审核状态失败: %w", err)
 		}
 
 		return nil
@@ -1459,20 +1382,10 @@ func finishInstance(tx *gorm.DB, instance *model.ApprovalInstance, status int, r
 		return err
 	}
 
-	// 同步更新业务表 approval_status
-	bizStatus := instanceStatusToBizStatus(status)
-	real := bizTableName(instance.BusinessTable)
-	if colSet, err := queryColumnSet(real); err == nil && colSet["approval_status"] {
-		if err := tx.Exec("UPDATE `"+real+"` SET `approval_status` = ?, `updated_at` = ?, `updated_by` = ? WHERE `id` = ?",
-			bizStatus, now, curUserID, instance.BusinessDataID).Error; err != nil {
-			return fmt.Errorf("同步业务表审核状态失败: %w", err)
-		}
-	}
-
 	return nil
 }
 
-// instanceStatusToBizStatus 实例状态 -> 业务表 approval_status 映射
+// instanceStatusToBizStatus 实例状态 -> ApprovalStatus 映射（供 ApprovalRecord.Status 使用，前端 ApprovalStatusTag 依赖此映射）
 func instanceStatusToBizStatus(instanceStatus int) int {
 	switch instanceStatus {
 	case model.InstanceStatusPassed:
@@ -1748,27 +1661,9 @@ func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 			return errors.New("只有已拒绝/已驳回/已作废/已撤回的流程可删除")
 		}
 
-		// 标记业务数据的审批状态为已删除
-		if instance.BusinessDataID > 0 && instance.AppID > 0 {
-			tableName, err := resolveAppTableName(tx, instance.AppID)
-			if err == nil && tableName != "" {
-				tx.Table(tableName).Where("id = ?", instance.BusinessDataID).
-					Updates(map[string]interface{}{"approval_status": model.ApprovalStatusDeleted})
-			}
-		}
-
 		// 软删除实例
 		return tx.Delete(&instance).Error
 	})
-}
-
-// resolveAppTableName 根据应用 ID 获取动态表名
-func resolveAppTableName(tx *gorm.DB, appID uint) (string, error) {
-	var app model.Application
-	if err := tx.First(&app, appID).Error; err != nil {
-		return "", err
-	}
-	return app.TableName, nil
 }
 
 // ============================================================
