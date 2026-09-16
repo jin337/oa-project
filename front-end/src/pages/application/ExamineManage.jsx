@@ -230,6 +230,7 @@ export default function ExamineManage() {
             title="选择可发起人"
             modes={[1, 2]} // 1-组织架构 / 2-角色
             checkTarget={1} // 1-仅人员：勾选部门联动选中其下所有人员，已选仅保留具体人员
+            selectMode={2} // 可发起人员支持多人，保持多选
             value={normalizeMembers(editing.node.members)}
             onChange={(items) => saveNode({ ...editing.node, members: items })}
             onCancel={closeEdit}

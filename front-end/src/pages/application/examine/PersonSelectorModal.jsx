@@ -8,6 +8,7 @@ import { useSelectorData } from 'src/pages/application/examine/selector-context'
  * 通用对象选择器弹层（左右布局 Modal），参照钉钉审批的成员选择语义：
  * - modes: 数据源维度数组（数字枚举：1-组织架构 / 2-角色），如 [1, 2]；单项时自动隐藏 Tab 切换栏
  * - checkTarget: org 树可勾选类型（数字枚举：1-仅人员 / 2-仅部门），默认 1-人员
+ * - selectMode: 选择模式（数字枚举：1-单选 / 2-多选），默认 2-多选；单选时 selected 最多保留一项
  * - 组织架构维度：checkTarget=1（仅人员）时保留部门+人员父子层级，勾选部门联动选中其下所有人员，
  *   已选面板仅展示具体人员（「部门：姓名」）；checkTarget=2（仅部门）时人员节点禁用，仅勾选部门，
  *   已选面板仅展示部门名称
@@ -22,6 +23,7 @@ export function PersonSelectorModal({
   onCancel,
   modes = [1, 2], // 默认全部数据源维度：1-组织架构 / 2-角色
   checkTarget = 1, // 默认 1-人员
+  selectMode = 2, // 选择模式：1-单选 / 2-多选（默认多选）
 }) {
   const {
     orgTree = [],
@@ -34,10 +36,11 @@ export function PersonSelectorModal({
   const hasOrg = modes.includes(1) // 1-组织架构
   const isSingleMode = modes.length === 1
   const [tab, setTab] = useState(modes[0])
-  // 弹层内临时选择（统一带 key）
-  const [selected, setSelected] = useState(() =>
-    value.map((item) => ({ ...item, key: item.key || `${item.type}-${item.label}` })),
-  )
+  // 弹层内临时选择（统一带 key）；单选模式（selectMode===1）下仅保留最后一项，确保 selected 最多一个元素
+  const [selected, setSelected] = useState(() => {
+    const init = value.map((item) => ({ ...item, key: item.key || `${item.type}-${item.label}` }))
+    return selectMode === 1 ? init.slice(-1) : init
+  })
 
   // 组织架构树选中 keys（部门/人员）
   const orgCheckedKeys = selected.filter((s) => orgItemMap[s.key]).map((s) => s.key)
@@ -82,14 +85,27 @@ export function PersonSelectorModal({
     let orgItems = checked.map((k) => orgItemMap[k]).filter(Boolean)
     // 按 checkTarget 过滤：1-仅人员 → 只保留人员；2-仅部门 → 只保留部门
     orgItems = orgItems.filter((s) => s.type === checkTarget)
+    // 单选模式（selectMode===1）：只保留最后勾选的一项，自动清除之前已选项
+    if (selectMode === 1 && orgItems.length > 1) orgItems = orgItems.slice(-1)
     const roleItems = selected.filter((s) => roleItemMap[s.key])
-    setSelected(dedupe([...orgItems, ...roleItems]))
+    // 单选模式：组织树新选后，角色维度已有条目一并清除（selected 最多一个元素）
+    const rest = selectMode === 1 ? [] : roleItems
+    setSelected(dedupe([...orgItems, ...rest]))
   }
 
   // 角色维度勾选切换（钉钉模式：勾选「角色」本身，type=3；取消勾选则移除该角色）。
   // 保留组织架构维度的已选项（人员/部门），仅增删角色条目；checkTarget=2（仅部门）时角色维度无意义
   const handleRoleToggle = (role, checked) => {
     if (checkTarget === 2) return
+    if (selectMode === 1) {
+      // 单选模式：勾选新角色即替换旧选项（selected 最多一个元素）；取消勾选则清空
+      if (!checked) {
+        setSelected(selected.filter((s) => s.key !== role.key))
+        return
+      }
+      setSelected([roleItemMap[role.key]])
+      return
+    }
     const others = selected.filter((s) => !roleItemMap[s.key]) // 保留非角色条目（组织架构维度）
     const roleItems = selected.filter((s) => roleItemMap[s.key] && s.key !== role.key)
     if (checked) roleItems.push(roleItemMap[role.key])
@@ -159,19 +175,33 @@ export function PersonSelectorModal({
                 <div className="py-8 text-center text-xs text-gray-400">暂无组织架构数据</div>
               )
             ) : roleList.length ? (
-              // 2-角色：直接渲染角色列表（钉钉模式：勾选「角色」本身，无需角色下属用户树）
+              // 2-角色：直接渲染角色列表（钉钉模式：勾选「角色」本身，无需角色下属用户树）。
+              // 单选模式（selectMode===1）下用 Radio（点击已选项不触发取消，取消通过右侧 Tag 删除），
+              // 多选模式用 Checkbox
               <div className="space-y-1">
-                {roleList.map((r) => (
-                  <div key={r.key} className="flex items-center gap-2">
-                    <Checkbox
-                      disabled={checkTarget === 2}
-                      checked={selected.some((s) => s.key === r.key)}
-                      onChange={(checked) => handleRoleToggle(r, checked)}
-                    >
-                      {r.title}
-                    </Checkbox>
-                  </div>
-                ))}
+                {roleList.map((r) =>
+                  selectMode === 1 ? (
+                    <div key={r.key} className="flex items-center gap-2">
+                      <Radio
+                        disabled={checkTarget === 2}
+                        checked={selected.some((s) => s.key === r.key)}
+                        onChange={(checked) => handleRoleToggle(r, checked)}
+                      >
+                        {r.title}
+                      </Radio>
+                    </div>
+                  ) : (
+                    <div key={r.key} className="flex items-center gap-2">
+                      <Checkbox
+                        disabled={checkTarget === 2}
+                        checked={selected.some((s) => s.key === r.key)}
+                        onChange={(checked) => handleRoleToggle(r, checked)}
+                      >
+                        {r.title}
+                      </Checkbox>
+                    </div>
+                  ),
+                )}
               </div>
             ) : (
               <div className="py-8 text-center text-xs text-gray-400">暂无角色数据</div>
@@ -213,6 +243,7 @@ export function PersonPicker({
   placeholder,
   modes = [1, 2], // 默认全部数据源维度：1-组织架构 / 2-角色
   checkTarget = 1, // 默认 1-人员
+  selectMode = 2, // 选择模式：1-单选 / 2-多选（默认多选）
 }) {
   const {
     orgTree = [],
@@ -256,6 +287,7 @@ export function PersonPicker({
           title={placeholder || '选择人员'}
           modes={modes}
           checkTarget={checkTarget}
+          selectMode={selectMode}
           value={value}
           onChange={(items) => {
             onChange(items)

@@ -439,6 +439,7 @@ export default function DynamicFlowView({ raw, formData, onMembersChange }) {
             value={selectorNode.members || []}
             modes={[1, 2]} // 1-组织架构 / 2-角色
             checkTarget={1} // 1-人员
+            selectMode={selectorNode.selfSelect || 2} // 发起人自选：1-单选 / 2-多选（默认多选）
             onChange={handleMembersChange}
             onCancel={() => setSelectorNode(null)}
           />
