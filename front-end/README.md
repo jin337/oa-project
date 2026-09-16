@@ -69,3 +69,14 @@ front-end/
 | 部门管理 | 树形表格、新增子部门、增删改 |
 
 侧边栏菜单通过 `GET /api/v1/auth/profile` 返回的菜单树动态渲染，按 `sort` 排序、过滤停用项，按钮类权限项（type=3）不渲染为菜单。
+
+新增工具
+usePermission.js — 权限判断 Hook：
+hasPerm('system:user:add') — 单个权限判断
+hasAnyPerm('perm1', 'perm2') — OR 匹配（满足任一）
+hasAllPerms('perm1', 'perm2') — AND 匹配（全部满足）
+AuthButton.jsx — 权限按钮组件：
+<AuthButton perm="system:user:add"> — 无权限时不渲染
+fallback="disable" — 无权限时渲染为禁用
+perm={['perm1', 'perm2']} — 支持多权限数组
+mode="all" — 切换为 AND 匹配
