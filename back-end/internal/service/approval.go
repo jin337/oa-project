@@ -602,6 +602,30 @@ func parseFlowNodes(raw any) ([]flowNode, error) {
 	return nodes, nil
 }
 
+// injectSelfSelectIntoNodes 将发起人自选审批人注入到 flow_snapshot 节点的 members 中，
+// 使 approverType=3 的节点在快照中即包含最终确定的审批人，消除对 self_select_members_json 的运行时依赖。
+func injectSelfSelectIntoNodes(nodes []flowNode, selfSelectMembers map[string][]uint) []flowNode {
+	if len(selfSelectMembers) == 0 {
+		return nodes
+	}
+	for i := range nodes {
+		if nodes[i].ApproverType == 3 {
+			if uids, ok := selfSelectMembers[nodes[i].ID]; ok && len(uids) > 0 {
+				members := make([]flowMember, 0, len(uids))
+				for _, uid := range uids {
+					members = append(members, flowMember{
+						Type:  1,
+						Key:   fmt.Sprintf("user_%d", uid),
+						Label: "",
+					})
+				}
+				nodes[i].Members = members
+			}
+		}
+	}
+	return nodes
+}
+
 // resolveFieldValue 获取规则字段在表单数据中的实际值（与前端 resolveFieldValue 一致）
 func resolveFieldValue(rule flowRule, formData map[string]interface{}) interface{} {
 	if formData == nil {
@@ -947,6 +971,33 @@ func uniqueUintSlice(ids []uint) []uint {
 // 流程实例核心操作
 // ============================================================
 
+// resolveBusinessDataID 解析业务数据 ID：
+//   - BusinessDataID > 0 且 BusinessData 非空：更新已有业务数据并返回 ID
+//   - BusinessDataID > 0 且 BusinessData 为空：直接返回 ID
+//   - BusinessDataID == 0 且 BusinessData 非空：自动创建业务数据行并返回新 ID
+func resolveBusinessDataID(curUserID uint, req *model.ApprovalInstanceCreateReq) (uint, error) {
+	if req.BusinessDataID > 0 {
+		// 同时传了 business_data，先更新已有业务数据
+		if len(req.BusinessData) > 0 {
+			if err := ApplicationDataUpdate(req.AppID, req.BusinessDataID, curUserID, req.BusinessData); err != nil {
+				return 0, fmt.Errorf("更新业务数据失败: %w", err)
+			}
+		}
+		return req.BusinessDataID, nil
+	}
+	if len(req.BusinessData) == 0 {
+		return 0, errors.New("business_data_id 与 business_data 必须提供其一")
+	}
+	// 强制草稿状态
+	req.BusinessData["approval_status"] = model.ApprovalStatusDraft
+	dataID, err := ApplicationDataCreate(req.AppID, curUserID, req.BusinessData)
+	if err != nil {
+		return 0, fmt.Errorf("自动创建业务数据失败: %w", err)
+	}
+	req.BusinessDataID = dataID
+	return dataID, nil
+}
+
 // ApprovalInstanceCreate 发起审批：
 //  1. 校验业务数据存在且为草稿状态
 //  2. 快照审批流配置 + 表单数据
@@ -955,6 +1006,11 @@ func uniqueUintSlice(ids []uint) []uint {
 //  5. 为首个审批节点生成任务
 //  6. 更新业务表 approval_status 为审核中(2)
 func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
+	// 0. 解析业务数据 ID（支持自动创建）
+	if _, err := resolveBusinessDataID(curUserID, req); err != nil {
+		return nil, err
+	}
+
 	// 1. 校验应用配置
 	app, err := ApplicationDetail(req.AppID)
 	if err != nil {
@@ -1010,14 +1066,18 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 	}
 	execPathJSON, _ := json.Marshal(execPath)
 
-	// 5. 创建流程实例（事务）
+	// 5. 将发起人自选审批人注入流程快照（approverType=3 节点的 members 直接包含最终选人）
+	injectedNodes := injectSelfSelectIntoNodes(nodes, req.SelfSelectMembers)
+	injectedFlowJSON, _ := json.Marshal(injectedNodes)
+
+	// 6. 创建流程实例（事务）
 	var instance model.ApprovalInstance
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
 		instance = model.ApprovalInstance{
 			AppID:            req.AppID,
 			BusinessTable:    app.TableName,
 			BusinessDataID:   req.BusinessDataID,
-			FlowSnapshotJSON: app.ApprovalFlowJSON,
+			FlowSnapshotJSON: injectedFlowJSON,
 			FormDataSnapshot: formData,
 			ExecutionPath:    string(execPathJSON),
 			CurrentNodeIdx:   0,
@@ -1028,8 +1088,8 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 			return err
 		}
 
-		// 6. 为首个审批节点生成任务
-		if err := generateTasksForCurrentNode(tx, &instance, nodes, req.SelfSelectMembers, curUserID); err != nil {
+		// 7. 为首个审批节点生成任务（自选成员已在快照 members 中，无需额外传入）
+		if err := generateTasksForCurrentNode(tx, &instance, injectedNodes, curUserID); err != nil {
 			return err
 		}
 
@@ -1048,8 +1108,212 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 	return &instance, nil
 }
 
+// ApprovalInstanceSaveDraft 保存审批草稿：
+//  1. 校验业务数据存在且为草稿状态
+//  2. 快照审批流配置 + 表单数据 + 评估执行路径
+//  3. 创建流程实例（状态=草稿），不生成审批任务、不更新业务表审核状态
+//  4. 暂存发起人自选审批人，供后续从草稿提交时使用
+func ApprovalInstanceSaveDraft(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
+	// 0. 解析业务数据 ID（支持自动创建）
+	if _, err := resolveBusinessDataID(curUserID, req); err != nil {
+		return nil, err
+	}
+
+	// 1. 校验应用配置
+	app, err := ApplicationDetail(req.AppID)
+	if err != nil {
+		return nil, err
+	}
+	if !isValidTableName(app.TableName) {
+		return nil, errors.New("非法的表名")
+	}
+	if app.ApprovalFlowJSON == nil {
+		return nil, errors.New("该应用未配置审批流程")
+	}
+
+	// 2. 校验业务数据存在且为草稿
+	real := bizTableName(app.TableName)
+	colSet, err := queryColumnSet(real)
+	if err != nil {
+		return nil, fmt.Errorf("查询表结构失败: %w", err)
+	}
+	if !colSet["approval_status"] {
+		return nil, errors.New("业务表缺少审核状态字段")
+	}
+
+	var curStatus *int
+	if err := database.DB.Raw("SELECT `approval_status` FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", req.BusinessDataID).Scan(&curStatus).Error; err != nil {
+		return nil, err
+	}
+	if curStatus == nil {
+		return nil, errors.New("业务数据不存在")
+	}
+	if *curStatus != model.ApprovalStatusDraft {
+		return nil, errors.New("仅草稿状态的数据可保存审批草稿")
+	}
+
+	// 3. 解析流程节点 & 读取业务数据快照 & 评估执行路径
+	nodes, err := parseFlowNodes(app.ApprovalFlowJSON)
+	if err != nil {
+		return nil, fmt.Errorf("解析审批流配置失败: %w", err)
+	}
+	if len(nodes) == 0 {
+		return nil, errors.New("审批流配置为空")
+	}
+
+	formData, err := ApplicationDataDetail(req.AppID, req.BusinessDataID, &model.ApplicationDataDetailReq{})
+	if err != nil {
+		return nil, fmt.Errorf("读取业务数据快照失败: %w", err)
+	}
+
+	execPath := flattenExecutionPath(nodes, formData)
+	execPathJSON, _ := json.Marshal(execPath)
+
+	// 4. 创建草稿实例
+	instance := model.ApprovalInstance{
+		AppID:                 req.AppID,
+		BusinessTable:         app.TableName,
+		BusinessDataID:        req.BusinessDataID,
+		FlowSnapshotJSON:      app.ApprovalFlowJSON,
+		FormDataSnapshot:      formData,
+		ExecutionPath:         string(execPathJSON),
+		CurrentNodeIdx:        0,
+		Status:                model.InstanceStatusDraft,
+		SelfSelectMembersJSON: req.SelfSelectMembers,
+	}
+	instance.CreatedBy, instance.UpdatedBy = curUserID, curUserID
+	if err := database.DB.Create(&instance).Error; err != nil {
+		return nil, err
+	}
+	return &instance, nil
+}
+
+// ApprovalInstanceSubmitDraft 从草稿提交发起审批：
+//  1. 校验草稿实例存在、状态=草稿、属于当前用户
+//  2. 重新读取业务数据、重新评估执行路径（业务数据可能已修改）
+//  3. 更新实例状态为进行中，生成首个审批节点任务
+//  4. 更新业务表 approval_status 为审核中(2)
+func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.ApprovalInstanceSubmitDraftReq) (*model.ApprovalInstance, error) {
+	// 1. 加载草稿实例
+	var instance model.ApprovalInstance
+	if err := database.DB.First(&instance, instanceID).Error; err != nil {
+		return nil, errors.New("流程实例不存在")
+	}
+	if instance.Status != model.InstanceStatusDraft {
+		return nil, errors.New("仅草稿状态的实例可提交")
+	}
+	if instance.CreatedBy != curUserID {
+		return nil, errors.New("只能提交自己发起的草稿")
+	}
+
+	// 2. 校验应用配置
+	app, err := ApplicationDetail(instance.AppID)
+	if err != nil {
+		return nil, err
+	}
+	if !isValidTableName(app.TableName) {
+		return nil, errors.New("非法的表名")
+	}
+
+	real := bizTableName(app.TableName)
+	colSet, err := queryColumnSet(real)
+	if err != nil {
+		return nil, fmt.Errorf("查询表结构失败: %w", err)
+	}
+	if !colSet["approval_status"] {
+		return nil, errors.New("业务表缺少审核状态字段")
+	}
+
+	// 校验业务数据仍为草稿状态
+	var curStatus *int
+	if err := database.DB.Raw("SELECT `approval_status` FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", instance.BusinessDataID).Scan(&curStatus).Error; err != nil {
+		return nil, err
+	}
+	if curStatus == nil {
+		return nil, errors.New("业务数据不存在")
+	}
+	if *curStatus != model.ApprovalStatusDraft {
+		return nil, errors.New("业务数据已不在草稿状态，无法提交")
+	}
+
+	// 3. 重新解析流程节点 & 读取业务数据 & 评估执行路径
+	nodes, err := parseFlowNodes(app.ApprovalFlowJSON)
+	if err != nil {
+		return nil, fmt.Errorf("解析审批流配置失败: %w", err)
+	}
+	if len(nodes) == 0 {
+		return nil, errors.New("审批流配置为空")
+	}
+
+	formData, err := ApplicationDataDetail(instance.AppID, instance.BusinessDataID, &model.ApplicationDataDetailReq{})
+	if err != nil {
+		return nil, fmt.Errorf("读取业务数据快照失败: %w", err)
+	}
+
+	execPath := flattenExecutionPath(nodes, formData)
+	if len(execPath) == 0 {
+		return nil, errors.New("审批流评估后无审批节点，请检查流程配置")
+	}
+	execPathJSON, _ := json.Marshal(execPath)
+
+	// 合并发起人自选审批人：提交时传入 > 草稿暂存
+	selfSelectMembers := instance.SelfSelectMembersJSON
+	if req.SelfSelectMembers != nil {
+		selfSelectMembers = req.SelfSelectMembers
+	}
+
+	// 5. 将发起人自选审批人注入流程快照（approverType=3 节点的 members 直接包含最终选人）
+	injectedNodes := injectSelfSelectIntoNodes(nodes, selfSelectMembers)
+	injectedFlowBytes, _ := json.Marshal(injectedNodes)
+	injectedFlowJSON := string(injectedFlowBytes)
+
+	// 序列化表单数据快照（map 需转为 JSON 字符串，SQL 驱动不支持 map 类型参数）
+	formDataBytes, _ := json.Marshal(formData)
+	formDataJSON := string(formDataBytes)
+
+	// 6. 事务：更新实例 + 生成任务 + 更新业务表
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		instance.FlowSnapshotJSON = injectedFlowJSON
+		instance.FormDataSnapshot = formData
+		instance.ExecutionPath = string(execPathJSON)
+		instance.CurrentNodeIdx = 0
+		instance.Status = model.InstanceStatusRunning
+		instance.SelfSelectMembersJSON = nil // 已注入快照，清除独立字段
+
+		if err := tx.Model(&instance).Updates(map[string]interface{}{
+			"flow_snapshot_json":       injectedFlowJSON,
+			"form_data_snapshot":       formDataJSON,
+			"execution_path":           string(execPathJSON),
+			"current_node_idx":         0,
+			"status":                   model.InstanceStatusRunning,
+			"self_select_members_json": nil, // 已注入快照，清除
+			"updated_by":               curUserID,
+		}).Error; err != nil {
+			return err
+		}
+
+		// 生成首个审批节点任务（自选成员已在快照 members 中，无需额外传入）
+		if err := generateTasksForCurrentNode(tx, &instance, injectedNodes, curUserID); err != nil {
+			return err
+		}
+
+		// 更新业务表 approval_status 为审核中(2)
+		now := time.Now()
+		if err := tx.Exec("UPDATE `"+real+"` SET `approval_status` = ?, `updated_at` = ?, `updated_by` = ? WHERE `id` = ?",
+			model.ApprovalStatusReviewing, now, curUserID, instance.BusinessDataID).Error; err != nil {
+			return fmt.Errorf("更新审核状态失败: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &instance, nil
+}
+
 // generateTasksForCurrentNode 为当前节点生成审批任务
-func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, selfSelectMembers map[string][]uint, curUserID uint) error {
+func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint) error {
 	// 解析执行路径
 	var pathNodeIDs []string
 	if err := json.Unmarshal([]byte(instance.ExecutionPath), &pathNodeIDs); err != nil {
@@ -1066,16 +1330,15 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 		return fmt.Errorf("流程节点 %s 不存在", nodeID)
 	}
 
-	// 解析审批人
-	selfSelectUserIDs := selfSelectMembers[nodeID]
-	userIDs, err := resolveApproverUserIDs(*node, selfSelectUserIDs)
+	// 解析审批人（approverType=3 的自选成员已在提交时注入 node.Members）
+	userIDs, err := resolveApproverUserIDs(*node, nil)
 	if err != nil {
 		return fmt.Errorf("解析审批人失败: %w", err)
 	}
 
 	// 审批人为空且 emptyHandler=1（自动通过）：直接跳过该节点
 	if len(userIDs) == 0 {
-		return handleAutoPassNode(tx, instance, allNodes, selfSelectMembers, curUserID)
+		return handleAutoPassNode(tx, instance, allNodes, curUserID)
 	}
 
 	// 按审批方式生成任务
@@ -1119,7 +1382,7 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 }
 
 // handleAutoPassNode 审批人为空且自动通过：推进到下一个节点
-func handleAutoPassNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, selfSelectMembers map[string][]uint, curUserID uint) error {
+func handleAutoPassNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint) error {
 	// 推进到下一个节点
 	instance.CurrentNodeIdx++
 	var pathNodeIDs []string
@@ -1140,7 +1403,7 @@ func handleAutoPassNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes 
 	}
 
 	// 递归生成新节点的任务
-	return generateTasksForCurrentNode(tx, instance, allNodes, selfSelectMembers, curUserID)
+	return generateTasksForCurrentNode(tx, instance, allNodes, curUserID)
 }
 
 // finishInstance 完成流程实例（通过/拒绝/驳回），同步更新业务表状态
@@ -1195,6 +1458,8 @@ func instanceStatusToBizStatus(instanceStatus int) int {
 	case model.InstanceStatusVoided:
 		return model.ApprovalStatusVoided
 	case model.InstanceStatusWithdrawn:
+		return model.ApprovalStatusDraft
+	case model.InstanceStatusDraft:
 		return model.ApprovalStatusDraft
 	default:
 		return model.ApprovalStatusReviewing
@@ -1356,8 +1621,8 @@ func advanceToNextNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes [
 		return finishInstance(tx, instance, model.InstanceStatusPassed, "", curUserID)
 	}
 
-	// 为新节点生成任务（selfSelectMembers 在推进时为空，因为发起人自选只在发起时传入）
-	return generateTasksForCurrentNode(tx, instance, allNodes, nil, curUserID)
+	// 为新节点生成任务（自选成员已在 flow_snapshot 的 members 中，无需额外传入）
+	return generateTasksForCurrentNode(tx, instance, allNodes, curUserID)
 }
 
 // ApprovalTaskDelegate 转交审批任务
@@ -1432,18 +1697,20 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 // 实例详情
 // ============================================================
 
-// ApprovalInstanceDetail 获取流程实例详情（含任务列表+业务数据）
+// ApprovalInstanceDetail 获取流程实例详情（含任务列表+业务数据+审批人姓名+详情页布局）
 func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstanceDetailResult, error) {
 	var instance model.ApprovalInstance
 	if err := database.DB.First(&instance, instanceID).Error; err != nil {
 		return nil, errors.New("流程实例不存在")
 	}
 
-	// 查询应用名称
+	// 查询应用配置（名称 + 详情页布局快照）
 	var app model.Application
 	appName := ""
+	var detailLayoutJSON any
 	if err := database.DB.First(&app, instance.AppID).Error; err == nil {
 		appName = app.Name
+		detailLayoutJSON = app.DetailLayoutJSON
 	}
 
 	// 查询发起人姓名
@@ -1459,7 +1726,7 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	var tasks []model.ApprovalInstanceTask
 	database.DB.Where("instance_id = ?", instance.ID).Order("sort ASC, id ASC").Find(&tasks)
 
-	// 查询业务数据
+	// 查询业务数据（含子表）
 	var bizData map[string]interface{}
 	real := bizTableName(instance.BusinessTable)
 	if colSet, err := queryColumnSet(real); err == nil {
@@ -1469,13 +1736,64 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 		}
 		database.DB.Raw(sql, instance.BusinessDataID).Scan(&bizData)
 	}
+	// 子表数据：按 parent_id 关联主表（与 ApplicationDataDetail 逻辑一致）
+	if app.SubTableName != "" {
+		for _, sub := range strings.Split(app.SubTableName, ",") {
+			sub = strings.TrimSpace(sub)
+			if sub == "" || !isValidTableName(sub) {
+				continue
+			}
+			subReal := bizTableName(sub)
+			var rows []map[string]interface{}
+			subSQL := "SELECT * FROM `" + subReal + "` WHERE `parent_id` = ?"
+			if subColSet, err := queryColumnSet(subReal); err == nil && subColSet["deleted_at"] {
+				subSQL += " AND `deleted_at` IS NULL"
+			}
+			subSQL += " ORDER BY `id` ASC"
+			if err := database.DB.Raw(subSQL, instance.BusinessDataID).Scan(&rows).Error; err == nil {
+				if rows == nil {
+					rows = []map[string]interface{}{}
+				}
+				if bizData == nil {
+					bizData = make(map[string]interface{})
+				}
+				bizData[sub] = rows
+			}
+		}
+	}
+
+	// 批量解析涉及用户 ID 的姓名（审批人 + 发起人）
+	uidSet := map[uint]bool{}
+	for _, t := range tasks {
+		if t.AssigneeID > 0 {
+			uidSet[t.AssigneeID] = true
+		}
+	}
+	if instance.CreatedBy > 0 {
+		uidSet[instance.CreatedBy] = true
+	}
+	assigneeNameMap := make(map[string]string, len(uidSet))
+	if len(uidSet) > 0 {
+		uidList := make([]uint, 0, len(uidSet))
+		for uid := range uidSet {
+			uidList = append(uidList, uid)
+		}
+		var users []model.User
+		if err := database.DB.Unscoped().Preload("Profile").Where("id IN ?", uidList).Find(&users).Error; err == nil {
+			for _, u := range users {
+				assigneeNameMap[strconv.FormatUint(uint64(u.ID), 10)] = userNickname(u)
+			}
+		}
+	}
 
 	result := &model.ApprovalInstanceDetailResult{
 		ApprovalInstance: instance,
 		AppName:          appName,
 		CreatedByName:    createdByName,
 		BusinessData:     bizData,
+		DetailLayoutJSON: detailLayoutJSON,
 		Tasks:            tasks,
+		AssigneeNameMap:  assigneeNameMap,
 	}
 	return result, nil
 }

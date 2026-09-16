@@ -236,8 +236,8 @@ export default function Apply() {
     }
   }
 
-  // 校验动态表单并落库为草稿（approval_status 强制为 0），返回保存记录（含 dataId）
-  const saveDraftData = async () => {
+  // 校验动态表单并返回序列化后的 payload（不再单独创建业务数据，由后端审批接口一步完成）
+  const validateAndBuildPayload = async () => {
     if (!drawerApp) return null
     let values
     try {
@@ -249,20 +249,37 @@ export default function Apply() {
     // （YYYY-MM-DD / YYYY-MM-DD HH:mm:ss / HH:mm:ss），避免前端 ISO 8601
     // （如 2026-09-14T00:00:00+08:00）导致 MySQL Error 1292 更新失败
     const layout = parseLayoutJson(drawerApp?.form_layout_json)
-    const payload = serializeTimeFields(values, layout?.elements || [])
-    const res = await applicationApi.createApplicationData(drawerApp.id, {
-      ...payload,
-      approval_status: 0, // 强制草稿状态
-    })
-    return res.data
+    return serializeTimeFields(values, layout?.elements || [])
   }
 
-  // 保存草稿：仅落库，状态保持草稿
+  // 将发起人自选成员从 [{ type, key, label }] 转为 { nodeId: [userId] }
+  const buildSelfSelectUserIDs = () => {
+    const result = {}
+    for (const [nodeId, members] of Object.entries(selfSelectMembers)) {
+      const ids = (members || [])
+        .map((m) => {
+          const key = m.key || ''
+          const parts = key.split('_')
+          return parts.length >= 2 ? parseInt(parts[1], 10) : 0
+        })
+        .filter((id) => id > 0)
+      if (ids.length) result[nodeId] = ids
+    }
+    return result
+  }
+
+  // 保存草稿：校验表单 + 一次调用保存审批草稿实例（后端自动创建业务数据）
   const handleSaveDraft = async () => {
     setDrawerSaving(true)
     try {
-      const data = await saveDraftData()
-      if (!data) return
+      const payload = await validateAndBuildPayload()
+      if (!payload) return
+      const selfSelectUserIDs = buildSelfSelectUserIDs()
+      await approvalApi.saveDraftInstance({
+        app_id: drawerApp.id,
+        business_data: payload,
+        self_select_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+      })
       Message.success('草稿保存成功')
       setDrawerVisible(false)
     } catch (e) {
@@ -272,33 +289,16 @@ export default function Apply() {
     }
   }
 
-  // 提交审核：先落库草稿，再调用发起审批接口创建流程实例
+  // 提交审核：校验表单 + 一次调用发起审批（后端自动创建业务数据）
   const handleSubmitApproval = async () => {
     setDrawerSaving(true)
     try {
-      const data = await saveDraftData()
-      if (!data) return
-      const dataId = data.id ?? data.dataId
-      if (!dataId) {
-        Message.warning('数据已保存，但未能获取数据 ID，审核状态未流转')
-        setDrawerVisible(false)
-        return
-      }
-      // 将发起人自选成员从 [{ type, key, label }] 转为 { nodeId: [userId] }
-      const selfSelectUserIDs = {}
-      for (const [nodeId, members] of Object.entries(selfSelectMembers)) {
-        const ids = (members || [])
-          .map((m) => {
-            const key = m.key || ''
-            const parts = key.split('_')
-            return parts.length >= 2 ? parseInt(parts[1], 10) : 0
-          })
-          .filter((id) => id > 0)
-        if (ids.length) selfSelectUserIDs[nodeId] = ids
-      }
+      const payload = await validateAndBuildPayload()
+      if (!payload) return
+      const selfSelectUserIDs = buildSelfSelectUserIDs()
       await approvalApi.createApprovalInstance({
         app_id: drawerApp.id,
-        business_data_id: dataId,
+        business_data: payload,
         self_select_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
       })
       Message.success('提交成功，等待审核')

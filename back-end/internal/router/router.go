@@ -104,6 +104,8 @@ func Setup() *gin.Engine {
 		instance := approval.Group("/instance")
 		{
 			instance.POST("", handler.ApprovalInstanceCreate)                                // 发起审批
+			instance.POST("/draft", handler.ApprovalInstanceSaveDraft)                       // 保存审批草稿
+			instance.PUT("/:id/submit", handler.ApprovalInstanceSubmitDraft)                 // 从草稿提交发起
 			instance.GET("/:id", handler.ApprovalInstanceDetail)                             // 实例详情
 			instance.PUT("/:id/withdraw", handler.ApprovalInstanceWithdraw)                  // 撤回
 			instance.PUT("/:id/task/:taskId/approve", handler.ApprovalInstanceTaskApprove)   // 审批操作
@@ -132,7 +134,6 @@ func Setup() *gin.Engine {
 		applications.PUT("/:id/formelement/:elementId", handler.FormElementUpdate)
 		applications.DELETE("/:id/formelement/:elementId", handler.FormElementDelete)
 		// 动态页面数据
-		applications.GET("/:id/data", handler.ApplicationDataList)
 		applications.POST("/:id/data", handler.ApplicationDataCreate)
 		applications.GET("/:id/data/:dataId", handler.ApplicationDataDetail)
 		applications.PUT("/:id/data/:dataId", handler.ApplicationDataUpdate)

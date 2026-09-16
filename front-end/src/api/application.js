@@ -66,28 +66,6 @@ export function deleteTableField(appId, fieldId, tableName) {
   })
 }
 
-// ========== 动态业务数据（/application/:id/data） ==========
-
-// POST /application/:id/data 新增动态业务数据（提交申请表单）
-export function createApplicationData(appId, data) {
-  return request.post(`/application/${appId}/data`, data)
-}
-
-// PUT /application/:id/data/:dataId 更新动态业务数据（编辑表单提交）
-export function updateApplicationData(appId, dataId, data) {
-  return request.put(`/application/${appId}/data/${dataId}`, data)
-}
-
-// GET /application/:id/data/:dataId 动态业务数据详情（含子表数据）
-export function getApplicationDataDetail(appId, dataId) {
-  return request.get(`/application/${appId}/data/${dataId}`)
-}
-
-// DELETE /application/:id/data/:dataId 删除动态业务数据（列表页删除行）
-export function deleteApplicationData(appId, dataId) {
-  return request.delete(`/application/${appId}/data/${dataId}`)
-}
-
 // ========== 表单元素管理（/application/:appId/formelement） ==========
 
 // GET /application/:appId/formelement 表单元素列表
@@ -108,4 +86,26 @@ export function updateFormElement(appId, elementId, data) {
 // DELETE /application/:appId/formelement/:id 删除表单元素
 export function deleteFormElement(appId, elementId) {
   return request.delete(`/application/${appId}/formelement/${elementId}`)
+}
+
+// ========== 动态业务数据（/application/:id/data） ==========
+
+// POST /application/:id/data 新增动态业务数据
+export function createApplicationData(appId, data) {
+  return request.post(`/application/${appId}/data`, data)
+}
+
+// PUT /application/:id/data/:dataId 更新动态业务数据
+export function updateApplicationData(appId, dataId, data) {
+  return request.put(`/application/${appId}/data/${dataId}`, data)
+}
+
+// GET /application/:id/data/:dataId 动态业务数据详情（含子表数据）
+export function getApplicationDataDetail(appId, dataId) {
+  return request.get(`/application/${appId}/data/${dataId}`)
+}
+
+// DELETE /application/:id/data/:dataId 删除动态业务数据
+export function deleteApplicationData(appId, dataId) {
+  return request.delete(`/application/${appId}/data/${dataId}`)
 }

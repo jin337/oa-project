@@ -1,12 +1,12 @@
 import {
-    Button,
-    Card,
-    Drawer,
-    Input,
-    Message,
-    Popconfirm,
-    Space,
-    Table,
+  Button,
+  Card,
+  Drawer,
+  Input,
+  Message,
+  Popconfirm,
+  Space,
+  Table,
 } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -34,6 +34,9 @@ export default function Todo() {
   const [currentTask, setCurrentTask] = useState(null)
   const [comment, setComment] = useState('')
   const [operating, setOperating] = useState(false)
+  // 审批时间线预加载数据：打开 Drawer 时一次请求，通过 initialData 传递给 ApprovalTimeline 跳过自身请求
+  const [timelineInstance, setTimelineInstance] = useState(null)
+  const [timelineLoading, setTimelineLoading] = useState(false)
 
   useEffect(() => {
     addTab({ path: location.pathname, title: PAGE_TITLE })
@@ -56,11 +59,21 @@ export default function Todo() {
     fetchList()
   }, [fetchList])
 
-  // 打开审批操作 Drawer
-  const handleOpenApprove = (record) => {
+  // 打开审批操作 Drawer：预加载实例数据，供 ApprovalTimeline 复用
+  const handleOpenApprove = async (record) => {
     setCurrentTask(record)
     setComment('')
     setApproveDrawerVisible(true)
+    setTimelineInstance(null)
+    setTimelineLoading(true)
+    try {
+      const res = await approvalApi.getApprovalInstanceDetail(record.instance_id)
+      setTimelineInstance(res.data)
+    } catch {
+      // 错误已在请求层提示
+    } finally {
+      setTimelineLoading(false)
+    }
   }
 
   // 执行审批操作（1-通过 2-拒绝 3-驳回）
@@ -76,6 +89,7 @@ export default function Todo() {
       Message.success(`已${actionNames[action]}`)
       setApproveDrawerVisible(false)
       setCurrentTask(null)
+      setTimelineInstance(null)
       fetchList()
     } catch (e) {
       // 错误已在请求层提示
@@ -211,11 +225,17 @@ export default function Todo() {
               />
             </div>
 
-            {/* 审批流程时间线 */}
-            <ApprovalTimeline
-              instanceId={currentTask.instance_id}
-              visible={approveDrawerVisible}
-            />
+            {/* 审批流程时间线：数据预加载完成后渲染，通过 initialData 跳过自身 API 请求 */}
+            {timelineLoading ? (
+              <div className="py-4 text-center text-gray-400">加载审批流程...</div>
+            ) : (
+              <ApprovalTimeline
+                instanceId={currentTask.instance_id}
+                visible={approveDrawerVisible}
+                initialData={timelineInstance}
+                assigneeNameMap={timelineInstance?.assignee_name_map}
+              />
+            )}
           </>
         )}
       </Drawer>

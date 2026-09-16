@@ -20,6 +20,8 @@ import * as approvalApi from 'src/api/approval'
  * @param {object} props
  * @param {number} props.instanceId 流程实例 ID
  * @param {boolean} props.visible 是否可见（控制数据加载）
+ * @param {object} props.initialData 外部预加载的实例数据，传入时跳过自身 API 请求
+ * @param {object} props.assigneeNameMap 外部预解析的用户姓名映射（userId -> 姓名），传入时跳过用户查询请求
  */
 
 // 任务状态元信息
@@ -83,16 +85,27 @@ function flattenFlowNodes(nodes, executionPathSet) {
   return result
 }
 
-/** 格式化成员列表为可读文本 */
-function formatMembers(members) {
+/** 格式化成员列表为可读文本，利用 userNameMap 解析人员 key（如 user_5 → 真实姓名） */
+function formatMembers(members, nameMap) {
   if (!members?.length) return '未配置'
-  return members.map((m) => m.label || m.key || '').filter(Boolean).join('、') || '未配置'
+  return members
+    .map((m) => {
+      if (m.label) return m.label
+      // 人员类型 key 格式为 "user_{id}"，通过 nameMap 解析真实姓名
+      if (m.type === 1 && m.key && nameMap) {
+        const uid = m.key.replace('user_', '')
+        if (nameMap[uid]) return nameMap[uid]
+      }
+      return m.key || ''
+    })
+    .filter(Boolean)
+    .join('、') || '未配置'
 }
 
 /** 抄送时机文本 */
 const CC_TIMING_LABEL = { 1: '审批通过后抄送', 2: '流程结束时统一抄送' }
 
-export default function ApprovalTimeline({ instanceId, visible }) {
+export default function ApprovalTimeline({ instanceId, visible, initialData, assigneeNameMap: externalNameMap }) {
   const [loading, setLoading] = useState(false)
   const [instance, setInstance] = useState(null)
   const [tasks, setTasks] = useState([])
@@ -102,52 +115,57 @@ export default function ApprovalTimeline({ instanceId, visible }) {
   useEffect(() => {
     if (!visible || !instanceId) return
     let cancelled = false
-    setLoading(true)
-    setInstance(null)
-    setTasks([])
-    setFlowNodes([])
-    setUserNameMap({})
 
-    approvalApi
-      .getApprovalInstanceDetail(instanceId)
-      .then((res) => {
-        if (cancelled) return
-        const data = res.data
-        setInstance(data)
-        setTasks(data.tasks || [])
+    // 处理实例数据：解析节点链、设置任务、解析用户姓名
+    const processInstanceData = (data) => {
+      if (cancelled) return
+      setInstance(data)
+      setTasks(data.tasks || [])
 
-        // 解析流程快照节点链
-        let nodes = []
-        try {
-          const snapshot = data.flow_snapshot_json
-          nodes = Array.isArray(snapshot) ? snapshot : snapshot?.nodes || []
-        } catch {
-          // 解析失败时使用空数组
-        }
+      // 解析流程快照节点链
+      let nodes = []
+      try {
+        const snapshot = data.flow_snapshot_json
+        nodes = Array.isArray(snapshot) ? snapshot : snapshot?.nodes || []
+      } catch {
+        // 解析失败时使用空数组
+      }
 
-        // 解析 execution_path 为 Set，用于判断节点是否被命中
-        let execPathSet = new Set()
-        try {
-          const ep = data.execution_path
-          const arr = typeof ep === 'string' ? JSON.parse(ep) : ep
-          if (Array.isArray(arr)) arr.forEach((id) => execPathSet.add(id))
-        } catch {
-          // 无执行路径
-        }
+      // 解析 execution_path 为 Set，用于判断节点是否被命中
+      let execPathSet = new Set()
+      try {
+        const ep = data.execution_path
+        const arr = typeof ep === 'string' ? JSON.parse(ep) : ep
+        if (Array.isArray(arr)) arr.forEach((id) => execPathSet.add(id))
+      } catch {
+        // 无执行路径
+      }
 
-        setFlowNodes(flattenFlowNodes(nodes, execPathSet))
+      setFlowNodes(flattenFlowNodes(nodes, execPathSet))
 
-        // 收集所有涉及的用户 ID
+      // 用户姓名：优先使用外部传入的映射（已解析），否则逐个查询
+      if (externalNameMap) {
+        if (!cancelled) setUserNameMap(externalNameMap)
+      } else {
+        // 收集所有涉及的用户 ID（tasks + 成员引用）
         const userIds = new Set()
         ;(data.tasks || []).forEach((t) => {
           if (t.assignee_id) userIds.add(t.assignee_id)
         })
         if (data.created_by) userIds.add(data.created_by)
+        // 从节点 members 中提取人员引用（approverType=3 自选节点注入的 key 格式为 user_{id}）
+        nodes.forEach((n) => {
+          ;(n.members || []).forEach((m) => {
+            if (m.type === 1 && m.key) {
+              const uid = m.key.replace('user_', '')
+              if (uid) userIds.add(uid)
+            }
+          })
+        })
 
-        // 批量查询用户姓名
+        // 逐个查询（项目暂无批量用户接口，后续可优化）
         if (userIds.size > 0) {
           const nameMap = {}
-          // 逐个查询（项目暂无批量用户接口，后续可优化）
           Promise.all(
             Array.from(userIds).map((uid) =>
               import('src/api/user').then(({ getUser }) =>
@@ -165,6 +183,25 @@ export default function ApprovalTimeline({ instanceId, visible }) {
             if (!cancelled) setUserNameMap(nameMap)
           })
         }
+      }
+    }
+
+    // 外部已提供数据时跳过 API 请求
+    if (initialData) {
+      processInstanceData(initialData)
+      return () => { cancelled = true }
+    }
+
+    setLoading(true)
+    setInstance(null)
+    setTasks([])
+    setFlowNodes([])
+    setUserNameMap({})
+
+    approvalApi
+      .getApprovalInstanceDetail(instanceId)
+      .then((res) => {
+        processInstanceData(res.data)
       })
       .catch(() => {
         // 错误已在请求层提示
@@ -285,7 +322,7 @@ export default function ApprovalTimeline({ instanceId, visible }) {
                     })
                   ) : (
                     <div className="mt-1 text-xs text-gray-400">
-                      {formatMembers(node.members)}
+                      {formatMembers(node.members, userNameMap)}
                     </div>
                   )}
                 </Timeline.Item>
@@ -309,7 +346,7 @@ export default function ApprovalTimeline({ instanceId, visible }) {
                     <Tag size="small" color="blue">抄送人</Tag>
                   </div>
                   <div className="mt-0.5 text-xs text-gray-500">
-                    <span>{formatMembers(node.members)}</span>
+                    <span>{formatMembers(node.members, userNameMap)}</span>
                     {node.ccTiming && (
                       <span className="ml-2 text-gray-400">
                         {CC_TIMING_LABEL[node.ccTiming] || ''}

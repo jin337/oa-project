@@ -75,37 +75,6 @@ func ApplicationByCode(c *gin.Context) {
 	response.OK(c, result)
 }
 
-// ApplicationDataList GET /api/v1/application/:id/data 动态数据列表查询
-// 参数：page、size、table_name，以及动态搜索字段（以 field_key 作为 Query 参数名）
-func ApplicationDataList(c *gin.Context) {
-	id, ok := parseID(c)
-	if !ok {
-		return
-	}
-	var req model.ApplicationDataListReq
-	if msg := vtrans.Validate(c, &req); msg != "" {
-		response.Fail(c, response.CodeParamError, msg)
-		return
-	}
-	// 动态搜索字段：query 中除 page/size/table_name 之外的参数（field_key → 值）
-	filters := make(map[string]string)
-	for k, vs := range c.Request.URL.Query() {
-		if k == "page" || k == "size" || k == "table_name" {
-			continue
-		}
-		if len(vs) > 0 && vs[0] != "" {
-			filters[k] = vs[0]
-		}
-	}
-	req.Filters = filters
-	list, total, err := service.ApplicationDataList(id, &req)
-	if err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
-		return
-	}
-	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
-}
-
 // ApplicationDataDetail GET /api/v1/application/:id/data/:dataId 动态数据详情（含子表数据）
 func ApplicationDataDetail(c *gin.Context) {
 	id, ok := parseID(c)

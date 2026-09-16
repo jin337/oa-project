@@ -174,6 +174,40 @@ func ApprovalInstanceCreate(c *gin.Context) {
 	response.OK(c, instance)
 }
 
+// ApprovalInstanceSaveDraft POST /api/v1/approval/instance/draft
+func ApprovalInstanceSaveDraft(c *gin.Context) {
+	var req model.ApprovalInstanceCreateReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	instance, err := service.ApprovalInstanceSaveDraft(middleware.CurrentUserID(c), &req)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, instance)
+}
+
+// ApprovalInstanceSubmitDraft PUT /api/v1/approval/instance/:id/submit
+func ApprovalInstanceSubmitDraft(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req model.ApprovalInstanceSubmitDraftReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	instance, err := service.ApprovalInstanceSubmitDraft(middleware.CurrentUserID(c), id, &req)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, instance)
+}
+
 // ApprovalInstanceDetail GET /api/v1/approval/instance/:id
 func ApprovalInstanceDetail(c *gin.Context) {
 	id, ok := parseID(c)

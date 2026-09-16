@@ -1,4 +1,5 @@
 import { Empty, Form, Spin } from '@arco-design/web-react'
+import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import DynamicForm from 'src/pages/application/dynamic/DynamicForm'
 import { useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
@@ -11,13 +12,26 @@ import { useApplicationDetailData } from 'src/pages/application/dynamic/useAppli
  *
  * @param {object} app    应用配置对象（含 id / name / detail_layout_json 等字段）
  * @param {string|number} dataId  数据记录 ID（可选；Drawer 场景由父组件传入，路由场景回退 useParams().id）
+ * @param {object} initialData  外部预加载的业务数据（传入时跳过自动请求，直接用于表单回填）
  */
-export default function DynamicDetail({ app, dataId: propDataId }) {
+export default function DynamicDetail({ app, dataId: propDataId, initialData }) {
   const { id: routeDataId } = useParams()
   const dataId = propDataId || routeDataId
   const [form] = Form.useForm()
 
-  const { detailData, loading, detailApp } = useApplicationDetailData(app, dataId, form)
+  // 外部已提供数据时跳过自动请求（审批详情场景：复用实例接口返回的 business_data）
+  const { detailData, loading, detailApp } = useApplicationDetailData(app, dataId, form, {
+    autoFetch: !initialData,
+  })
+
+  // 外部数据变化时同步回填表单
+  useEffect(() => {
+    if (initialData && form) {
+      form.setFieldsValue(initialData)
+    }
+  }, [initialData, form])
+
+  const displayData = initialData || detailData
 
   if (loading) {
     return (
@@ -27,7 +41,7 @@ export default function DynamicDetail({ app, dataId: propDataId }) {
     )
   }
 
-  if (!detailData) {
+  if (!displayData) {
     return <Empty description="数据不存在或已删除" />
   }
 

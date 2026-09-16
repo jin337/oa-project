@@ -1,13 +1,13 @@
 import {
-    Button,
-    Card,
-    Drawer,
-    Form,
-    Message,
-    Popconfirm,
-    Space,
-    Spin,
-    Table,
+  Button,
+  Card,
+  Drawer,
+  Form,
+  Message,
+  Popconfirm,
+  Space,
+  Spin,
+  Table,
 } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -15,8 +15,8 @@ import * as applicationApi from 'src/api/application'
 import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
-    parseLayoutJson,
-    serializeTimeFields,
+  parseLayoutJson,
+  serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
 import DetailDrawer from 'src/pages/approval/DetailDrawer.jsx'
@@ -43,6 +43,8 @@ export default function Drafts() {
   const [drawerForm] = Form.useForm()
   // 抽屉内动态表单实时值（供审批流程条件分支命中评估使用）
   const [formValues, setFormValues] = useState({})
+  // 发起人自选审批人（nodeId -> [{ type, key, label }]），提交时转为 nodeId -> [userId] 传给后端
+  const [selfSelectMembers, setSelfSelectMembers] = useState({})
 
   // 动态详情 Drawer（查看详情）
   const [detailRecord, setDetailRecord] = useState(null)
@@ -68,7 +70,7 @@ export default function Drafts() {
     fetchList()
   }, [fetchList])
 
-  // 继续编辑：预请求应用配置 + 草稿详情，回填动态表单
+  // 继续编辑：通过实例接口一次获取全部数据
   const openDraftEdit = async (record) => {
     setDraftRecord(record)
     setDrawerVisible(true)
@@ -76,15 +78,24 @@ export default function Drafts() {
     setDrawerApp(null)
     drawerForm.resetFields()
     try {
-      const dataId = record.data_id ?? record.id
-      const [appRes, dataRes] = await Promise.all([
-        applicationApi.getApplication(record.app_id),
-        applicationApi.getApplicationDataDetail(record.app_id, dataId),
-      ])
-      setDrawerApp(appRes.data)
-      drawerForm.setFieldsValue(dataRes.data || {})
-      // 同步表单值到审批流程评估（setFieldsValue 不触发 onValuesChange）
-      setFormValues(dataRes.data || {})
+      if (!record.instance_id) {
+        Message.error('该草稿未关联审批流程，无法编辑')
+        setDrawerVisible(false)
+        return
+      }
+      // 一次请求获取实例详情（含 business_data + detail_layout_json）
+      const res = await approvalApi.getApprovalInstanceDetail(record.instance_id)
+      const inst = res.data
+      // 构造 app 配置：detail_layout_json → form_layout_json 映射供 DynamicForm 使用
+      setDrawerApp({
+        id: inst.app_id,
+        name: inst.app_name,
+        form_layout_json: inst.detail_layout_json,
+      })
+      const bizData = inst.business_data || {}
+      drawerForm.setFieldsValue(bizData)
+      setFormValues(bizData)
+      setSelfSelectMembers({})
     } catch (e) {
       Message.error('草稿加载失败，请稍后重试')
       setDrawerVisible(false)
@@ -93,7 +104,23 @@ export default function Drafts() {
     }
   }
 
-  // 保存草稿编辑：更新动态业务数据（状态保持草稿）
+  // 将发起人自选成员从 [{ type, key, label }] 转为 { nodeId: [userId] }
+  const buildSelfSelectUserIDs = () => {
+    const result = {}
+    for (const [nodeId, members] of Object.entries(selfSelectMembers)) {
+      const ids = (members || [])
+        .map((m) => {
+          const key = m.key || ''
+          const parts = key.split('_')
+          return parts.length >= 2 ? parseInt(parts[1], 10) : 0
+        })
+        .filter((id) => id > 0)
+      if (ids.length) result[nodeId] = ids
+    }
+    return result
+  }
+
+  // 保存草稿编辑：一次调用更新业务数据并保存审批流程草稿实例
   const handleDraftSave = async () => {
     let values
     try {
@@ -104,15 +131,16 @@ export default function Drafts() {
     setDrawerSaving(true)
     try {
       // 时间字段（date/datetime/time 等）统一序列化为 MySQL 兼容格式
-      // （YYYY-MM-DD / YYYY-MM-DD HH:mm:ss / HH:mm:ss），避免前端 ISO 8601
-      // （如 2026-09-14T00:00:00+08:00）导致 MySQL Error 1292 更新失败
       const layout = parseLayoutJson(drawerApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
-      await applicationApi.updateApplicationData(
-        drawerApp.id,
-        draftRecord.data_id ?? draftRecord.id,
-        payload,
-      )
+      const selfSelectUserIDs = buildSelfSelectUserIDs()
+      // 一次调用：后端自动更新业务数据并保存审批草稿实例
+      await approvalApi.saveDraftInstance({
+        app_id: drawerApp.id,
+        business_data_id: draftRecord.data_id ?? draftRecord.id,
+        business_data: payload,
+        self_select_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+      })
       Message.success('草稿更新成功')
       setDrawerVisible(false)
       fetchList()
@@ -123,13 +151,19 @@ export default function Drafts() {
     }
   }
 
-  // 提交审核：调用发起审批接口创建流程实例
+  // 提交审核：优先调用从草稿提交接口，无实例时降级为发起审批
   const handleSubmit = async (record) => {
     try {
-      await approvalApi.createApprovalInstance({
-        app_id: record.app_id,
-        business_data_id: record.id,
-      })
+      if (record.instance_id) {
+        // 已有审批草稿实例，直接从草稿提交发起审批
+        await approvalApi.submitDraftInstance(record.instance_id)
+      } else {
+        // 无实例（旧草稿），走发起审批接口
+        await approvalApi.createApprovalInstance({
+          app_id: record.app_id,
+          business_data_id: record.data_id ?? record.id,
+        })
+      }
       Message.success('提交成功，等待审核')
       fetchList()
     } catch (e) {
@@ -239,7 +273,13 @@ export default function Drafts() {
           <>
             <DynamicForm app={drawerApp} form={drawerForm} pageType="form" onValuesChange={setFormValues} />
             {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
-            <DynamicFlowView raw={drawerApp?.approval_flow_json} formData={formValues} />
+            <DynamicFlowView
+              raw={drawerApp?.approval_flow_json}
+              formData={formValues}
+              onMembersChange={(nodeId, members) => {
+                setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
+              }}
+            />
           </>
         ) : null}
       </Drawer>

@@ -1,46 +1,44 @@
 import { Drawer, Empty, Spin } from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
-import * as applicationApi from 'src/api/application'
+import * as approvalApi from 'src/api/approval'
 import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
 import ApprovalTimeline from 'src/pages/approval/ApprovalTimeline.jsx'
 
 /**
- * 审批记录动态详情 Drawer：根据记录的页面编码（record.code，兼容 "code:state" 格式）请求
- * 对应的应用配置（state=detail），在 Drawer 内渲染 DynamicDetail 还原动态配置的详情页。
- * 负责应用配置的加载状态（Spin）与错误/空状态（Empty）处理，
- * 数据记录本身由 DynamicDetail 内部按 dataId 拉取。
+ * 审批记录动态详情 Drawer：通过 record.instance_id 一次性请求流程实例详情接口，
+ * 复用接口返回的 business_data（含子表）渲染动态详情，复用 detail_layout_json 构建布局配置，
+ * 复用 assignee_name_map 传递给 ApprovalTimeline 消除额外用户查询请求。
+ * 无 instance_id 时（旧业务数据）回退为按 code + dataId 分别请求应用配置与业务数据。
  */
 export default function DetailDrawer({ record, visible, onCancel }) {
   const [loading, setLoading] = useState(false)
-  const [app, setApp] = useState(null)
+  const [instance, setInstance] = useState(null)
   const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     if (!visible || !record) return
     let cancelled = false
     setLoading(true)
-    setApp(null)
+    setInstance(null)
     setLoadError(false)
 
-    // 兼容 "页面编码:页面状态"（如 app_xxx:detail）与纯页面编码：取第一段作为 code
-    const [code = ''] = (record.code || '').trim().split(':')
-    if (!code) {
-      setLoadError(true)
-      setLoading(false)
-      return
+    // 有实例 ID 时走优化路径：一次请求获取全部数据
+    if (record.instance_id) {
+      approvalApi
+        .getApprovalInstanceDetail(record.instance_id)
+        .then((res) => {
+          if (!cancelled) setInstance(res.data)
+        })
+        .catch(() => {
+          if (!cancelled) setLoadError(true)
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    } else {
+      // 无实例 ID：回退为旧路径（按 code 查询应用配置，DynamicDetail 自行请求业务数据）
+      if (!cancelled) setLoading(false)
     }
-
-    applicationApi
-      .getApplicationByCode(code, 'detail')
-      .then((res) => {
-        if (!cancelled) setApp(res.data)
-      })
-      .catch(() => {
-        if (!cancelled) setLoadError(true)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
 
     return () => {
       cancelled = true
@@ -49,10 +47,22 @@ export default function DetailDrawer({ record, visible, onCancel }) {
 
   const dataId = record?.data_id ?? record?.id
 
+  // 从实例响应中构造 DynamicDetail 所需的 app 配置
+  // hook 内部会将 detail_layout_json 映射为 form_layout_json 供 DynamicForm 使用
+  const appFromInstance = instance
+    ? {
+        id: instance.app_id,
+        name: instance.app_name,
+        detail_layout_json: instance.detail_layout_json,
+      }
+    : null
+
+  const title = instance?.app_name || record?.item_name || record?.name || ''
+
   return (
     <Drawer
       width="50%"
-      title={`详情 - ${app?.name || record?.item_name || record?.name || ''}`}
+      title={`详情 - ${title}`}
       visible={visible}
       onCancel={onCancel}
       footer={null}
@@ -62,15 +72,29 @@ export default function DetailDrawer({ record, visible, onCancel }) {
         <div className="flex h-40 items-center justify-center">
           <Spin />
         </div>
-      ) : app ? (
+      ) : instance ? (
         <>
-          <DynamicDetail app={app} dataId={dataId} />
-          {record?.instance_id && (
-            <ApprovalTimeline instanceId={record.instance_id} visible={visible} />
-          )}
+          <DynamicDetail
+            app={appFromInstance}
+            dataId={dataId}
+            initialData={instance?.business_data}
+          />
+          <ApprovalTimeline
+            instanceId={record?.instance_id}
+            visible={visible}
+            initialData={instance}
+            assigneeNameMap={instance?.assignee_name_map}
+          />
         </>
+      ) : !record?.instance_id ? (
+        // 无实例 ID 的回退态：仅渲染应用配置（DynamicDetail 自行请求业务数据）
+        loadError ? (
+          <Empty description="数据加载失败" />
+        ) : (
+          <Empty description="该记录未关联审批流程" />
+        )
       ) : (
-        <Empty description={loadError ? '应用配置加载失败' : '该记录未关联页面编码'} />
+        <Empty description={loadError ? '数据加载失败' : '暂无数据'} />
       )}
     </Drawer>
   )
