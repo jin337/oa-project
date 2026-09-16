@@ -1042,7 +1042,6 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 
 	// 5. 将发起人自选审批人注入流程快照（approverType=3 节点的 members 直接包含最终选人）
 	injectedNodes := injectSelfSelectIntoNodes(nodes, req.SelfSelectMembers)
-	injectedFlowJSON, _ := json.Marshal(injectedNodes)
 
 	// 6. 创建流程实例（事务）
 	var instance model.ApprovalInstance
@@ -1051,7 +1050,7 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 			AppID:            req.AppID,
 			BusinessTable:    app.TableName,
 			BusinessDataID:   req.BusinessDataID,
-			FlowSnapshotJSON: injectedFlowJSON,
+			FlowSnapshotJSON: injectedNodes, // 直接传入结构化数据，由 GORM serializer:json 统一序列化
 			FormDataSnapshot: formData,
 			ExecutionPath:    string(execPathJSON),
 			CurrentNodeIdx:   0,
@@ -1131,14 +1130,13 @@ func ApprovalInstanceSaveDraft(curUserID uint, req *model.ApprovalInstanceCreate
 
 	// 将发起人自选审批人注入流程快照（approverType=3 节点的 members 直接包含最终选人）
 	injectedNodes := injectSelfSelectIntoNodes(nodes, req.SelfSelectMembers)
-	injectedFlowBytes, _ := json.Marshal(injectedNodes)
 
 	// 4. 创建草稿实例
 	instance := model.ApprovalInstance{
 		AppID:                 req.AppID,
 		BusinessTable:         app.TableName,
 		BusinessDataID:        req.BusinessDataID,
-		FlowSnapshotJSON:      injectedFlowBytes,
+		FlowSnapshotJSON:      injectedNodes, // 直接传入结构化数据，由 GORM serializer:json 统一序列化
 		FormDataSnapshot:      formData,
 		ExecutionPath:         string(execPathJSON),
 		CurrentNodeIdx:        0,
@@ -1220,8 +1218,6 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 
 	// 5. 将发起人自选审批人注入流程快照（approverType=3 节点的 members 直接包含最终选人）
 	injectedNodes := injectSelfSelectIntoNodes(nodes, selfSelectMembers)
-	injectedFlowBytes, _ := json.Marshal(injectedNodes)
-	injectedFlowJSON := string(injectedFlowBytes)
 
 	// 序列化表单数据快照（map 需转为 JSON 字符串，SQL 驱动不支持 map 类型参数）
 	formDataBytes, _ := json.Marshal(formData)
@@ -1229,7 +1225,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 
 	// 6. 事务：更新实例 + 生成任务 + 更新业务表
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
-		instance.FlowSnapshotJSON = injectedFlowJSON
+		instance.FlowSnapshotJSON = injectedNodes // 直接传入结构化数据，由 GORM serializer:json 统一序列化
 		instance.FormDataSnapshot = formData
 		instance.ExecutionPath = string(execPathJSON)
 		instance.CurrentNodeIdx = 0
@@ -1237,7 +1233,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		instance.SelfSelectMembersJSON = nil // 已注入快照，清除独立字段
 
 		if err := tx.Model(&instance).Updates(map[string]interface{}{
-			"flow_snapshot_json":       injectedFlowJSON,
+			"flow_snapshot_json":       injectedNodes,
 			"form_data_snapshot":       formDataJSON,
 			"execution_path":           string(execPathJSON),
 			"current_node_idx":         0,
@@ -1643,12 +1639,13 @@ func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 		if instance.CreatedBy != curUserID {
 			return errors.New("只能删除自己发起的审批")
 		}
-		// 仅允许删除已终结的实例：已拒绝(2)/已驳回(3)/已作废(4)/已撤回(5)
+		// 仅允许删除已终结的实例：已拒绝(2)/已驳回(3)/已作废(4)/已撤回(5)/草稿(6)
 		allowedStatuses := []int{
 			model.InstanceStatusRejected,
 			model.InstanceStatusReturned,
 			model.InstanceStatusVoided,
 			model.InstanceStatusWithdrawn,
+			model.InstanceStatusDraft,
 		}
 		allowed := false
 		for _, s := range allowedStatuses {

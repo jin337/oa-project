@@ -171,7 +171,7 @@ export default function Drafts() {
   // 删除草稿
   const handleDelete = async (record) => {
     try {
-      await applicationApi.deleteApplicationData(record.app_id, record.data_id ?? record.id)
+      await approvalApi.deleteApprovalInstance(record.instance_id)
       Message.success('草稿删除成功')
       fetchList()
     } catch (e) {
