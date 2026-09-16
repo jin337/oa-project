@@ -29,6 +29,7 @@ import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import * as roleApi from 'src/api/role'
 import * as userApi from 'src/api/user'
+import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -95,6 +96,7 @@ function normalizeUserPayload(values) {
 }
 
 export default function UserManage() {
+  const { hasPerm } = usePermission()
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -387,32 +389,40 @@ export default function UserManage() {
       width: 290,
       render: (_, record) => (
         <Space>
-          <Button size="mini" onClick={() => openDetail(record)}>
-            查看详情
-          </Button>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          <Button size="mini" onClick={() => openResetPassword(record)}>
-            重置密码
-          </Button>
-          {record.id === 1 ? (
-            <Tooltip content="内置管理员不可删除">
-              <Button size="mini" status="danger" disabled>
-                删除
-              </Button>
-            </Tooltip>
-          ) : (
-            <Popconfirm
-              position="lb"
-              focusLock
-              title="确认删除该用户？"
-              onOk={() => handleDelete(record)}
-            >
-              <Button size="mini" status="danger">
-                删除
-              </Button>
-            </Popconfirm>
+          {hasPerm('system:user:detail') && (
+            <Button size="mini" onClick={() => openDetail(record)}>
+              查看详情
+            </Button>
+          )}
+          {hasPerm('system:user:edit') && (
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+          )}
+          {hasPerm('system:user:resetPwd') && (
+            <Button size="mini" onClick={() => openResetPassword(record)}>
+              重置密码
+            </Button>
+          )}
+          {hasPerm('system:user:delete') && (
+            record.id === 1 ? (
+              <Tooltip content="内置管理员不可删除">
+                <Button size="mini" status="danger" disabled>
+                  删除
+                </Button>
+              </Tooltip>
+            ) : (
+              <Popconfirm
+                position="lb"
+                focusLock
+                title="确认删除该用户？"
+                onOk={() => handleDelete(record)}
+              >
+                <Button size="mini" status="danger">
+                  删除
+                </Button>
+              </Popconfirm>
+            )
           )}
         </Space>
       ),
@@ -467,9 +477,11 @@ export default function UserManage() {
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
-          新增用户
-        </Button>
+        {hasPerm('system:user:add') && (
+          <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
+            新增用户
+          </Button>
+        )}
         <Space>
           <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新

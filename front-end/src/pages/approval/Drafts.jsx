@@ -1,13 +1,13 @@
 import {
-  Button,
-  Card,
-  Drawer,
-  Form,
-  Message,
-  Popconfirm,
-  Space,
-  Spin,
-  Table,
+    Button,
+    Card,
+    Drawer,
+    Form,
+    Message,
+    Popconfirm,
+    Space,
+    Spin,
+    Table,
 } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -15,8 +15,8 @@ import * as applicationApi from 'src/api/application'
 import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
-  parseLayoutJson,
-  serializeTimeFields,
+    parseLayoutJson,
+    serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
 import DetailDrawer from 'src/pages/approval/DetailDrawer.jsx'
@@ -123,14 +123,13 @@ export default function Drafts() {
     }
   }
 
-  // 提交审核：审核状态流转为「待审核」
+  // 提交审核：调用发起审批接口创建流程实例
   const handleSubmit = async (record) => {
     try {
-      await applicationApi.updateApplicationDataApproval(
-        record.app_id,
-        record.data_id ?? record.id,
-        1,
-      )
+      await approvalApi.createApprovalInstance({
+        app_id: record.app_id,
+        business_data_id: record.id,
+      })
       Message.success('提交成功，等待审核')
       fetchList()
     } catch (e) {

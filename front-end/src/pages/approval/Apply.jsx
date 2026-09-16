@@ -31,6 +31,8 @@ import DynamicForm, {
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 
+import { usePermission } from 'src/hooks/usePermission'
+
 const FormItem = Form.Item
 const Row = Grid.Row
 const Col = Grid.Col
@@ -52,6 +54,7 @@ const getIcon = (icon) => ICON_MAP[(icon || '').toLowerCase()] || <IconFile />
  * 点击申请项卡片时预请求应用配置，并在 Drawer 中注入动态表单组件进行展示。
  */
 export default function Apply() {
+  const { hasPerm } = usePermission()
   // 分类 & 申请项数据
   const [categories, setCategories] = useState([])
   const [items, setItems] = useState([])
@@ -76,6 +79,8 @@ export default function Apply() {
   const [drawerForm] = Form.useForm()
   // 抽屉内动态表单实时值（供审批流程条件分支命中评估使用）
   const [formValues, setFormValues] = useState({})
+  // 发起人自选审批人（nodeId -> [{ type, key, label }]），提交时转为 nodeId -> [userId] 传给后端
+  const [selfSelectMembers, setSelfSelectMembers] = useState({})
 
   // 加载分类列表
   const fetchCategories = useCallback(async () => {
@@ -267,7 +272,7 @@ export default function Apply() {
     }
   }
 
-  // 提交审核：先落库草稿，再调用审核状态变更接口流转为「待审核」
+  // 提交审核：先落库草稿，再调用发起审批接口创建流程实例
   const handleSubmitApproval = async () => {
     setDrawerSaving(true)
     try {
@@ -279,9 +284,26 @@ export default function Apply() {
         setDrawerVisible(false)
         return
       }
-      await applicationApi.updateApplicationDataApproval(drawerApp.id, dataId, 1)
+      // 将发起人自选成员从 [{ type, key, label }] 转为 { nodeId: [userId] }
+      const selfSelectUserIDs = {}
+      for (const [nodeId, members] of Object.entries(selfSelectMembers)) {
+        const ids = (members || [])
+          .map((m) => {
+            const key = m.key || ''
+            const parts = key.split('_')
+            return parts.length >= 2 ? parseInt(parts[1], 10) : 0
+          })
+          .filter((id) => id > 0)
+        if (ids.length) selfSelectUserIDs[nodeId] = ids
+      }
+      await approvalApi.createApprovalInstance({
+        app_id: drawerApp.id,
+        business_data_id: dataId,
+        self_select_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+      })
       Message.success('提交成功，等待审核')
       setDrawerVisible(false)
+      setSelfSelectMembers({})
     } catch (e) {
       Message.error('提交审核失败，请稍后重试')
     } finally {
@@ -293,9 +315,11 @@ export default function Apply() {
     <Card
       title="审批申请"
       extra={
-        <Button type="primary" icon={<IconPlus />} onClick={openCreateCategory}>
-          新增分类
-        </Button>
+        hasPerm('approval:apply-btn') && (
+          <Button type="primary" icon={<IconPlus />} onClick={openCreateCategory}>
+            新增分类
+          </Button>
+        )
       }
     >
       {/* 分类流式区块：每个分类独占一行，行下展示该分类的申请项网格 */}
@@ -309,28 +333,34 @@ export default function Apply() {
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <span className="text-base font-medium">{c.name}</span>
-                    <Button
-                      size="mini"
-                      type="text"
-                      icon={<IconEdit />}
-                      onClick={() => openEditCategory(c)}
-                    />
-                    <Popconfirm
-                      title="确定删除该分类吗？"
-                      onOk={() => handleCategoryDelete(c)}
-                      position="bl"
-                    >
-                      <Button size="mini" type="text" status="danger" icon={<IconDelete />} />
-                    </Popconfirm>
+                    {hasPerm('approval:apply-btn') && (
+                      <>
+                        <Button
+                          size="mini"
+                          type="text"
+                          icon={<IconEdit />}
+                          onClick={() => openEditCategory(c)}
+                        />
+                        <Popconfirm
+                          title="确定删除该分类吗？"
+                          onOk={() => handleCategoryDelete(c)}
+                          position="bl"
+                        >
+                          <Button size="mini" type="text" status="danger" icon={<IconDelete />} />
+                        </Popconfirm>
+                      </>
+                    )}
                   </div>
-                  <Button
-                    size="small"
-                    type="secondary"
-                    icon={<IconPlus />}
-                    onClick={() => openCreateItem(c)}
-                  >
-                    新增申请项
-                  </Button>
+                  {hasPerm('approval:apply-btn') && (
+                    <Button
+                      size="small"
+                      type="secondary"
+                      icon={<IconPlus />}
+                      onClick={() => openCreateItem(c)}
+                    >
+                      新增申请项
+                    </Button>
+                  )}
                 </div>
 
                 {/* 申请项网格卡片 */}
@@ -345,29 +375,31 @@ export default function Apply() {
                           onClick={() => handleItemClick(item)}
                         >
                           {/* 卡片右上角操作区：编辑 / 删除（hover 显示） */}
-                          <div
-                            className="absolute top-2 right-2 z-10 hidden items-center group-hover:flex"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Button
-                              size="mini"
-                              type="text"
-                              icon={<IconEdit />}
-                              onClick={() => openEditItem(item)}
-                            />
-                            <Popconfirm
-                              title="确定删除该申请项吗？"
-                              onOk={() => handleItemDelete(item)}
-                              position="br"
+                          {hasPerm('approval:apply-btn') && (
+                            <div
+                              className="absolute top-2 right-2 z-10 hidden items-center group-hover:flex"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <Button
                                 size="mini"
                                 type="text"
-                                status="danger"
-                                icon={<IconDelete />}
+                                icon={<IconEdit />}
+                                onClick={() => openEditItem(item)}
                               />
-                            </Popconfirm>
-                          </div>
+                              <Popconfirm
+                                title="确定删除该申请项吗？"
+                                onOk={() => handleItemDelete(item)}
+                                position="br"
+                              >
+                                <Button
+                                  size="mini"
+                                  type="text"
+                                  status="danger"
+                                  icon={<IconDelete />}
+                                />
+                              </Popconfirm>
+                            </div>
+                          )}
                           <div className="flex items-center gap-3">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-lg text-blue-600">
                               {getIcon(item.icon)}
@@ -493,9 +525,20 @@ export default function Apply() {
           </div>
         ) : drawerApp ? (
           <>
-            <DynamicForm app={drawerApp} form={drawerForm} pageType="form" onValuesChange={setFormValues} />
+            <DynamicForm
+              app={drawerApp}
+              form={drawerForm}
+              pageType="form"
+              onValuesChange={setFormValues}
+            />
             {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
-            <DynamicFlowView raw={drawerApp?.approval_flow_json} formData={formValues} />
+            <DynamicFlowView
+              raw={drawerApp?.approval_flow_json}
+              formData={formValues}
+              onMembersChange={(nodeId, members) => {
+                setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
+              }}
+            />
           </>
         ) : null}
       </Drawer>

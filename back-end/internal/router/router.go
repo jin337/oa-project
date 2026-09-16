@@ -85,18 +85,30 @@ func Setup() *gin.Engine {
 	approval := v1.Group("/approval")
 	approval.Use(middleware.JWTAuth())
 	{
-		// 审批分类
-		approval.GET("/category", handler.ApprovalCategoryList)
-		approval.POST("/category", handler.ApprovalCategoryCreate)
-		approval.PUT("/category/:id", handler.ApprovalCategoryUpdate)
-		approval.DELETE("/category/:id", handler.ApprovalCategoryDelete)
-		// 申请项
-		approval.GET("/item", handler.ApprovalItemList)
-		approval.POST("/item", handler.ApprovalItemCreate)
-		approval.PUT("/item/:id", handler.ApprovalItemUpdate)
-		approval.DELETE("/item/:id", handler.ApprovalItemDelete)
 		// 审批列表
 		approval.GET("/list", handler.ApprovalList)
+		// 审批分类 & 申请项
+		category := approval.Group("/category")
+		{
+			category.GET("", handler.ApprovalCategoryList)
+			category.POST("", handler.ApprovalCategoryCreate)
+			category.PUT("/:id", handler.ApprovalCategoryUpdate)
+			category.DELETE("/:id", handler.ApprovalCategoryDelete)
+			// 申请项
+			category.GET("/item", handler.ApprovalCategoryItemList)
+			category.POST("/item", handler.ApprovalCategoryItemCreate)
+			category.PUT("/item/:id", handler.ApprovalCategoryItemUpdate)
+			category.DELETE("/item/:id", handler.ApprovalCategoryItemDelete)
+		}
+		// 流程实例
+		instance := approval.Group("/instance")
+		{
+			instance.POST("", handler.ApprovalInstanceCreate)                                // 发起审批
+			instance.GET("/:id", handler.ApprovalInstanceDetail)                             // 实例详情
+			instance.PUT("/:id/withdraw", handler.ApprovalInstanceWithdraw)                  // 撤回
+			instance.PUT("/:id/task/:taskId/approve", handler.ApprovalInstanceTaskApprove)   // 审批操作
+			instance.PUT("/:id/task/:taskId/delegate", handler.ApprovalInstanceTaskDelegate) // 转交
+		}
 	}
 
 	// 页面配置管理

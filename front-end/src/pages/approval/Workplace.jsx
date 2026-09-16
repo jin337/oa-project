@@ -2,8 +2,9 @@ import { Button, Card, Space, Table } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import * as approvalApi from 'src/api/approval'
-import { useTabs } from 'src/store/tab-context'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer.jsx'
+import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import { useTabs } from 'src/store/tab-context'
 
 const PAGE_TITLE = '我审批的'
 

@@ -482,8 +482,8 @@ type ApprovalCategoryListReq struct {
 	BaseListReq
 }
 
-// ApprovalItem 申请项
-type ApprovalItem struct {
+// ApprovalCategoryItem 申请项
+type ApprovalCategoryItem struct {
 	BaseModel
 	Name       string `gorm:"size:64;not null;comment:申请项名称" json:"name"`
 	Code       string `gorm:"size:64;comment:关联应用页面编码" json:"code"`
@@ -494,7 +494,7 @@ type ApprovalItem struct {
 	Category *ApprovalCategory `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 }
 
-type ApprovalItemCreateReq struct {
+type ApprovalCategoryItemCreateReq struct {
 	Name       string `json:"name" validate:"required,min=1,max=64" label:"申请项名称"`
 	Code       string `json:"code" validate:"required,min=1,max=64" label:"页面编码"`
 	CategoryID uint   `json:"category_id" validate:"required" label:"所属分类"`
@@ -502,7 +502,7 @@ type ApprovalItemCreateReq struct {
 	Sort       int    `json:"sort" validate:"omitempty" label:"排序"`
 }
 
-type ApprovalItemUpdateReq struct {
+type ApprovalCategoryItemUpdateReq struct {
 	Name       string `json:"name" validate:"omitempty,min=1,max=64" label:"申请项名称"`
 	Code       string `json:"code" validate:"omitempty,min=1,max=64" label:"页面编码"`
 	CategoryID uint   `json:"category_id" validate:"omitempty" label:"所属分类"`
@@ -510,26 +510,113 @@ type ApprovalItemUpdateReq struct {
 	Sort       int    `json:"sort" validate:"omitempty" label:"排序"`
 }
 
-type ApprovalItemListReq struct {
+type ApprovalCategoryItemListReq struct {
 	BaseListReq
 	CategoryID uint `json:"category_id" form:"category_id" validate:"omitempty" label:"所属分类"`
 }
 
+// ============================================================
+// 流程实例 & 审批任务模型
+// ============================================================
+
+// 流程实例状态常量
+const (
+	InstanceStatusRunning   = 0 // 进行中
+	InstanceStatusPassed    = 1 // 已通过（终态）
+	InstanceStatusRejected  = 2 // 已拒绝（终态）
+	InstanceStatusReturned  = 3 // 已驳回（可重新提交）
+	InstanceStatusVoided    = 4 // 已作废（终态）
+	InstanceStatusWithdrawn = 5 // 已撤回（回退为草稿）
+)
+
+// 审批任务状态常量
+const (
+	TaskStatusPending   = 0 // 待处理
+	TaskStatusApproved  = 1 // 已通过
+	TaskStatusRejected  = 2 // 已拒绝
+	TaskStatusReturned  = 3 // 已驳回
+	TaskStatusDelegated = 4 // 已转交
+	TaskStatusCancelled = 5 // 已取消
+)
+
+// ApprovalInstance 流程实例：一次审批流转的运行时载体
+type ApprovalInstance struct {
+	BaseModel
+	AppID            uint                   `gorm:"index;not null;comment:关联页面配置ID" json:"app_id"`
+	BusinessTable    string                 `gorm:"size:128;not null;comment:业务表名(不含前缀)" json:"business_table"`
+	BusinessDataID   uint                   `gorm:"not null;comment:业务数据主键ID" json:"business_data_id"`
+	FlowSnapshotJSON any                    `gorm:"serializer:json;type:json;comment:审批流配置快照(提交时冻结)" json:"flow_snapshot_json"`
+	FormDataSnapshot map[string]interface{} `gorm:"serializer:json;type:json;comment:表单数据快照(提交时冻结)" json:"form_data_snapshot"`
+	ExecutionPath    string                 `gorm:"type:json;comment:条件评估后的命中节点ID链(JSON数组)" json:"execution_path"`
+	CurrentNodeIdx   int                    `gorm:"default:0;comment:当前执行到节点链的索引" json:"current_node_idx"`
+	Status           int                    `gorm:"default:0;comment:实例状态 0进行中 1已通过 2已拒绝 3已驳回 4已作废 5已撤回" json:"status"`
+	Result           string                 `gorm:"size:255;comment:最终审批意见" json:"result"`
+	FinishedAt       *time.Time             `gorm:"comment:流程结束时间" json:"finished_at"`
+
+	App *Application `gorm:"foreignKey:AppID" json:"app,omitempty"`
+}
+
+// ApprovalInstanceTask 审批任务：流程实例中每个审批节点生成的待办任务
+type ApprovalInstanceTask struct {
+	BaseModel
+	InstanceID    uint       `gorm:"index;not null;comment:所属流程实例ID" json:"instance_id"`
+	NodeID        string     `gorm:"size:64;not null;comment:流程节点ID(对应flow_snapshot中的节点id)" json:"node_id"`
+	NodeName      string     `gorm:"size:64;comment:节点名称" json:"node_name"`
+	Sort          int        `gorm:"default:0;comment:节点在execution_path中的序号" json:"sort"`
+	AssigneeID    uint       `gorm:"index;not null;comment:审批人用户ID" json:"assignee_id"`
+	Status        int        `gorm:"default:0;comment:任务状态 0待处理 1已通过 2已拒绝 3已驳回 4已转交 5已取消" json:"status"`
+	Comment       string     `gorm:"size:500;comment:审批意见" json:"comment"`
+	OperatedAt    *time.Time `gorm:"comment:操作时间" json:"operated_at"`
+	DelegatedFrom uint       `gorm:"comment:转交来源任务ID" json:"delegated_from"`
+
+	Instance *ApprovalInstance `gorm:"foreignKey:InstanceID" json:"instance,omitempty"`
+}
+
+// ApprovalInstanceCreateReq 发起审批请求
+type ApprovalInstanceCreateReq struct {
+	AppID            uint              `json:"app_id" validate:"required" label:"页面配置ID"`
+	BusinessDataID   uint              `json:"business_data_id" validate:"required" label:"业务数据ID"`
+	SelfSelectMembers map[string][]uint `json:"self_select_members" validate:"omitempty" label:"发起人自选审批人"` // nodeId -> 用户ID列表
+}
+
+// ApprovalInstanceTaskApproveReq 审批操作请求
+type ApprovalInstanceTaskApproveReq struct {
+	Action  int    `json:"action" validate:"required,oneof=1 2 3" label:"操作"` // 1-通过 2-拒绝 3-驳回
+	Comment string `json:"comment" validate:"omitempty,max=500" label:"审批意见"`
+}
+
+// ApprovalInstanceTaskDelegateReq 转交请求
+type ApprovalInstanceTaskDelegateReq struct {
+	ToUserID uint `json:"to_user_id" validate:"required,gt=0" label:"转交目标用户ID"`
+}
+
+// ApprovalInstanceDetailResult 实例详情响应（含任务列表+审批记录）
+type ApprovalInstanceDetailResult struct {
+	ApprovalInstance
+	AppName        string                 `json:"app_name"`
+	CreatedByName  string                 `json:"created_by_name"` // 发起人姓名
+	BusinessData   map[string]interface{} `json:"business_data,omitempty"`
+	Tasks          []ApprovalInstanceTask `json:"tasks,omitempty"`
+}
+
 // ApprovalRecord 审批列表聚合记录（跨应用汇总动态业务数据，供我的发起/待办/已办/抄送/草稿箱使用）
 type ApprovalRecord struct {
-	ID          uint                   `json:"id"`              // 动态业务数据行 ID
-	AppID       uint                   `json:"app_id"`          // 页面配置 ID
-	AppCode     string                 `json:"code"`            // 页面编码
-	AppName     string                 `json:"app_name"`        // 页面名称
-	Status      int                    `json:"approval_status"` // 审核状态 0草稿 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除
-	StatusName  string                 `json:"status_name"`     // 审核状态中文名
-	CreatedBy   uint                   `json:"created_by"`      // 发起人 ID
-	CreatedName string                 `json:"created_name"`    // 发起人姓名
-	DeptName    string                 `json:"dept_name"`       // 发起人部门名称
-	FinishedAt  *time.Time             `json:"finished_at"`     // 完成时间
-	UpdatedAt   *time.Time             `json:"-"`               // 底层记录更新时间（终态时作为完成时间，不对外输出）
-	CreatedAt   *time.Time             `json:"created_at"`      // 发起时间
-	Data        map[string]interface{} `json:"data,omitempty"`  // 业务数据摘要（不含系统列与审核状态）
+	ID             uint                   `json:"id"`              // 动态业务数据行 ID 或任务 ID
+	InstanceID     uint                   `json:"instance_id,omitempty"` // 流程实例 ID
+	NodeName       string                 `json:"node_name,omitempty"`   // 当前节点名称（待办场景）
+	BusinessDataID uint                   `json:"data_id,omitempty"`     // 业务数据主键 ID（供详情/审批 Drawer 使用）
+	AppID          uint                   `json:"app_id"`          // 页面配置 ID
+	AppCode        string                 `json:"code"`            // 页面编码
+	AppName        string                 `json:"app_name"`        // 页面名称
+	Status         int                    `json:"approval_status"` // 审核状态 0草稿 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除
+	StatusName     string                 `json:"status_name"`     // 审核状态中文名
+	CreatedBy      uint                   `json:"created_by"`      // 发起人 ID
+	CreatedName    string                 `json:"created_name"`    // 发起人姓名
+	DeptName       string                 `json:"dept_name"`       // 发起人部门名称
+	FinishedAt     *time.Time             `json:"finished_at"`     // 完成时间
+	UpdatedAt      *time.Time             `json:"-"`               // 底层记录更新时间（终态时作为完成时间，不对外输出）
+	CreatedAt      *time.Time             `json:"created_at"`      // 发起时间
+	Data           map[string]interface{} `json:"data,omitempty"`  // 业务数据摘要（不含系统列与审核状态）
 }
 
 // ApprovalListReq 审批列表请求（分页）

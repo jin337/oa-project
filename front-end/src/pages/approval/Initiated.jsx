@@ -1,11 +1,10 @@
 import { Button, Card, Message, Popconfirm, Space, Table } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import * as applicationApi from 'src/api/application'
 import * as approvalApi from 'src/api/approval'
-import { useTabs } from 'src/store/tab-context'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import { useTabs } from 'src/store/tab-context'
 
 const PAGE_TITLE = '我的发起'
 
@@ -41,14 +40,10 @@ export default function Initiated() {
     fetchList()
   }, [fetchList])
 
-  // 撤回申请：审核状态流转回草稿（仅待审核 / 审核中可撤回）
+  // 撤回申请：调用流程实例撤回接口（仅进行中状态可撤回）
   const handleWithdraw = async (record) => {
     try {
-      await applicationApi.updateApplicationDataApproval(
-        record.app_id,
-        record.data_id ?? record.id,
-        0,
-      )
+      await approvalApi.withdrawApprovalInstance(record.instance_id || record.id)
       Message.success('撤回成功，已转为草稿')
       fetchList()
     } catch (e) {
@@ -93,7 +88,7 @@ export default function Initiated() {
           <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
             详情
           </Button>
-          {[1, 2].includes(r.approval_status) && (
+          {[2].includes(r.approval_status) && (
             <Popconfirm position='lb' title="撤回后该申请将转为草稿，确定撤回？" onOk={() => handleWithdraw(r)}>
               <Button type="text" size="small" status="danger">
                 撤回
@@ -108,7 +103,7 @@ export default function Initiated() {
   return (
     <Card title={PAGE_TITLE}>
       <Table
-        rowKey={(r) => r.data_id ?? r.id}
+        rowKey={(r) => r.instance_id ?? r.id}
         columns={columns}
         data={list}
         loading={loading}

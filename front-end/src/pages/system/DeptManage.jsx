@@ -22,6 +22,7 @@ import {
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from 'src/api/dept'
+import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -57,6 +58,7 @@ const EMPTY_FORM = {
 }
 
 export default function DeptManage() {
+  const { hasPerm } = usePermission()
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(false)
 
@@ -174,24 +176,30 @@ export default function DeptManage() {
       width: 220,
       render: (_, record) => (
         <Space>
-          <Button size="mini" onClick={() => openCreate(record.id)}>
-            新增子部门
-          </Button>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          {record.children?.length > 0 ? (
-            <Tooltip content="存在子节点，请先删除子节点">
-              <Button size="mini" status="danger" disabled>
-                删除
-              </Button>
-            </Tooltip>
-          ) : (
-            <Popconfirm position="lb" focusLock title="确认删除该部门？" onOk={() => handleDelete(record)}>
-              <Button size="mini" status="danger">
-                删除
-              </Button>
-            </Popconfirm>
+          {hasPerm('system:dept:add') && (
+            <Button size="mini" onClick={() => openCreate(record.id)}>
+              新增子部门
+            </Button>
+          )}
+          {hasPerm('system:dept:edit') && (
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+          )}
+          {hasPerm('system:dept:delete') && (
+            record.children?.length > 0 ? (
+              <Tooltip content="存在子节点，请先删除子节点">
+                <Button size="mini" status="danger" disabled>
+                  删除
+                </Button>
+              </Tooltip>
+            ) : (
+              <Popconfirm position="lb" focusLock title="确认删除该部门？" onOk={() => handleDelete(record)}>
+                <Button size="mini" status="danger">
+                  删除
+                </Button>
+              </Popconfirm>
+            )
           )}
         </Space>
       ),
@@ -218,9 +226,11 @@ export default function DeptManage() {
     <Card title="部门管理">
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
-          新增部门
-        </Button>
+        {hasPerm('system:dept:add') && (
+          <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
+            新增部门
+          </Button>
+        )}
         <Space>
           <Button size="mini" icon={<IconRefresh />} onClick={fetchTree}>
             刷新

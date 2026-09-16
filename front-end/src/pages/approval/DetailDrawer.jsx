@@ -2,6 +2,7 @@ import { Drawer, Empty, Spin } from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
+import ApprovalTimeline from 'src/pages/approval/ApprovalTimeline.jsx'
 
 /**
  * 审批记录动态详情 Drawer：根据记录的页面编码（record.code，兼容 "code:state" 格式）请求
@@ -62,7 +63,12 @@ export default function DetailDrawer({ record, visible, onCancel }) {
           <Spin />
         </div>
       ) : app ? (
-        <DynamicDetail app={app} dataId={dataId} />
+        <>
+          <DynamicDetail app={app} dataId={dataId} />
+          {record?.instance_id && (
+            <ApprovalTimeline instanceId={record.instance_id} visible={visible} />
+          )}
+        </>
       ) : (
         <Empty description={loadError ? '应用配置加载失败' : '该记录未关联页面编码'} />
       )}

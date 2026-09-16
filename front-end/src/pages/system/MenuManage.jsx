@@ -22,6 +22,7 @@ import {
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as menuApi from 'src/api/menu'
+import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -74,6 +75,7 @@ const EMPTY_FORM = {
 }
 
 export default function MenuManage() {
+  const { hasPerm } = usePermission()
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(false)
 
@@ -214,32 +216,35 @@ export default function MenuManage() {
       width: 220,
       render: (_, record) => (
         <Space>
-          {record.type !== 3 && (
+          {hasPerm('system:menu:add') && record.type !== 3 && (
             <Button size="mini" onClick={() => openCreate(record.id)}>
               新增子菜单
             </Button>
           )}
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          {record.children?.length > 0 ? (
-            <Tooltip content="存在子节点，请先删除子节点">
-              <Button size="mini" status="danger" disabled>
-                删除
-              </Button>
-            </Tooltip>
-          ) : (
-            <Popconfirm
-              position="lb"
-              focusLock
-              title="确认删除该菜单？"
-              onOk={() => handleDelete(record)}
-            >
-              <Button size="mini" status="danger">
-                删除
-              </Button>
-            </Popconfirm>
+          {hasPerm('system:menu:edit') && (
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
           )}
+          {hasPerm('system:menu:delete') &&
+            (record.children?.length > 0 ? (
+              <Tooltip content="存在子节点，请先删除子节点">
+                <Button size="mini" status="danger" disabled>
+                  删除
+                </Button>
+              </Tooltip>
+            ) : (
+              <Popconfirm
+                position="lb"
+                focusLock
+                title="确认删除该菜单？"
+                onOk={() => handleDelete(record)}
+              >
+                <Button size="mini" status="danger">
+                  删除
+                </Button>
+              </Popconfirm>
+            ))}
         </Space>
       ),
     },
@@ -265,9 +270,11 @@ export default function MenuManage() {
     <Card title="菜单管理">
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
-          新增菜单
-        </Button>
+        {hasPerm('system:menu:add') && (
+          <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
+            新增菜单
+          </Button>
+        )}
         <Space>
           <Button size="mini" icon={<IconRefresh />} onClick={fetchTree}>
             刷新

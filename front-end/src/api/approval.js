@@ -22,26 +22,26 @@ export function deleteApprovalCategory(id) {
   return request.delete(`/approval/category/${id}`)
 }
 
-// ========== 申请项（/approval/item） ==========
+// ========== 申请项（/approval/category/item） ==========
 
-// GET /approval/item 申请项列表
+// GET /approval/category/item 申请项列表
 export function listApprovalItems(params) {
-  return request.get('/approval/item', { params })
+  return request.get('/approval/category/item', { params })
 }
 
-// POST /approval/item 新增申请项
+// POST /approval/category/item 新增申请项
 export function createApprovalItem(data) {
-  return request.post('/approval/item', data)
+  return request.post('/approval/category/item', data)
 }
 
-// PUT /approval/item/:id 修改申请项
+// PUT /approval/category/item/:id 修改申请项
 export function updateApprovalItem(id, data) {
-  return request.put(`/approval/item/${id}`, data)
+  return request.put(`/approval/category/item/${id}`, data)
 }
 
-// DELETE /approval/item/:id 删除申请项
+// DELETE /approval/category/item/:id 删除申请项
 export function deleteApprovalItem(id) {
-  return request.delete(`/approval/item/${id}`)
+  return request.delete(`/approval/category/item/${id}`)
 }
 
 // ========== 审批列表（跨应用聚合查询，供我的发起/待办/已办/抄送/草稿箱使用） ==========
@@ -49,4 +49,31 @@ export function deleteApprovalItem(id) {
 // GET /approval/list 审批列表
 export function getApprovalList(params) {
   return request.get('/approval/list', { params })
+}
+
+// ========== 流程实例（/approval/instance） ==========
+
+// POST /approval/instance 发起审批
+export function createApprovalInstance(data) {
+  return request.post('/approval/instance', data)
+}
+
+// GET /approval/instance/:id 实例详情（含任务列表+审批记录）
+export function getApprovalInstanceDetail(id) {
+  return request.get(`/approval/instance/${id}`)
+}
+
+// PUT /approval/instance/:id/withdraw 撤回
+export function withdrawApprovalInstance(id) {
+  return request.put(`/approval/instance/${id}/withdraw`)
+}
+
+// PUT /approval/instance/:instanceId/task/:taskId/approve 审批操作（同意/拒绝/驳回）
+export function approveApprovalTask(instanceId, taskId, data) {
+  return request.put(`/approval/instance/${instanceId}/task/${taskId}/approve`, data)
+}
+
+// PUT /approval/instance/:instanceId/task/:taskId/delegate 转交
+export function delegateApprovalTask(instanceId, taskId, data) {
+  return request.put(`/approval/instance/${instanceId}/task/${taskId}/delegate`, data)
 }

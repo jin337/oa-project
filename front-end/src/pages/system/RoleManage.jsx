@@ -1,31 +1,32 @@
 import {
-  Button,
-  Card,
-  Checkbox,
-  Dropdown,
-  Form,
-  Grid,
-  Input,
-  InputNumber,
-  Menu,
-  Message,
-  Modal,
-  Popconfirm,
-  Popover,
-  Radio,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  Tree,
-  Typography,
+    Button,
+    Card,
+    Checkbox,
+    Dropdown,
+    Form,
+    Grid,
+    Input,
+    InputNumber,
+    Menu,
+    Message,
+    Modal,
+    Popconfirm,
+    Popover,
+    Radio,
+    Select,
+    Space,
+    Table,
+    Tag,
+    Tooltip,
+    Tree,
+    Typography,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import * as menuApi from 'src/api/menu'
 import * as roleApi from 'src/api/role'
+import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -91,6 +92,7 @@ const EMPTY_FORM = {
 }
 
 export default function RoleManage() {
+  const { hasPerm } = usePermission()
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -325,34 +327,40 @@ export default function RoleManage() {
       width: 220,
       render: (_, record) => (
         <Space>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          <Button size="mini" onClick={() => openAssignMenus(record)}>
-            分配菜单
-          </Button>
-          {record.data_scope === 2 && (
+          {hasPerm('system:role:edit') && (
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+          )}
+          {hasPerm('system:role:assignMenu') && (
+            <Button size="mini" onClick={() => openAssignMenus(record)}>
+              分配菜单
+            </Button>
+          )}
+          {hasPerm('system:role:assignDept') && record.data_scope === 2 && (
             <Button size="mini" onClick={() => openAssignDepts(record)}>
               绑定部门
             </Button>
           )}
-          {record.code === 'admin' ? (
-            <Tooltip content="超级管理员角色不可删除">
-              <Button size="mini" status="danger" disabled>
-                删除
-              </Button>
-            </Tooltip>
-          ) : (
-            <Popconfirm
-              position="lb"
-              focusLock
-              title="确认删除该角色？"
-              onOk={() => handleDelete(record)}
-            >
-              <Button size="mini" status="danger">
-                删除
-              </Button>
-            </Popconfirm>
+          {hasPerm('system:role:delete') && (
+            record.code === 'admin' ? (
+              <Tooltip content="超级管理员角色不可删除">
+                <Button size="mini" status="danger" disabled>
+                  删除
+                </Button>
+              </Tooltip>
+            ) : (
+              <Popconfirm
+                position="lb"
+                focusLock
+                title="确认删除该角色？"
+                onOk={() => handleDelete(record)}
+              >
+                <Button size="mini" status="danger">
+                  删除
+                </Button>
+              </Popconfirm>
+            )
           )}
         </Space>
       ),
@@ -397,9 +405,11 @@ export default function RoleManage() {
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
-          新增角色
-        </Button>
+        {hasPerm('system:role:add') && (
+          <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
+            新增角色
+          </Button>
+        )}
         <Space>
           <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新

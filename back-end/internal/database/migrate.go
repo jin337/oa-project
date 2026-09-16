@@ -56,16 +56,10 @@ var migrations = []migration{
 			return db.AutoMigrate(
 				&model.Application{},
 				&model.FormElement{},
-			)
-		},
-	},
-	{
-		Version: 3,
-		Name:    "add_approval_tables",
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(
 				&model.ApprovalCategory{},
-				&model.ApprovalItem{},
+				&model.ApprovalCategoryItem{},
+				&model.ApprovalInstance{},
+				&model.ApprovalInstanceTask{},
 			)
 		},
 	},
