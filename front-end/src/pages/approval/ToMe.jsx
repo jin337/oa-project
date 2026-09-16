@@ -2,14 +2,14 @@ import { Button, Card, Space, Table } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import * as approvalApi from 'src/api/approval'
-import { useTabs } from 'src/store/tab-context'
+import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer.jsx'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
-import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
+import { useTabs } from 'src/store/tab-context'
 
 const PAGE_TITLE = '抄送我的'
 
 /** 抄送我的：展示流程中抄送给当前用户的申请记录 */
-export default function ToMe() {
+export default function Workplace() {
   const location = useLocation()
   const { addTab } = useTabs()
   const [list, setList] = useState([])

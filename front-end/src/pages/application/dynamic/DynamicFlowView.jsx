@@ -215,7 +215,12 @@ const buildNodeSummary = (node) => {
  * 成员展示 chip（仿参考图右侧成员区）：
  */
 const MemberChip = ({ member, onRemove }) => {
-  const name = member.label || member.name || member.title || ''
+  let name = member.label || member.name || member.title || ''
+  // 降级：label/name/title 均为空时，从 key（如 user_5）中提取用户 ID 显示
+  if (!name && member.key) {
+    const uidMatch = String(member.key).match(/^user_(\d+)$/)
+    if (uidMatch) name = `用户${uidMatch[1]}`
+  }
   return (
     <div className="flex w-11.75 flex-col items-center">
       <div className="relative">

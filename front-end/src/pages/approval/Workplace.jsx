@@ -2,14 +2,14 @@ import { Button, Card, Space, Table } from '@arco-design/web-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import * as approvalApi from 'src/api/approval'
-import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer.jsx'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 import { useTabs } from 'src/store/tab-context'
 
 const PAGE_TITLE = '我审批的'
 
-/** 我审批的：展示当前用户已处理完毕的历史审批记录（已通过 / 不通过 / 已驳回 / 已作废） */
-export default function Workplace() {
+/** 我审批的：展示当前用户已处理完毕的历史审批记录 */
+export default function ToMe() {
   const location = useLocation()
   const { addTab } = useTabs()
   const [list, setList] = useState([])

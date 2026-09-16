@@ -51,6 +51,17 @@ export default function Initiated() {
     }
   }
 
+  // 删除已终结的审批实例（已拒绝/已驳回/已作废/已撤回）
+  const handleDelete = async (record) => {
+    try {
+      await approvalApi.deleteApprovalInstance(record.instance_id || record.id)
+      Message.success('删除成功')
+      fetchList()
+    } catch (e) {
+      // 错误已在请求层提示
+    }
+  }
+
   const columns = [
     {
       title: '序号',
@@ -82,7 +93,7 @@ export default function Initiated() {
     {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 70,
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
@@ -90,8 +101,15 @@ export default function Initiated() {
           </Button>
           {[2].includes(r.approval_status) && (
             <Popconfirm position='lb' title="撤回后该申请将转为草稿，确定撤回？" onOk={() => handleWithdraw(r)}>
-              <Button type="text" size="small" status="danger">
+              <Button type="text" size="small" status="warning">
                 撤回
+              </Button>
+            </Popconfirm>
+          )}
+          {[4, 5].includes(r.approval_status) && (
+            <Popconfirm position='lb' title="确定删除该审批记录吗？" onOk={() => handleDelete(r)}>
+              <Button type="text" size="small" status="danger">
+                删除
               </Button>
             </Popconfirm>
           )}

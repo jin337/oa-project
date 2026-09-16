@@ -235,6 +235,19 @@ func ApprovalInstanceWithdraw(c *gin.Context) {
 	response.OKMsg(c, "撤回成功")
 }
 
+// ApprovalInstanceDelete DELETE /api/v1/approval/instance/:id
+func ApprovalInstanceDelete(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if err := service.ApprovalInstanceDelete(middleware.CurrentUserID(c), id); err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OKMsg(c, "删除成功")
+}
+
 // parseTaskID 解析路径中的 :taskId 参数
 func parseTaskID(c *gin.Context) (uint, bool) {
 	id, err := strconv.ParseUint(c.Param("taskId"), 10, 64)

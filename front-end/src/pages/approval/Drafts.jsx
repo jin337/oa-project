@@ -19,7 +19,6 @@ import DynamicForm, {
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
-import DetailDrawer from 'src/pages/approval/DetailDrawer.jsx'
 import { useTabs } from 'src/store/tab-context'
 
 const PAGE_TITLE = '草稿箱'
@@ -45,9 +44,6 @@ export default function Drafts() {
   const [formValues, setFormValues] = useState({})
   // 发起人自选审批人（nodeId -> [{ type, key, label }]），提交时转为 nodeId -> [userId] 传给后端
   const [selfSelectMembers, setSelfSelectMembers] = useState({})
-
-  // 动态详情 Drawer（查看详情）
-  const [detailRecord, setDetailRecord] = useState(null)
 
   useEffect(() => {
     addTab({ path: location.pathname, title: PAGE_TITLE })
@@ -86,11 +82,12 @@ export default function Drafts() {
       // 一次请求获取实例详情（含 business_data + detail_layout_json）
       const res = await approvalApi.getApprovalInstanceDetail(record.instance_id)
       const inst = res.data
-      // 构造 app 配置：detail_layout_json → form_layout_json 映射供 DynamicForm 使用
+      // 构造 app 配置：detail_layout_json → form_layout_json 映射供 DynamicForm 使用，flow_snapshot_json → approval_flow_json 映射供 DynamicFlowView 使用
       setDrawerApp({
         id: inst.app_id,
         name: inst.app_name,
         form_layout_json: inst.detail_layout_json,
+        approval_flow_json: inst.flow_snapshot_json,
       })
       const bizData = inst.business_data || {}
       drawerForm.setFieldsValue(bizData)
@@ -207,12 +204,9 @@ export default function Drafts() {
     {
       title: '操作',
       key: 'action',
-      width: 300,
+      width: 240,
       render: (_, r) => (
         <Space>
-          <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
-            详情
-          </Button>
           <Button type="text" size="small" onClick={() => openDraftEdit(r)}>
             编辑
           </Button>
@@ -254,7 +248,7 @@ export default function Drafts() {
         width="50%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
-        title={`编辑草稿 - ${drawerApp?.item_name || drawerApp?.name || ''}`}
+        title={`编辑 - ${drawerApp?.item_name || drawerApp?.name || ''}`}
         unmountOnExit
         footer={
           <div className="flex justify-end gap-2">
@@ -283,13 +277,6 @@ export default function Drafts() {
           </>
         ) : null}
       </Drawer>
-
-      {/* 查看详情 Drawer：按记录的页面编码请求应用配置，渲染动态详情 */}
-      <DetailDrawer
-        record={detailRecord}
-        visible={Boolean(detailRecord)}
-        onCancel={() => setDetailRecord(null)}
-      />
     </Card>
   )
 }

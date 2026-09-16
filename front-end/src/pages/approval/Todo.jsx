@@ -1,24 +1,24 @@
 import {
   Button,
   Card,
-  Drawer,
   Input,
   Message,
-  Popconfirm,
+  Modal,
   Space,
   Table,
+  Tag,
 } from '@arco-design/web-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import * as approvalApi from 'src/api/approval'
+import { listUsers } from 'src/api/user'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
-import ApprovalTimeline from 'src/pages/approval/ApprovalTimeline'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 import { useTabs } from 'src/store/tab-context'
 
 const PAGE_TITLE = '我的待办'
 
-/** 我的待办：展示当前用户待处理的审批任务，提供审批操作（同意/拒绝/驳回）与查看详情 */
+/** 我的待办：展示当前用户待处理的审批任务，支持审批/转交/加签/查看详情 */
 export default function Todo() {
   const location = useLocation()
   const { addTab } = useTabs()
@@ -27,16 +27,26 @@ export default function Todo() {
   const [page, setPage] = useState(1)
   const [size, setSize] = useState(10)
   const [loading, setLoading] = useState(false)
-  const [detailRecord, setDetailRecord] = useState(null)
 
-  // 审批操作 Drawer
-  const [approveDrawerVisible, setApproveDrawerVisible] = useState(false)
+  // 详情 Drawer（集成审批操作）
+  const [detailRecord, setDetailRecord] = useState(null)
   const [currentTask, setCurrentTask] = useState(null)
-  const [comment, setComment] = useState('')
-  const [operating, setOperating] = useState(false)
-  // 审批时间线预加载数据：打开 Drawer 时一次请求，通过 initialData 传递给 ApprovalTimeline 跳过自身请求
-  const [timelineInstance, setTimelineInstance] = useState(null)
-  const [timelineLoading, setTimelineLoading] = useState(false)
+
+  // 转交 Modal
+  const [delegateVisible, setDelegateVisible] = useState(false)
+  const [delegateSearch, setDelegateSearch] = useState('')
+  const [delegateResults, setDelegateResults] = useState([])
+  const [delegateUser, setDelegateUser] = useState(null)
+  const [delegateLoading, setDelegateLoading] = useState(false)
+
+  // 加签 Modal
+  const [addSignerVisible, setAddSignerVisible] = useState(false)
+  const [addSignerSearch, setAddSignerSearch] = useState('')
+  const [addSignerResults, setAddSignerResults] = useState([])
+  const [addSignerUser, setAddSignerUser] = useState(null)
+  const [addSignerLoading, setAddSignerLoading] = useState(false)
+
+  const searchTimerRef = useRef(null)
 
   useEffect(() => {
     addTab({ path: location.pathname, title: PAGE_TITLE })
@@ -59,44 +69,115 @@ export default function Todo() {
     fetchList()
   }, [fetchList])
 
-  // 打开审批操作 Drawer：预加载实例数据，供 ApprovalTimeline 复用
-  const handleOpenApprove = async (record) => {
-    setCurrentTask(record)
-    setComment('')
-    setApproveDrawerVisible(true)
-    setTimelineInstance(null)
-    setTimelineLoading(true)
+  // 打开详情（带审批操作）
+  const handleOpenDetail = (record) => {
+    setDetailRecord(record)
+    setCurrentTask({ id: record.id, instance_id: record.instance_id })
+  }
+
+  // 关闭详情
+  const handleCloseDetail = () => {
+    setDetailRecord(null)
+    setCurrentTask(null)
+  }
+
+  // 操作成功后刷新列表
+  const handleAction = () => {
+    fetchList()
+  }
+
+  // ========== 用户搜索（防抖） ==========
+  const searchUsers = (keyword, setResults) => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (!keyword) {
+      setResults([])
+      return
+    }
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await listUsers({ username: keyword, page: 1, size: 20 })
+        setResults(res.data?.list || res.data?.records || [])
+      } catch {
+        setResults([])
+      }
+    }, 300)
+  }
+
+  // ========== 转交 ==========
+  const openDelegateModal = () => {
+    if (!currentTask) return
+    setDelegateUser(null)
+    setDelegateSearch('')
+    setDelegateResults([])
+    setDelegateVisible(true)
+  }
+
+  const handleDelegate = async () => {
+    if (!delegateUser || !currentTask) return
+    setDelegateLoading(true)
     try {
-      const res = await approvalApi.getApprovalInstanceDetail(record.instance_id)
-      setTimelineInstance(res.data)
+      await approvalApi.delegateApprovalTask(currentTask.instance_id, currentTask.id, {
+        to_user_id: delegateUser.id,
+      })
+      Message.success('转交成功')
+      setDelegateVisible(false)
+      handleCloseDetail()
+      fetchList()
     } catch {
       // 错误已在请求层提示
     } finally {
-      setTimelineLoading(false)
+      setDelegateLoading(false)
     }
   }
 
-  // 执行审批操作（1-通过 2-拒绝 3-驳回）
-  const handleApprovalAction = async (action) => {
+  // ========== 加签 ==========
+  const openAddSignerModal = () => {
     if (!currentTask) return
-    setOperating(true)
+    setAddSignerUser(null)
+    setAddSignerSearch('')
+    setAddSignerResults([])
+    setAddSignerVisible(true)
+  }
+
+  const handleAddSigner = async () => {
+    if (!addSignerUser || !currentTask) return
+    setAddSignerLoading(true)
     try {
-      await approvalApi.approveApprovalTask(currentTask.instance_id, currentTask.id, {
-        action,
-        comment: comment.trim() || undefined,
+      await approvalApi.delegateApprovalTask(currentTask.instance_id, currentTask.id, {
+        to_user_id: addSignerUser.id,
       })
-      const actionNames = { 1: '通过', 2: '拒绝', 3: '驳回' }
-      Message.success(`已${actionNames[action]}`)
-      setApproveDrawerVisible(false)
-      setCurrentTask(null)
-      setTimelineInstance(null)
+      Message.success('加签成功')
+      setAddSignerVisible(false)
+      handleCloseDetail()
       fetchList()
-    } catch (e) {
+    } catch {
       // 错误已在请求层提示
     } finally {
-      setOperating(false)
+      setAddSignerLoading(false)
     }
   }
+
+  // 渲染用户搜索结果
+  const renderUserResults = (results, selectedUser, onSelect) => (
+    <div className="max-h-48 overflow-auto rounded border border-gray-200">
+      {results.length === 0 ? (
+        <div className="p-3 text-center text-sm text-gray-400">输入姓名搜索用户</div>
+      ) : (
+        results.map((u) => (
+          <div
+            key={u.id}
+            className={`cursor-pointer px-3 py-2 text-sm hover:bg-gray-50 ${
+              selectedUser?.id === u.id ? 'bg-blue-50 text-blue-600' : ''
+            }`}
+            onClick={() => onSelect(u)}
+          >
+            {u.nickname || u.username}
+            <span className="ml-2 text-xs text-gray-400">({u.username})</span>
+          </div>
+        ))
+      )}
+    </div>
+  )
 
   const columns = [
     {
@@ -125,14 +206,17 @@ export default function Todo() {
     {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 220,
       render: (_, r) => (
         <Space>
-          <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
-            详情
-          </Button>
-          <Button type="primary" size="small" onClick={() => handleOpenApprove(r)}>
+          <Button type="primary" size="small" onClick={() => handleOpenDetail(r)}>
             审批
+          </Button>
+          <Button type="text" size="small" onClick={openDelegateModal}>
+            转交
+          </Button>
+          <Button type="text" size="small" onClick={openAddSignerModal}>
+            加签
           </Button>
         </Space>
       ),
@@ -159,86 +243,76 @@ export default function Todo() {
         }}
       />
 
-      {/* 详情 Drawer */}
+      {/* 详情 Drawer（集成同意/拒绝/撤回操作） */}
       <ApprovalDetailDrawer
         record={detailRecord}
         visible={Boolean(detailRecord)}
-        onCancel={() => setDetailRecord(null)}
+        onCancel={handleCloseDetail}
+        currentTask={currentTask}
+        onAction={handleAction}
       />
 
-      {/* 审批操作 Drawer */}
-      <Drawer
-        width="50%"
-        title={`审批 - ${currentTask?.app_name || ''}`}
-        visible={approveDrawerVisible}
-        onCancel={() => setApproveDrawerVisible(false)}
+      {/* 转交 Modal */}
+      <Modal
+        title="转交审批"
+        visible={delegateVisible}
+        onCancel={() => setDelegateVisible(false)}
+        onOk={handleDelegate}
+        okText="确认转交"
+        okButtonProps={{ disabled: !delegateUser, loading: delegateLoading }}
         unmountOnExit
-        footer={
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-500">
-              节点：{currentTask?.node_name || '-'}
-            </div>
-            <Space>
-              <Popconfirm
-                title="确定拒绝该申请吗？"
-                onOk={() => handleApprovalAction(2)}
-                position="top"
-              >
-                <Button status="danger" loading={operating}>
-                  拒绝
-                </Button>
-              </Popconfirm>
-              <Popconfirm
-                title="确定驳回该申请吗？（退回修改）"
-                onOk={() => handleApprovalAction(3)}
-                position="top"
-              >
-                <Button status="warning" loading={operating}>
-                  驳回
-                </Button>
-              </Popconfirm>
-              <Popconfirm
-                title="确定通过该申请吗？"
-                onOk={() => handleApprovalAction(1)}
-                position="top"
-              >
-                <Button type="primary" loading={operating}>
-                  同意
-                </Button>
-              </Popconfirm>
-            </Space>
-          </div>
-        }
       >
-        {currentTask && (
-          <>
-            {/* 审批意见输入 */}
-            <div className="mb-4">
-              <div className="mb-2 text-sm font-medium text-gray-700">审批意见</div>
-              <Input.TextArea
-                placeholder="请输入审批意见（可选）"
-                value={comment}
-                onChange={setComment}
-                maxLength={500}
-                showWordLimit
-                autoSize={{ minRows: 2, maxRows: 4 }}
-              />
-            </div>
+        <div className="mb-2 text-sm text-gray-500">选择转交目标用户</div>
+        <Input.Search
+          placeholder="输入姓名搜索用户"
+          value={delegateSearch}
+          onChange={(v) => {
+            setDelegateSearch(v)
+            searchUsers(v, setDelegateResults)
+          }}
+          allowClear
+          className="mb-2"
+        />
+        {delegateUser ? (
+          <div className="mb-2">
+            <Tag closable onClose={() => setDelegateUser(null)} color="blue">
+              {delegateUser.nickname || delegateUser.username}
+            </Tag>
+          </div>
+        ) : null}
+        {renderUserResults(delegateResults, delegateUser, (u) => setDelegateUser(u))}
+      </Modal>
 
-            {/* 审批流程时间线：数据预加载完成后渲染，通过 initialData 跳过自身 API 请求 */}
-            {timelineLoading ? (
-              <div className="py-4 text-center text-gray-400">加载审批流程...</div>
-            ) : (
-              <ApprovalTimeline
-                instanceId={currentTask.instance_id}
-                visible={approveDrawerVisible}
-                initialData={timelineInstance}
-                assigneeNameMap={timelineInstance?.assignee_name_map}
-              />
-            )}
-          </>
-        )}
-      </Drawer>
+      {/* 加签 Modal */}
+      <Modal
+        title="加签"
+        visible={addSignerVisible}
+        onCancel={() => setAddSignerVisible(false)}
+        onOk={handleAddSigner}
+        okText="确认加签"
+        okButtonProps={{ disabled: !addSignerUser, loading: addSignerLoading }}
+        unmountOnExit
+      >
+        <div className="mb-2 text-sm text-gray-500">选择加签用户</div>
+        <Input.Search
+          placeholder="输入姓名搜索用户"
+          value={addSignerSearch}
+          onChange={(v) => {
+            setAddSignerSearch(v)
+            searchUsers(v, setAddSignerResults)
+          }}
+          allowClear
+          className="mb-2"
+        />
+        {addSignerUser ? (
+          <div className="mb-2">
+            <Tag closable onClose={() => setAddSignerUser(null)} color="blue">
+              {addSignerUser.nickname || addSignerUser.username}
+            </Tag>
+          </div>
+        ) : null}
+        {renderUserResults(addSignerResults, addSignerUser, (u) => setAddSignerUser(u))}
+      </Modal>
     </Card>
   )
 }

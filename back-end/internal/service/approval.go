@@ -262,14 +262,14 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 func approvalListInitiated(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
 	var total int64
 	if err := database.DB.Model(&model.ApprovalInstance{}).
-		Where("created_by = ? AND deleted_at IS NULL", curUserID).
+		Where("created_by = ? AND deleted_at IS NULL AND status != ?", curUserID, model.InstanceStatusDraft).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var instances []model.ApprovalInstance
 	if err := database.DB.
-		Where("created_by = ? AND deleted_at IS NULL", curUserID).
+		Where("created_by = ? AND deleted_at IS NULL AND status != ?", curUserID, model.InstanceStatusDraft).
 		Order("id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
 		Find(&instances).Error; err != nil {
@@ -604,10 +604,33 @@ func parseFlowNodes(raw any) ([]flowNode, error) {
 
 // injectSelfSelectIntoNodes 将发起人自选审批人注入到 flow_snapshot 节点的 members 中，
 // 使 approverType=3 的节点在快照中即包含最终确定的审批人，消除对 self_select_members_json 的运行时依赖。
+// 同时查询用户姓名填充 Label 字段，确保前端可直接渲染。
 func injectSelfSelectIntoNodes(nodes []flowNode, selfSelectMembers map[string][]uint) []flowNode {
 	if len(selfSelectMembers) == 0 {
 		return nodes
 	}
+	// 收集所有需要查询的用户 ID
+	uidSet := map[uint]bool{}
+	for _, uids := range selfSelectMembers {
+		for _, uid := range uids {
+			uidSet[uid] = true
+		}
+	}
+	// 批量查询用户姓名
+	uidList := make([]uint, 0, len(uidSet))
+	for uid := range uidSet {
+		uidList = append(uidList, uid)
+	}
+	nameMap := map[uint]string{}
+	if len(uidList) > 0 {
+		var users []model.User
+		if err := database.DB.Unscoped().Preload("Profile").Where("id IN ?", uidList).Find(&users).Error; err == nil {
+			for _, u := range users {
+				nameMap[u.ID] = userNickname(u)
+			}
+		}
+	}
+	// 注入成员到 approverType=3 节点
 	for i := range nodes {
 		if nodes[i].ApproverType == 3 {
 			if uids, ok := selfSelectMembers[nodes[i].ID]; ok && len(uids) > 0 {
@@ -616,7 +639,7 @@ func injectSelfSelectIntoNodes(nodes []flowNode, selfSelectMembers map[string][]
 					members = append(members, flowMember{
 						Type:  1,
 						Key:   fmt.Sprintf("user_%d", uid),
-						Label: "",
+						Label: nameMap[uid],
 					})
 				}
 				nodes[i].Members = members
@@ -839,10 +862,9 @@ func flattenExecutionPath(nodes []flowNode, formData map[string]interface{}) []s
 				}
 				continue
 			}
-			if n.Type == 2 {
+			if n.Type == 2 || n.Type == 3 {
 				path = append(path, n.ID)
 			}
-			// type=3 抄送人：一期不处理
 		}
 	}
 	walk(nodes)
@@ -988,8 +1010,8 @@ func resolveBusinessDataID(curUserID uint, req *model.ApprovalInstanceCreateReq)
 	if len(req.BusinessData) == 0 {
 		return 0, errors.New("business_data_id 与 business_data 必须提供其一")
 	}
-	// 强制草稿状态
-	req.BusinessData["approval_status"] = model.ApprovalStatusDraft
+	// 强制草稿状态（使用 float64 类型，与 ApplicationDataCreate 中 JSON 数字类型断言一致）
+	req.BusinessData["approval_status"] = float64(model.ApprovalStatusDraft)
 	dataID, err := ApplicationDataCreate(req.AppID, curUserID, req.BusinessData)
 	if err != nil {
 		return 0, fmt.Errorf("自动创建业务数据失败: %w", err)
@@ -1169,12 +1191,16 @@ func ApprovalInstanceSaveDraft(curUserID uint, req *model.ApprovalInstanceCreate
 	execPath := flattenExecutionPath(nodes, formData)
 	execPathJSON, _ := json.Marshal(execPath)
 
+	// 将发起人自选审批人注入流程快照（approverType=3 节点的 members 直接包含最终选人）
+	injectedNodes := injectSelfSelectIntoNodes(nodes, req.SelfSelectMembers)
+	injectedFlowBytes, _ := json.Marshal(injectedNodes)
+
 	// 4. 创建草稿实例
 	instance := model.ApprovalInstance{
 		AppID:                 req.AppID,
 		BusinessTable:         app.TableName,
 		BusinessDataID:        req.BusinessDataID,
-		FlowSnapshotJSON:      app.ApprovalFlowJSON,
+		FlowSnapshotJSON:      injectedFlowBytes,
 		FormDataSnapshot:      formData,
 		ExecutionPath:         string(execPathJSON),
 		CurrentNodeIdx:        0,
@@ -1691,6 +1717,58 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 		// 撤回：更新实例状态 + 取消所有待处理任务 + 业务表回退为草稿
 		return finishInstance(tx, &instance, model.InstanceStatusWithdrawn, "发起人撤回", curUserID)
 	})
+}
+
+// ApprovalInstanceDelete 删除流程实例（软删除）
+// 仅允许发起人删除已终结的实例（已拒绝/已驳回/已作废/已撤回），同时标记业务数据为已删除
+func ApprovalInstanceDelete(curUserID, instanceID uint) error {
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		var instance model.ApprovalInstance
+		if err := tx.First(&instance, instanceID).Error; err != nil {
+			return errors.New("流程实例不存在")
+		}
+		if instance.CreatedBy != curUserID {
+			return errors.New("只能删除自己发起的审批")
+		}
+		// 仅允许删除已终结的实例：已拒绝(2)/已驳回(3)/已作废(4)/已撤回(5)
+		allowedStatuses := []int{
+			model.InstanceStatusRejected,
+			model.InstanceStatusReturned,
+			model.InstanceStatusVoided,
+			model.InstanceStatusWithdrawn,
+		}
+		allowed := false
+		for _, s := range allowedStatuses {
+			if instance.Status == s {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return errors.New("只有已拒绝/已驳回/已作废/已撤回的流程可删除")
+		}
+
+		// 标记业务数据的审批状态为已删除
+		if instance.BusinessDataID > 0 && instance.AppID > 0 {
+			tableName, err := resolveAppTableName(tx, instance.AppID)
+			if err == nil && tableName != "" {
+				tx.Table(tableName).Where("id = ?", instance.BusinessDataID).
+					Updates(map[string]interface{}{"approval_status": model.ApprovalStatusDeleted})
+			}
+		}
+
+		// 软删除实例
+		return tx.Delete(&instance).Error
+	})
+}
+
+// resolveAppTableName 根据应用 ID 获取动态表名
+func resolveAppTableName(tx *gorm.DB, appID uint) (string, error) {
+	var app model.Application
+	if err := tx.First(&app, appID).Error; err != nil {
+		return "", err
+	}
+	return app.TableName, nil
 }
 
 // ============================================================
