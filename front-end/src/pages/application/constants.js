@@ -81,11 +81,10 @@ export const PERMISSION_OPTIONS = [
   { value: 3, label: '加签' },
 ]
 
-/** 表单字段权限（1-只读 / 2-隐藏 / 3-可编辑） */
+/** 表单字段权限（1-隐藏 / 2-可编辑） */
 export const FIELD_PERM_OPTIONS = [
-  { value: 1, label: '只读' },
-  { value: 2, label: '隐藏' },
-  { value: 3, label: '可编辑' },
+  { value: 1, label: '隐藏' },
+  { value: 2, label: '可编辑' },
 ]
 
 /** 抄送时机（1-审批通过后抄送 / 2-流程结束时统一抄送） */

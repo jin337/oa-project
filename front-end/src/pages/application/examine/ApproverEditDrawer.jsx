@@ -203,7 +203,7 @@ export function ApproverEditDrawer({ node, formFields = [], fieldsLoading = fals
               <Button
                 size="small"
                 icon={<IconPlus />}
-                onClick={() => setFieldPerms([...fieldPerms, { field: '', perm: 1 }])} // 新字段默认 1-只读
+                onClick={() => setFieldPerms([...fieldPerms, { field: '', perm: 1 }])} // 新字段默认 1-隐藏
               >
                 添加字段
               </Button>

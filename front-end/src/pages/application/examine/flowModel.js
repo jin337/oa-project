@@ -32,7 +32,7 @@ import { NODE_TYPE_META } from 'src/pages/application/constants'
 /**
  * @typedef {Object} ApprovalFieldPerm 表单字段权限
  * @property {string} field 表单字段标识
- * @property {number} perm 权限（1-只读 / 2-隐藏 / 3-可编辑）
+ * @property {number} perm 权限（1-隐藏 / 2-可编辑）
  */
 
 /**
@@ -89,7 +89,7 @@ export const createNode = (type) => {
       emptyHandler: 1, // 审批人为空处理：1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员
       emptyMembers: [],
       permissions: [1, 2, 3], // 审批人操作权限：1-拒绝 / 2-转交 / 3-加签
-      fieldPerms: [], // 表单字段权限 [{ field, perm: 1-只读 | 2-隐藏 | 3-可编辑 }]
+      fieldPerms: [], // 表单字段权限 [{ field, perm: 1-隐藏 | 2-可编辑 }]
     }
   if (type === 4)
     return {
