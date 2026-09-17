@@ -263,7 +263,7 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
                 return cellEditable ? (
                   renderFn(col, 'form')
                 ) : isReadonlyText ? (
-                  <ReadonlyValue value={cellValue} elementType={col.element_type} />
+                  <ReadonlyValue value={cellValue} elementType={col.element_type} dataSource={col.data_source} />
                 ) : (
                   renderFn(col, undefined)
                 )
@@ -273,7 +273,7 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
                   {cellEditable ? (
                     renderFn(col, 'form')
                   ) : isReadonlyText ? (
-                    <ReadonlyValue elementType={col.element_type} />
+                    <ReadonlyValue elementType={col.element_type} dataSource={col.data_source} />
                   ) : (
                     renderFn(col, undefined)
                   )}
@@ -815,20 +815,33 @@ export function serializeTimeFields(values, elements) {
 }
 
 /**
+ * 将数据值映射为 data_source 配置的展示 label（select/radio/checkbox 等选项型字段）；
+ * 未配置 data_source 或值无匹配项时原样返回。
+ */
+const labelOfValue = (value, dataSource) => {
+  if (dataSource == null || value == null) return value
+  const opts = getStaticOptions({ data_source: dataSource })
+  if (!opts.length) return value
+  const hit = opts.find((o) => String(o.value) === String(value))
+  return hit && hit.label != null ? hit.label : value
+}
+
+/**
  * 详情只读模式（pageType='detail'）下的纯文本展示组件：
- * 作为 FormItem 单子元素接收 Arco 注入的 value，直接输出数据值（数组值以 ", " 连接），空值显示 '-'。
+ * 作为 FormItem 单子元素接收 Arco 注入的 value，输出数据值对应的 data_source label
+ * （数组值逐项映射后以 ", " 连接），空值显示 '-'。
  * elementType 为时间/日期类型时，value 经 formatTimeValue 格式化为标准可读的日期/时间字符串。
  */
-const ReadonlyValue = ({ value, elementType }) => {
+const ReadonlyValue = ({ value, elementType, dataSource }) => {
   let text
   if (value == null || value === '') {
     text = '-'
   } else if (TIME_ELEMENT_TYPES.includes(elementType)) {
     text = formatTimeValue(value, elementType)
   } else if (Array.isArray(value)) {
-    text = value.join(', ')
+    text = value.map((v) => labelOfValue(v, dataSource)).join(', ')
   } else {
-    text = String(value)
+    text = String(labelOfValue(value, dataSource))
   }
   return <span className="break-all whitespace-pre-wrap">{text}</span>
 }
@@ -887,7 +900,7 @@ const renderFormItemElement = (el, ctx) => {
       return <TableElementField el={el} pageType={pageType} fieldPerms={fieldPerms} editable={editable} />
     }
     if (pageType === 'detail' && el.element_type !== 'divider' && !permEditable) {
-      return <ReadonlyValue elementType={el.element_type} />
+      return <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} />
     }
     const baseCfg = getBaseElementConfig(el.element_type)
     if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, pageType)
