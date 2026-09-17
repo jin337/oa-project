@@ -523,6 +523,9 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	// 批量解析涉及用户 ID 的姓名（审批人 + 发起人）
 	assigneeNameMap := buildAssigneeNameMap(tasks, instance.CreatedBy)
 
+	// 当前执行节点的表单字段权限（审批详情页按权限隐藏/可编辑字段）
+	fieldPerms := currentNodeFieldPerms(instance)
+
 	result := &model.ApprovalInstanceDetailResult{
 		ApprovalInstance: instance,
 		AppName:          appName,
@@ -531,6 +534,7 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 		DetailLayoutJSON: detailLayoutJSON,
 		Tasks:            tasks,
 		AssigneeNameMap:  assigneeNameMap,
+		FieldPerms:       fieldPerms,
 	}
 	return result, nil
 }
@@ -581,6 +585,30 @@ func splitSubTables(subTableName string) []string {
 		}
 	}
 	return result
+}
+
+// currentNodeFieldPerms 当前执行节点的表单字段权限：
+// 实例进行中时按 execution_path[current_node_idx] 定位节点，返回其 fieldPerms（[{field, perm}]）
+func currentNodeFieldPerms(instance model.ApprovalInstance) []interface{} {
+	if instance.Status != model.InstanceStatusRunning {
+		return nil
+	}
+	var pathNodeIDs []string
+	if err := json.Unmarshal([]byte(instance.ExecutionPath), &pathNodeIDs); err != nil {
+		return nil
+	}
+	if instance.CurrentNodeIdx < 0 || instance.CurrentNodeIdx >= len(pathNodeIDs) {
+		return nil
+	}
+	nodes, err := parseFlowNodes(instance.FlowSnapshotJSON)
+	if err != nil {
+		return nil
+	}
+	node := findNodeByID(nodes, pathNodeIDs[instance.CurrentNodeIdx])
+	if node == nil {
+		return nil
+	}
+	return node.FieldPerms
 }
 
 // buildAssigneeNameMap 批量查询任务审批人 + 发起人的用户姓名（用户ID -> 姓名）

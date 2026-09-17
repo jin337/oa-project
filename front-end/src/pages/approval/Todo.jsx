@@ -4,6 +4,7 @@ import {
   Input,
   Message,
   Modal,
+  Radio,
   Space,
   Table,
   Tag,
@@ -45,6 +46,8 @@ export default function Todo() {
   const [addSignerResults, setAddSignerResults] = useState([])
   const [addSignerUser, setAddSignerUser] = useState(null)
   const [addSignerLoading, setAddSignerLoading] = useState(false)
+  // 加签类型：1-前加签 2-后加签
+  const [addSignType, setAddSignType] = useState(2)
 
   const searchTimerRef = useRef(null)
 
@@ -104,8 +107,10 @@ export default function Todo() {
   }
 
   // ========== 转交 ==========
-  const openDelegateModal = () => {
-    if (!currentTask) return
+  const openDelegateModal = (task) => {
+    if (!task && !currentTask) return
+    // 列表页直接点“转交”时行数据即目标任务（详情页操作时 currentTask 已设置）
+    if (task) setCurrentTask({ id: task.id, instance_id: task.instance_id })
     setDelegateUser(null)
     setDelegateSearch('')
     setDelegateResults([])
@@ -131,11 +136,14 @@ export default function Todo() {
   }
 
   // ========== 加签 ==========
-  const openAddSignerModal = () => {
-    if (!currentTask) return
+  const openAddSignerModal = (task) => {
+    if (!task && !currentTask) return
+    // 列表页直接点“加签”时行数据即目标任务（详情页操作时 currentTask 已设置）
+    if (task) setCurrentTask({ id: task.id, instance_id: task.instance_id })
     setAddSignerUser(null)
     setAddSignerSearch('')
     setAddSignerResults([])
+    setAddSignType(2)
     setAddSignerVisible(true)
   }
 
@@ -143,10 +151,11 @@ export default function Todo() {
     if (!addSignerUser || !currentTask) return
     setAddSignerLoading(true)
     try {
-      await approvalApi.delegateApprovalTask(currentTask.instance_id, currentTask.id, {
-        to_user_id: addSignerUser.id,
+      await approvalApi.addSignApprovalTask(currentTask.instance_id, currentTask.id, {
+        user_id: addSignerUser.id,
+        type: addSignType,
       })
-      Message.success('加签成功')
+      Message.success(addSignType === 1 ? '前加签成功' : '后加签成功')
       setAddSignerVisible(false)
       handleCloseDetail()
       fetchList()
@@ -212,10 +221,10 @@ export default function Todo() {
           <Button type="primary" size="small" onClick={() => handleOpenDetail(r)}>
             审批
           </Button>
-          <Button type="text" size="small" onClick={openDelegateModal}>
+          <Button type="text" size="small" onClick={() => openDelegateModal(r)}>
             转交
           </Button>
-          <Button type="text" size="small" onClick={openAddSignerModal}>
+          <Button type="text" size="small" onClick={() => openAddSignerModal(r)}>
             加签
           </Button>
         </Space>
@@ -293,6 +302,11 @@ export default function Todo() {
         okButtonProps={{ disabled: !addSignerUser, loading: addSignerLoading }}
         unmountOnExit
       >
+        <div className="mb-2 text-sm text-gray-500">加签类型</div>
+        <Radio.Group value={addSignType} onChange={setAddSignType} className="mb-3">
+          <Radio value={2}>后加签（我通过后，加签人继续审批）</Radio>
+          <Radio value={1}>前加签（加签人先审，通过后我再审批）</Radio>
+        </Radio.Group>
         <div className="mb-2 text-sm text-gray-500">选择加签用户</div>
         <Input.Search
           placeholder="输入姓名搜索用户"

@@ -44,7 +44,7 @@ mysql:
   parse_time: true            # 是否把时间字段解析为 time.Time
   loc: Local                  # 时区
   max_open_conns: 100         # 连接池：最大连接数
-  max_idle_conns: 10          # 连接池：最大空闲连接数
+  max_idle_conns: 50          # 连接池：最大空闲连接数（调大以减少高并发时新建连接排队）
   conn_max_lifetime: 60       # 连接池：连接最大存活时间（分钟）
   connect_timeout: 5          # 连接超时（秒）
 

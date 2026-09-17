@@ -92,3 +92,8 @@ export function approveApprovalTask(instanceId, taskId, data) {
 export function delegateApprovalTask(instanceId, taskId, data) {
   return request.put(`/approval/instance/${instanceId}/task/${taskId}/delegate`, data)
 }
+
+// PUT /approval/instance/:instanceId/task/:taskId/add-sign 加签（type: 1-前加签 2-后加签）
+export function addSignApprovalTask(instanceId, taskId, data) {
+  return request.put(`/approval/instance/${instanceId}/task/${taskId}/add-sign`, data)
+}

@@ -109,6 +109,7 @@ func Setup() *gin.Engine {
 			instance.PUT("/:id/submit", handler.ApprovalInstanceSubmitDraft)                 // 从草稿提交发起
 			instance.PUT("/:id/withdraw", handler.ApprovalInstanceWithdraw)                  // 撤回
 			instance.PUT("/:id/task/:taskId/approve", handler.ApprovalInstanceTaskApprove)   // 审批操作
+			instance.PUT("/:id/task/:taskId/add-sign", handler.ApprovalInstanceTaskAddSign)  // 加签（前/后）
 			instance.PUT("/:id/task/:taskId/delegate", handler.ApprovalInstanceTaskDelegate) // 转交
 			instance.DELETE("/:id", handler.ApprovalInstanceDelete)                            // 删除
 		}

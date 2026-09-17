@@ -219,17 +219,20 @@ func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalR
 
 // approvalListTodo 待办列表：从 approval_task 表查询当前用户的待处理任务
 func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
+	// JOIN 实例表过滤已删除实例的孤儿任务，保证 total 与列表一致
 	var total int64
 	if err := database.DB.Model(&model.ApprovalInstanceTask{}).
-		Where("assignee_id = ? AND status = ?", curUserID, model.TaskStatusPending).
+		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL").
+		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status = ?", curUserID, model.TaskStatusPending).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var tasks []model.ApprovalInstanceTask
 	if err := database.DB.
-		Where("assignee_id = ? AND status = ?", curUserID, model.TaskStatusPending).
-		Order("id DESC").
+		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL").
+		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status = ?", curUserID, model.TaskStatusPending).
+		Order("oa_approval_instance_tasks.id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
 		Find(&tasks).Error; err != nil {
 		return nil, 0, err
@@ -363,11 +366,12 @@ func approvalListFromInstances(curUserID uint, req *model.ApprovalListReq) ([]mo
 func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
 	handled := []int{model.TaskStatusApproved, model.TaskStatusRejected, model.TaskStatusReturned}
 
-	// 总数：当前用户已处理任务的去重实例数
+	// 总数：当前用户已处理任务的去重实例数（JOIN 实例表过滤已删除实例的孤儿任务）
 	var total int64
 	if err := database.DB.Model(&model.ApprovalInstanceTask{}).
-		Where("assignee_id = ? AND status IN ?", curUserID, handled).
-		Distinct("instance_id").
+		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL").
+		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ?", curUserID, handled).
+		Distinct("oa_approval_instance_tasks.instance_id").
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -379,10 +383,11 @@ func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.A
 	}
 	var groups []handledGroup
 	if err := database.DB.Model(&model.ApprovalInstanceTask{}).
-		Select("instance_id, MAX(operated_at) AS last_op").
-		Where("assignee_id = ? AND status IN ?", curUserID, handled).
-		Group("instance_id").
-		Order("last_op DESC, instance_id DESC").
+		Select("oa_approval_instance_tasks.instance_id, MAX(oa_approval_instance_tasks.operated_at) AS last_op").
+		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL").
+		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ?", curUserID, handled).
+		Group("oa_approval_instance_tasks.instance_id").
+		Order("last_op DESC, oa_approval_instance_tasks.instance_id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
 		Scan(&groups).Error; err != nil {
 		return nil, 0, err
@@ -418,11 +423,21 @@ func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.A
 	return records, total, nil
 }
 
-// approvalListCC 抄送我的：从实例执行路径中的抄送节点（type=3）解析抄送人，匹配当前用户。
-// 抄送节点不生成审批任务，仅存在于流程快照 flow_snapshot_json；执行路径 execution_path
-// 记录了条件评估后实际命中的节点 ID 链（含抄送节点），未命中分支的抄送不视为抄送给我。
+// approvalListCC 抄送我的：抄送记录表（oa_approval_cc_records）命中 ∪ 执行路径解析命中。
+// 抄送时机到达后由流程引擎写入抄送记录（ccTiming=1 节点到达时 / ccTiming=2 流程终结时）；
+// 执行路径解析兜底兼容存量实例（引擎写入前配置的实例），避免功能回退。
 func approvalListCC(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
-	// 预筛：JSON 列无法索引，先用 LIKE 定位含当前用户标识的实例，缩小精确解析范围
+	// 1. 抄送记录表命中的实例 ID 集合
+	recordHit := map[uint]bool{}
+	var ccRecords []model.ApprovalCCRecord
+	if err := database.DB.Where("user_id = ?", curUserID).Find(&ccRecords).Error; err == nil {
+		for _, r := range ccRecords {
+			recordHit[r.InstanceID] = true
+		}
+	}
+
+	// 2. 执行路径解析命中（兼容存量实例 / 抄送记录未写入的实例）
+	parseHit := map[uint]bool{}
 	userKey := fmt.Sprintf("\"user_%d\"", curUserID)
 	var instances []model.ApprovalInstance
 	if err := database.DB.
@@ -431,13 +446,41 @@ func approvalListCC(curUserID uint, req *model.ApprovalListReq) ([]model.Approva
 		Find(&instances).Error; err != nil {
 		return nil, 0, err
 	}
-
-	// 精确过滤：执行路径中的抄送节点解析出的用户集合包含当前用户
-	hit := make([]model.ApprovalInstance, 0, len(instances))
 	for _, inst := range instances {
 		if instanceCCContainsUser(inst, curUserID) {
+			parseHit[inst.ID] = true
+		}
+	}
+
+	// 3. 并集（保持 id 倒序展示：解析命中已按 id DESC，记录表命中按实例 id 插入）
+	hit := make([]model.ApprovalInstance, 0, len(parseHit)+len(recordHit))
+	seen := map[uint]bool{}
+	addInst := func(id uint) {
+		if seen[id] {
+			return
+		}
+		seen[id] = true
+		var inst model.ApprovalInstance
+		if err := database.DB.First(&inst, id).Error; err == nil && !inst.DeletedAt.Valid {
 			hit = append(hit, inst)
 		}
+	}
+	// 先解析命中（已按 id DESC），再补记录表命中的实例（按 id DESC 排序后追加）
+	for _, inst := range instances {
+		if parseHit[inst.ID] {
+			addInst(inst.ID)
+		}
+	}
+	var recordInstances []model.ApprovalInstance
+	if len(recordHit) > 0 {
+		ids := make([]uint, 0, len(recordHit))
+		for id := range recordHit {
+			ids = append(ids, id)
+		}
+		database.DB.Where("id IN ?", ids).Order("id DESC").Find(&recordInstances)
+	}
+	for _, inst := range recordInstances {
+		addInst(inst.ID)
 	}
 
 	total := int64(len(hit))

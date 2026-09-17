@@ -128,7 +128,7 @@ export default function Initiated() {
         pagination={{
           total,
           current: page,
-          pageSize: size,
+          size: size,
           showTotal: true,
           sizeCanChange: true,
           onChange: (p, s) => {

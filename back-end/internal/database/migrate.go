@@ -63,6 +63,17 @@ var migrations = []migration{
 			)
 		},
 	},
+	{
+		Version: 4,
+		Name:    "add_approval_addsign_ccrecord",
+		Up: func(db *gorm.DB) error {
+			// 任务表新增加签字段（AutoMigrate 增量加列）；新增抄送记录表
+			return db.AutoMigrate(
+				&model.ApprovalInstanceTask{},
+				&model.ApprovalCCRecord{},
+			)
+		},
+	},
 	// 示例：后续迭代追加增量迁移，只加表/加字段，不删数据
 	// {
 	// 	Version: 3,

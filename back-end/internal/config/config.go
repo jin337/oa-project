@@ -144,14 +144,15 @@ func Load() *Config {
 
 // DSN 生成 gorm MySQL DSN（不含库名，用于建库）
 func (m *MySQLConfig) BaseDSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=%s&collation=%s&parseTime=%v&loc=%s&timeout=%ds",
-		m.Username, m.Password, m.Host, m.Port, m.Charset, m.Collation, m.ParseTime, m.Loc, m.ConnectTimeout)
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=%s&collation=%s&parseTime=%v&loc=%s&timeout=%ds&readTimeout=%ds&writeTimeout=%ds",
+		m.Username, m.Password, m.Host, m.Port, m.Charset, m.Collation, m.ParseTime, m.Loc, m.ConnectTimeout, m.ConnectTimeout, m.ConnectTimeout)
 }
 
 // DSN 生成带库名的完整 DSN
+// readTimeout/writeTimeout 与连接超时同值：单条 SQL 超过该时长即报错返回，避免慢查询长期占用连接
 func (m *MySQLConfig) DSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&collation=%s&parseTime=%v&loc=%s&timeout=%ds",
-		m.Username, m.Password, m.Host, m.Port, m.DBName, m.Charset, m.Collation, m.ParseTime, m.Loc, m.ConnectTimeout)
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&collation=%s&parseTime=%v&loc=%s&timeout=%ds&readTimeout=%ds&writeTimeout=%ds",
+		m.Username, m.Password, m.Host, m.Port, m.DBName, m.Charset, m.Collation, m.ParseTime, m.Loc, m.ConnectTimeout, m.ConnectTimeout, m.ConnectTimeout)
 }
 
 // ConnMaxLifetimeDuration 连接最大存活时间

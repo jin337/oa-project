@@ -155,6 +155,28 @@ func ApprovalInstanceTaskApprove(c *gin.Context) {
 	response.OKMsg(c, "操作成功")
 }
 
+// ApprovalInstanceTaskAddSign PUT /api/v1/approval/instance/:id/task/:taskId/add-sign 加签（前加签/后加签）
+func ApprovalInstanceTaskAddSign(c *gin.Context) {
+	instanceID, ok := parseID(c)
+	if !ok {
+		return
+	}
+	taskID, ok := parseTaskID(c)
+	if !ok {
+		return
+	}
+	var req model.ApprovalInstanceTaskAddSignReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	if err := service.ApprovalTaskAddSign(middleware.CurrentUserID(c), instanceID, taskID, &req); err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	response.OKMsg(c, "加签成功")
+}
+
 // ApprovalInstanceTaskDelegate PUT /api/v1/approval/instance/:id/task/:taskId/delegate 转交
 func ApprovalInstanceTaskDelegate(c *gin.Context) {
 	instanceID, ok := parseID(c)

@@ -530,6 +530,7 @@ const (
 	TaskStatusReturned  = 3 // 已驳回
 	TaskStatusDelegated = 4 // 已转交
 	TaskStatusCancelled = 5 // 已取消
+	TaskStatusWaiting   = 6 // 加签等待（前加签：原任务挂起等待加签人处理）
 )
 
 // ApprovalInstance 流程实例：一次审批流转的运行时载体
@@ -562,6 +563,8 @@ type ApprovalInstanceTask struct {
 	Comment       string     `gorm:"size:500;comment:审批意见" json:"comment"`
 	OperatedAt    *time.Time `gorm:"comment:操作时间" json:"operated_at"`
 	DelegatedFrom uint       `gorm:"comment:转交来源任务ID" json:"delegated_from"`
+	AddSignFrom   uint       `gorm:"default:0;comment:加签来源任务ID(0=普通任务)" json:"add_sign_from"`
+	AddSignType   int        `gorm:"default:0;comment:加签类型 1-前加签 2-后加签" json:"add_sign_type"`
 
 	Instance *ApprovalInstance `gorm:"foreignKey:InstanceID" json:"instance,omitempty"`
 }
@@ -598,6 +601,23 @@ type ApprovalInstanceTaskDelegateReq struct {
 	ToUserID uint `json:"to_user_id" validate:"required,gt=0" label:"转交目标用户ID"`
 }
 
+// ApprovalInstanceTaskAddSignReq 加签请求
+type ApprovalInstanceTaskAddSignReq struct {
+	UserID uint `json:"user_id" validate:"required,gt=0" label:"加签用户ID"`
+	Type   int  `json:"type" validate:"required,oneof=1 2" label:"加签类型"` // 1-前加签（加签人先审，通过后原审批人再审） 2-后加签（原审批人通过后加签人再审）
+}
+
+// ApprovalCCRecord 抄送记录：抄送时机到达后写入
+// ccTiming=1（审批通过后抄送）：节点被推进经过时写入；ccTiming=2（流程结束时统一抄送）：实例终结时写入
+type ApprovalCCRecord struct {
+	BaseModel
+	InstanceID uint       `gorm:"index;not null;comment:流程实例ID" json:"instance_id"`
+	NodeID     string     `gorm:"size:64;not null;comment:抄送节点ID" json:"node_id"`
+	NodeName   string     `gorm:"size:64;comment:节点名称" json:"node_name"`
+	UserID     uint       `gorm:"index;not null;comment:抄送用户ID" json:"user_id"`
+	NotifiedAt *time.Time `gorm:"comment:抄送时间" json:"notified_at"`
+}
+
 // ApprovalInstanceDetailResult 实例详情响应（含任务列表+审批记录）
 type ApprovalInstanceDetailResult struct {
 	ApprovalInstance
@@ -607,6 +627,7 @@ type ApprovalInstanceDetailResult struct {
 	DetailLayoutJSON any                    `json:"detail_layout_json,omitempty"` // 详情页布局快照
 	Tasks            []ApprovalInstanceTask `json:"tasks,omitempty"`
 	AssigneeNameMap  map[string]string      `json:"assignee_name_map,omitempty"` // 用户ID -> 姓名
+	FieldPerms       []interface{}          `json:"field_perms,omitempty"` // 当前执行节点的表单字段权限 [{field, perm}]
 }
 
 // ApprovalRecord 审批列表聚合记录（跨应用汇总动态业务数据，供我的发起/待办/已办/抄送/草稿箱使用）

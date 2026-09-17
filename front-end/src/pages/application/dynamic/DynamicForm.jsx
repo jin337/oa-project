@@ -976,6 +976,8 @@ const CanvasElement = memo(function CanvasElement({
  * @param {Function} onCanvasDragOver     画布模式：画布空白区拖拽悬停
  * @param {Function} onCanvasDrop         画布模式：画布空白区放置
  * @param {Function} onCanvasClick        画布模式：画布空白区点击（取消选中）
+ * @param {Array}    fieldPerms           字段权限 [{field, perm}]：perm=1 隐藏（不渲染）、perm=2 可编辑（正常渲染）；
+ *                                        未配置权限的字段默认渲染。审批详情场景由实例详情接口返回当前节点 field_perms。
  */
 export default function DynamicForm({
   app,
@@ -993,6 +995,7 @@ export default function DynamicForm({
   onCanvasDragOver,
   onCanvasDrop,
   onCanvasClick,
+  fieldPerms,
 }) {
   // 布局解析缓存：仅当布局 JSON 变化时重新解析，拖拽/选中等状态更新不触发重复解析
   const layout = useMemo(() => parseLayoutJson(app?.form_layout_json), [app?.form_layout_json])
@@ -1043,11 +1046,18 @@ export default function DynamicForm({
                 onDragEnd={onDragEnd}
               />
             ))
-          : elements.map((el, index) => (
-              <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
-                {renderFormItemElement(el, formCtx)}
-              </Col>
-            ))}
+          : elements
+              .filter((el) => {
+                // 字段权限过滤：perm=1（隐藏）不渲染；未配置权限的字段默认渲染
+                if (!fieldPerms || !el.field_key) return true
+                const fp = fieldPerms.find((p) => p && p.field === el.field_key)
+                return !fp || fp.perm !== 1
+              })
+              .map((el, index) => (
+                <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
+                  {renderFormItemElement(el, formCtx)}
+                </Col>
+              ))}
       </Row>
     </Form>
   )

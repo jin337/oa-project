@@ -13,8 +13,9 @@ import { useApplicationDetailData } from 'src/pages/application/dynamic/useAppli
  * @param {object} app    应用配置对象（含 id / name / detail_layout_json 等字段）
  * @param {string|number} dataId  数据记录 ID（可选；Drawer 场景由父组件传入，路由场景回退 useParams().id）
  * @param {object} initialData  外部预加载的业务数据（传入时跳过自动请求，直接用于表单回填）
+ * @param {array}  fieldPerms   字段权限 [{field, perm}]（审批详情场景由父组件传入，透传 DynamicForm 过滤隐藏字段）
  */
-export default function DynamicDetail({ app, dataId: propDataId, initialData }) {
+export default function DynamicDetail({ app, dataId: propDataId, initialData, fieldPerms }) {
   const { id: routeDataId } = useParams()
   const dataId = propDataId || routeDataId
   const [form] = Form.useForm()
@@ -46,5 +47,5 @@ export default function DynamicDetail({ app, dataId: propDataId, initialData }) 
   }
 
   // detailApp 已由 hook 将 detail_layout_json 映射为 form_layout_json
-  return <DynamicForm app={detailApp} form={form} pageType="detail" />
+  return <DynamicForm app={detailApp} form={form} pageType="detail" fieldPerms={fieldPerms} />
 }

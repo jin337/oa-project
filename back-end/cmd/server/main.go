@@ -40,6 +40,11 @@ func main() {
 	}
 
 	// 5. 组装路由并启动服务
+	// GIN 请求日志输出到文件，避免继承终端/管道 stdout 时缓冲写满阻塞全部请求
+	if ginFile, ferr := os.OpenFile("logs/gin.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); ferr == nil {
+		gin.DefaultWriter = ginFile
+		gin.DefaultErrorWriter = ginFile
+	}
 	gin.SetMode(cfg.Server.Mode)
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),

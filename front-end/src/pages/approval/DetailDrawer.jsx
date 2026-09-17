@@ -6,6 +6,7 @@ import {
   Message,
   Modal,
   Popconfirm,
+  Radio,
   Space,
   Spin,
   Tag,
@@ -48,6 +49,8 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   const [addSignerResults, setAddSignerResults] = useState([])
   const [addSignerUser, setAddSignerUser] = useState(null)
   const [addSignerLoading, setAddSignerLoading] = useState(false)
+  // 加签类型：1-前加签（加签人先审，通过后本人再审） 2-后加签（本人通过后加签人再审）
+  const [addSignType, setAddSignType] = useState(2)
 
   // 防抖定时器（用户搜索）
   const searchTimerRef = useRef(null)
@@ -191,6 +194,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     setAddSignerUser(null)
     setAddSignerSearch('')
     setAddSignerResults([])
+    setAddSignType(2)
     setAddSignerVisible(true)
   }
 
@@ -198,10 +202,11 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     if (!addSignerUser || !currentTask) return
     setOperating(true)
     try {
-      await approvalApi.delegateApprovalTask(currentTask.instance_id, currentTask.id, {
-        to_user_id: addSignerUser.id,
+      await approvalApi.addSignApprovalTask(currentTask.instance_id, currentTask.id, {
+        user_id: addSignerUser.id,
+        type: addSignType,
       })
-      Message.success('加签成功')
+      Message.success(addSignType === 1 ? '前加签成功' : '后加签成功')
       setAddSignerVisible(false)
       onAction?.()
       onCancel?.()
@@ -313,7 +318,12 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
           </div>
         ) : instance ? (
           <>
-            <DynamicDetail app={appFromInstance} dataId={dataId} initialData={instance?.business_data} />
+            <DynamicDetail
+              app={appFromInstance}
+              dataId={dataId}
+              initialData={instance?.business_data}
+              fieldPerms={instance?.field_perms}
+            />
             <ApprovalTimeline
               instanceId={record?.instance_id}
               visible={visible}
@@ -374,6 +384,11 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         okButtonProps={{ disabled: !addSignerUser, loading: operating }}
         unmountOnExit
       >
+        <div className="mb-2 text-sm text-gray-500">加签类型</div>
+        <Radio.Group value={addSignType} onChange={setAddSignType} className="mb-3">
+          <Radio value={2}>后加签（我通过后，加签人继续审批）</Radio>
+          <Radio value={1}>前加签（加签人先审，通过后我再审批）</Radio>
+        </Radio.Group>
         <div className="mb-2 text-sm text-gray-500">选择加签用户</div>
         <Input.Search
           placeholder="输入姓名搜索用户"
