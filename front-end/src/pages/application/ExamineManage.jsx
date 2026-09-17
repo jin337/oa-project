@@ -242,6 +242,7 @@ export default function ExamineManage() {
             node={editing.node}
             formFields={formFields}
             fieldsLoading={fieldsLoading}
+            mainTable={mainTable}
             onCancel={closeEdit}
             onSave={saveNode}
           />

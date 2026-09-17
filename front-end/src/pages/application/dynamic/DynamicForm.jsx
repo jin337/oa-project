@@ -159,7 +159,7 @@ export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[eleme
  * - detail：详情只读模式，行内单元格渲染为纯文本（ReadonlyValue，空值 '-'）
  * - move-detail：画布只读预览，隐藏操作列与新增按钮，行内控件保持禁用态预览
  */
-const TableElementField = ({ el, pageType }) => {
+const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
   // 可编辑：实际填写（form）与画布表单页（move-form）
   const isEditable = pageType === 'form' || pageType === 'move-form'
   // 详情只读：仅真实详情页（detail）渲染纯文本；画布 move-detail 保持禁用控件预览
@@ -217,7 +217,16 @@ const TableElementField = ({ el, pageType }) => {
       initialValue={isEditable ? [{}] : undefined}
     >
       {(fields, { add, remove }) => {
-        const columns = (el.columns || []).map((col, i) => {
+        // 字段权限 perm=1（隐藏）：子表列不渲染（与主表字段隐藏一致）；
+        // 严格按 field + table_key 匹配，避免主表同名字段的权限误伤子表列
+        const permColumns = (el.columns || []).filter((col) => {
+          const colKey = col.dataIndex || col.field_key
+          const fp = (fieldPerms || []).find(
+            (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key)
+          )
+          return !fp || fp.perm !== 1
+        })
+        const columns = permColumns.map((col, i) => {
           const colKey = col.dataIndex || col.field_key || `col_${i + 1}`
           const isDetail = pageType === 'detail'
           return {
@@ -240,10 +249,18 @@ const TableElementField = ({ el, pageType }) => {
             render: (cellValue, record, index) => {
               const renderFn = renderPreviewConfig[col.element_type]
               if (!renderFn) return <span>{cellValue ?? ''}</span>
+              // 审批节点字段权限：仅待办审批（editable）详情（detail）下该列 perm=2（可编辑）→ 渲染可编辑控件
+              const colEditableByPerm =
+                editable &&
+                pageType === 'detail' &&
+                (fieldPerms || []).find(
+                  (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key)
+                )?.perm === 2
+              const cellEditable = isEditable || colEditableByPerm
               const field = fields[index]?.field
               if (!field) {
                 // 行未注册到 Form store（如画布空态）：可编辑渲染可交互控件，详情渲染纯文本
-                return isEditable ? (
+                return cellEditable ? (
                   renderFn(col, 'form')
                 ) : isReadonlyText ? (
                   <ReadonlyValue value={cellValue} elementType={col.element_type} />
@@ -253,7 +270,7 @@ const TableElementField = ({ el, pageType }) => {
               }
               return (
                 <FormItem field={`${field}.${colKey}`} noStyle>
-                  {isEditable ? (
+                  {cellEditable ? (
                     renderFn(col, 'form')
                   ) : isReadonlyText ? (
                     <ReadonlyValue elementType={col.element_type} />
@@ -822,11 +839,16 @@ const ReadonlyValue = ({ value, elementType }) => {
  * @param {object} ctx  渲染上下文 { isHorizontal, formConfig, pageType, isMoveMode }
  */
 const renderFormItemElement = (el, ctx) => {
-  const { isHorizontal, formConfig, pageType, isMoveMode } = ctx
+  const { isHorizontal, formConfig, pageType, isMoveMode, fieldPerms, editable } = ctx
   const noLabel = isNoLabelElement(el.element_type)
   const isTableElement = el.element_type === 'table'
   const isFormMode = pageType === 'form'
   const isDetailMode = pageType === 'detail'
+  // 审批节点字段权限：仅待办审批（editable）详情（detail）场景下 perm=2（可编辑）的字段渲染可编辑控件
+  const permEditable =
+    editable &&
+    pageType === 'detail' &&
+    (fieldPerms || []).find((p) => p && p.field === el.field_key)?.perm === 2
 
   // 仅在水平模式下计算栅格/Flex 布局（无标签元素按宽度分配，常规元素按全局标签宽度）
   let labelCol
@@ -860,14 +882,18 @@ const renderFormItemElement = (el, ctx) => {
   // - 其余模式：基础组件走专属配置（传原始 pageType，表格据此区分 form/move-form 可编辑、
   //   detail 纯文本、move-detail 画布禁用预览）；常规控件走统一渲染配置中心
   const renderControl = () => {
-    if (pageType === 'detail' && el.element_type !== 'divider' && el.element_type !== 'table') {
+    if (el.element_type === 'table') {
+      // 表格（子表）：透传字段权限，支持 detail 下按列 perm=2 渲染可编辑控件
+      return <TableElementField el={el} pageType={pageType} fieldPerms={fieldPerms} editable={editable} />
+    }
+    if (pageType === 'detail' && el.element_type !== 'divider' && !permEditable) {
       return <ReadonlyValue elementType={el.element_type} />
     }
     const baseCfg = getBaseElementConfig(el.element_type)
     if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, pageType)
     const render = renderPreviewConfig[el.element_type]
     if (render) return render(el, pageType)
-    return <Input disabled={!isFormMode} placeholder={el.placeholder || undefined} />
+    return <Input disabled={!isFormMode && !permEditable} placeholder={el.placeholder || undefined} />
   }
 
   return (
@@ -996,6 +1022,7 @@ export default function DynamicForm({
   onCanvasDrop,
   onCanvasClick,
   fieldPerms,
+  editable = false,
 }) {
   // 布局解析缓存：仅当布局 JSON 变化时重新解析，拖拽/选中等状态更新不触发重复解析
   const layout = useMemo(() => parseLayoutJson(app?.form_layout_json), [app?.form_layout_json])
@@ -1011,8 +1038,10 @@ export default function DynamicForm({
       formConfig,
       pageType,
       isMoveMode,
+      fieldPerms,
+      editable,
     }),
-    [formConfig, pageType, isMoveMode],
+    [formConfig, pageType, isMoveMode, fieldPerms, editable],
   )
 
   // 表单节点：根据页面类型渲染不同内容
@@ -1024,7 +1053,10 @@ export default function DynamicForm({
       className={isMoveMode ? 'mx-auto max-w-187.5' : undefined}
       layout={formConfig.layout}
       labelAlign={formConfig.labelAlign}
-      disabled={pageType !== 'form'}
+      disabled={
+        pageType !== 'form' &&
+        !(pageType === 'detail' && editable && (fieldPerms || []).some((p) => p && p.perm === 2))
+      }
       autoComplete="off"
       onValuesChange={(changed, allValues) => onValuesChange?.(allValues)}
     >

@@ -308,6 +308,23 @@ func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.App
 
 		now := time.Now()
 
+		// 2.5 审批人修改了业务数据（字段权限 perm=2 可编辑字段）：同一事务内更新业务表 + 实例数据快照
+		if len(req.BusinessData) > 0 {
+			if err := ApplicationDataUpdateWithDB(tx, instance.AppID, instance.BusinessDataID, curUserID, req.BusinessData); err != nil {
+				return err
+			}
+			formBytes, marshalErr := json.Marshal(req.BusinessData)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			if err := tx.Model(&model.ApprovalInstance{}).Where("id = ?", instanceID).
+				Update("form_data_snapshot", string(formBytes)).Error; err != nil {
+				return err
+			}
+			// 内存同步，供后续节点流转/详情展示读取最新快照
+			instance.FormDataSnapshot = req.BusinessData
+		}
+
 		// 3. 更新任务状态
 		task.Status = req.Action
 		task.Comment = req.Comment

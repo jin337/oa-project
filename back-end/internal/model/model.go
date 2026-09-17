@@ -592,8 +592,9 @@ type ApprovalInstanceSubmitDraftReq struct {
 
 // ApprovalInstanceTaskApproveReq 审批操作请求
 type ApprovalInstanceTaskApproveReq struct {
-	Action  int    `json:"action" validate:"required,oneof=1 2 3" label:"操作"` // 1-通过 2-拒绝 3-驳回
-	Comment string `json:"comment" validate:"omitempty,max=500" label:"审批意见"`
+	Action       int                    `json:"action" validate:"required,oneof=1 2 3" label:"操作"` // 1-通过 2-拒绝 3-驳回
+	Comment      string                 `json:"comment" validate:"omitempty,max=500" label:"审批意见"`
+	BusinessData map[string]interface{} `json:"business_data" validate:"omitempty" label:"业务数据"` // 审批人修改后的业务数据（字段权限 perm=2 可编辑字段），可选
 }
 
 // ApprovalInstanceTaskDelegateReq 转交请求

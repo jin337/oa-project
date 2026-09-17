@@ -602,18 +602,13 @@ func fillApprovalUserInfo(records []model.ApprovalRecord) {
 		}
 	}
 
-	// 回填姓名、部门与完成时间
+	// 回填姓名与部门（完成时间直接使用实例表 finished_at，由 finishInstance 在流程终结时写入，
+	// 历史逻辑曾以底层记录更新时间覆盖，但列表记录未携带 UpdatedAt 导致终态完成时间被置空）
 	for i := range records {
 		r := &records[i]
 		r.CreatedName = userName[r.CreatedBy]
 		if did, ok := userDept[r.CreatedBy]; ok {
 			r.DeptName = deptName[did]
-		}
-		switch r.Status {
-		case model.ApprovalStatusPassed, model.ApprovalStatusRejected,
-			model.ApprovalStatusReturned, model.ApprovalStatusVoided:
-			// 终态：完成时间取底层记录更新时间
-			r.FinishedAt = r.UpdatedAt
 		}
 	}
 }

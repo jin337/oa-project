@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button, Checkbox, Drawer, Radio, Select } from '@arco-design/web-react'
 import { IconClose, IconPlus } from '@arco-design/web-react/icon'
 import {
@@ -22,7 +22,14 @@ import { PersonPicker } from 'src/pages/application/examine/PersonSelectorModal'
  *   onSave: (node: Object) => void,
  * }} props
  */
-export function ApproverEditDrawer({ node, formFields = [], fieldsLoading = false, onCancel, onSave }) {
+export function ApproverEditDrawer({
+  node,
+  formFields = [],
+  fieldsLoading = false,
+  mainTable = '',
+  onCancel,
+  onSave,
+}) {
   // 审批对象：1-指定人员 / 2-指定角色 / 3-发起人自选
   const [approverType, setApproverType] = useState(node.approverType || 1)
   const [members, setMembers] = useState(normalizeMembers(node.members))
@@ -35,10 +42,51 @@ export function ApproverEditDrawer({ node, formFields = [], fieldsLoading = fals
   const [emptyMembers, setEmptyMembers] = useState(normalizeMembers(node.emptyMembers))
   // 审批人操作权限数组元素：1-拒绝 / 2-转交 / 3-加签
   const [permissions, setPermissions] = useState(node.permissions || [1])
-  const [fieldPerms, setFieldPerms] = useState(node.fieldPerms || [])
+  // 表单字段权限：选中字段时同步记录 table_key（主表 / 子表），回显兼容旧数据缺失 table_key
+  const [fieldPerms, setFieldPerms] = useState(
+    (node.fieldPerms || []).map((fp) => ({
+      ...fp,
+      table_key:
+        fp.table_key || formFields.find((f) => f.field_key === fp.field)?.table_key || '',
+    })),
+  )
 
   const updateFieldPerm = (index, key, v) =>
-    setFieldPerms(fieldPerms.map((fp, i) => (i === index ? { ...fp, [key]: v } : fp)))
+    setFieldPerms(
+      fieldPerms.map((fp, i) =>
+        i === index
+          ? {
+              ...fp,
+              [key]: v,
+              // 选中字段时自动带入其所属表（主表 / 子表），供分组展示与后续精确匹配
+              ...(key === 'field'
+                ? { table_key: formFields.find((f) => f.field_key === v)?.table_key || '' }
+                : {}),
+            }
+          : fp,
+      ),
+    )
+
+  // 按 table_key 分组字段选项（主表 / 子表），与条件表达式「具体条件」呈现方式保持一致
+  const fieldGroups = useMemo(() => {
+    const groups = []
+    const byTable = {}
+    for (const f of formFields) {
+      const tk = f.table_key || ''
+      if (!byTable[tk]) {
+        byTable[tk] = { tableKey: tk, fields: [] }
+        groups.push(byTable[tk])
+      }
+      byTable[tk].fields.push(f)
+    }
+    return groups
+  }, [formFields])
+
+  // 分组标题：与主表名一致的为主表，其余为子表；无主表信息时直接显示表名
+  const groupLabel = (tableKey) => {
+    if (!tableKey) return '其他'
+    return tableKey === mainTable ? `主表 - ${tableKey}` : `子表 - ${tableKey}`
+  }
 
   // 展示步骤二「审批方式」的条件：
   // 3-发起人自选 + 2-多选；或 1-指定人员 / 2-指定角色 实际选择数量 > 1（事实多选）
@@ -177,10 +225,14 @@ export function ApproverEditDrawer({ node, formFields = [], fieldsLoading = fals
                     placeholder="选择表单字段"
                     onChange={(v) => updateFieldPerm(i, 'field', v)}
                   >
-                    {formFields.map((f) => (
-                      <Select.Option key={f.field_key} value={f.field_key}>
-                        {f.label || f.field_key}
-                      </Select.Option>
+                    {fieldGroups.map((g) => (
+                      <Select.OptGroup key={g.tableKey || 'other'} label={groupLabel(g.tableKey)}>
+                        {g.fields.map((f) => (
+                          <Select.Option key={f.field_key} value={f.field_key}>
+                            {f.label || f.field_key}
+                          </Select.Option>
+                        ))}
+                      </Select.OptGroup>
                     ))}
                   </Select>
                   <Select

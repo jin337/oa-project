@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
+import { parseLayoutJson, serializeTimeFields } from 'src/pages/application/dynamic/DynamicForm'
 import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
 import PersonSelectorProvider from 'src/pages/application/examine/PersonSelectorProvider'
 import { userIdFromKey } from 'src/pages/application/examine/flowModel'
@@ -35,6 +36,8 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   const [loadError, setLoadError] = useState(false)
   const [comment, setComment] = useState('')
   const [operating, setOperating] = useState(false)
+  // 审批详情动态表单实例（字段权限 perm=2 可编辑字段修改后，提交时读取最新值）
+  const [detailForm, setDetailForm] = useState(null)
 
   // 转交 Modal（用户选择统一使用 PersonSelectorModal）
   const [delegateVisible, setDelegateVisible] = useState(false)
@@ -120,13 +123,42 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   const canAddSign = showDelegateButtons && currentNodePerms.includes(3)
 
   // ========== 审批操作 ==========
+  // 收集审批人修改后的表单数据：序列化时间字段后与实例初始数据比对，有差异才随审批提交
+  // 被字段权限（perm=1）隐藏、未渲染到表单的字段不会出现在 getFieldsValue 中，
+  // 提交前用初始快照按行补齐，保证子表全量重建时数据完整（避免缺失必填列导致 MySQL 1364）
+  const mergeHiddenColumns = (values, initial) => {
+    if (!initial || typeof initial !== 'object') return values
+    const merged = { ...initial, ...values }
+    Object.keys(initial).forEach((k) => {
+      if (Array.isArray(initial[k]) && Array.isArray(values[k])) {
+        merged[k] = values[k].map((row, i) => {
+          const base = initial[k][i] && typeof initial[k][i] === 'object' ? initial[k][i] : {}
+          const rowObj = row && typeof row === 'object' ? row : {}
+          return { ...base, ...rowObj }
+        })
+      }
+    })
+    return merged
+  }
+
+  const buildModifiedBusinessData = () => {
+    if (!detailForm || !instance?.business_data) return undefined
+    const layout = parseLayoutJson(instance?.detail_layout_json)
+    const values = serializeTimeFields(detailForm.getFieldsValue(), layout?.elements || [])
+    const fullValues = mergeHiddenColumns(values, instance.business_data)
+    if (JSON.stringify(fullValues) === JSON.stringify(instance.business_data)) return undefined
+    return fullValues
+  }
+
   const handleApprove = async (action) => {
     if (!currentTask) return
     setOperating(true)
     try {
+      const businessData = buildModifiedBusinessData()
       await approvalApi.approveApprovalTask(currentTask.instance_id, currentTask.id, {
         action,
         comment: comment.trim() || undefined,
+        business_data: businessData,
       })
       const names = { 1: '已同意', 2: '已拒绝', 3: '已驳回' }
       Message.success(names[action] || '操作成功')
@@ -268,6 +300,8 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
               dataId={dataId}
               initialData={instance?.business_data}
               fieldPerms={instance?.field_perms}
+              onFormReady={setDetailForm}
+              editable={Boolean(currentTask)}
             />
             <ApprovalTimeline
               instanceId={record?.instance_id}

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"gorm.io/gorm"
 	"errors"
 	"fmt"
 	"regexp"
@@ -450,6 +451,12 @@ func ApplicationDataDelete(appID, dataID uint) error {
 //  4. 子表数据：先清理旧数据（parent_id = dataId，有 deleted_at 软删、否则物理删），
 //     再遍历新数据逐行校验列合法性后重新 INSERT（自动填充 parent_id 及审计字段）
 func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]interface{}) error {
+	return ApplicationDataUpdateWithDB(database.DB, appID, dataID, curUserID, data)
+}
+
+// ApplicationDataUpdateWithDB 与 ApplicationDataUpdate 逻辑一致，但允许传入指定 DB 句柄
+// （审批流转等事务场景传 tx，保证业务数据更新与流程状态流转在同一事务内提交/回滚）。
+func ApplicationDataUpdateWithDB(db *gorm.DB, appID, dataID uint, curUserID uint, data map[string]interface{}) error {
 	app, err := ApplicationDetail(appID)
 	if err != nil {
 		return err
@@ -461,7 +468,7 @@ func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]i
 
 	// 校验目标记录存在（过滤软删除）
 	var cnt int64
-	if err := database.DB.Raw("SELECT COUNT(*) FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", dataID).Scan(&cnt).Error; err != nil {
+	if err := db.Raw("SELECT COUNT(*) FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", dataID).Scan(&cnt).Error; err != nil {
 		return err
 	}
 	if cnt == 0 {
@@ -517,7 +524,7 @@ func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]i
 	updateSQL := fmt.Sprintf("UPDATE `%s` SET %s WHERE `id` = ? AND `deleted_at` IS NULL",
 		real, strings.Join(sets, ","))
 	args = append(args, dataID)
-	if err := database.DB.Exec(updateSQL, args...).Error; err != nil {
+	if err := db.Exec(updateSQL, args...).Error; err != nil {
 		return fmt.Errorf("更新数据失败: %w", err)
 	}
 
@@ -537,11 +544,11 @@ func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]i
 
 		// 清理旧子表数据：有 deleted_at 列软删，否则物理删
 		if subColSet["deleted_at"] {
-			if err := database.DB.Exec("UPDATE `"+subReal+"` SET `deleted_at` = ? WHERE `parent_id` = ?", now, dataID).Error; err != nil {
+			if err := db.Exec("UPDATE `"+subReal+"` SET `deleted_at` = ? WHERE `parent_id` = ?", now, dataID).Error; err != nil {
 				return fmt.Errorf("清理子表 %s 旧数据失败: %w", subName, err)
 			}
 		} else {
-			if err := database.DB.Exec("DELETE FROM `"+subReal+"` WHERE `parent_id` = ?", dataID).Error; err != nil {
+			if err := db.Exec("DELETE FROM `"+subReal+"` WHERE `parent_id` = ?", dataID).Error; err != nil {
 				return fmt.Errorf("清理子表 %s 旧数据失败: %w", subName, err)
 			}
 		}
@@ -579,7 +586,7 @@ func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]i
 				strings.Join(subColumns, ","),
 				strings.Join(subPlaceholders, ","),
 			)
-			if err := database.DB.Exec(subSQL, subArgs...).Error; err != nil {
+			if err := db.Exec(subSQL, subArgs...).Error; err != nil {
 				return fmt.Errorf("插入子表 %s 数据失败: %w", subName, err)
 			}
 		}

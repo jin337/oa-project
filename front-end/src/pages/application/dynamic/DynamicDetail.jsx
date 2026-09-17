@@ -14,11 +14,18 @@ import { useApplicationDetailData } from 'src/pages/application/dynamic/useAppli
  * @param {string|number} dataId  数据记录 ID（可选；Drawer 场景由父组件传入，路由场景回退 useParams().id）
  * @param {object} initialData  外部预加载的业务数据（传入时跳过自动请求，直接用于表单回填）
  * @param {array}  fieldPerms   字段权限 [{field, perm}]（审批详情场景由父组件传入，透传 DynamicForm 过滤隐藏字段）
+ * @param {function} onFormReady  表单实例创建后的回调 (form) => void（审批场景父组件持有表单，提交时读取修改后的数据）
  */
-export default function DynamicDetail({ app, dataId: propDataId, initialData, fieldPerms }) {
+export default function DynamicDetail({ app, dataId: propDataId, initialData, fieldPerms, onFormReady, editable = false }) {
   const { id: routeDataId } = useParams()
   const dataId = propDataId || routeDataId
   const [form] = Form.useForm()
+
+  // 表单实例就绪后回调父组件（仅通知一次，form 实例在整个生命周期内稳定）
+  useEffect(() => {
+    onFormReady?.(form)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form])
 
   // 外部已提供数据时跳过自动请求（审批详情场景：复用实例接口返回的 business_data）
   const { detailData, loading, detailApp } = useApplicationDetailData(app, dataId, form, {
@@ -47,5 +54,5 @@ export default function DynamicDetail({ app, dataId: propDataId, initialData, fi
   }
 
   // detailApp 已由 hook 将 detail_layout_json 映射为 form_layout_json
-  return <DynamicForm app={detailApp} form={form} pageType="detail" fieldPerms={fieldPerms} />
+  return <DynamicForm app={detailApp} form={form} pageType="detail" fieldPerms={fieldPerms} editable={editable} />
 }
