@@ -344,6 +344,21 @@ func handleNodeApproval(tx *gorm.DB, instance *model.ApprovalInstance, task *mod
 		return errors.New("流程节点不存在")
 	}
 
+	// 原审批人（非加签任务）通过：激活本节点处于等待态的后加签任务（waiting → pending），
+	// 使其进入加签人待办；加签人通过后再按节点策略推进。
+	if task.AddSignFrom == 0 {
+		if err := tx.Model(&model.ApprovalInstanceTask{}).
+			Where("instance_id = ? AND node_id = ? AND add_sign_type = 2 AND status = ?",
+				instance.ID, task.NodeID, model.TaskStatusWaiting).
+			Updates(map[string]interface{}{
+				"status":     model.TaskStatusPending,
+				"updated_at": time.Now(),
+				"updated_by": curUserID,
+			}).Error; err != nil {
+			return err
+		}
+	}
+
 	// 加签任务完成：前加签恢复原审批人任务待处理；后加签继续走节点策略逻辑
 	//（依次=轮后续审批人 / 会签=统计剩余审批人 / 或签=直接推进）
 	if task.AddSignFrom > 0 && task.AddSignType == 1 {
@@ -555,13 +570,19 @@ func ApprovalTaskAddSign(curUserID uint, instanceID, taskID uint, req *model.App
 		}
 
 		// 6. 创建加签任务（前/后加签均创建）
+		// 后加签（type=2）：任务先置为等待态（TaskStatusWaiting），待原审批人通过后激活为待处理，
+		// 保证“我通过后，加签人继续审批”的时序语义，加签任务不会提前出现在加签人待办中。
+		addTaskStatus := model.TaskStatusPending
+		if req.Type == 2 {
+			addTaskStatus = model.TaskStatusWaiting
+		}
 		addTask := model.ApprovalInstanceTask{
 			InstanceID:  instance.ID,
 			NodeID:      node.ID,
 			NodeName:    node.Label,
 			Sort:        task.Sort,
 			AssigneeID:  req.UserID,
-			Status:      model.TaskStatusPending,
+			Status:      addTaskStatus,
 			AddSignFrom: task.ID,
 			AddSignType: req.Type,
 		}

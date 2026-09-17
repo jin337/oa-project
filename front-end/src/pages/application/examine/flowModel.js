@@ -248,3 +248,15 @@ export function updateNodeInTree(list, nodeId, updater) {
     return node
   })
 }
+
+/**
+ * 成员条目 key 解析为数字用户 id（如 user_5 → 5），非人员条目返回 null。
+ * 供加签 / 转交等以具体用户为操作目标的场景从选择器条目中提取用户 id。
+ * @param {string} key 成员条目 key（如 user_5 / dept_2 / role_3）
+ * @returns {number|null}
+ */
+export const userIdFromKey = (key) => {
+  const m = String(key || '').match(/^user_(\d+)$/)
+  return m ? Number(m[1]) : null
+}
+

@@ -60,16 +60,6 @@ var migrations = []migration{
 				&model.ApprovalCategoryItem{},
 				&model.ApprovalInstance{},
 				&model.ApprovalInstanceTask{},
-			)
-		},
-	},
-	{
-		Version: 4,
-		Name:    "add_approval_addsign_ccrecord",
-		Up: func(db *gorm.DB) error {
-			// 任务表新增加签字段（AutoMigrate 增量加列）；新增抄送记录表
-			return db.AutoMigrate(
-				&model.ApprovalInstanceTask{},
 				&model.ApprovalCCRecord{},
 			)
 		},

@@ -24,6 +24,7 @@ export function PersonSelectorModal({
   modes = [1, 2], // 默认全部数据源维度：1-组织架构 / 2-角色
   checkTarget = 1, // 默认 1-人员
   selectMode = 2, // 选择模式：1-单选 / 2-多选（默认多选）
+  extra = null, // 额外内容插槽（渲染在弹层内容顶部，如加签类型选择）
 }) {
   const {
     orgTree = [],
@@ -136,6 +137,7 @@ export function PersonSelectorModal({
       style={{ width: 680 }}
       autoFocus={false}
     >
+      {extra}
       <div className="flex gap-4">
         {/* 左侧：数据源 */}
         <div className="w-1/2 rounded border border-gray-200">

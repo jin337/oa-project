@@ -4,17 +4,17 @@ import {
   Empty,
   Input,
   Message,
-  Modal,
   Popconfirm,
   Radio,
   Space,
   Spin,
-  Tag,
 } from '@arco-design/web-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
-import { listUsers } from 'src/api/user'
 import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
+import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
+import PersonSelectorProvider from 'src/pages/application/examine/PersonSelectorProvider'
+import { userIdFromKey } from 'src/pages/application/examine/flowModel'
 import ApprovalTimeline from 'src/pages/approval/ApprovalTimeline.jsx'
 
 /**
@@ -36,24 +36,13 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   const [comment, setComment] = useState('')
   const [operating, setOperating] = useState(false)
 
-  // 转交 Modal
+  // 转交 Modal（用户选择统一使用 PersonSelectorModal）
   const [delegateVisible, setDelegateVisible] = useState(false)
-  const [delegateSearch, setDelegateSearch] = useState('')
-  const [delegateResults, setDelegateResults] = useState([])
-  const [delegateUser, setDelegateUser] = useState(null)
-  const [delegateLoading, setDelegateLoading] = useState(false)
 
-  // 加签 Modal
+  // 加签 Modal（用户选择统一使用 PersonSelectorModal）
   const [addSignerVisible, setAddSignerVisible] = useState(false)
-  const [addSignerSearch, setAddSignerSearch] = useState('')
-  const [addSignerResults, setAddSignerResults] = useState([])
-  const [addSignerUser, setAddSignerUser] = useState(null)
-  const [addSignerLoading, setAddSignerLoading] = useState(false)
   // 加签类型：1-前加签（加签人先审，通过后本人再审） 2-后加签（本人通过后加签人再审）
   const [addSignType, setAddSignType] = useState(2)
-
-  // 防抖定时器（用户搜索）
-  const searchTimerRef = useRef(null)
 
   useEffect(() => {
     if (!visible || !record) return
@@ -89,16 +78,16 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     if (!visible) {
       setDelegateVisible(false)
       setAddSignerVisible(false)
-      setDelegateUser(null)
-      setAddSignerUser(null)
-      setDelegateSearch('')
-      setAddSignerSearch('')
     }
   }, [visible])
 
   const dataId = record?.data_id ?? record?.id
   const appFromInstance = instance
-    ? { id: instance.app_id, name: instance.app_name, detail_layout_json: instance.detail_layout_json }
+    ? {
+        id: instance.app_id,
+        name: instance.app_name,
+        detail_layout_json: instance.detail_layout_json,
+      }
     : null
   const title = instance?.app_name || record?.item_name || record?.name || ''
 
@@ -146,37 +135,17 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     }
   }
 
-  // ========== 用户搜索（防抖） ==========
-  const searchUsers = (keyword, setResults) => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    if (!keyword) {
-      setResults([])
-      return
-    }
-    searchTimerRef.current = setTimeout(async () => {
-      try {
-        const res = await listUsers({ username: keyword, page: 1, size: 20 })
-        setResults(res.data?.list || res.data?.records || [])
-      } catch {
-        setResults([])
-      }
-    }, 300)
-  }
-
   // ========== 转交 ==========
   const openDelegateModal = () => {
-    setDelegateUser(null)
-    setDelegateSearch('')
-    setDelegateResults([])
     setDelegateVisible(true)
   }
 
-  const handleDelegate = async () => {
-    if (!delegateUser || !currentTask) return
+  const handleDelegate = async (userId) => {
+    if (!userId || !currentTask) return
     setOperating(true)
     try {
       await approvalApi.delegateApprovalTask(currentTask.instance_id, currentTask.id, {
-        to_user_id: delegateUser.id,
+        to_user_id: userId,
       })
       Message.success('转交成功')
       setDelegateVisible(false)
@@ -191,19 +160,16 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
 
   // ========== 加签 ==========
   const openAddSignerModal = () => {
-    setAddSignerUser(null)
-    setAddSignerSearch('')
-    setAddSignerResults([])
     setAddSignType(2)
     setAddSignerVisible(true)
   }
 
-  const handleAddSigner = async () => {
-    if (!addSignerUser || !currentTask) return
+  const handleAddSigner = async (userId) => {
+    if (!userId || !currentTask) return
     setOperating(true)
     try {
       await approvalApi.addSignApprovalTask(currentTask.instance_id, currentTask.id, {
-        user_id: addSignerUser.id,
+        user_id: userId,
         type: addSignType,
       })
       Message.success(addSignType === 1 ? '前加签成功' : '后加签成功')
@@ -217,33 +183,11 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     }
   }
 
-  // 渲染用户搜索结果列表
-  const renderUserSearchResults = (results, selectedUser, onSelect) => (
-    <div className="max-h-48 overflow-auto rounded border border-gray-200">
-      {results.length === 0 ? (
-        <div className="p-3 text-center text-sm text-gray-400">输入姓名搜索用户</div>
-      ) : (
-        results.map((u) => (
-          <div
-            key={u.id}
-            className={`cursor-pointer px-3 py-2 text-sm hover:bg-gray-50 ${
-              selectedUser?.id === u.id ? 'bg-blue-50 text-blue-600' : ''
-            }`}
-            onClick={() => onSelect(u)}
-          >
-            {u.nickname || u.username}
-            <span className="ml-2 text-xs text-gray-400">({u.username})</span>
-          </div>
-        ))
-      )}
-    </div>
-  )
-
   // 操作按钮区域
   const renderActions = () => {
     if (!showApproveButtons && !showWithdraw && !showDelegateButtons) return null
     return (
-      <div className="border-t border-gray-100 pt-3">
+      <div className="pt-3">
         {/* 审批意见输入 */}
         {showApproveButtons && (
           <div className="mb-3">
@@ -271,7 +215,11 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
               </Space>
             )}
             {showWithdraw && (
-              <Popconfirm title="撤回后该申请将转为草稿，确定撤回？" onOk={handleWithdraw} position="top">
+              <Popconfirm
+                title="撤回后该申请将转为草稿，确定撤回？"
+                onOk={handleWithdraw}
+                position="top"
+              >
                 <Button size="small" status="warning" loading={operating}>
                   撤回
                 </Button>
@@ -285,7 +233,11 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
                   拒绝
                 </Button>
               </Popconfirm>
-              <Popconfirm title="确定驳回该申请吗？（退回修改）" onOk={() => handleApprove(3)} position="top">
+              <Popconfirm
+                title="确定驳回该申请吗？（退回修改）"
+                onOk={() => handleApprove(3)}
+                position="top"
+              >
                 <Button status="warning" size="small" loading={operating}>
                   驳回
                 </Button>
@@ -303,7 +255,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   }
 
   return (
-    <>
+    <PersonSelectorProvider>
       <Drawer
         width="50%"
         title={`详情 - ${title}`}
@@ -343,72 +295,44 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         )}
       </Drawer>
 
-      {/* 转交 Modal */}
-      <Modal
-        title="转交审批"
-        visible={delegateVisible}
-        onCancel={() => setDelegateVisible(false)}
-        onOk={handleDelegate}
-        okText="确认转交"
-        okButtonProps={{ disabled: !delegateUser, loading: operating }}
-        unmountOnExit
-      >
-        <div className="mb-2 text-sm text-gray-500">选择转交目标用户</div>
-        <Input.Search
-          placeholder="输入姓名搜索用户"
-          value={delegateSearch}
-          onChange={(v) => {
-            setDelegateSearch(v)
-            searchUsers(v, setDelegateResults)
+      {/* 转交 Modal：用户选择统一使用 PersonSelectorModal（组织架构单选） */}
+      {delegateVisible && (
+        <PersonSelectorModal
+          title="转交审批"
+          modes={[1]}
+          checkTarget={1}
+          selectMode={1}
+          onChange={(items) => {
+            const uid = userIdFromKey(items[0]?.key)
+            if (uid) handleDelegate(uid)
           }}
-          allowClear
-          className="mb-2"
+          onCancel={() => setDelegateVisible(false)}
         />
-        {delegateUser ? (
-          <div className="mb-2">
-            <Tag closable onClose={() => setDelegateUser(null)} color="blue">
-              {delegateUser.nickname || delegateUser.username}
-            </Tag>
-          </div>
-        ) : null}
-        {renderUserSearchResults(delegateResults, delegateUser, (u) => setDelegateUser(u))}
-      </Modal>
+      )}
 
-      {/* 加签 Modal */}
-      <Modal
-        title="加签"
-        visible={addSignerVisible}
-        onCancel={() => setAddSignerVisible(false)}
-        onOk={handleAddSigner}
-        okText="确认加签"
-        okButtonProps={{ disabled: !addSignerUser, loading: operating }}
-        unmountOnExit
-      >
-        <div className="mb-2 text-sm text-gray-500">加签类型</div>
-        <Radio.Group value={addSignType} onChange={setAddSignType} className="mb-3">
-          <Radio value={2}>后加签（我通过后，加签人继续审批）</Radio>
-          <Radio value={1}>前加签（加签人先审，通过后我再审批）</Radio>
-        </Radio.Group>
-        <div className="mb-2 text-sm text-gray-500">选择加签用户</div>
-        <Input.Search
-          placeholder="输入姓名搜索用户"
-          value={addSignerSearch}
-          onChange={(v) => {
-            setAddSignerSearch(v)
-            searchUsers(v, setAddSignerResults)
+      {/* 加签 Modal：用户选择统一使用 PersonSelectorModal，extra 承载加签类型 */}
+      {addSignerVisible && (
+        <PersonSelectorModal
+          title="加签"
+          modes={[1]}
+          checkTarget={1}
+          selectMode={1}
+          extra={
+            <>
+              <div className="mb-2 text-sm text-gray-500">加签类型</div>
+              <Radio.Group value={addSignType} onChange={setAddSignType} className="mb-3">
+                <Radio value={2}>后加签（我通过后，加签人继续审批）</Radio>
+                <Radio value={1}>前加签（加签人先审，通过后我再审批）</Radio>
+              </Radio.Group>
+            </>
+          }
+          onChange={(items) => {
+            const uid = userIdFromKey(items[0]?.key)
+            if (uid) handleAddSigner(uid)
           }}
-          allowClear
-          className="mb-2"
+          onCancel={() => setAddSignerVisible(false)}
         />
-        {addSignerUser ? (
-          <div className="mb-2">
-            <Tag closable onClose={() => setAddSignerUser(null)} color="blue">
-              {addSignerUser.nickname || addSignerUser.username}
-            </Tag>
-          </div>
-        ) : null}
-        {renderUserSearchResults(addSignerResults, addSignerUser, (u) => setAddSignerUser(u))}
-      </Modal>
-    </>
+      )}
+    </PersonSelectorProvider>
   )
 }

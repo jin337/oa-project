@@ -252,6 +252,8 @@ export default function ApprovalTimeline({
         <Timeline>
           {/* 发起节点 */}
           <Timeline.Item
+            className="min-h-10! pb-5"
+            key="initiator"
             dot={
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white">
                 <IconUser style={{ fontSize: 13 }} />
@@ -259,14 +261,14 @@ export default function ApprovalTimeline({
             }
           >
             <div className="flex items-center gap-2">
-              <span className="text-base font-medium">发起申请</span>
+              <span className="font-medium">发起申请</span>
               <Tag size="small" color="green">
                 已提交
               </Tag>
             </div>
-            <div className="mt-0.5 text-xs text-gray-500">
+            <div className="mt-0.5 flex items-center justify-between text-xs text-gray-500">
               <span className="font-medium text-gray-700">{createdByName}</span>
-              <span className="ml-2">{instance.created_at?.slice(0, 19).replace('T', ' ')}</span>
+              <span>{instance.created_at?.slice(0, 19).replace('T', ' ')}</span>
             </div>
           </Timeline.Item>
 
@@ -278,6 +280,7 @@ export default function ApprovalTimeline({
               return (
                 <Timeline.Item
                   key={node.id}
+                  className="min-h-10! pb-5"
                   dot={
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white">
                       <IconStamp style={{ fontSize: 13 }} />
@@ -285,17 +288,11 @@ export default function ApprovalTimeline({
                   }
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-base font-medium">{node.label || '审批'}</span>
-                    {node.strategy === 2 && (
-                      <Tag size="small" color="blue">
-                        会签
-                      </Tag>
-                    )}
-                    {node.strategy === 3 && (
-                      <Tag size="small" color="blue">
-                        或签
-                      </Tag>
-                    )}
+                    <span className="font-medium">
+                      {node.label || '审批'}：
+                      {nodeTasks.length > 0 ? nodeTasks.length : node.members?.length || 0}人（
+                      {node.strategy === 2 ? '会签' : node.strategy === 3 ? '或签' : '依次审批'}）
+                    </span>
                   </div>
                   {nodeTasks.length > 0 ? (
                     nodeTasks.map((task) => {
@@ -304,33 +301,26 @@ export default function ApprovalTimeline({
                       const userName = userNameMap[task.assignee_id] || `用户#${task.assignee_id}`
                       return (
                         <div key={task.id} className="mt-1.5 rounded-md bg-gray-100 p-2">
-                          <div className="flex items-center gap-1">
-                            <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full  ${
-                                task.status === 0
-                                  ? 'text-orange-400'
-                                  : task.status === 1
-                                    ? 'text-green-500'
-                                    : task.status === 4
-                                      ? 'text-blue-500'
-                                      : 'text-red-500'
-                              }`}>
-                              <Icon style={{ fontSize: 14 }} />
-                            </span>
-                            <span className="text-sm font-medium text-gray-700">{userName}</span>
-                            <Tag size="small" color={meta.color}>
-                              {meta.label}
-                            </Tag>
-                          </div>
-                          <div className="mt-0.5 flex items-center gap-3 text-xs text-gray-400">
-                            {task.operated_at && (
-                              <span>{task.operated_at.slice(0, 19).replace('T', ' ')}</span>
-                            )}
-                            {task.delegated_from > 0 && (
-                              <span className="text-blue-500">（由他人转交）</span>
-                            )}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-1">
+                              <span className="truncate text-sm font-medium text-gray-700">
+                                {userName}
+                              </span>
+                              <Tag size="small" color={meta.color}>
+                                {meta.label}
+                              </Tag>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2 text-xs text-gray-400">
+                              {task.delegated_from > 0 && (
+                                <span className="text-blue-500">（由他人转交）</span>
+                              )}
+                              {task.operated_at && (
+                                <span>{task.operated_at.slice(0, 19).replace('T', ' ')}</span>
+                              )}
+                            </div>
                           </div>
                           {task.comment && (
-                            <div className="mt-1 text-xs text-gray-600">意见：{task.comment}</div>
+                            <div className="mt-1 text-xs text-gray-600">{task.comment}</div>
                           )}
                         </div>
                       )
@@ -350,6 +340,7 @@ export default function ApprovalTimeline({
               return (
                 <Timeline.Item
                   key={node.id}
+                  className="min-h-10!"
                   dot={
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-white">
                       <Icon style={{ fontSize: 13 }} />
@@ -357,18 +348,13 @@ export default function ApprovalTimeline({
                   }
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-base font-medium">{node.label || '抄送'}</span>
-                    <Tag size="small" color="blue">
-                      抄送人
-                    </Tag>
+                    <span className="font-medium">
+                      {node.label || '抄送'}
+                      {node.ccTiming ? `（${CC_TIMING_LABEL[node.ccTiming]}）` : ''}
+                    </span>
                   </div>
                   <div className="mt-0.5 text-xs text-gray-500">
                     <span>{formatMembers(node.members, userNameMap)}</span>
-                    {node.ccTiming && (
-                      <span className="ml-2 text-gray-400">
-                        {CC_TIMING_LABEL[node.ccTiming] || ''}
-                      </span>
-                    )}
                   </div>
                 </Timeline.Item>
               )
