@@ -261,7 +261,7 @@ export default function ApprovalTimeline({
             }
           >
             <div className="flex items-center gap-2">
-              <span className="font-medium">发起申请</span>
+              <span className="font-medium">发起人</span>
               <Tag size="small" color="green">
                 已提交
               </Tag>

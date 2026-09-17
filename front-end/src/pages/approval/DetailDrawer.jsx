@@ -4,6 +4,7 @@ import {
   Empty,
   Input,
   Message,
+  Modal,
   Popconfirm,
   Radio,
   Space,
@@ -135,6 +136,16 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     }
   }
 
+  // 撤回二次确认（右上角“更多”菜单触发）
+  const confirmWithdraw = () => {
+    Modal.confirm({
+      title: '撤回申请',
+      content: '撤回后该申请将转为草稿，确定撤回？',
+      okButtonProps: { status: 'warning' },
+      onOk: handleWithdraw,
+    })
+  }
+
   // ========== 转交 ==========
   const openDelegateModal = () => {
     setDelegateVisible(true)
@@ -187,22 +198,19 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   const renderActions = () => {
     if (!showApproveButtons && !showWithdraw && !showDelegateButtons) return null
     return (
-      <div className="pt-3">
+      <>
         {/* 审批意见输入 */}
         {showApproveButtons && (
-          <div className="mb-3">
-            <div className="mb-1 text-sm text-gray-500">审批意见</div>
-            <Input.TextArea
-              placeholder="请输入审批意见（可选）"
-              value={comment}
-              onChange={setComment}
-              maxLength={500}
-              showWordLimit
-              autoSize={{ minRows: 2, maxRows: 4 }}
-            />
-          </div>
+          <Input.TextArea
+            placeholder="请输入审批意见（可选）"
+            value={comment}
+            onChange={setComment}
+            maxLength={500}
+            showWordLimit
+            autoSize={{ minRows: 2, maxRows: 4 }}
+          />
         )}
-        <div className="flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between">
           <Space>
             {showDelegateButtons && (
               <Space>
@@ -215,15 +223,9 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
               </Space>
             )}
             {showWithdraw && (
-              <Popconfirm
-                title="撤回后该申请将转为草稿，确定撤回？"
-                onOk={handleWithdraw}
-                position="top"
-              >
-                <Button size="small" status="warning" loading={operating}>
-                  撤回
-                </Button>
-              </Popconfirm>
+              <Button size="small" status="warning" loading={operating} onClick={confirmWithdraw}>
+                撤回
+              </Button>
             )}
           </Space>
           {showApproveButtons && (
@@ -250,7 +252,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
             </Space>
           )}
         </div>
-      </div>
+      </>
     )
   }
 
@@ -261,7 +263,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         title={`详情 - ${title}`}
         visible={visible}
         onCancel={onCancel}
-        footer={null}
+        footer={renderActions() || null}
         unmountOnExit
       >
         {loading ? (
@@ -282,7 +284,6 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
               initialData={instance}
               assigneeNameMap={instance?.assignee_name_map}
             />
-            {renderActions()}
           </>
         ) : !record?.instance_id ? (
           loadError ? (
