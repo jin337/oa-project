@@ -248,8 +248,7 @@ export default function ApprovalTimeline({
           {instMeta.label}
         </Tag>
       </Divider>
-      <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-        <Timeline>
+        <Timeline className="pl-1.5">
           {/* 发起节点 */}
           <Timeline.Item
             className="min-h-10! pb-5"
@@ -368,7 +367,6 @@ export default function ApprovalTimeline({
             return null
           })}
         </Timeline>
-      </div>
     </>
   )
 }

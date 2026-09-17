@@ -259,7 +259,7 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
         </div>
         <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node)}</div>
       </div>
-      <div className="flex shrink-0 flex-wrap justify-end gap-y-1">
+      <div className="flex shrink-0 flex-wrap justify-end gap-y-1 relative">
         {node.approverType === 3 ? (
           // 3-发起人自选：已选择渲染头像+姓名，未选择仅展示「+」按钮；均可点击唤起选择器
           <>
@@ -281,6 +281,9 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
             <Avatar shape="square" size={35} className="ml-1 cursor-pointer">
               <IconPlus onClick={() => onSelectNode?.(node)} />
             </Avatar>
+            {!(node.members || []).length && (
+              <span className="text-xs text-red-500 absolute -top-1.5 -right-0.5">*</span>
+            )}
           </>
         ) : (
           // 非发起人自选（1-指定人员 / 2-指定角色）：保持原有成员渲染
@@ -303,7 +306,7 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
  * @param {object} [props.formData] 实际填报的表单数据（主表字段 + 子表数组），用于条件分支命中评估
  * @param {Function} [props.onMembersChange] 发起人自选节点成员变化回调 (nodeId, members) => void
  */
-export default function DynamicFlowView({ raw, formData, onMembersChange }) {
+export default function DynamicFlowView({ raw, formData, onMembersChange, onReadyStateChange }) {
   const nodes = useMemo(() => parseApprovalFlow(raw), [raw])
   // 发起人自选节点运行期成员覆盖：nodeId -> members（选择后展示用）
   const [memberOverrides, setMemberOverrides] = useState({})
@@ -340,6 +343,18 @@ export default function DynamicFlowView({ raw, formData, onMembersChange }) {
     walk(visibleNodes)
     return flat
   }, [visibleNodes, formData])
+  // 发起人自选节点必须选人（审批人 approverType=3，或抄送节点配置了自选）：
+  // 命中路径上的自选节点未选任何成员时，提交应被前端拦截（后端同样校验）
+  const missingSelfSelectNodes = useMemo(() => {
+    return (flattenedNodes || []).filter((n) => {
+      const isSelfSelect = n.approverType === 3 || (n.type === 3 && n.selfSelect > 0)
+      if (!isSelfSelect) return false
+      return !(memberOverrides[n.id] || n.members || []).length
+    })
+  }, [flattenedNodes, memberOverrides])
+  useEffect(() => {
+    onReadyStateChange?.(missingSelfSelectNodes.length === 0)
+  }, [missingSelfSelectNodes, onReadyStateChange])
   // 当前唤起选择器的节点
   const [selectorNode, setSelectorNode] = useState(null)
   // 对象选择器数据源（组织架构树 / 角色列表 / 派生映射），首次唤起选择器时懒加载

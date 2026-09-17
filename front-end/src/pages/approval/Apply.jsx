@@ -88,6 +88,8 @@ export default function Apply() {
   const [formValues, setFormValues] = useState({})
   // 发起人自选审批人（nodeId -> [{ type, key, label }]），提交时转为 nodeId -> [userId] 传给后端
   const [selfSelectMembers, setSelfSelectMembers] = useState({})
+  // 自选审批人/抄送人节点是否已全部选择（DynamicFlowView 上报，未选齐时禁止提交）
+  const [selfSelectReady, setSelfSelectReady] = useState(true)
 
   // 加载分类列表
   const fetchCategories = useCallback(async () => {
@@ -296,8 +298,12 @@ export default function Apply() {
     }
   }
 
-  // 提交审核：校验表单 + 一次调用发起审批（后端自动创建业务数据）
+  // 提交审核：校验表单 + 自选必填 + 一次调用发起审批（后端自动创建业务数据）
   const handleSubmitApproval = async () => {
+    if (!selfSelectReady) {
+      Message.error('请先为自选的审批人/抄送人节点选择人员后再提交')
+      return
+    }
     setDrawerSaving(true)
     try {
       const payload = await validateAndBuildPayload()
@@ -557,6 +563,7 @@ export default function Apply() {
               onMembersChange={(nodeId, members) => {
                 setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
               }}
+              onReadyStateChange={setSelfSelectReady}
             />
           </>
         ) : null}

@@ -132,11 +132,15 @@ func prepareApprovalContext(appID, businessDataID uint, selfSelectMembers map[st
 func validateSelfSelectApprovers(ctx *approvalContext) error {
 	for _, nodeID := range ctx.execPath {
 		node := findNodeByID(ctx.injectedNodes, nodeID)
-		if node == nil || node.ApproverType != 3 {
+		if node == nil {
 			continue
 		}
-		// 抄送节点（type=3）为通知类节点，不生成审批待办任务，成员为空不阻塞提交
-		if node.Type != 2 {
+		// 发起人自选节点必须选人：
+		//   - 审批人：approverType=3 的审批节点（type=2）
+		//   - 抄送人：抄送节点（type=3）且配置了发起人自选（selfSelect>0）
+		isApproverSelfSelect := node.ApproverType == 3 && node.Type == 2
+		isCcSelfSelect := node.Type == 3 && node.SelfSelect > 0
+		if !isApproverSelfSelect && !isCcSelfSelect {
 			continue
 		}
 		ids, err := resolveApproverUserIDs(*node, nil)
@@ -148,7 +152,11 @@ func validateSelfSelectApprovers(ctx *approvalContext) error {
 			if label == "" {
 				label = nodeID
 			}
-			return fmt.Errorf("请为「%s」节点选择审批人后再提交", label)
+			kind := "审批人"
+			if node.Type == 3 {
+				kind = "抄送人"
+			}
+			return fmt.Errorf("请为「%s」节点选择%s后再提交", label, kind)
 		}
 	}
 	return nil
