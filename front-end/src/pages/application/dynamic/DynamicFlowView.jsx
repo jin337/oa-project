@@ -273,14 +273,22 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
                     onRemoveMember?.(node, updated)
                   }}
                 />
-                <span className="h-8.75 leading-8.75 text-gray-400">
-                  {node.type === 2 ? STRATEGY_SYMBOL[node.strategy] || '>' : '+'}
-                </span>
+                {node.type === 2 ? (
+                  <span className="h-8.75 leading-8.75 text-gray-400">
+                    {STRATEGY_SYMBOL[node.strategy] || '>'}
+                  </span>
+                ) : node.selfSelect === 1 ? null : (
+                  // 抄送人多选（selfSelect=2）：成员间展示分隔符，暗示可继续添加
+                  <span className="h-8.75 leading-8.75 text-gray-400">+</span>
+                )}
               </Fragment>
             ))}
-            <Avatar shape="square" size={35} className="ml-1 cursor-pointer">
-              <IconPlus onClick={() => onSelectNode?.(node)} />
-            </Avatar>
+            {/* 单选（selfSelect=1）选中一人后隐藏「+」，多选（selfSelect=2）始终可添加 */}
+            {node.selfSelect !== 1 || !(node.members || []).length ? (
+              <Avatar shape="square" size={35} className="ml-1 cursor-pointer">
+                <IconPlus onClick={() => onSelectNode?.(node)} />
+              </Avatar>
+            ) : null}
             {!(node.members || []).length && (
               <span className="text-xs text-red-500 absolute -top-1.5 -right-0.5">*</span>
             )}
