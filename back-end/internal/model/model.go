@@ -575,6 +575,10 @@ type ApprovalInstanceCreateReq struct {
 	BusinessDataID    uint                   `json:"business_data_id" label:"业务数据ID"`
 	BusinessData      map[string]interface{} `json:"business_data" label:"业务数据"`
 	SelfSelectMembers map[string][]uint      `json:"self_select_members" validate:"omitempty" label:"发起人自选审批人"` // nodeId -> 用户ID列表
+	// InstanceID 草稿实例ID：仅保存草稿（POST /approval/instance/draft）时使用——
+	// 传 0（默认）新建草稿实例；传已有草稿实例 ID 时严格更新（Update）该草稿，不新增记录。
+	// 发起审批（POST /approval/instance）忽略该字段。
+	InstanceID uint `json:"instance_id" label:"草稿实例ID"`
 }
 
 // ApprovalInstanceSubmitDraftReq 从草稿提交发起审批请求

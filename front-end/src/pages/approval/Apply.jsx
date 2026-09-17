@@ -11,6 +11,7 @@ import {
   Modal,
   Popconfirm,
   Select,
+  Space,
   Spin,
 } from '@arco-design/web-react'
 import {
@@ -20,6 +21,7 @@ import {
   IconEdit,
   IconFile,
   IconPlus,
+  IconSettings,
   IconUser,
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -52,6 +54,9 @@ const getIcon = (icon) => ICON_MAP[(icon || '').toLowerCase()] || <IconFile />
  * 分类行下方以网格卡片展示该分类下的申请项。
  * 申请项通过「页面编码（code）」关联 ApplicationManage 中已配置的应用页面，
  * 点击申请项卡片时预请求应用配置，并在 Drawer 中注入动态表单组件进行展示。
+ *
+ * 管理模式：头部「管理」按钮（受 approval:apply-btn 权限控制）切换 isManaging，
+ * 进入管理模式后展示「新增分类」/「新增申请项」/分类与申请项的编辑删除操作，退出后隐藏。
  */
 export default function Apply() {
   const { hasPerm } = usePermission()
@@ -59,6 +64,8 @@ export default function Apply() {
   const [categories, setCategories] = useState([])
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
+  // 管理模式开关：true 时展示分类/申请项的管理操作按钮
+  const [isManaging, setIsManaging] = useState(false)
 
   // 分类弹窗
   const [catModalVisible, setCatModalVisible] = useState(false)
@@ -316,9 +323,21 @@ export default function Apply() {
       title="审批申请"
       extra={
         hasPerm('approval:apply-btn') && (
-          <Button type="primary" icon={<IconPlus />} onClick={openCreateCategory}>
-            新增分类
-          </Button>
+          <Space>
+            {/* 管理模式开关：进入后展示管理操作，退出后恢复普通浏览 */}
+            <Button
+              type={isManaging ? 'primary' : 'default'}
+              icon={<IconSettings />}
+              onClick={() => setIsManaging((v) => !v)}
+            >
+              {isManaging ? '完成管理' : '管理'}
+            </Button>
+            {isManaging && (
+              <Button type="primary" icon={<IconPlus />} onClick={openCreateCategory}>
+                新增分类
+              </Button>
+            )}
+          </Space>
         )
       }
     >
@@ -329,11 +348,11 @@ export default function Apply() {
             const catItems = items.filter((it) => it.category_id === c.id)
             return (
               <div key={c.id}>
-                {/* 分类行：左侧名称 + 编辑/删除图标，右侧新增申请项按钮 */}
+                {/* 分类行：左侧名称 + 编辑/删除图标，右侧新增申请项按钮（管理模式展示） */}
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <span className="text-base font-medium">{c.name}</span>
-                    {hasPerm('approval:apply-btn') && (
+                    {isManaging && hasPerm('approval:apply-btn') && (
                       <>
                         <Button
                           size="mini"
@@ -351,7 +370,7 @@ export default function Apply() {
                       </>
                     )}
                   </div>
-                  {hasPerm('approval:apply-btn') && (
+                  {isManaging && hasPerm('approval:apply-btn') && (
                     <Button
                       size="small"
                       type="secondary"
@@ -374,10 +393,10 @@ export default function Apply() {
                           bodyStyle={{ padding: '10px' }}
                           onClick={() => handleItemClick(item)}
                         >
-                          {/* 卡片右上角操作区：编辑 / 删除（hover 显示） */}
-                          {hasPerm('approval:apply-btn') && (
+                          {/* 卡片右上角操作区：编辑 / 删除（管理模式直接显示，退出后隐藏） */}
+                          {isManaging && hasPerm('approval:apply-btn') && (
                             <div
-                              className="absolute top-2 right-2 z-10 hidden items-center group-hover:flex"
+                              className="absolute top-2 right-2 z-10 flex items-center"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Button

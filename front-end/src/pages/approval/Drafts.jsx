@@ -66,6 +66,32 @@ export default function Drafts() {
     fetchList()
   }, [fetchList])
 
+  // 从流程快照收集发起人自选成员（approverType=3 节点已注入的 members），兼容 JSON 字符串与节点数组；
+  // 用于编辑草稿打开时回填 selfSelectMembers 状态，保存时原样回传，避免自选审批人在编辑后丢失
+  const collectSelfSelectMembers = (flowSnapshot) => {
+    const result = {}
+    let nodes = flowSnapshot
+    if (typeof flowSnapshot === 'string' && flowSnapshot) {
+      try {
+        nodes = JSON.parse(flowSnapshot)
+      } catch {
+        return result
+      }
+    }
+    const walk = (list) => {
+      for (const n of list || []) {
+        if (n && n.approverType === 3 && Array.isArray(n.members) && n.members.length) {
+          result[n.id] = n.members
+        }
+        if (n && n.type === 4 && Array.isArray(n.branches)) {
+          n.branches.forEach((b) => walk(b && b.children))
+        }
+      }
+    }
+    walk(Array.isArray(nodes) ? nodes : [])
+    return result
+  }
+
   // 继续编辑：通过实例接口一次获取全部数据
   const openDraftEdit = async (record) => {
     setDraftRecord(record)
@@ -92,7 +118,9 @@ export default function Drafts() {
       const bizData = inst.business_data || {}
       drawerForm.setFieldsValue(bizData)
       setFormValues(bizData)
-      setSelfSelectMembers({})
+      // 从流程快照恢复发起人自选审批人（approverType=3 节点已注入的 members），
+      // 避免编辑打开时清空已选成员，导致保存草稿时 self_select_members 丢失并被后端清空暂存
+      setSelfSelectMembers(collectSelfSelectMembers(inst.flow_snapshot_json))
     } catch (e) {
       Message.error('草稿加载失败，请稍后重试')
       setDrawerVisible(false)
@@ -132,7 +160,10 @@ export default function Drafts() {
       const payload = serializeTimeFields(values, layout?.elements || [])
       const selfSelectUserIDs = buildSelfSelectUserIDs()
       // 一次调用：后端自动更新业务数据并保存审批草稿实例
+      // instance_id 标识本次编辑的草稿实例：后端据此执行 UPDATE（更新）而非 INSERT（新增），
+      // 避免从草稿箱每次保存都新增一条草稿记录
       await approvalApi.saveDraftInstance({
+        instance_id: draftRecord.instance_id,
         app_id: drawerApp.id,
         business_data_id: draftRecord.data_id ?? draftRecord.id,
         business_data: payload,

@@ -332,7 +332,7 @@ func pickHitBranches(node flowNode, formData map[string]interface{}) []flowBranc
 	}
 
 	var hitBranches []flowBranch
-	if formData != nil && len(formData) > 0 {
+	if len(formData) > 0 {
 		for _, b := range normalBranches {
 			if evaluateBranch(b, node, formData) {
 				hitBranches = append(hitBranches, b)

@@ -88,24 +88,31 @@ function flattenFlowNodes(nodes, executionPathSet) {
 /** 格式化成员列表为可读文本，利用 userNameMap 解析人员 key（如 user_5 → 真实姓名） */
 function formatMembers(members, nameMap) {
   if (!members?.length) return '未配置'
-  return members
-    .map((m) => {
-      if (m.label) return m.label
-      // 人员类型 key 格式为 "user_{id}"，通过 nameMap 解析真实姓名
-      if (m.type === 1 && m.key && nameMap) {
-        const uid = m.key.replace('user_', '')
-        if (nameMap[uid]) return nameMap[uid]
-      }
-      return m.key || ''
-    })
-    .filter(Boolean)
-    .join('、') || '未配置'
+  return (
+    members
+      .map((m) => {
+        if (m.label) return m.label
+        // 人员类型 key 格式为 "user_{id}"，通过 nameMap 解析真实姓名
+        if (m.type === 1 && m.key && nameMap) {
+          const uid = m.key.replace('user_', '')
+          if (nameMap[uid]) return nameMap[uid]
+        }
+        return m.key || ''
+      })
+      .filter(Boolean)
+      .join('、') || '未配置'
+  )
 }
 
 /** 抄送时机文本 */
 const CC_TIMING_LABEL = { 1: '审批通过后抄送', 2: '流程结束时统一抄送' }
 
-export default function ApprovalTimeline({ instanceId, visible, initialData, assigneeNameMap: externalNameMap }) {
+export default function ApprovalTimeline({
+  instanceId,
+  visible,
+  initialData,
+  assigneeNameMap: externalNameMap,
+}) {
   const [loading, setLoading] = useState(false)
   const [instance, setInstance] = useState(null)
   const [tasks, setTasks] = useState([])
@@ -176,9 +183,9 @@ export default function ApprovalTimeline({ instanceId, visible, initialData, ass
                   })
                   .catch(() => {
                     nameMap[uid] = `用户#${uid}`
-                  })
-              )
-            )
+                  }),
+              ),
+            ),
           ).then(() => {
             if (!cancelled) setUserNameMap(nameMap)
           })
@@ -189,7 +196,9 @@ export default function ApprovalTimeline({ instanceId, visible, initialData, ass
     // 外部已提供数据时跳过 API 请求
     if (initialData) {
       processInstanceData(initialData)
-      return () => { cancelled = true }
+      return () => {
+        cancelled = true
+      }
     }
 
     setLoading(true)
@@ -216,9 +225,7 @@ export default function ApprovalTimeline({ instanceId, visible, initialData, ass
   }, [visible, instanceId])
 
   if (loading) {
-    return (
-      <div className="py-4 text-center text-gray-400">加载审批流程...</div>
-    )
+    return <div className="py-4 text-center text-gray-400">加载审批流程...</div>
   }
 
   if (!instance) return null
@@ -253,13 +260,13 @@ export default function ApprovalTimeline({ instanceId, visible, initialData, ass
           >
             <div className="flex items-center gap-2">
               <span className="text-base font-medium">发起申请</span>
-              <Tag size="small" color="green">已提交</Tag>
+              <Tag size="small" color="green">
+                已提交
+              </Tag>
             </div>
             <div className="mt-0.5 text-xs text-gray-500">
               <span className="font-medium text-gray-700">{createdByName}</span>
-              <span className="ml-2">
-                {instance.created_at?.slice(0, 19).replace('T', ' ')}
-              </span>
+              <span className="ml-2">{instance.created_at?.slice(0, 19).replace('T', ' ')}</span>
             </div>
           </Timeline.Item>
 
@@ -279,8 +286,16 @@ export default function ApprovalTimeline({ instanceId, visible, initialData, ass
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base font-medium">{node.label || '审批'}</span>
-                    {node.strategy === 2 && <Tag size="small" color="blue">会签</Tag>}
-                    {node.strategy === 3 && <Tag size="small" color="blue">或签</Tag>}
+                    {node.strategy === 2 && (
+                      <Tag size="small" color="blue">
+                        会签
+                      </Tag>
+                    )}
+                    {node.strategy === 3 && (
+                      <Tag size="small" color="blue">
+                        或签
+                      </Tag>
+                    )}
                   </div>
                   {nodeTasks.length > 0 ? (
                     nodeTasks.map((task) => {
@@ -288,23 +303,15 @@ export default function ApprovalTimeline({ instanceId, visible, initialData, ass
                       const Icon = meta.icon
                       const userName = userNameMap[task.assignee_id] || `用户#${task.assignee_id}`
                       return (
-                        <div key={task.id} className="mt-1.5 rounded-md bg-white/80 p-2">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-white ${
-                                task.status === 0
-                                  ? 'bg-orange-400'
-                                  : task.status === 1
-                                    ? 'bg-green-500'
-                                    : task.status === 4
-                                      ? 'bg-blue-500'
-                                      : 'bg-red-500'
-                              }`}
-                            >
-                              <Icon style={{ fontSize: 11 }} />
+                        <div key={task.id} className="mt-1.5 rounded-md bg-gray-100 p-2">
+                          <div className="flex items-center gap-1">
+                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full">
+                              <Icon style={{ fontSize: 14 }} />
                             </span>
                             <span className="text-sm font-medium text-gray-700">{userName}</span>
-                            <Tag size="small" color={meta.color}>{meta.label}</Tag>
+                            <Tag size="small" color={meta.color}>
+                              {meta.label}
+                            </Tag>
                           </div>
                           <div className="mt-0.5 flex items-center gap-3 text-xs text-gray-400">
                             {task.operated_at && (
@@ -343,7 +350,9 @@ export default function ApprovalTimeline({ instanceId, visible, initialData, ass
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base font-medium">{node.label || '抄送'}</span>
-                    <Tag size="small" color="blue">抄送人</Tag>
+                    <Tag size="small" color="blue">
+                      抄送人
+                    </Tag>
                   </div>
                   <div className="mt-0.5 text-xs text-gray-500">
                     <span>{formatMembers(node.members, userNameMap)}</span>

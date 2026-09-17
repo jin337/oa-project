@@ -256,14 +256,14 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         <div className="flex items-center justify-between">
           <Space>
             {showDelegateButtons && (
-              <>
+              <Space>
                 <Button size="small" onClick={openDelegateModal}>
                   转交
                 </Button>
                 <Button size="small" onClick={openAddSignerModal}>
                   加签
                 </Button>
-              </>
+              </Space>
             )}
             {showWithdraw && (
               <Popconfirm title="撤回后该申请将转为草稿，确定撤回？" onOk={handleWithdraw} position="top">

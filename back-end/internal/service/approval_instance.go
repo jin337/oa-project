@@ -249,19 +249,25 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 }
 
 // ApprovalInstanceSaveDraft 保存审批草稿：
-//  1. 校验业务数据存在
-//  2. 快照审批流配置 + 表单数据 + 评估执行路径
-//  3. 创建流程实例（状态=草稿），不生成审批任务
-//  4. 暂存发起人自选审批人，供后续从草稿提交时使用
+//   - req.InstanceID == 0：新建草稿实例（首次保存 / 发起页保存草稿）
+//   - req.InstanceID > 0 ：更新已有草稿实例（草稿箱继续编辑），严格 UPDATE，不新增记录
 //
 // 草稿保存不校验自选审批人是否已选（允许先保存后选择），提交时统一校验。
 func ApprovalInstanceSaveDraft(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
+	if req.InstanceID > 0 {
+		return saveDraftUpdate(curUserID, req)
+	}
+	return saveDraftCreate(curUserID, req)
+}
+
+// saveDraftCreate 新建草稿实例（status=Draft，不生成审批任务）
+func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
 	// 0. 解析业务数据 ID（支持自动创建）
 	if _, err := resolveBusinessDataID(curUserID, req); err != nil {
 		return nil, err
 	}
 
-	// 1. 准备流程上下文（草稿阶段不要求执行路径非空，允许保存待完善配置）
+	// 1. 准备流程上下文（快照/表单/执行路径）
 	ctx, err := prepareApprovalContext(req.AppID, req.BusinessDataID, req.SelfSelectMembers)
 	if err != nil {
 		return nil, err
@@ -281,6 +287,82 @@ func ApprovalInstanceSaveDraft(curUserID uint, req *model.ApprovalInstanceCreate
 	}
 	instance.CreatedBy, instance.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&instance).Error; err != nil {
+		return nil, err
+	}
+	return &instance, nil
+}
+
+// saveDraftUpdate 更新已有草稿实例：
+//  1. 校验草稿存在、属于当前用户、状态=草稿
+//  2. 业务数据以草稿实例已关联的行为准（防止前端漏传 business_data_id 时新建业务行）
+//  3. 事务内更新实例（快照/表单/执行路径/自选成员），状态保持草稿，不新增记录
+func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
+	var instance model.ApprovalInstance
+
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// 1. 加载草稿实例
+		if err := tx.First(&instance, req.InstanceID).Error; err != nil {
+			return errors.New("草稿不存在或已被删除")
+		}
+		if instance.CreatedBy != curUserID {
+			return errors.New("只能修改自己发起的草稿")
+		}
+		if instance.Status != model.InstanceStatusDraft {
+			return fmt.Errorf("仅草稿状态的实例可编辑，当前状态为「%s」", instanceStatusName(instance.Status))
+		}
+
+		// 2. 业务数据：以草稿实例已关联的业务行为准（复用行 + 更新 payload），不允许新建
+		req.BusinessDataID = instance.BusinessDataID
+		if _, err := resolveBusinessDataID(curUserID, req); err != nil {
+			return err
+		}
+
+		// 3. 基于最新业务数据重新准备流程上下文（快照/执行路径随之刷新）
+		ctx, err := prepareApprovalContext(instance.AppID, req.BusinessDataID, req.SelfSelectMembers)
+		if err != nil {
+			return err
+		}
+
+		// 4. 序列化快照（Updates map 不走 serializer，需手动序列化）
+		injectedFlowBytes, _ := json.Marshal(ctx.injectedNodes)
+		formDataBytes, _ := json.Marshal(ctx.formData)
+
+		// 5. 自选成员：本次未传（nil）视为清空暂存，传了则覆盖暂存
+		selfSelectJSON := "null"
+		if req.SelfSelectMembers != nil {
+			b, _ := json.Marshal(req.SelfSelectMembers)
+			selfSelectJSON = string(b)
+		}
+
+		// 6. 严格更新该草稿（UPDATE ... WHERE id=? AND status=草稿），不新增记录
+		res := tx.Model(&model.ApprovalInstance{}).
+			Where("id = ? AND status = ?", instance.ID, model.InstanceStatusDraft).
+			Updates(map[string]interface{}{
+				"app_id":                   instance.AppID,
+				"business_table":           ctx.app.TableName,
+				"business_data_id":         req.BusinessDataID,
+				"flow_snapshot_json":       string(injectedFlowBytes),
+				"form_data_snapshot":       string(formDataBytes),
+				"execution_path":           ctx.execPathJSON,
+				"current_node_idx":         0,
+				"status":                   model.InstanceStatusDraft,
+				"self_select_members_json": selfSelectJSON,
+				"updated_by":               curUserID,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errors.New("该草稿已被处理，请刷新后重试")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 返回更新后的实例
+	if err := database.DB.First(&instance, req.InstanceID).Error; err != nil {
 		return nil, err
 	}
 	return &instance, nil

@@ -760,34 +760,37 @@ export function serializeTimeFields(values, elements) {
   if (!values || !Array.isArray(elements)) return values
   const next = { ...values }
   for (const el of elements || []) {
+    if (el.element_type === 'table') {
+      // 子表（Form.List）：注册字段名是 table_key（非 field_key），需按 table_key 定位行数据
+      const tableKey = el.table_key || el.field_key || el.id || ''
+      if (!tableKey) continue
+      const rows = Array.isArray(next[tableKey]) ? next[tableKey] : []
+      // 关键：Arco Form.List 删除最后一行后字段值会变为 undefined，对象展开后 JSON.stringify
+      // 会丢弃该 key，导致请求体缺少子表字段，后端无法感知"子表已删光"而残留旧记录。
+      // 统一归一为数组（未传 / 删光 -> []），确保请求体始终携带子表 key，
+      // 后端才能执行"先清后插"同步删除已移除的子表行。
+      next[tableKey] = rows.map((row) => {
+        if (!row || typeof row !== 'object') return row
+        const nr = { ...row }
+        // 遍历行内时间列（date/datetime/time 等）统一序列化为 MySQL 兼容格式
+        for (const col of el.columns || []) {
+          const colKey = col.dataIndex || col.field_key
+          if (
+            colKey &&
+            TIME_ELEMENT_TYPES.includes(col.element_type) &&
+            nr[colKey] != null &&
+            nr[colKey] !== ''
+          ) {
+            nr[colKey] = formatTimeValue(nr[colKey], col.element_type, nr[colKey])
+          }
+        }
+        return nr
+      })
+      continue
+    }
     const key = el?.field_key
     if (!key) continue
-    if (el.element_type === 'table') {
-      // 子表（Form.List）：遍历行内时间列
-      const rows = next[key]
-      if (Array.isArray(rows)) {
-        next[key] = rows.map((row) => {
-          if (!row || typeof row !== 'object') return row
-          const nr = { ...row }
-          for (const col of el.columns || []) {
-            const colKey = col.dataIndex || col.field_key
-            if (
-              colKey &&
-              TIME_ELEMENT_TYPES.includes(col.element_type) &&
-              nr[colKey] != null &&
-              nr[colKey] !== ''
-            ) {
-              nr[colKey] = formatTimeValue(nr[colKey], col.element_type, nr[colKey])
-            }
-          }
-          return nr
-        })
-      }
-    } else if (
-      TIME_ELEMENT_TYPES.includes(el.element_type) &&
-      next[key] != null &&
-      next[key] !== ''
-    ) {
+    if (TIME_ELEMENT_TYPES.includes(el.element_type) && next[key] != null && next[key] !== '') {
       next[key] = formatTimeValue(next[key], el.element_type, next[key])
     }
   }
