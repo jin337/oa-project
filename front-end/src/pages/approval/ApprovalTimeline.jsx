@@ -1,9 +1,9 @@
 import { Divider, Tag, Timeline } from '@arco-design/web-react'
 import {
   IconBranch,
-  IconCheck,
+  IconCheckCircle,
   IconClockCircle,
-  IconClose,
+  IconCloseCircle,
   IconRedo,
   IconSend,
   IconStamp,
@@ -27,11 +27,11 @@ import * as approvalApi from 'src/api/approval'
 // 任务状态元信息
 const TASK_STATUS_META = {
   0: { label: '待处理', color: 'orange', icon: IconClockCircle },
-  1: { label: '已通过', color: 'green', icon: IconCheck },
-  2: { label: '已拒绝', color: 'red', icon: IconClose },
-  3: { label: '已驳回', color: 'orangered', icon: IconClose },
+  1: { label: '已通过', color: 'green', icon: IconCheckCircle },
+  2: { label: '已拒绝', color: 'red', icon: IconCloseCircle },
+  3: { label: '已驳回', color: 'orangered', icon: IconCloseCircle },
   4: { label: '已转交', color: 'blue', icon: IconRedo },
-  5: { label: '已取消', color: 'gray', icon: IconClose },
+  5: { label: '已取消', color: 'gray', icon: IconCloseCircle },
 }
 
 // 实例状态元信息
@@ -305,7 +305,15 @@ export default function ApprovalTimeline({
                       return (
                         <div key={task.id} className="mt-1.5 rounded-md bg-gray-100 p-2">
                           <div className="flex items-center gap-1">
-                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full">
+                            <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full  ${
+                                task.status === 0
+                                  ? 'text-orange-400'
+                                  : task.status === 1
+                                    ? 'text-green-500'
+                                    : task.status === 4
+                                      ? 'text-blue-500'
+                                      : 'text-red-500'
+                              }`}>
                               <Icon style={{ fontSize: 14 }} />
                             </span>
                             <span className="text-sm font-medium text-gray-700">{userName}</span>

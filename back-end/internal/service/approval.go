@@ -11,7 +11,9 @@ package service
 // ============================================================
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"back-end/internal/database"
@@ -193,11 +195,11 @@ func ApprovalCategoryItemDelete(id uint) error {
 // ==================== 审批列表（跨应用聚合） ====================
 
 // ApprovalList 审批列表跨应用聚合查询：
-//   - todo      我的待办  ：从 approval_task 表查 assignee_id=当前用户 AND status=0（精确到审批人维度）
-//   - initiated 我的发起  ：从 approval_instance 表查 created_by=当前用户
-//   - approved  我审批的  ：保持原逻辑（查业务表终态 + updated_by=当前用户）
-//   - cc        抄送我的  ：当前无抄送人字段，返回空列表（结构预留）
-//   - drafts    草稿箱    ：created_by=当前用户 且 status=6 草稿（保持原逻辑）
+//   - todo      我的待办  ：从 approval_task 表查 assignee_id=当前用户 AND status=待处理
+//   - initiated 我的发起  ：从 approval_instance 表查 created_by=当前用户（非草稿）
+//   - approved  我审批的  ：从 approval_task 表查 assignee_id=当前用户且已处理（通过/拒绝/驳回）的任务，按实例去重
+//   - cc        抄送我的  ：从实例执行路径中的抄送节点（type=3）解析抄送人，匹配当前用户
+//   - drafts    草稿箱    ：created_by=当前用户 且 status=草稿
 func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
 	switch req.Scope {
 	case "todo":
@@ -205,8 +207,10 @@ func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalR
 	case "initiated":
 		return approvalListInitiated(curUserID, req)
 	case "cc":
-		return []model.ApprovalRecord{}, 0, nil
-	case "approved", "drafts":
+		return approvalListCC(curUserID, req)
+	case "approved":
+		return approvalListApproved(curUserID, req)
+	case "drafts":
 		return approvalListFromInstances(curUserID, req)
 	default:
 		return nil, 0, errors.New("非法的审批列表类型")
@@ -306,39 +310,21 @@ func approvalListInitiated(curUserID uint, req *model.ApprovalListReq) ([]model.
 	return records, total, nil
 }
 
-// approvalListFromInstances 从 approval_instances 表聚合审批列表（approved / drafts 场景）
+// approvalListFromInstances 从 approval_instances 表聚合审批列表（草稿箱场景）
 func approvalListFromInstances(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
-	// 按 scope 确定实例状态过滤条件
-	var statusFilter string
-	var statusArgs []interface{}
-	switch req.Scope {
-	case "approved":
-		statusFilter = "status IN (?, ?, ?, ?)"
-		statusArgs = []interface{}{
-			model.InstanceStatusPassed, model.InstanceStatusRejected,
-			model.InstanceStatusReturned, model.InstanceStatusVoided,
-		}
-	case "drafts":
-		statusFilter = "status = ?"
-		statusArgs = []interface{}{model.InstanceStatusDraft}
-	default:
-		return nil, 0, errors.New("非法的审批列表类型")
-	}
-
-	baseWhere := "created_by = ? AND deleted_at IS NULL AND " + statusFilter
-	countArgs := append([]interface{}{curUserID}, statusArgs...)
+	baseWhere := "created_by = ? AND deleted_at IS NULL AND status = ?"
+	baseArgs := []interface{}{curUserID, model.InstanceStatusDraft}
 
 	var total int64
 	if err := database.DB.Model(&model.ApprovalInstance{}).
-		Where(baseWhere, countArgs...).
+		Where(baseWhere, baseArgs...).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var instances []model.ApprovalInstance
-	queryArgs := append([]interface{}{curUserID}, statusArgs...)
 	if err := database.DB.
-		Where(baseWhere, queryArgs...).
+		Where(baseWhere, baseArgs...).
 		Order("id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
 		Find(&instances).Error; err != nil {
@@ -370,6 +356,152 @@ func approvalListFromInstances(curUserID uint, req *model.ApprovalListReq) ([]mo
 
 	fillApprovalUserInfo(records)
 	return records, total, nil
+}
+
+// approvalListApproved 我审批的：从审批任务表查询当前用户已处理（通过/拒绝/驳回）过的任务，
+// 按实例去重后聚合实例信息。实例可能仍在流转中（我处理完前序节点）或已终结。
+func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
+	handled := []int{model.TaskStatusApproved, model.TaskStatusRejected, model.TaskStatusReturned}
+
+	// 总数：当前用户已处理任务的去重实例数
+	var total int64
+	if err := database.DB.Model(&model.ApprovalInstanceTask{}).
+		Where("assignee_id = ? AND status IN ?", curUserID, handled).
+		Distinct("instance_id").
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页：按实例分组，取每实例最近处理时间排序
+	type handledGroup struct {
+		InstanceID uint
+		LastOp     *time.Time
+	}
+	var groups []handledGroup
+	if err := database.DB.Model(&model.ApprovalInstanceTask{}).
+		Select("instance_id, MAX(operated_at) AS last_op").
+		Where("assignee_id = ? AND status IN ?", curUserID, handled).
+		Group("instance_id").
+		Order("last_op DESC, instance_id DESC").
+		Offset(req.Offset()).Limit(req.Limit()).
+		Scan(&groups).Error; err != nil {
+		return nil, 0, err
+	}
+
+	records := make([]model.ApprovalRecord, 0, len(groups))
+	for _, g := range groups {
+		var inst model.ApprovalInstance
+		if err := database.DB.First(&inst, g.InstanceID).Error; err != nil {
+			continue
+		}
+		var app model.Application
+		if err := database.DB.First(&app, inst.AppID).Error; err != nil {
+			continue
+		}
+		bizStatus := instanceStatusToBizStatus(inst.Status)
+		records = append(records, model.ApprovalRecord{
+			ID:             inst.ID,
+			InstanceID:     inst.ID,
+			BusinessDataID: inst.BusinessDataID,
+			AppID:          app.ID,
+			AppCode:        app.Code,
+			AppName:        app.Name,
+			Status:         bizStatus,
+			StatusName:     approvalStatusName(bizStatus),
+			CreatedBy:      inst.CreatedBy,
+			CreatedAt:      &inst.CreatedAt,
+			FinishedAt:     inst.FinishedAt,
+		})
+	}
+
+	fillApprovalUserInfo(records)
+	return records, total, nil
+}
+
+// approvalListCC 抄送我的：从实例执行路径中的抄送节点（type=3）解析抄送人，匹配当前用户。
+// 抄送节点不生成审批任务，仅存在于流程快照 flow_snapshot_json；执行路径 execution_path
+// 记录了条件评估后实际命中的节点 ID 链（含抄送节点），未命中分支的抄送不视为抄送给我。
+func approvalListCC(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
+	// 预筛：JSON 列无法索引，先用 LIKE 定位含当前用户标识的实例，缩小精确解析范围
+	userKey := fmt.Sprintf("\"user_%d\"", curUserID)
+	var instances []model.ApprovalInstance
+	if err := database.DB.
+		Where("deleted_at IS NULL AND status != ? AND flow_snapshot_json LIKE ?", model.InstanceStatusDraft, "%"+userKey+"%").
+		Order("id DESC").
+		Find(&instances).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 精确过滤：执行路径中的抄送节点解析出的用户集合包含当前用户
+	hit := make([]model.ApprovalInstance, 0, len(instances))
+	for _, inst := range instances {
+		if instanceCCContainsUser(inst, curUserID) {
+			hit = append(hit, inst)
+		}
+	}
+
+	total := int64(len(hit))
+	start := req.Offset()
+	if start > len(hit) {
+		start = len(hit)
+	}
+	end := start + req.Limit()
+	if end > len(hit) {
+		end = len(hit)
+	}
+
+	records := make([]model.ApprovalRecord, 0, end-start)
+	for _, inst := range hit[start:end] {
+		var app model.Application
+		if err := database.DB.First(&app, inst.AppID).Error; err != nil {
+			continue
+		}
+		bizStatus := instanceStatusToBizStatus(inst.Status)
+		records = append(records, model.ApprovalRecord{
+			ID:             inst.ID,
+			InstanceID:     inst.ID,
+			BusinessDataID: inst.BusinessDataID,
+			AppID:          app.ID,
+			AppCode:        app.Code,
+			AppName:        app.Name,
+			Status:         bizStatus,
+			StatusName:     approvalStatusName(bizStatus),
+			CreatedBy:      inst.CreatedBy,
+			CreatedAt:      &inst.CreatedAt,
+			FinishedAt:     inst.FinishedAt,
+		})
+	}
+
+	fillApprovalUserInfo(records)
+	return records, total, nil
+}
+
+// instanceCCContainsUser 判断实例执行路径中是否有抄送节点（type=3）将当前用户列为抄送人
+func instanceCCContainsUser(inst model.ApprovalInstance, userID uint) bool {
+	var pathIDs []string
+	if err := json.Unmarshal([]byte(inst.ExecutionPath), &pathIDs); err != nil {
+		return false
+	}
+	nodes, err := parseFlowNodes(inst.FlowSnapshotJSON)
+	if err != nil {
+		return false
+	}
+	for _, pid := range pathIDs {
+		node := findNodeByID(nodes, pid)
+		if node == nil || node.Type != 3 {
+			continue
+		}
+		ids, err := resolveMembersUserIDs(node.Members)
+		if err != nil {
+			continue
+		}
+		for _, id := range ids {
+			if id == userID {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // fillApprovalUserInfo 批量填充审批记录的发起人信息与完成时间：
