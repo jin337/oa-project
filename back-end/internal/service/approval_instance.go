@@ -614,9 +614,24 @@ func currentNodeFieldPerms(instance model.ApprovalInstance) []interface{} {
 // buildAssigneeNameMap 批量查询任务审批人 + 发起人的用户姓名（用户ID -> 姓名）
 func buildAssigneeNameMap(tasks []model.ApprovalInstanceTask, creatorID uint) map[string]string {
 	uidSet := map[uint]bool{}
+	var fromTaskIDs []uint
 	for _, t := range tasks {
 		if t.AssigneeID > 0 {
 			uidSet[t.AssigneeID] = true
+		}
+		// 转交来源任务（delegated_from 存的是来源任务ID，时间线“由XX转交”需要其原审批人姓名）
+		if t.DelegatedFrom > 0 {
+			fromTaskIDs = append(fromTaskIDs, t.DelegatedFrom)
+		}
+	}
+	if len(fromTaskIDs) > 0 {
+		var srcTasks []model.ApprovalInstanceTask
+		if err := database.DB.Where("id IN ?", fromTaskIDs).Find(&srcTasks).Error; err == nil {
+			for _, st := range srcTasks {
+				if st.AssigneeID > 0 {
+					uidSet[st.AssigneeID] = true
+				}
+			}
 		}
 	}
 	if creatorID > 0 {

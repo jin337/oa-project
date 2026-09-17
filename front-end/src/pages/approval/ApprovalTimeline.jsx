@@ -262,12 +262,9 @@ export default function ApprovalTimeline({
           >
             <div className="flex items-center gap-2">
               <span className="font-medium">发起人</span>
-              <Tag size="small" color="green">
-                已提交
-              </Tag>
             </div>
             <div className="mt-0.5 flex items-center justify-between text-xs text-gray-500">
-              <span className="font-medium text-gray-700">{createdByName}</span>
+              <span className="truncate text-sm font-medium text-gray-700">{createdByName}</span>
               <span>{instance.created_at?.slice(0, 19).replace('T', ' ')}</span>
             </div>
           </Timeline.Item>
@@ -311,9 +308,17 @@ export default function ApprovalTimeline({
                               </Tag>
                             </div>
                             <div className="flex shrink-0 items-center gap-2 text-xs text-gray-400">
-                              {task.delegated_from > 0 && (
-                                <span className="text-blue-500">（由他人转交）</span>
-                              )}
+                              {task.delegated_from > 0 && (() => {
+                                const srcTask = tasks.find((t) => t.id === task.delegated_from)
+                                const srcName = srcTask?.assignee_id
+                                  ? userNameMap[srcTask.assignee_id]
+                                  : null
+                                return (
+                                  <span className="text-blue-500">
+                                    （由{srcName || '他人'}转交）
+                                  </span>
+                                )
+                              })()}
                               {task.operated_at && (
                                 <span>{task.operated_at.slice(0, 19).replace('T', ' ')}</span>
                               )}
