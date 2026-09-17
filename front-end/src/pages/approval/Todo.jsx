@@ -1,64 +1,40 @@
-import { Button, Card, Space, Table } from '@arco-design/web-react'
-import { useCallback, useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Button, Card, Table } from '@arco-design/web-react'
 import * as approvalApi from 'src/api/approval'
+import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
-import { useTabs } from 'src/store/tab-context'
+import { useApprovalList } from 'src/pages/approval/useApprovalList'
+import { formatTime } from 'src/utils/format'
 
 const PAGE_TITLE = '我的待办'
 
+// 可配置列 key（操作列固定显示，不参与列设置）
+const ALL_COL_KEYS = ['index', 'app_name', 'node_name', 'dept_name', 'created_name', 'created_at', 'approval_status']
+
 /** 我的待办：展示当前用户待处理的审批任务，支持审批/转交/加签/查看详情 */
 export default function Todo() {
-  const location = useLocation()
-  const { addTab } = useTabs()
-  const [list, setList] = useState([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [size, setSize] = useState(10)
-  const [loading, setLoading] = useState(false)
-
-  // 详情 Drawer（集成审批/转交/加签等全部操作）
-  const [detailRecord, setDetailRecord] = useState(null)
-  const [currentTask, setCurrentTask] = useState(null)
-
-  useEffect(() => {
-    addTab({ path: location.pathname, title: PAGE_TITLE })
-  }, [location.pathname, addTab])
-
-  const fetchList = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await approvalApi.getApprovalList({ page, size, scope: 'todo' })
-      setList(res.data?.list || [])
-      setTotal(res.data?.total || 0)
-    } catch (e) {
-      // 错误已在请求层提示
-    } finally {
-      setLoading(false)
-    }
-  }, [page, size])
-
-  useEffect(() => {
-    fetchList()
-  }, [fetchList])
-
-  // 打开详情（带审批操作）
-  const handleOpenDetail = (record) => {
-    setDetailRecord(record)
-    setCurrentTask({ id: record.id, instance_id: record.instance_id })
-  }
-
-  // 关闭详情
-  const handleCloseDetail = () => {
-    setDetailRecord(null)
-    setCurrentTask(null)
-  }
-
-  // 操作成功后刷新列表
-  const handleAction = () => {
-    fetchList()
-  }
+  const {
+    list,
+    total,
+    page,
+    size,
+    loading,
+    setPage,
+    setSize,
+    fetchList,
+    detailRecord,
+    currentTask,
+    openDetail,
+    closeDetail,
+    keyword,
+    setKeyword,
+    handleSearch,
+    handleReset,
+    tableSize,
+    visibleCols,
+    setVisibleCols,
+    sizeMenu,
+  } = useApprovalList('todo', { title: PAGE_TITLE, withTask: true, colKeys: ALL_COL_KEYS })
 
   const columns = [
     {
@@ -68,18 +44,20 @@ export default function Todo() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { title: '模块', dataIndex: 'app_name', render: (v) => v || '-' },
-    { title: '审批节点', dataIndex: 'node_name', render: (v) => v || '-' },
-    { title: '部门', dataIndex: 'dept_name', render: (v) => v || '-' },
-    { title: '申请人', dataIndex: 'created_name', render: (v) => v || '-' },
+    { title: '模块', key: 'app_name', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '审批节点', key: 'node_name', dataIndex: 'node_name', render: (v) => v || '-' },
+    { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
+    { title: '申请人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
     {
       title: '申请时间',
+      key: 'created_at',
       dataIndex: 'created_at',
       width: 170,
-      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
+      render: formatTime,
     },
     {
       title: '状态',
+      key: 'approval_status',
       dataIndex: 'approval_status',
       width: 110,
       render: (v) => <ApprovalStatusTag status={v} />,
@@ -89,20 +67,36 @@ export default function Todo() {
       key: 'action',
       width: 90,
       render: (_, r) => (
-        <Button type="primary" size="small" onClick={() => handleOpenDetail(r)}>
+        <Button type="primary" size="small" onClick={() => openDetail(r, { id: r.id, instance_id: r.instance_id })}>
           审批
         </Button>
       ),
     },
   ]
 
+  // 操作列固定显示，其余按 visibleCols 过滤
+  const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
+
   return (
     <Card title={PAGE_TITLE}>
-      <Table
-        rowKey={(r) => r.instance_id ? `${r.instance_id}_${r.id}` : r.id}
+      <ApprovalTableToolbar
+        keyword={keyword}
+        setKeyword={setKeyword}
+        onSearch={handleSearch}
+        onReset={handleReset}
+        onRefresh={fetchList}
+        sizeMenu={sizeMenu}
+        visibleCols={visibleCols}
+        setVisibleCols={setVisibleCols}
         columns={columns}
+        colKeys={ALL_COL_KEYS}
+      />
+      <Table
+        rowKey={(r) => (r.instance_id ? `${r.instance_id}_${r.id}` : r.id)}
+        columns={visibleColumns}
         data={list}
         loading={loading}
+        size={tableSize}
         pagination={{
           total,
           current: page,
@@ -116,16 +110,14 @@ export default function Todo() {
         }}
       />
 
-      {/* 详情 Drawer（集成同意/拒绝/撤回操作） */}
+      {/* 详情 Drawer（集成同意/拒绝/转交/加签操作） */}
       <ApprovalDetailDrawer
         record={detailRecord}
         visible={Boolean(detailRecord)}
-        onCancel={handleCloseDetail}
+        onCancel={closeDetail}
         currentTask={currentTask}
-        onAction={handleAction}
+        onAction={fetchList}
       />
-
-
     </Card>
   )
 }

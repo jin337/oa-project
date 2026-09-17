@@ -11,10 +11,11 @@ import {
 } from '@arco-design/web-react/icon'
 import { useEffect, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
+import { formatTime } from 'src/utils/format'
 
 /**
  * 审批流程时间线组件：展示流程实例的完整审批流转记录
- * 从 flow_snapshot_json 解析完整节点链，关联实际 tasks 数据，
+ * 从 approval_flow_json 解析完整节点链，关联实际 tasks 数据，
  * 展示发起人、审批人、抄送人、条件分支等所有节点类型。
  *
  * @param {object} props
@@ -127,12 +128,12 @@ export default function ApprovalTimeline({
     const processInstanceData = (data) => {
       if (cancelled) return
       setInstance(data)
-      setTasks(data.tasks || [])
+      setTasks(data.approval_flow_tasks || [])
 
       // 解析流程快照节点链
       let nodes = []
       try {
-        const snapshot = data.flow_snapshot_json
+        const snapshot = data.approval_flow_json
         nodes = Array.isArray(snapshot) ? snapshot : snapshot?.nodes || []
       } catch {
         // 解析失败时使用空数组
@@ -156,7 +157,7 @@ export default function ApprovalTimeline({
       } else {
         // 收集所有涉及的用户 ID（tasks + 成员引用）
         const userIds = new Set()
-        ;(data.tasks || []).forEach((t) => {
+        ;(data.approval_flow_tasks || []).forEach((t) => {
           if (t.assignee_id) userIds.add(t.assignee_id)
         })
         if (data.created_by) userIds.add(data.created_by)
@@ -170,7 +171,7 @@ export default function ApprovalTimeline({
           })
         })
 
-        // 逐个查询（项目暂无批量用户接口，后续可优化）
+        // 无外部姓名映射时的兜底：逐个查询
         if (userIds.size > 0) {
           const nameMap = {}
           Promise.all(
@@ -264,7 +265,7 @@ export default function ApprovalTimeline({
             </div>
             <div className="mt-0.5 flex items-center justify-between text-xs text-gray-500">
               <span className="truncate text-sm font-medium text-gray-700">{createdByName}</span>
-              <span>{instance.created_at?.slice(0, 19).replace('T', ' ')}</span>
+              <span>{formatTime(instance.created_at)}</span>
             </div>
           </Timeline.Item>
 
@@ -319,7 +320,7 @@ export default function ApprovalTimeline({
                                 )
                               })()}
                               {task.operated_at && (
-                                <span>{task.operated_at.slice(0, 19).replace('T', ' ')}</span>
+                                <span>{formatTime(task.operated_at)}</span>
                               )}
                             </div>
                           </div>

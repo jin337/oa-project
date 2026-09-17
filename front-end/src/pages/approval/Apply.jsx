@@ -32,6 +32,7 @@ import DynamicForm, {
   parseLayoutJson,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
+import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
 
 import { usePermission } from 'src/hooks/usePermission'
 
@@ -261,29 +262,13 @@ export default function Apply() {
     return serializeTimeFields(values, layout?.elements || [])
   }
 
-  // 将发起人自选成员从 [{ type, key, label }] 转为 { nodeId: [userId] }
-  const buildSelfSelectUserIDs = () => {
-    const result = {}
-    for (const [nodeId, members] of Object.entries(selfSelectMembers)) {
-      const ids = (members || [])
-        .map((m) => {
-          const key = m.key || ''
-          const parts = key.split('_')
-          return parts.length >= 2 ? parseInt(parts[1], 10) : 0
-        })
-        .filter((id) => id > 0)
-      if (ids.length) result[nodeId] = ids
-    }
-    return result
-  }
-
   // 保存草稿：校验表单 + 一次调用保存审批草稿实例（后端自动创建业务数据）
   const handleSaveDraft = async () => {
     setDrawerSaving(true)
     try {
       const payload = await validateAndBuildPayload()
       if (!payload) return
-      const selfSelectUserIDs = buildSelfSelectUserIDs()
+      const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
       await approvalApi.saveDraftInstance({
         app_id: drawerApp.id,
         business_data: payload,
@@ -308,7 +293,7 @@ export default function Apply() {
     try {
       const payload = await validateAndBuildPayload()
       if (!payload) return
-      const selfSelectUserIDs = buildSelfSelectUserIDs()
+      const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
       await approvalApi.createApprovalInstance({
         app_id: drawerApp.id,
         business_data: payload,

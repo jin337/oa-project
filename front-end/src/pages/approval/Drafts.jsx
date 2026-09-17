@@ -9,29 +9,44 @@ import {
   Spin,
   Table,
 } from '@arco-design/web-react'
-import { useCallback, useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import * as applicationApi from 'src/api/application'
+import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
+import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
   parseLayoutJson,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
+import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
-import { useTabs } from 'src/store/tab-context'
+import { useApprovalList } from 'src/pages/approval/useApprovalList'
+import { formatTime } from 'src/utils/format'
 
 const PAGE_TITLE = '草稿箱'
 
+// 可配置列 key（操作列固定显示，不参与列设置）
+const ALL_COL_KEYS = ['index', 'app_name', 'dept_name', 'created_at', 'approval_status']
+
 /** 草稿箱：展示当前用户状态为「草稿」的申请记录，支持继续编辑 / 提交审核 / 删除 */
 export default function Drafts() {
-  const location = useLocation()
-  const { addTab } = useTabs()
-  const [list, setList] = useState([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [size, setSize] = useState(10)
-  const [loading, setLoading] = useState(false)
+  const {
+    list,
+    total,
+    page,
+    size,
+    loading,
+    setPage,
+    setSize,
+    fetchList,
+    keyword,
+    setKeyword,
+    handleSearch,
+    handleReset,
+    tableSize,
+    visibleCols,
+    setVisibleCols,
+    sizeMenu,
+  } = useApprovalList('drafts', { title: PAGE_TITLE, colKeys: ALL_COL_KEYS })
 
   // 继续编辑 Drawer：加载应用配置 + 草稿详情回填动态表单
   const [drawerVisible, setDrawerVisible] = useState(false)
@@ -44,27 +59,6 @@ export default function Drafts() {
   const [formValues, setFormValues] = useState({})
   // 发起人自选审批人（nodeId -> [{ type, key, label }]），提交时转为 nodeId -> [userId] 传给后端
   const [selfSelectMembers, setSelfSelectMembers] = useState({})
-
-  useEffect(() => {
-    addTab({ path: location.pathname, title: PAGE_TITLE })
-  }, [location.pathname, addTab])
-
-  const fetchList = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await approvalApi.getApprovalList({ page, size, scope: 'drafts' })
-      setList(res.data?.list || [])
-      setTotal(res.data?.total || 0)
-    } catch (e) {
-      // 错误已在请求层提示
-    } finally {
-      setLoading(false)
-    }
-  }, [page, size])
-
-  useEffect(() => {
-    fetchList()
-  }, [fetchList])
 
   // 从流程快照收集发起人自选成员（approverType=3 节点已注入的 members），兼容 JSON 字符串与节点数组；
   // 用于编辑草稿打开时回填 selfSelectMembers 状态，保存时原样回传，避免自选审批人在编辑后丢失
@@ -108,41 +102,25 @@ export default function Drafts() {
       // 一次请求获取实例详情（含 business_data + detail_layout_json）
       const res = await approvalApi.getApprovalInstanceDetail(record.instance_id)
       const inst = res.data
-      // 构造 app 配置：detail_layout_json → form_layout_json 映射供 DynamicForm 使用，flow_snapshot_json → approval_flow_json 映射供 DynamicFlowView 使用
+      // 构造 app 配置：detail_layout_json → form_layout_json 映射供 DynamicForm 使用，approval_flow_json → approval_flow_json 映射供 DynamicFlowView 使用
       setDrawerApp({
         id: inst.app_id,
         name: inst.app_name,
         form_layout_json: inst.detail_layout_json,
-        approval_flow_json: inst.flow_snapshot_json,
+        approval_flow_json: inst.approval_flow_json,
       })
       const bizData = inst.business_data || {}
       drawerForm.setFieldsValue(bizData)
       setFormValues(bizData)
       // 从流程快照恢复发起人自选审批人（approverType=3 节点已注入的 members），
       // 避免编辑打开时清空已选成员，导致保存草稿时 self_select_members 丢失并被后端清空暂存
-      setSelfSelectMembers(collectSelfSelectMembers(inst.flow_snapshot_json))
+      setSelfSelectMembers(collectSelfSelectMembers(inst.approval_flow_json))
     } catch (e) {
       Message.error('草稿加载失败，请稍后重试')
       setDrawerVisible(false)
     } finally {
       setDrawerLoading(false)
     }
-  }
-
-  // 将发起人自选成员从 [{ type, key, label }] 转为 { nodeId: [userId] }
-  const buildSelfSelectUserIDs = () => {
-    const result = {}
-    for (const [nodeId, members] of Object.entries(selfSelectMembers)) {
-      const ids = (members || [])
-        .map((m) => {
-          const key = m.key || ''
-          const parts = key.split('_')
-          return parts.length >= 2 ? parseInt(parts[1], 10) : 0
-        })
-        .filter((id) => id > 0)
-      if (ids.length) result[nodeId] = ids
-    }
-    return result
   }
 
   // 保存草稿编辑：一次调用更新业务数据并保存审批流程草稿实例
@@ -158,7 +136,7 @@ export default function Drafts() {
       // 时间字段（date/datetime/time 等）统一序列化为 MySQL 兼容格式
       const layout = parseLayoutJson(drawerApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
-      const selfSelectUserIDs = buildSelfSelectUserIDs()
+      const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
       // 一次调用：后端自动更新业务数据并保存审批草稿实例
       // instance_id 标识本次编辑的草稿实例：后端据此执行 UPDATE（更新）而非 INSERT（新增），
       // 避免从草稿箱每次保存都新增一条草稿记录
@@ -218,16 +196,12 @@ export default function Drafts() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { title: '模块', dataIndex: 'app_name', render: (v) => v || '-' },
-    { title: '部门', dataIndex: 'dept_name', render: (v) => v || '-' },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      width: 170,
-      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
-    },
+    { title: '模块', key: 'app_name', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
+    { title: '创建时间', key: 'created_at', dataIndex: 'created_at', width: 170, render: formatTime },
     {
       title: '状态',
+      key: 'approval_status',
       dataIndex: 'approval_status',
       width: 110,
       render: (v) => <ApprovalStatusTag status={v} />,
@@ -244,7 +218,7 @@ export default function Drafts() {
           <Button type="text" size="small" onClick={() => handleSubmit(r)}>
             提交
           </Button>
-          <Popconfirm position='lb' title="确定删除该草稿吗？" onOk={() => handleDelete(r)}>
+          <Popconfirm position="lb" title="确定删除该草稿吗？" onOk={() => handleDelete(r)}>
             <Button type="text" size="small" status="danger">
               删除
             </Button>
@@ -254,13 +228,29 @@ export default function Drafts() {
     },
   ]
 
+  // 操作列固定显示，其余按 visibleCols 过滤
+  const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
+
   return (
     <Card title={PAGE_TITLE}>
+      <ApprovalTableToolbar
+        keyword={keyword}
+        setKeyword={setKeyword}
+        onSearch={handleSearch}
+        onReset={handleReset}
+        onRefresh={fetchList}
+        sizeMenu={sizeMenu}
+        visibleCols={visibleCols}
+        setVisibleCols={setVisibleCols}
+        columns={columns}
+        colKeys={ALL_COL_KEYS}
+      />
       <Table
         rowKey={(r) => r.data_id ?? r.id}
-        columns={columns}
+        columns={visibleColumns}
         data={list}
         loading={loading}
+        size={tableSize}
         pagination={{
           total,
           current: page,

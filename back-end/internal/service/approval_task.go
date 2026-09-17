@@ -16,7 +16,6 @@ package service
 // ============================================================
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -27,13 +26,24 @@ import (
 	"gorm.io/gorm"
 )
 
+// createPendingTask 构造并创建一条待处理审批任务（依次/会签/或签共用）
+func createPendingTask(tx *gorm.DB, instance *model.ApprovalInstance, nodeID, nodeName string, sort int, assigneeID, curUserID uint) error {
+	task := model.ApprovalInstanceTask{
+		InstanceID: instance.ID,
+		NodeID:     nodeID,
+		NodeName:   nodeName,
+		Sort:       sort,
+		AssigneeID: assigneeID,
+		Status:     model.TaskStatusPending,
+	}
+	task.CreatedBy, task.UpdatedBy = curUserID, curUserID
+	return tx.Create(&task).Error
+}
+
 // generateTasksForCurrentNode 为当前节点生成审批任务
 func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint) error {
 	// 解析执行路径
-	var pathNodeIDs []string
-	if err := json.Unmarshal([]byte(instance.ExecutionPath), &pathNodeIDs); err != nil {
-		return err
-	}
+	pathNodeIDs := instance.ExecutionPath
 	idx := instance.CurrentNodeIdx
 	if idx >= len(pathNodeIDs) {
 		return nil // 所有节点已处理
@@ -80,7 +90,7 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 		case 4: // 指定人员但未解析到任何人：视为配置缺陷，拒绝放行
 			return finishInstance(tx, instance, model.InstanceStatusRejected, "指定审批人未配置，自动拒绝", curUserID)
 		default: // 1-自动通过（默认）
-			return handleAutoPassNode(tx, instance, allNodes, curUserID)
+			return advanceToNextNodeWith(tx, instance, allNodes, curUserID, "自动通过")
 		}
 	}
 
@@ -92,30 +102,10 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 
 	switch strategy {
 	case 1: // 依次审批：只生成第一个人的任务
-		task := model.ApprovalInstanceTask{
-			InstanceID: instance.ID,
-			NodeID:     nodeID,
-			NodeName:   node.Label,
-			Sort:       idx,
-			AssigneeID: userIDs[0],
-			Status:     model.TaskStatusPending,
-		}
-		task.CreatedBy, task.UpdatedBy = curUserID, curUserID
-		if err := tx.Create(&task).Error; err != nil {
-			return err
-		}
+		return createPendingTask(tx, instance, nodeID, node.Label, idx, userIDs[0], curUserID)
 	case 2, 3: // 会签 / 或签：同时生成所有人的任务
 		for _, uid := range userIDs {
-			task := model.ApprovalInstanceTask{
-				InstanceID: instance.ID,
-				NodeID:     nodeID,
-				NodeName:   node.Label,
-				Sort:       idx,
-				AssigneeID: uid,
-				Status:     model.TaskStatusPending,
-			}
-			task.CreatedBy, task.UpdatedBy = curUserID, curUserID
-			if err := tx.Create(&task).Error; err != nil {
+			if err := createPendingTask(tx, instance, nodeID, node.Label, idx, uid, curUserID); err != nil {
 				return err
 			}
 		}
@@ -124,46 +114,27 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 	return nil
 }
 
-// handleAutoPassNode 审批人为空且自动通过：推进到下一个节点
-func handleAutoPassNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint) error {
-	// 推进到下一个节点
+// advanceToNextNode 推进到下一个审批节点（普通通过场景，result 为空）
+func advanceToNextNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint) error {
+	return advanceToNextNodeWith(tx, instance, allNodes, curUserID, "")
+}
+
+// advanceToNextNodeWith 推进到下一个节点：
+//   - 先推进索引并检查是否已处理完所有节点（是则直接终结，避免多余 UPDATE）
+//   - 未处理完则更新实例索引并递归生成新节点任务
+// autoResult 仅在自动通过场景（空审批人 emptyHandler=1）传入"自动通过"，作为流程终结时的结果说明
+func advanceToNextNodeWith(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint, autoResult string) error {
 	instance.CurrentNodeIdx++
-	var pathNodeIDs []string
-	if err := json.Unmarshal([]byte(instance.ExecutionPath), &pathNodeIDs); err != nil {
-		return err
-	}
+	pathNodeIDs := instance.ExecutionPath
 
 	if instance.CurrentNodeIdx >= len(pathNodeIDs) {
 		// 所有节点都已处理完 -> 流程通过
-		return finishInstance(tx, instance, model.InstanceStatusPassed, "自动通过", curUserID)
+		return finishInstance(tx, instance, model.InstanceStatusPassed, autoResult, curUserID)
 	}
 
 	// 更新实例节点索引
-	if err := tx.Model(instance).Updates(map[string]interface{}{
-		"current_node_idx": instance.CurrentNodeIdx,
-	}).Error; err != nil {
-		return err
-	}
-
-	// 递归生成新节点的任务
-	return generateTasksForCurrentNode(tx, instance, allNodes, curUserID)
-}
-
-// advanceToNextNode 推进到下一个审批节点
-func advanceToNextNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint) error {
-	var pathNodeIDs []string
-	if err := json.Unmarshal([]byte(instance.ExecutionPath), &pathNodeIDs); err != nil {
-		return err
-	}
-
-	instance.CurrentNodeIdx++
 	if err := tx.Model(instance).Update("current_node_idx", instance.CurrentNodeIdx).Error; err != nil {
 		return err
-	}
-
-	if instance.CurrentNodeIdx >= len(pathNodeIDs) {
-		// 所有节点都已处理完 -> 流程通过
-		return finishInstance(tx, instance, model.InstanceStatusPassed, "", curUserID)
 	}
 
 	// 为新节点生成任务（自选成员已在 flow_snapshot 的 members 中，无需额外传入）
@@ -206,7 +177,7 @@ func finishInstance(tx *gorm.DB, instance *model.ApprovalInstance, status int, r
 // writeCCRecordsOnFinish 流程终结时：为执行路径/快照中 ccTiming=2 的抄送节点统一写入抄送记录。
 // 抄送失败不阻断流程终态（仅记录层面尽力而为）。
 func writeCCRecordsOnFinish(tx *gorm.DB, instance *model.ApprovalInstance, curUserID uint) {
-	nodes, err := parseFlowNodes(instance.FlowSnapshotJSON)
+	nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
 	if err != nil {
 		return
 	}
@@ -239,10 +210,7 @@ func writeCCRecordsOnFinish(tx *gorm.DB, instance *model.ApprovalInstance, curUs
 
 // writeCCRecords 当前执行节点（抄送节点，ccTiming=1）写入抄送记录（幂等）
 func writeCCRecords(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint) error {
-	var pathNodeIDs []string
-	if err := json.Unmarshal([]byte(instance.ExecutionPath), &pathNodeIDs); err != nil {
-		return err
-	}
+	pathNodeIDs := instance.ExecutionPath
 	idx := instance.CurrentNodeIdx
 	if idx >= len(pathNodeIDs) {
 		return nil
@@ -276,25 +244,38 @@ func writeCCRecords(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []fl
 	return nil
 }
 
+// loadOwnedPendingTask 加载并校验待处理审批任务（审批/转交/加签共用）：
+//   - 任务不存在 → 审批任务不存在
+//   - 任务不属于该实例 → 任务与实例不匹配
+//   - 状态非待处理 → 该任务已处理
+//   - 非当前用户持有 → 您不是该任务的审批人
+func loadOwnedPendingTask(tx *gorm.DB, instanceID, taskID, curUserID uint) (*model.ApprovalInstanceTask, error) {
+	var task model.ApprovalInstanceTask
+	if err := tx.First(&task, taskID).Error; err != nil {
+		return nil, errors.New("审批任务不存在")
+	}
+	if task.InstanceID != instanceID {
+		return nil, errors.New("任务与实例不匹配")
+	}
+	if task.Status != model.TaskStatusPending {
+		return nil, errors.New("该任务已处理")
+	}
+	if task.AssigneeID != curUserID {
+		return nil, errors.New("您不是该任务的审批人")
+	}
+	return &task, nil
+}
+
 // ApprovalTaskApprove 执行审批操作（通过/拒绝/驳回）：
 //  1. 校验任务存在、状态=待处理、assignee_id=当前用户
 //  2. 校验实例存在、状态=进行中
 //  3. 事务内更新任务状态并按操作类型流转
 func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.ApprovalInstanceTaskApproveReq) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. 校验任务
-		var task model.ApprovalInstanceTask
-		if err := tx.First(&task, taskID).Error; err != nil {
-			return errors.New("审批任务不存在")
-		}
-		if task.InstanceID != instanceID {
-			return errors.New("任务与实例不匹配")
-		}
-		if task.Status != model.TaskStatusPending {
-			return errors.New("该任务已处理")
-		}
-		if task.AssigneeID != curUserID {
-			return errors.New("您不是该任务的审批人")
+		// 1. 校验任务（存在/归属/待处理/当前用户持有）
+		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
+		if err != nil {
+			return err
 		}
 
 		// 2. 校验实例
@@ -308,21 +289,11 @@ func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.App
 
 		now := time.Now()
 
-		// 2.5 审批人修改了业务数据（字段权限 perm=2 可编辑字段）：同一事务内更新业务表 + 实例数据快照
+		// 2.5 审批人修改了业务数据（字段权限 perm=2 可编辑字段）：同一事务内更新业务表
 		if len(req.BusinessData) > 0 {
 			if err := ApplicationDataUpdateWithDB(tx, instance.AppID, instance.BusinessDataID, curUserID, req.BusinessData); err != nil {
 				return err
 			}
-			formBytes, marshalErr := json.Marshal(req.BusinessData)
-			if marshalErr != nil {
-				return marshalErr
-			}
-			if err := tx.Model(&model.ApprovalInstance{}).Where("id = ?", instanceID).
-				Update("form_data_snapshot", string(formBytes)).Error; err != nil {
-				return err
-			}
-			// 内存同步，供后续节点流转/详情展示读取最新快照
-			instance.FormDataSnapshot = req.BusinessData
 		}
 
 		// 3. 更新任务状态
@@ -330,14 +301,14 @@ func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.App
 		task.Comment = req.Comment
 		task.OperatedAt = &now
 		task.UpdatedBy = curUserID
-		if err := tx.Save(&task).Error; err != nil {
+		if err := tx.Save(task).Error; err != nil {
 			return err
 		}
 
 		// 4. 按操作类型处理流转
 		switch req.Action {
 		case model.TaskStatusApproved: // 通过
-			return handleNodeApproval(tx, &instance, &task, curUserID)
+			return handleNodeApproval(tx, &instance, task, curUserID)
 		case model.TaskStatusRejected: // 拒绝
 			return finishInstance(tx, &instance, model.InstanceStatusRejected, req.Comment, curUserID)
 		case model.TaskStatusReturned: // 驳回
@@ -351,7 +322,7 @@ func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.App
 // handleNodeApproval 审批通过后判断节点是否完成，推进到下一节点或结束流程
 func handleNodeApproval(tx *gorm.DB, instance *model.ApprovalInstance, task *model.ApprovalInstanceTask, curUserID uint) error {
 	// 解析流程快照
-	nodes, err := parseFlowNodes(instance.FlowSnapshotJSON)
+	nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
 	if err != nil {
 		return err
 	}
@@ -471,19 +442,10 @@ func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *f
 //  3. 事务内原任务标记为已转交，并新建转交任务
 func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.ApprovalInstanceTaskDelegateReq) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
-		// 校验任务
-		var task model.ApprovalInstanceTask
-		if err := tx.First(&task, taskID).Error; err != nil {
-			return errors.New("审批任务不存在")
-		}
-		if task.InstanceID != instanceID {
-			return errors.New("任务与实例不匹配")
-		}
-		if task.Status != model.TaskStatusPending {
-			return errors.New("该任务已处理")
-		}
-		if task.AssigneeID != curUserID {
-			return errors.New("您不是该任务的审批人")
+		// 校验任务（存在/归属/待处理/当前用户持有）
+		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
+		if err != nil {
+			return err
 		}
 
 		// 校验目标用户存在
@@ -498,7 +460,7 @@ func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.Ap
 		task.Status = model.TaskStatusDelegated
 		task.OperatedAt = &now
 		task.UpdatedBy = curUserID
-		if err := tx.Save(&task).Error; err != nil {
+		if err := tx.Save(task).Error; err != nil {
 			return err
 		}
 
@@ -524,19 +486,10 @@ func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.Ap
 //  4. 后加签（type=2）：加签人任务置为待处理，原审批人通过后由加签人继续审批
 func ApprovalTaskAddSign(curUserID uint, instanceID, taskID uint, req *model.ApprovalInstanceTaskAddSignReq) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. 校验任务
-		var task model.ApprovalInstanceTask
-		if err := tx.First(&task, taskID).Error; err != nil {
-			return errors.New("审批任务不存在")
-		}
-		if task.InstanceID != instanceID {
-			return errors.New("任务与实例不匹配")
-		}
-		if task.Status != model.TaskStatusPending {
-			return errors.New("该任务已处理")
-		}
-		if task.AssigneeID != curUserID {
-			return errors.New("您不是该任务的审批人")
+		// 1. 校验任务（存在/归属/待处理/当前用户持有）
+		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
+		if err != nil {
+			return err
 		}
 
 		// 2. 校验实例
@@ -558,7 +511,7 @@ func ApprovalTaskAddSign(curUserID uint, instanceID, taskID uint, req *model.App
 		}
 
 		// 4. 校验节点开放加签权限（permissions 含 3）
-		nodes, err := parseFlowNodes(instance.FlowSnapshotJSON)
+		nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
 		if err != nil {
 			return err
 		}

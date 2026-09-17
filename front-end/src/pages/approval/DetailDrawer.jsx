@@ -103,8 +103,8 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   // 快照为树形结构（条件分支的 children 内嵌节点），需递归查找；
   // 通过实例任务列表定位任务所属节点，旧快照无 permissions 时默认全部放行
   const currentNodePerms = (() => {
-    const snapshot = instance?.flow_snapshot_json || []
-    const curTask = (instance?.tasks || []).find((t) => t.id === currentTask?.id)
+    const snapshot = instance?.approval_flow_json || []
+    const curTask = (instance?.approval_flow_tasks || []).find((t) => t.id === currentTask?.id)
     const findNode = (nodes, id) => {
       for (const n of nodes || []) {
         if (n.id === id) return n

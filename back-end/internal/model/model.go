@@ -539,9 +539,8 @@ type ApprovalInstance struct {
 	AppID                 uint                   `gorm:"index;not null;comment:关联页面配置ID" json:"app_id"`
 	BusinessTable         string                 `gorm:"size:128;not null;comment:业务表名(不含前缀)" json:"business_table"`
 	BusinessDataID        uint                   `gorm:"not null;comment:业务数据主键ID" json:"business_data_id"`
-	FlowSnapshotJSON      any                    `gorm:"serializer:json;type:json;comment:审批流配置快照(提交时冻结)" json:"flow_snapshot_json"`
-	FormDataSnapshot      map[string]interface{} `gorm:"serializer:json;type:json;comment:表单数据快照(提交时冻结)" json:"form_data_snapshot"`
-	ExecutionPath         string                 `gorm:"type:json;comment:条件评估后的命中节点ID链(JSON数组)" json:"execution_path"`
+	ApprovalFlowJSON      any                    `gorm:"column:approval_flow_json;serializer:json;type:json;comment:审批流配置快照(提交时冻结)" json:"approval_flow_json"`
+	ExecutionPath         []string               `gorm:"serializer:json;type:json;comment:条件评估后的命中节点ID链(JSON数组)" json:"execution_path,omitempty"`
 	CurrentNodeIdx        int                    `gorm:"default:0;comment:当前执行到节点链的索引" json:"current_node_idx"`
 	Status                int                    `gorm:"default:0;comment:实例状态 0进行中 1已通过 2已拒绝 3已驳回 4已作废 5已撤回 6草稿" json:"status"`
 	Result                string                 `gorm:"size:255;comment:最终审批意见" json:"result"`
@@ -626,7 +625,7 @@ type ApprovalInstanceDetailResult struct {
 	CreatedByName    string                 `json:"created_by_name"`              // 发起人姓名
 	BusinessData     map[string]interface{} `json:"business_data,omitempty"`      // 业务数据（含子表）
 	DetailLayoutJSON any                    `json:"detail_layout_json,omitempty"` // 详情页布局快照
-	Tasks            []ApprovalInstanceTask `json:"tasks,omitempty"`
+	Tasks            []ApprovalInstanceTask `json:"approval_flow_tasks,omitempty"`
 	AssigneeNameMap  map[string]string      `json:"assignee_name_map,omitempty"` // 用户ID -> 姓名
 	FieldPerms       []interface{}          `json:"field_perms,omitempty"` // 当前执行节点的表单字段权限 [{field, perm}]
 }
@@ -654,5 +653,6 @@ type ApprovalRecord struct {
 // ApprovalListReq 审批列表请求（分页）
 type ApprovalListReq struct {
 	BaseListReq
-	Scope string `json:"scope" form:"scope" validate:"required" label:"范围"`
+	Scope   string `json:"scope" form:"scope" validate:"required" label:"范围"`
+	Keyword string `json:"keyword" form:"keyword" validate:"omitempty,max=64" label:"关键词"`
 }

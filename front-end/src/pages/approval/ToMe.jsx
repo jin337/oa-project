@@ -1,44 +1,38 @@
 import { Button, Card, Space, Table } from '@arco-design/web-react'
-import { useCallback, useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import * as approvalApi from 'src/api/approval'
-import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer.jsx'
+import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
-import { useTabs } from 'src/store/tab-context'
+import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
+import { useApprovalList } from 'src/pages/approval/useApprovalList'
+import { formatTime } from 'src/utils/format'
 
 const PAGE_TITLE = '抄送我的'
 
-/** 抄送我的：展示流程中抄送给当前用户的申请记录 */
-export default function Workplace() {
-  const location = useLocation()
-  const { addTab } = useTabs()
-  const [list, setList] = useState([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [size, setSize] = useState(10)
-  const [loading, setLoading] = useState(false)
-  const [detailRecord, setDetailRecord] = useState(null)
+// 可配置列 key（操作列固定显示，不参与列设置）
+const ALL_COL_KEYS = ['index', 'app_name', 'dept_name', 'created_name', 'created_at', 'finished_at', 'approval_status']
 
-  useEffect(() => {
-    addTab({ path: location.pathname, title: PAGE_TITLE })
-  }, [location.pathname, addTab])
-
-  const fetchList = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await approvalApi.getApprovalList({ page, size, scope: 'cc' })
-      setList(res.data?.list || [])
-      setTotal(res.data?.total || 0)
-    } catch (e) {
-      // 错误已在请求层提示
-    } finally {
-      setLoading(false)
-    }
-  }, [page, size])
-
-  useEffect(() => {
-    fetchList()
-  }, [fetchList])
+/** 抄送我的：展示流程中抄送给当前用户的申请记录，只读查看详情 */
+export default function ToMe() {
+  const {
+    list,
+    total,
+    page,
+    size,
+    loading,
+    setPage,
+    setSize,
+    fetchList,
+    detailRecord,
+    openDetail,
+    closeDetail,
+    keyword,
+    setKeyword,
+    handleSearch,
+    handleReset,
+    tableSize,
+    visibleCols,
+    setVisibleCols,
+    sizeMenu,
+  } = useApprovalList('cc', { title: PAGE_TITLE, colKeys: ALL_COL_KEYS })
 
   const columns = [
     {
@@ -48,23 +42,14 @@ export default function Workplace() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { title: '模块', dataIndex: 'app_name', render: (v) => v || '-' },
-    { title: '部门', dataIndex: 'dept_name', render: (v) => v || '-' },
-    { title: '申请人', dataIndex: 'created_name', render: (v) => v || '-' },
-    {
-      title: '申请时间',
-      dataIndex: 'created_at',
-      width: 170,
-      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
-    },
-    {
-      title: '完成时间',
-      dataIndex: 'finished_at',
-      width: 170,
-      render: (v) => v?.slice(0, 19).replace('T', ' ') || '-',
-    },
+    { title: '模块', key: 'app_name', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
+    { title: '申请人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
+    { title: '申请时间', key: 'created_at', dataIndex: 'created_at', width: 170, render: formatTime },
+    { title: '完成时间', key: 'finished_at', dataIndex: 'finished_at', width: 170, render: formatTime },
     {
       title: '状态',
+      key: 'approval_status',
       dataIndex: 'approval_status',
       width: 110,
       render: (v) => <ApprovalStatusTag status={v} />,
@@ -75,7 +60,7 @@ export default function Workplace() {
       width: 110,
       render: (_, r) => (
         <Space>
-          <Button type="text" size="small" onClick={() => setDetailRecord(r)}>
+          <Button type="text" size="small" onClick={() => openDetail(r)}>
             详情
           </Button>
         </Space>
@@ -83,13 +68,29 @@ export default function Workplace() {
     },
   ]
 
+  // 操作列固定显示，其余按 visibleCols 过滤
+  const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
+
   return (
     <Card title={PAGE_TITLE}>
+      <ApprovalTableToolbar
+        keyword={keyword}
+        setKeyword={setKeyword}
+        onSearch={handleSearch}
+        onReset={handleReset}
+        onRefresh={fetchList}
+        sizeMenu={sizeMenu}
+        visibleCols={visibleCols}
+        setVisibleCols={setVisibleCols}
+        columns={columns}
+        colKeys={ALL_COL_KEYS}
+      />
       <Table
         rowKey={(r) => r.data_id ?? r.id}
-        columns={columns}
+        columns={visibleColumns}
         data={list}
         loading={loading}
+        size={tableSize}
         pagination={{
           total,
           current: page,
@@ -105,7 +106,7 @@ export default function Workplace() {
       <ApprovalDetailDrawer
         record={detailRecord}
         visible={Boolean(detailRecord)}
-        onCancel={() => setDetailRecord(null)}
+        onCancel={closeDetail}
       />
     </Card>
   )

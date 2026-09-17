@@ -28,7 +28,7 @@ func ApprovalCategoryList(c *gin.Context) {
 	}
 	list, total, err := service.ApprovalCategoryList(&req)
 	if err != nil {
-		response.Fail(c, response.CodeServerError, "查询审批分类失败")
+		respondServiceError(c, err)
 		return
 	}
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
@@ -43,7 +43,7 @@ func ApprovalCategoryCreate(c *gin.Context) {
 	}
 	cat, err := service.ApprovalCategoryCreate(middleware.CurrentUserID(c), &req)
 	if err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
+		respondServiceError(c, err)
 		return
 	}
 	response.OK(c, cat)
@@ -62,7 +62,7 @@ func ApprovalCategoryUpdate(c *gin.Context) {
 	}
 	cat, err := service.ApprovalCategoryUpdate(middleware.CurrentUserID(c), id, &req)
 	if err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
+		respondServiceError(c, err)
 		return
 	}
 	response.OK(c, cat)
@@ -75,7 +75,7 @@ func ApprovalCategoryDelete(c *gin.Context) {
 		return
 	}
 	if err := service.ApprovalCategoryDelete(id); err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
+		respondServiceError(c, err)
 		return
 	}
 	response.OKMsg(c, "删除成功")
@@ -92,7 +92,7 @@ func ApprovalCategoryItemList(c *gin.Context) {
 	}
 	list, total, err := service.ApprovalCategoryItemList(&req)
 	if err != nil {
-		response.Fail(c, response.CodeServerError, "查询申请项失败")
+		respondServiceError(c, err)
 		return
 	}
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
@@ -107,7 +107,7 @@ func ApprovalCategoryItemCreate(c *gin.Context) {
 	}
 	item, err := service.ApprovalCategoryItemCreate(middleware.CurrentUserID(c), &req)
 	if err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
+		respondServiceError(c, err)
 		return
 	}
 	response.OK(c, item)
@@ -126,7 +126,7 @@ func ApprovalCategoryItemUpdate(c *gin.Context) {
 	}
 	item, err := service.ApprovalCategoryItemUpdate(middleware.CurrentUserID(c), id, &req)
 	if err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
+		respondServiceError(c, err)
 		return
 	}
 	response.OK(c, item)
@@ -139,7 +139,7 @@ func ApprovalCategoryItemDelete(c *gin.Context) {
 		return
 	}
 	if err := service.ApprovalCategoryItemDelete(id); err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
+		respondServiceError(c, err)
 		return
 	}
 	response.OKMsg(c, "删除成功")

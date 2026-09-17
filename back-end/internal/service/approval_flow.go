@@ -19,7 +19,7 @@ import (
 	"back-end/internal/model"
 )
 
-// flowNode 审批流节点（从 flow_snapshot_json 反序列化后的结构）
+// flowNode 审批流节点（从 approval_flow_json 反序列化后的结构）
 type flowNode struct {
 	ID           string        `json:"id"`
 	Type         int           `json:"type"` // 1-发起人 2-审批人 3-抄送人 4-条件分支
@@ -61,7 +61,7 @@ type flowRule struct {
 	Value    string `json:"value"`     // 条件值
 }
 
-// parseFlowNodes 解析 flow_snapshot_json 为节点数组（兼容 JSON 字符串与已解析结构）
+// parseFlowNodes 解析 approval_flow_json 为节点数组（兼容 JSON 字符串与已解析结构）
 func parseFlowNodes(raw any) ([]flowNode, error) {
 	if raw == nil {
 		return nil, nil

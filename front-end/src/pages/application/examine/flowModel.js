@@ -260,3 +260,28 @@ export const userIdFromKey = (key) => {
   return m ? Number(m[1]) : null
 }
 
+/**
+ * 发起人自选成员列表 -> 用户 ID 列表。
+ * 成员条目形如 { type, key: 'user_5', label }，key 含 "user_" / "dept_" / "role_" 前缀。
+ */
+export const memberIdsFromKeys = (members) =>
+  (members || [])
+    .map((m) => {
+      const parts = String(m?.key || '').split('_')
+      return parts.length >= 2 ? parseInt(parts[1], 10) : 0
+    })
+    .filter((id) => Number.isInteger(id) && id > 0)
+
+/**
+ * 发起人自选成员状态（nodeId -> [{ type, key, label }]）转为提交参数（nodeId -> [userId]）。
+ * 申请页 / 草稿箱编辑共用，避免两处重复实现。
+ */
+export const buildSelfSelectUserIDs = (selfSelectMembers) => {
+  const result = {}
+  for (const [nodeId, members] of Object.entries(selfSelectMembers || {})) {
+    const ids = memberIdsFromKeys(members)
+    if (ids.length) result[nodeId] = ids
+  }
+  return result
+}
+

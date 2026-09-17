@@ -12,8 +12,8 @@ package service
 //	草稿(6) --提交--> 进行中(0) --全部节点完成--> 已通过(1)
 //	进行中(0) --审批人拒绝--> 已拒绝(2)
 //	进行中(0) --审批人驳回--> 已驳回(3)
-//	进行中(0) --发起人撤回--> 已撤回(5)
-//	已拒绝/已驳回/已作废/已撤回/草稿 --删除--> 软删除
+//	进行中(0) --发起人撤回--> 草稿(6)（回退草稿，可重新编辑/重新提交）
+//	已拒绝/已驳回/已作废/草稿 --删除--> 软删除
 //
 // 所有多表更新（实例状态 + 快照 + 任务）均在同一个数据库事务内执行。
 // ============================================================
@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 	"strconv"
 	"strings"
 
@@ -37,7 +38,6 @@ type approvalContext struct {
 	nodes         []flowNode        // 解析后的流程节点
 	formData      map[string]interface{}
 	execPath      []string
-	execPathJSON  string
 	injectedNodes []flowNode // 注入发起人自选成员后的快照节点
 }
 
@@ -111,7 +111,6 @@ func prepareApprovalContext(appID, businessDataID uint, selfSelectMembers map[st
 	if len(execPath) == 0 {
 		return nil, errors.New("审批流评估后无审批节点，请检查流程配置")
 	}
-	execPathJSON, _ := json.Marshal(execPath)
 
 	// 5. 将发起人自选审批人注入流程快照（approverType=3 节点的 members 直接包含最终选人）
 	injectedNodes := injectSelfSelectIntoNodes(nodes, selfSelectMembers)
@@ -120,8 +119,7 @@ func prepareApprovalContext(appID, businessDataID uint, selfSelectMembers map[st
 		app:           *app,
 		nodes:         nodes,
 		formData:      formData,
-		execPath:      execPath,
-		execPathJSON:  string(execPathJSON),
+		execPath: execPath,
 		injectedNodes: injectedNodes,
 	}, nil
 }
@@ -204,6 +202,36 @@ func instanceStatusToBizStatus(instanceStatus int) int {
 	}
 }
 
+// loadOwnedInstance 加载流程实例并统一校验「存在性 + 归属 + 状态机」：
+//   - 实例不存在 → 流程实例不存在
+//   - 非发起人操作 → 只能{action}自己发起的审批
+//   - 当前状态不在允许集合 → 仅「{允许状态}」状态的实例可{action}，当前为「{当前状态}」
+// db 可为 database.DB 或事务句柄 tx（调用方所在事务内加载时传 tx，保证一致性读）。
+func loadOwnedInstance(db *gorm.DB, curUserID, instanceID uint, action string, allowedStatuses ...int) (*model.ApprovalInstance, error) {
+	var instance model.ApprovalInstance
+	if err := db.First(&instance, instanceID).Error; err != nil {
+		return nil, errors.New("流程实例不存在")
+	}
+	if instance.CreatedBy != curUserID {
+		return nil, fmt.Errorf("只能%s自己发起的审批", action)
+	}
+	if len(allowedStatuses) > 0 {
+		allowed := false
+		names := make([]string, 0, len(allowedStatuses))
+		for _, st := range allowedStatuses {
+			if instance.Status == st {
+				allowed = true
+			}
+			names = append(names, instanceStatusName(st))
+		}
+		if !allowed {
+			return nil, fmt.Errorf("仅「%s」状态的实例可%s，当前为「%s」",
+				strings.Join(names, "/"), action, instanceStatusName(instance.Status))
+		}
+	}
+	return &instance, nil
+}
+
 // ApprovalInstanceCreate 发起审批：
 //  1. 校验/解析业务数据
 //  2. 快照审批流配置 + 表单数据
@@ -231,14 +259,14 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 	var instance model.ApprovalInstance
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
 		instance = model.ApprovalInstance{
-			AppID:            req.AppID,
-			BusinessTable:    ctx.app.TableName,
-			BusinessDataID:   req.BusinessDataID,
-			FlowSnapshotJSON: ctx.injectedNodes, // 直接传入结构化数据，由 GORM serializer:json 统一序列化
-			FormDataSnapshot: ctx.formData,
-			ExecutionPath:    ctx.execPathJSON,
-			CurrentNodeIdx:   0,
-			Status:           model.InstanceStatusRunning,
+			AppID:                 req.AppID,
+			BusinessTable:         ctx.app.TableName,
+			BusinessDataID:        req.BusinessDataID,
+			ApprovalFlowJSON:      ctx.injectedNodes, // 直接传入结构化数据，由 GORM serializer:json 统一序列化
+			ExecutionPath:         ctx.execPath,
+			CurrentNodeIdx:        0,
+			Status:                model.InstanceStatusRunning,
+			SelfSelectMembersJSON: req.SelfSelectMembers, // 持久化自选审批人（撤回回退草稿后重新提交需要）
 		}
 		instance.CreatedBy, instance.UpdatedBy = curUserID, curUserID
 		if err := tx.Create(&instance).Error; err != nil {
@@ -286,9 +314,8 @@ func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		AppID:                 req.AppID,
 		BusinessTable:         ctx.app.TableName,
 		BusinessDataID:        req.BusinessDataID,
-		FlowSnapshotJSON:      ctx.injectedNodes,
-		FormDataSnapshot:      ctx.formData,
-		ExecutionPath:         ctx.execPathJSON,
+		ApprovalFlowJSON:      ctx.injectedNodes,
+		ExecutionPath:         ctx.execPath,
 		CurrentNodeIdx:        0,
 		Status:                model.InstanceStatusDraft,
 		SelfSelectMembersJSON: req.SelfSelectMembers,
@@ -308,16 +335,12 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 	var instance model.ApprovalInstance
 
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. 加载草稿实例
-		if err := tx.First(&instance, req.InstanceID).Error; err != nil {
-			return errors.New("草稿不存在或已被删除")
+		// 1. 加载草稿实例并校验归属/状态（草稿可编辑）
+		owned, err := loadOwnedInstance(tx, curUserID, req.InstanceID, "编辑", model.InstanceStatusDraft)
+		if err != nil {
+			return err
 		}
-		if instance.CreatedBy != curUserID {
-			return errors.New("只能修改自己发起的草稿")
-		}
-		if instance.Status != model.InstanceStatusDraft {
-			return fmt.Errorf("仅草稿状态的实例可编辑，当前状态为「%s」", instanceStatusName(instance.Status))
-		}
+		instance = *owned
 
 		// 2. 业务数据：以草稿实例已关联的业务行为准（复用行 + 更新 payload），不允许新建
 		req.BusinessDataID = instance.BusinessDataID
@@ -333,7 +356,7 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 
 		// 4. 序列化快照（Updates map 不走 serializer，需手动序列化）
 		injectedFlowBytes, _ := json.Marshal(ctx.injectedNodes)
-		formDataBytes, _ := json.Marshal(ctx.formData)
+		execPathBytes, _ := json.Marshal(ctx.execPath)
 
 		// 5. 自选成员：本次未传（nil）视为清空暂存，传了则覆盖暂存
 		selfSelectJSON := "null"
@@ -349,9 +372,8 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 				"app_id":                   instance.AppID,
 				"business_table":           ctx.app.TableName,
 				"business_data_id":         req.BusinessDataID,
-				"flow_snapshot_json":       string(injectedFlowBytes),
-				"form_data_snapshot":       string(formDataBytes),
-				"execution_path":           ctx.execPathJSON,
+				"approval_flow_json":       string(injectedFlowBytes),
+				"execution_path":           string(execPathBytes),
 				"current_node_idx":         0,
 				"status":                   model.InstanceStatusDraft,
 				"self_select_members_json": selfSelectJSON,
@@ -382,17 +404,13 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 //  3. 校验发起人自选节点已选审批人
 //  4. 事务内原子流转（草稿→进行中），生成首个审批节点任务
 func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.ApprovalInstanceSubmitDraftReq) (*model.ApprovalInstance, error) {
-	// 1. 加载草稿实例
+	// 1. 加载草稿实例并校验归属/状态（仅草稿可提交）
 	var instance model.ApprovalInstance
-	if err := database.DB.First(&instance, instanceID).Error; err != nil {
-		return nil, errors.New("流程实例不存在")
+	owned, err := loadOwnedInstance(database.DB, curUserID, instanceID, "提交", model.InstanceStatusDraft)
+	if err != nil {
+		return nil, err
 	}
-	if instance.CreatedBy != curUserID {
-		return nil, errors.New("只能提交自己发起的草稿")
-	}
-	if instance.Status != model.InstanceStatusDraft {
-		return nil, fmt.Errorf("仅草稿状态的实例可提交，当前状态为「%s」", instanceStatusName(instance.Status))
-	}
+	instance = *owned
 
 	// 2. 合并发起人自选审批人：提交时传入 > 草稿暂存
 	selfSelectMembers := instance.SelfSelectMembersJSON
@@ -413,7 +431,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 
 	// 5. 序列化快照（Updates map 不走 serializer，需手动序列化）
 	injectedFlowBytes, _ := json.Marshal(ctx.injectedNodes)
-	formDataBytes, _ := json.Marshal(ctx.formData)
+	execPathBytes, _ := json.Marshal(ctx.execPath)
 
 	// 6. 事务：原子状态流转（草稿→进行中）+ 更新快照/路径 + 生成首个任务
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
@@ -421,12 +439,10 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		res := tx.Model(&model.ApprovalInstance{}).
 			Where("id = ? AND status = ?", instanceID, model.InstanceStatusDraft).
 			Updates(map[string]interface{}{
-				"flow_snapshot_json":       string(injectedFlowBytes),
-				"form_data_snapshot":       string(formDataBytes),
-				"execution_path":           ctx.execPathJSON,
+				"approval_flow_json":       string(injectedFlowBytes),
+				"execution_path":           string(execPathBytes),
 				"current_node_idx":         0,
 				"status":                   model.InstanceStatusRunning,
-				"self_select_members_json": nil, // 已注入快照，清除独立字段
 				"updated_by":               curUserID,
 			})
 		if res.Error != nil {
@@ -454,20 +470,36 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 }
 
 // ApprovalInstanceWithdraw 撤回流程实例（仅发起人、仅进行中）：
-// 状态流转 进行中 -> 已撤回，同时取消所有待处理任务
+// 回退为草稿（草稿箱可重新编辑/提交/删除），同时取消所有待处理任务。
+// 流程快照与发起人自选成员保留，重新提交时按当时表单数据重新评估执行路径。
 func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
-		var instance model.ApprovalInstance
-		if err := tx.First(&instance, instanceID).Error; err != nil {
-			return errors.New("流程实例不存在")
+		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "撤回", model.InstanceStatusRunning)
+		if err != nil {
+			return err
 		}
-		if instance.CreatedBy != curUserID {
-			return errors.New("只能撤回自己发起的审批")
+		now := time.Now()
+		// 1. 取消所有待处理/加签等待任务（前加签挂起的原任务一并取消）
+		if err := tx.Model(&model.ApprovalInstanceTask{}).
+			Where("instance_id = ? AND status IN (?, ?)", instance.ID, model.TaskStatusPending, model.TaskStatusWaiting).
+			Updates(map[string]interface{}{
+				"status":     model.TaskStatusCancelled,
+				"updated_at": now,
+				"updated_by": curUserID,
+			}).Error; err != nil {
+			return err
 		}
-		if instance.Status != model.InstanceStatusRunning {
-			return errors.New("只有进行中的流程可撤回")
+		// 2. 回退为草稿：重置执行游标与结果，finished_at 置空
+		if err := tx.Model(instance).Updates(map[string]interface{}{
+			"status":           model.InstanceStatusDraft,
+			"current_node_idx": 0,
+			"finished_at":      nil,
+			"result":           "",
+			"updated_by":       curUserID,
+		}).Error; err != nil {
+			return err
 		}
-		return finishInstance(tx, &instance, model.InstanceStatusWithdrawn, "发起人撤回", curUserID)
+		return nil
 	})
 }
 
@@ -475,24 +507,13 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 // 仅允许发起人删除已终结的实例（已拒绝/已驳回/已作废/已撤回/草稿）
 func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
-		var instance model.ApprovalInstance
-		if err := tx.First(&instance, instanceID).Error; err != nil {
-			return errors.New("流程实例不存在")
+		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "删除",
+			model.InstanceStatusRejected, model.InstanceStatusReturned,
+			model.InstanceStatusVoided, model.InstanceStatusWithdrawn, model.InstanceStatusDraft)
+		if err != nil {
+			return err
 		}
-		if instance.CreatedBy != curUserID {
-			return errors.New("只能删除自己发起的审批")
-		}
-		allowedStatuses := map[int]bool{
-			model.InstanceStatusRejected:  true,
-			model.InstanceStatusReturned:  true,
-			model.InstanceStatusVoided:    true,
-			model.InstanceStatusWithdrawn: true,
-			model.InstanceStatusDraft:     true,
-		}
-		if !allowedStatuses[instance.Status] {
-			return errors.New("只有已拒绝/已驳回/已作废/已撤回或草稿状态的流程可删除")
-		}
-		return tx.Delete(&instance).Error
+		return tx.Delete(instance).Error
 	})
 }
 
@@ -601,14 +622,11 @@ func currentNodeFieldPerms(instance model.ApprovalInstance) []interface{} {
 	if instance.Status != model.InstanceStatusRunning {
 		return nil
 	}
-	var pathNodeIDs []string
-	if err := json.Unmarshal([]byte(instance.ExecutionPath), &pathNodeIDs); err != nil {
-		return nil
-	}
+	pathNodeIDs := instance.ExecutionPath
 	if instance.CurrentNodeIdx < 0 || instance.CurrentNodeIdx >= len(pathNodeIDs) {
 		return nil
 	}
-	nodes, err := parseFlowNodes(instance.FlowSnapshotJSON)
+	nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
 	if err != nil {
 		return nil
 	}
@@ -649,15 +667,9 @@ func buildAssigneeNameMap(tasks []model.ApprovalInstanceTask, creatorID uint) ma
 	if len(uidSet) == 0 {
 		return nameMap
 	}
-	uidList := make([]uint, 0, len(uidSet))
-	for uid := range uidSet {
-		uidList = append(uidList, uid)
-	}
-	var users []model.User
-	if err := database.DB.Unscoped().Preload("Profile").Where("id IN ?", uidList).Find(&users).Error; err == nil {
-		for _, u := range users {
-			nameMap[strconv.FormatUint(uint64(u.ID), 10)] = userNickname(u)
-		}
+	names := queryUserNames(uidSet)
+	for uid := range names {
+		nameMap[strconv.FormatUint(uint64(uid), 10)] = names[uid]
 	}
 	return nameMap
 }
