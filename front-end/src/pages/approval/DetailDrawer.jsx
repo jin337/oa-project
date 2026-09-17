@@ -4,7 +4,6 @@ import {
   Empty,
   Input,
   Message,
-  Modal,
   Popconfirm,
   Radio,
   Space,
@@ -22,7 +21,7 @@ import ApprovalTimeline from 'src/pages/approval/ApprovalTimeline.jsx'
  * 审批记录动态详情 Drawer（公共组件）：
  * - 通过 record.instance_id 一次性请求流程实例详情接口
  * - 复用接口返回的 business_data 渲染动态详情，复用 detail_layout_json 构建布局
- * - 集成审批操作按钮：同意/拒绝（需 currentTask）、转交、加签、撤回
+ * - 集成审批操作按钮：同意/拒绝（需 currentTask）、转交、加签（撤回仅在我的申请页）
  *
  * @param {object} props.record        列表记录（含 instance_id / data_id / app_id 等）
  * @param {boolean} props.visible      Drawer 是否可见
@@ -94,10 +93,31 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
 
   // 是否显示审批操作按钮（同意/拒绝）
   const showApproveButtons = Boolean(currentTask?.id)
-  // 是否显示撤回按钮（发起人是当前用户 + 进行中状态）
-  const showWithdraw = instance?.status === 0 && instance?.created_by > 0
   // 是否显示转交/加签按钮（有待办任务时）
   const showDelegateButtons = Boolean(currentTask?.id)
+
+  // 当前任务所在节点的审批人操作权限（node.permissions：1-拒绝 / 2-转交 / 3-加签）
+  // 快照为树形结构（条件分支的 children 内嵌节点），需递归查找；
+  // 通过实例任务列表定位任务所属节点，旧快照无 permissions 时默认全部放行
+  const currentNodePerms = (() => {
+    const snapshot = instance?.flow_snapshot_json || []
+    const curTask = (instance?.tasks || []).find((t) => t.id === currentTask?.id)
+    const findNode = (nodes, id) => {
+      for (const n of nodes || []) {
+        if (n.id === id) return n
+        const inBranch = (n.branches || []).map((b) => b.children || []).flat()
+        const found = findNode(inBranch, id)
+        if (found) return found
+      }
+      return null
+    }
+    const node = findNode(snapshot, curTask?.node_id)
+    return node?.permissions?.length ? node.permissions : [1, 2, 3]
+  })()
+
+  const canReject = showApproveButtons && currentNodePerms.includes(1)
+  const canDelegate = showDelegateButtons && currentNodePerms.includes(2)
+  const canAddSign = showDelegateButtons && currentNodePerms.includes(3)
 
   // ========== 审批操作 ==========
   const handleApprove = async (action) => {
@@ -118,32 +138,6 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     } finally {
       setOperating(false)
     }
-  }
-
-  // ========== 撤回 ==========
-  const handleWithdraw = async () => {
-    if (!instance) return
-    setOperating(true)
-    try {
-      await approvalApi.withdrawApprovalInstance(instance.id)
-      Message.success('撤回成功，已转为草稿')
-      onAction?.()
-      onCancel?.()
-    } catch {
-      // 错误已在请求层提示
-    } finally {
-      setOperating(false)
-    }
-  }
-
-  // 撤回二次确认（右上角“更多”菜单触发）
-  const confirmWithdraw = () => {
-    Modal.confirm({
-      title: '撤回申请',
-      content: '撤回后该申请将转为草稿，确定撤回？',
-      okButtonProps: { status: 'warning' },
-      onOk: handleWithdraw,
-    })
   }
 
   // ========== 转交 ==========
@@ -196,7 +190,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
 
   // 操作按钮区域
   const renderActions = () => {
-    if (!showApproveButtons && !showWithdraw && !showDelegateButtons) return null
+    if (!showApproveButtons && !showDelegateButtons) return null
     return (
       <>
         {/* 审批意见输入 */}
@@ -212,35 +206,32 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         )}
         <div className="mt-3 flex items-center justify-between">
           <Space>
-            {showDelegateButtons && (
-              <Space>
-                <Button size="small" onClick={openDelegateModal}>
-                  转交
-                </Button>
-                <Button size="small" onClick={openAddSignerModal}>
-                  加签
-                </Button>
-              </Space>
-            )}
-            {showWithdraw && (
-              <Button size="small" status="warning" loading={operating} onClick={confirmWithdraw}>
-                撤回
+            {canDelegate && (
+              <Button size="small" onClick={openDelegateModal}>
+                转交
               </Button>
+            )}
+            {canAddSign && (
+              <Button size="small" onClick={openAddSignerModal}>
+                加签
+              </Button>
+            )}
+            {canReject && (
+              <Popconfirm title="确定拒绝该申请吗？" onOk={() => handleApprove(2)} position="top">
+                <Button size="small" loading={operating}>
+                  拒绝
+                </Button>
+              </Popconfirm>
             )}
           </Space>
           {showApproveButtons && (
             <Space>
-              <Popconfirm title="确定拒绝该申请吗？" onOk={() => handleApprove(2)} position="top">
-                <Button status="danger" size="small" loading={operating}>
-                  拒绝
-                </Button>
-              </Popconfirm>
               <Popconfirm
                 title="确定驳回该申请吗？（退回修改）"
                 onOk={() => handleApprove(3)}
                 position="top"
               >
-                <Button status="warning" size="small" loading={operating}>
+                <Button status="danger" size="small" loading={operating}>
                   驳回
                 </Button>
               </Popconfirm>
@@ -321,7 +312,12 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
           extra={
             <>
               <div className="mb-2 text-sm text-gray-500">加签类型</div>
-              <Radio.Group value={addSignType} onChange={setAddSignType} className="mb-3">
+              <Radio.Group
+                direction="vertical"
+                value={addSignType}
+                onChange={setAddSignType}
+                className="mb-3"
+              >
                 <Radio value={2}>后加签（我通过后，加签人继续审批）</Radio>
                 <Radio value={1}>前加签（加签人先审，通过后我再审批）</Radio>
               </Radio.Group>
