@@ -1,25 +1,25 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    InputNumber,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Radio,
-    Select,
-    Space,
-    Table,
-    Tag,
-    Tooltip,
-    Tree,
-    Typography,
+  Button,
+  Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Radio,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Tree,
+  Typography,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -85,7 +85,7 @@ function deptToTree(depts) {
 const EMPTY_FORM = {
   name: '',
   code: '',
-  sort: 0,
+  sort: 1,
   status: 1,
   data_scope: 3,
   remark: '',
@@ -327,11 +327,6 @@ export default function RoleManage() {
       width: 220,
       render: (_, record) => (
         <Space>
-          {hasPerm('system:role:edit') && (
-            <Button size="mini" onClick={() => openEdit(record)}>
-              编辑
-            </Button>
-          )}
           {hasPerm('system:role:assignMenu') && (
             <Button size="mini" onClick={() => openAssignMenus(record)}>
               分配菜单
@@ -342,7 +337,12 @@ export default function RoleManage() {
               绑定部门
             </Button>
           )}
-          {hasPerm('system:role:delete') && (
+          {hasPerm('system:role:edit') && (
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+          )}
+          {hasPerm('system:role:edit') && (
             record.code === 'admin' ? (
               <Tooltip content="超级管理员角色不可删除">
                 <Button size="mini" status="danger" disabled>
@@ -405,10 +405,12 @@ export default function RoleManage() {
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {hasPerm('system:role:add') && (
+        {hasPerm('system:role:edit') ? (
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
             新增角色
           </Button>
+        ) : (
+          <div />
         )}
         <Space>
           <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
@@ -508,7 +510,7 @@ export default function RoleManage() {
           <Row gutter={20}>
             <Col span={12}>
               <FormItem label="排序" field="sort" triggerPropName="value">
-                <InputNumber min={0} placeholder="数字越小越靠前" />
+                <InputNumber min={1} placeholder="数字越小越靠前" />
               </FormItem>
             </Col>
             <Col span={12}>

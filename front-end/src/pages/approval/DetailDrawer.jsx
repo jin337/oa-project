@@ -1,14 +1,4 @@
-import {
-  Button,
-  Drawer,
-  Empty,
-  Input,
-  Message,
-  Popconfirm,
-  Radio,
-  Space,
-  Spin,
-} from '@arco-design/web-react'
+import { Button, Drawer, Empty, Input, Message, Radio, Space, Spin } from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
@@ -249,29 +239,29 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
               </Button>
             )}
             {canReject && (
-              <Popconfirm title="确定拒绝该申请吗？" onOk={() => handleApprove(2)} position="top">
-                <Button size="small" loading={operating}>
-                  拒绝
-                </Button>
-              </Popconfirm>
+              <Button size="small" loading={operating} onClick={() => handleApprove(2)}>
+                拒绝
+              </Button>
             )}
           </Space>
           {showApproveButtons && (
             <Space>
-              <Popconfirm
-                title="确定驳回该申请吗？（退回修改）"
-                onOk={() => handleApprove(3)}
-                position="top"
+              <Button
+                status="danger"
+                size="small"
+                loading={operating}
+                onClick={() => handleApprove(3)}
               >
-                <Button status="danger" size="small" loading={operating}>
-                  驳回
-                </Button>
-              </Popconfirm>
-              <Popconfirm title="确定通过该申请吗？" onOk={() => handleApprove(1)} position="top">
-                <Button type="primary" size="small" loading={operating}>
-                  同意
-                </Button>
-              </Popconfirm>
+                驳回
+              </Button>
+              <Button
+                type="primary"
+                size="small"
+                loading={operating}
+                onClick={() => handleApprove(1)}
+              >
+                同意
+              </Button>
             </Space>
           )}
         </div>

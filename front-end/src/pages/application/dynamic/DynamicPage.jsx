@@ -36,11 +36,15 @@ export default function DynamicPage() {
   const { menus } = useAuth()
   const [form] = Form.useForm()
 
-  // 解析 code/state：仅以菜单项 link_app 为准；菜单缺失或未配置 → 空 code 走 NotFound
-  const { code, state } = useMemo(
-    () => parseLinkApp(findMenuByPath(menus, location.pathname)?.link_app),
-    [menus, location.pathname],
-  )
+  // 解析 code/state（格式 "页面编码:list"）：
+  // 1) 优先取导航 state（location.state.link_app，不暴露于 URL）；
+  // 2) 回退 sessionStorage 缓存（刷新 / 页签切换等 state 丢失场景）；
+  // 3) 最后回退菜单项 link_app；均未配置 → 空 code 走 NotFound
+  const { code, state } = useMemo(() => {
+    const stateLink = location.state?.link_app
+    const cached = sessionStorage.getItem(`link_app:${location.pathname}`)
+    return parseLinkApp(stateLink || cached || findMenuByPath(menus, location.pathname)?.link_app)
+  }, [menus, location.pathname, location.state])
 
   // 应用配置加载（请求 / Loading / 错误态与重试统一由 Hook 管理）
   const { app, loading, error, retry } = useApplicationData(code, state)

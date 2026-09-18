@@ -9,17 +9,11 @@ import {
   Space,
   Typography,
 } from '@arco-design/web-react'
-import {
-  IconApps,
-  IconDesktop,
-  IconHome,
-  IconSettings,
-  IconStorage,
-  IconUser,
-} from '@arco-design/web-react/icon'
-import { useEffect } from 'react'
+import { IconHome, IconStorage, IconUser } from '@arco-design/web-react/icon'
+import { useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import * as userApi from 'src/api/user'
+import { MenuIcon } from 'src/components/icon-select'
 import TabsBar from 'src/components/tabs-bar'
 import { APP_NAME } from 'src/config/app.js'
 import { useMenuMeta } from 'src/hooks/useMenuMeta'
@@ -30,22 +24,6 @@ const Header = Layout.Header
 const Content = Layout.Content
 const MenuItem = Menu.Item
 const SubMenu = Menu.SubMenu
-
-// 后端菜单 icon 字段 -> Arco 图标组件映射
-const ICON_MAP = {
-  setting: <IconSettings />,
-  user: <IconUser />,
-  users: <IconUser />,
-  safe: <IconSettings />,
-  storage: <IconStorage />,
-  apps: <IconApps />,
-  home: <IconHome />,
-  desktop: <IconDesktop />,
-}
-
-function menuIcon(menu) {
-  return ICON_MAP[menu.icon] || <IconApps />
-}
 
 // 把后端菜单树转成 Arco Menu 项（只渲染目录和页面菜单，按钮权限项跳过；hidden=1 的菜单不显示在导航栏）
 // 导航路径一律使用菜单配置的原始 path（link_app 仅用于动态页面请求应用数据，不参与路由派生）
@@ -59,8 +37,12 @@ function renderMenus(menus) {
         return (
           <SubMenu
             key={`dir-${m.id}`}
-            title={m.name}
-            icon={menuIcon(m)}
+            title={
+              <>
+                {m.icon && <MenuIcon name={m.icon} />}
+                {m.name}
+              </>
+            }
             triggerProps={{ popupStyle: { maxHeight: '600px' } }}
           >
             {children}
@@ -71,7 +53,13 @@ function renderMenus(menus) {
       const navPath = m.path
       if (navPath) {
         return (
-          <MenuItem key={navPath} icon={menuIcon(m)}>
+          <MenuItem key={navPath}>
+            {m.icon && (
+              <>
+                <MenuIcon name={m.icon} />
+                &nbsp;
+              </>
+            )}
             {m.name}
           </MenuItem>
         )
@@ -114,10 +102,27 @@ function HeaderBar() {
   const { user, menus, logout, updateUser } = useAuth()
   // 当前路径对应的菜单链（精确匹配或最长前缀匹配），用于顶部导航高亮
   const { chain: activeChain } = useMenuMeta(location.pathname)
-  // 动态子路由时高亮其父级菜单项
-  const activeMenuKey = activeChain?.length
-    ? activeChain[activeChain.length - 1].path
-    : location.pathname
+  // 渲染可见菜单 key 集合（status=1、非按钮、非 hidden、有 path）
+  // 用于高亮回退：隐藏子菜单（如 /application/list 的列表页 hidden=1 不渲染）命中时，回退到其可见父级
+  const visibleMenuKeys = useMemo(() => {
+    const keys = new Set()
+    const walk = (list) => {
+      for (const m of list || []) {
+        if (m.status === 1 && m.type !== 3 && m.hidden !== 1 && m.path) keys.add(m.path)
+        if (m.children) walk(m.children)
+      }
+    }
+    walk(menus)
+    return keys
+  }, [menus])
+  // 高亮 key：从菜单链末节点向前回退，取第一个渲染可见的菜单项；均不可见则回退当前路径
+  const activeMenuKey = useMemo(() => {
+    if (!activeChain?.length) return location.pathname
+    for (let i = activeChain.length - 1; i >= 0; i--) {
+      if (visibleMenuKeys.has(activeChain[i].path)) return activeChain[i].path
+    }
+    return location.pathname
+  }, [activeChain, visibleMenuKeys, location.pathname])
 
   // 切换当前部门：调用接口成功后更新全局用户状态中的 dept_id
   const handleSwitchDept = async (deptId) => {
@@ -204,14 +209,6 @@ function HeaderBar() {
 }
 
 export default function MainLayout() {
-  const { refreshProfile } = useAuth()
-
-  // 进入后台后拉取用户资料与菜单（已有则跳过）
-  useEffect(() => {
-    refreshProfile().catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   return (
     <TabProvider>
       <Layout className="h-full">

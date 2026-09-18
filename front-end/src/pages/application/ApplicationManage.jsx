@@ -15,11 +15,19 @@ import {
   Space,
   Table,
   Tag,
+  Typography,
 } from '@arco-design/web-react'
-import { IconDown, IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
+import {
+  IconDown,
+  IconList,
+  IconPlus,
+  IconRefresh,
+  IconSettings,
+} from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
+import { usePermission } from 'src/hooks/usePermission'
 import { useTabs } from 'src/store/tab-context'
 
 const FormItem = Form.Item
@@ -49,6 +57,7 @@ const EMPTY_FORM = {
 export default function ApplicationManage() {
   const navigate = useNavigate()
   const { addTab } = useTabs()
+  const { hasPerm } = usePermission()
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -163,7 +172,17 @@ export default function ApplicationManage() {
     navigate(path)
   }
 
-  // 操作列「更多」下拉菜单分发：仅含子页面入口，编辑/删除为平铺按钮
+  // 打开动态列表页：配置完成后才可使用的成果入口，openSubPage 同款方式（预添加页签 + 定制标题 + 跳转）
+  // 页面编码通过 location.state 传递（不暴露于 URL），并写入 sessionStorage 兜底刷新/页签切换
+  const openListPage = (record) => {
+    const path = '/application/list'
+    const linkApp = `${record.code}:list`
+    sessionStorage.setItem(`link_app:${path}`, linkApp)
+    addTab({ path, title: `${record.name} - 列表页` })
+    navigate(path, { state: { link_app: linkApp } })
+  }
+
+  // 操作列「更多」下拉菜单分发：仅含配置类子页面入口，编辑/删除为平铺按钮
   const handleActionMenu = (key, record) => {
     if (key === 'tables') {
       openSubPage(record, 'tables', '表管理')
@@ -204,7 +223,12 @@ export default function ApplicationManage() {
       render: (_, __, index) => index + 1,
     },
     { key: 'name', title: '页面名称', dataIndex: 'name' },
-    { key: 'code', title: '页面编码', dataIndex: 'code' },
+    {
+      key: 'code',
+      title: '页面编码',
+      dataIndex: 'code',
+      render: (v) => <Typography.Text copyable>{v}</Typography.Text>,
+    },
     { key: 'table_name', title: '对应表', dataIndex: 'table_name' },
     {
       key: 'sub_table_name',
@@ -235,27 +259,32 @@ export default function ApplicationManage() {
           </Menu>
         )
         return (
-          <Space>
-            <Dropdown droplist={actionMenu} position="br">
-              <Button size="mini" type="text">
-                更多 <IconDown />
+          hasPerm('application:edit') && (
+            <Space>
+              <Dropdown droplist={actionMenu} position="br">
+                <Button size="mini" type="text">
+                  更多 <IconDown />
+                </Button>
+              </Dropdown>
+              <Button size="mini" onClick={() => openListPage(record)}>
+                列表页
               </Button>
-            </Dropdown>
-            <Button size="mini" onClick={() => openEdit(record)}>
-              编辑
-            </Button>
-            <Popconfirm
-              position="lb"
-              focusLock
-              title="确认删除该应用配置？"
-              content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
-              onOk={() => handleDelete(record)}
-            >
-              <Button size="mini" status="danger">
-                删除
+              <Button size="mini" onClick={() => openEdit(record)}>
+                编辑
               </Button>
-            </Popconfirm>
-          </Space>
+              <Popconfirm
+                position="lb"
+                focusLock
+                title="确认删除该应用配置？"
+                content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
+                onOk={() => handleDelete(record)}
+              >
+                <Button size="mini" status="danger">
+                  删除
+                </Button>
+              </Popconfirm>
+            </Space>
+          )
         )
       },
     },
@@ -299,9 +328,13 @@ export default function ApplicationManage() {
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
-          新增页面
-        </Button>
+        {hasPerm('application:edit') ? (
+          <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
+            新增页面
+          </Button>
+        ) : (
+          <div></div>
+        )}
         <Space>
           <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新

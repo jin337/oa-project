@@ -9,6 +9,8 @@ const HOME_TAB = { path: HOME_PATH, title: '工作台', breadcrumbs: ['工作台
 
 // 不生成页签的系统路径（如无权限错误页，仅作临时提示，无需页签切换）
 const NO_TAB_PATHS = new Set(['/403'])
+// 页签持久化 key（sessionStorage，刷新后恢复页签与手动标题；每个浏览器标签页独立）
+const TABS_STORAGE_KEY = 'oa-tabs' 
 
 const TabContext = createContext(null)
 
@@ -34,7 +36,19 @@ export function TabProvider({ children }) {
   const navigate = useNavigate()
   // 唯一数据源：登录后从后端获取的菜单树
   const { menus } = useAuth()
-  const [tabs, setTabs] = useState([HOME_TAB])
+  // 页签初始状态：优先从 sessionStorage 恢复（刷新后保持页签与手动标题）；损坏数据回退固定首页
+  const [tabs, setTabs] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(TABS_STORAGE_KEY)
+      if (saved) {
+        const restored = JSON.parse(saved)
+        if (Array.isArray(restored) && restored.length) return restored
+      }
+    } catch {
+      /* 忽略损坏的持久化数据 */
+    }
+    return [HOME_TAB]
+  })
 
   // 保持最新 tabs 供回调读取，避免闭包拿到过期值
   const tabsRef = useRef(tabs)
@@ -93,6 +107,15 @@ export function TabProvider({ children }) {
       return [...prev, { path, title: meta.title, breadcrumbs: meta.breadcrumbs, closable: true }]
     })
   }, [location.pathname, resolveTabMeta, isPathAccessible])
+
+  // 页签持久化：变化即写入 sessionStorage（幂等，不影响任何现有逻辑）
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(TABS_STORAGE_KEY, JSON.stringify(tabs))
+    } catch {
+      /* 忽略配额/隐私模式写入失败 */
+    }
+  }, [tabs])
 
   // 菜单树变化时统一处理：
   // 1) 清理无权限路径的无效页签（防止 RequirePermission 重定向前被误添加）

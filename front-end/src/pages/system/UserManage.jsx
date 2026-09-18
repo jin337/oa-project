@@ -37,7 +37,16 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'username', 'dept', 'roles', 'email', 'phone', 'status', 'created_at']
+const ALL_COL_KEYS = [
+  'index',
+  'username',
+  'dept',
+  'roles',
+  'email',
+  'phone',
+  'status',
+  'created_at',
+]
 
 // 表格密度选项
 const SIZE_OPTIONS = [
@@ -389,40 +398,38 @@ export default function UserManage() {
       width: 290,
       render: (_, record) => (
         <Space>
-          {hasPerm('system:user:detail') && (
-            <Button size="mini" onClick={() => openDetail(record)}>
-              查看详情
-            </Button>
-          )}
-          {hasPerm('system:user:edit') && (
-            <Button size="mini" onClick={() => openEdit(record)}>
-              编辑
-            </Button>
-          )}
           {hasPerm('system:user:resetPwd') && (
             <Button size="mini" onClick={() => openResetPassword(record)}>
               重置密码
             </Button>
           )}
-          {hasPerm('system:user:delete') && (
-            record.id === 1 ? (
-              <Tooltip content="内置管理员不可删除">
-                <Button size="mini" status="danger" disabled>
-                  删除
-                </Button>
-              </Tooltip>
-            ) : (
-              <Popconfirm
-                position="lb"
-                focusLock
-                title="确认删除该用户？"
-                onOk={() => handleDelete(record)}
-              >
-                <Button size="mini" status="danger">
-                  删除
-                </Button>
-              </Popconfirm>
-            )
+          {hasPerm('system:user:edit') && (
+            <Space>
+              <Button size="mini" onClick={() => openDetail(record)}>
+                查看详情
+              </Button>
+              <Button size="mini" onClick={() => openEdit(record)}>
+                编辑
+              </Button>
+              {record.id === 1 ? (
+                <Tooltip content="内置管理员不可删除">
+                  <Button size="mini" status="danger" disabled>
+                    删除
+                  </Button>
+                </Tooltip>
+              ) : (
+                <Popconfirm
+                  position="lb"
+                  focusLock
+                  title="确认删除该用户？"
+                  onOk={() => handleDelete(record)}
+                >
+                  <Button size="mini" status="danger">
+                    删除
+                  </Button>
+                </Popconfirm>
+              )}
+            </Space>
           )}
         </Space>
       ),
@@ -477,11 +484,11 @@ export default function UserManage() {
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {hasPerm('system:user:add') && (
+        {hasPerm('system:user:edit') ? (
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
             新增用户
           </Button>
-        )}
+        ) : <div/>}
         <Space>
           <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
@@ -658,15 +665,13 @@ export default function UserManage() {
                 { label: '手机号', value: detailUser?.phone || '-' },
                 {
                   label: '所属部门',
-                  value: (detailUser?.dept_ids || []).length ? (
-                    detailUser.dept_ids.map((d) => (
-                      <Tag key={d.id} color="arcoblue" className="mr-1">
-                        {d.name}
-                      </Tag>
-                    ))
-                  ) : (
-                    '-'
-                  ),
+                  value: (detailUser?.dept_ids || []).length
+                    ? detailUser.dept_ids.map((d) => (
+                        <Tag key={d.id} color="arcoblue" className="mr-1">
+                          {d.name}
+                        </Tag>
+                      ))
+                    : '-',
                 },
                 {
                   label: '角色',

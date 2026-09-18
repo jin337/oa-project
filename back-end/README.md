@@ -209,7 +209,7 @@ task clean          # 清理编译产物、bin/ 与 logs/
 | PUT/DELETE | /approval/category/:id | 修改 / 删除审批分类 |
 | GET/POST | /approval/category/item | 申请项列表 / 新增 |
 | PUT/DELETE | /approval/category/item/:id | 修改 / 删除申请项 |
-| POST | /approval/instance | 发起审批（可携带自选审批人 `self_select_members`） |
+| POST | /approval/instance | 发起审批（可携带自选审批人 `approval_draft_members`） |
 | POST | /approval/instance/draft | 保存草稿（不启动流程、不生成任务） |
 | GET | /approval/instance/:id | 实例详情（快照 + 业务数据 + 任务列表 + 审批人映射） |
 | PUT | /approval/instance/:id/submit | 从草稿提交发起审批 |

@@ -15,14 +15,10 @@ import {
   Spin,
 } from '@arco-design/web-react'
 import {
-  IconAlipayCircle,
-  IconCalendar,
   IconDelete,
   IconEdit,
-  IconFile,
   IconPlus,
   IconSettings,
-  IconUser,
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
@@ -35,20 +31,13 @@ import DynamicForm, {
 import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
 
 import { usePermission } from 'src/hooks/usePermission'
+import IconSelect, { MenuIcon } from 'src/components/icon-select'
 
 const FormItem = Form.Item
 const Row = Grid.Row
 const Col = Grid.Col
 
-// 申请项图标映射（icon 字段存图标名，未匹配时使用默认图标）
-const ICON_MAP = {
-  user: <IconUser />,
-  money: <IconAlipayCircle />,
-  calendar: <IconCalendar />,
-  file: <IconFile />,
-  edit: <IconEdit />,
-}
-const getIcon = (icon) => ICON_MAP[(icon || '').toLowerCase()] || <IconFile />
+
 
 /**
  * 审批申请页：上下按行排列的流式布局——每个分类独占一行（左侧名称与编辑/删除，右侧新增申请项），
@@ -56,7 +45,7 @@ const getIcon = (icon) => ICON_MAP[(icon || '').toLowerCase()] || <IconFile />
  * 申请项通过「页面编码（code）」关联 ApplicationManage 中已配置的应用页面，
  * 点击申请项卡片时预请求应用配置，并在 Drawer 中注入动态表单组件进行展示。
  *
- * 管理模式：头部「管理」按钮（受 approval:apply-btn 权限控制）切换 isManaging，
+ * 管理模式：头部「管理」按钮（受 approval:edit 权限控制）切换 isManaging，
  * 进入管理模式后展示「新增分类」/「新增申请项」/分类与申请项的编辑删除操作，退出后隐藏。
  */
 export default function Apply() {
@@ -122,7 +111,7 @@ export default function Apply() {
   const openCreateCategory = () => {
     setEditingCategory(null)
     catForm.resetFields()
-    catForm.setFieldsValue({ sort: 0 })
+    catForm.setFieldsValue({ sort: 1 })
     setCatModalVisible(true)
   }
 
@@ -172,7 +161,7 @@ export default function Apply() {
   const openCreateItem = (category) => {
     setEditingItem(null)
     itemForm.resetFields()
-    itemForm.setFieldsValue({ category_id: category.id, sort: 0 })
+    itemForm.setFieldsValue({ category_id: category.id, sort: 1 })
     setItemModalVisible(true)
   }
 
@@ -183,7 +172,7 @@ export default function Apply() {
       code: record.code,
       category_id: record.category_id,
       icon: record.icon || '',
-      sort: record.sort ?? 0,
+      sort: record.sort ?? 1,
     })
     setItemModalVisible(true)
   }
@@ -272,7 +261,7 @@ export default function Apply() {
       await approvalApi.saveDraftInstance({
         app_id: drawerApp.id,
         business_data: payload,
-        self_select_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+        approval_draft_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
       })
       Message.success('草稿保存成功')
       setDrawerVisible(false)
@@ -297,7 +286,7 @@ export default function Apply() {
       await approvalApi.createApprovalInstance({
         app_id: drawerApp.id,
         business_data: payload,
-        self_select_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+        approval_draft_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
       })
       Message.success('提交成功，等待审核')
       setDrawerVisible(false)
@@ -313,7 +302,7 @@ export default function Apply() {
     <Card
       title="审批申请"
       extra={
-        hasPerm('approval:apply-btn') && (
+        hasPerm('approval:edit') && (
           <Space>
             {/* 管理模式开关：进入后展示管理操作，退出后恢复普通浏览 */}
             <Button
@@ -343,7 +332,7 @@ export default function Apply() {
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <span className="text-base font-medium">{c.name}</span>
-                    {isManaging && hasPerm('approval:apply-btn') && (
+                    {isManaging && hasPerm('approval:edit') && (
                       <>
                         <Button
                           size="mini"
@@ -361,7 +350,7 @@ export default function Apply() {
                       </>
                     )}
                   </div>
-                  {isManaging && hasPerm('approval:apply-btn') && (
+                  {isManaging && hasPerm('approval:edit') && (
                     <Button
                       size="small"
                       type="secondary"
@@ -385,7 +374,7 @@ export default function Apply() {
                           onClick={() => handleItemClick(item)}
                         >
                           {/* 卡片右上角操作区：编辑 / 删除（管理模式直接显示，退出后隐藏） */}
-                          {isManaging && hasPerm('approval:apply-btn') && (
+                          {isManaging && hasPerm('approval:edit') && (
                             <div
                               className="absolute top-2 right-2 z-10 flex items-center"
                               onClick={(e) => e.stopPropagation()}
@@ -412,7 +401,7 @@ export default function Apply() {
                           )}
                           <div className="flex items-center gap-3">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-lg text-blue-600">
-                              {getIcon(item.icon)}
+                              <MenuIcon name={item.icon} />
                             </div>
                             <div className="min-w-0 font-medium">{item.name}</div>
                           </div>
@@ -449,7 +438,7 @@ export default function Apply() {
             <Input placeholder="如：人事类、财务类、行政类" maxLength={20} showWordLimit />
           </FormItem>
           <FormItem label="排序" field="sort" rules={[{ required: true, message: '请输入排序值' }]}>
-            <InputNumber style={{ width: '100%' }} min={0} placeholder="数字越小越靠前" />
+            <InputNumber style={{ width: '100%' }} min={1} placeholder="数字越小越靠前" />
           </FormItem>
         </Form>
       </Modal>
@@ -495,7 +484,7 @@ export default function Apply() {
             </Col>
             <Col span={12}>
               <FormItem label="图标" field="icon">
-                <Input placeholder="如：user / money / calendar" />
+                <IconSelect placeholder="点击选择图标" />
               </FormItem>
             </Col>
             <Col span={12}>
@@ -504,7 +493,7 @@ export default function Apply() {
                 field="sort"
                 rules={[{ required: true, message: '请输入排序值' }]}
               >
-                <InputNumber style={{ width: '100%' }} min={0} placeholder="数字越小越靠前" />
+                <InputNumber style={{ width: '100%' }} min={1} placeholder="数字越小越靠前" />
               </FormItem>
             </Col>
           </Row>

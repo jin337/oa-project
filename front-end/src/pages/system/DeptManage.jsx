@@ -1,23 +1,23 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    InputNumber,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Select,
-    Space,
-    Table,
-    Tag,
-    Tooltip,
-    TreeSelect,
+  Button,
+  Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -53,7 +53,7 @@ const EMPTY_FORM = {
   name: '',
   parent_id: undefined,
   leader: '',
-  sort: 0,
+  sort: 1,
   status: 1,
 }
 
@@ -162,7 +162,8 @@ export default function DeptManage() {
       title: '状态',
       dataIndex: 'status',
       width: 80,
-      render: (status) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+      render: (status) =>
+        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },
     {
       key: 'created_at',
@@ -174,35 +175,35 @@ export default function DeptManage() {
       key: 'action',
       title: '操作',
       width: 220,
-      render: (_, record) => (
-        <Space>
-          {hasPerm('system:dept:add') && (
+      render: (_, record) =>
+        hasPerm('system:dept:edit') && (
+          <Space>
             <Button size="mini" onClick={() => openCreate(record.id)}>
               新增子部门
             </Button>
-          )}
-          {hasPerm('system:dept:edit') && (
             <Button size="mini" onClick={() => openEdit(record)}>
               编辑
             </Button>
-          )}
-          {hasPerm('system:dept:delete') && (
-            record.children?.length > 0 ? (
+            {record.children?.length > 0 ? (
               <Tooltip content="存在子节点，请先删除子节点">
                 <Button size="mini" status="danger" disabled>
                   删除
                 </Button>
               </Tooltip>
             ) : (
-              <Popconfirm position="lb" focusLock title="确认删除该部门？" onOk={() => handleDelete(record)}>
+              <Popconfirm
+                position="lb"
+                focusLock
+                title="确认删除该部门？"
+                onOk={() => handleDelete(record)}
+              >
                 <Button size="mini" status="danger">
                   删除
                 </Button>
               </Popconfirm>
-            )
-          )}
-        </Space>
-      ),
+            )}
+          </Space>
+        ),
     },
   ]
 
@@ -226,10 +227,12 @@ export default function DeptManage() {
     <Card title="部门管理">
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {hasPerm('system:dept:add') && (
+        {hasPerm('system:dept:edit') ? (
           <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
             新增部门
           </Button>
+        ) : (
+          <div />
         )}
         <Space>
           <Button size="mini" icon={<IconRefresh />} onClick={fetchTree}>
@@ -266,7 +269,8 @@ export default function DeptManage() {
         confirmLoading={saving}
         onCancel={() => setModalVisible(false)}
         unmountOnExit
-        className="w-160! max-w-[90vw]">
+        className="w-160! max-w-[90vw]"
+      >
         <Form form={form} layout="vertical" autoComplete="off">
           <Row gutter={20}>
             <Col span={12}>
@@ -276,7 +280,8 @@ export default function DeptManage() {
                 rules={[
                   { required: true, message: '请输入部门名称' },
                   { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-                ]}>
+                ]}
+              >
                 <Input placeholder="如：技术部" />
               </FormItem>
             </Col>
@@ -292,7 +297,7 @@ export default function DeptManage() {
             </Col>
             <Col span={12}>
               <FormItem label="排序" field="sort" triggerPropName="value">
-                <InputNumber min={0} placeholder="数字越小越靠前" />
+                <InputNumber min={1} placeholder="数字越小越靠前" />
               </FormItem>
             </Col>
             <Col span={12}>

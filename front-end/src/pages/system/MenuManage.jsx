@@ -22,6 +22,7 @@ import {
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as menuApi from 'src/api/menu'
+import IconSelect, { MenuIcon } from 'src/components/icon-select'
 import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
@@ -69,7 +70,7 @@ const EMPTY_FORM = {
   perm: '',
   icon: '',
   link_app: '',
-  sort: 0,
+  sort: 1,
   status: 1,
   hidden: 0,
 }
@@ -193,7 +194,13 @@ export default function MenuManage() {
     { key: 'path', title: '路由地址', dataIndex: 'path', render: (v) => v || '-' },
     { key: 'perm', title: '权限标识', dataIndex: 'perm', render: (v) => v || '-' },
     { key: 'link_app', title: '关联应用', dataIndex: 'link_app', render: (v) => v || '-' },
-    { key: 'icon', title: '图标', dataIndex: 'icon', render: (v) => v || '-' },
+    {
+      key: 'icon',
+      title: '图标',
+      dataIndex: 'icon',
+      width: 80,
+      render: (v) => (v ? <MenuIcon name={v} className="text-lg" /> : '-'),
+    },
     { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
     {
       key: 'hidden',
@@ -214,20 +221,18 @@ export default function MenuManage() {
       key: 'action',
       title: '操作',
       width: 220,
-      render: (_, record) => (
-        <Space>
-          {hasPerm('system:menu:add') && record.type !== 3 && (
-            <Button size="mini" onClick={() => openCreate(record.id)}>
-              新增子菜单
-            </Button>
-          )}
-          {hasPerm('system:menu:edit') && (
+      render: (_, record) =>
+        hasPerm('system:menu:edit') && (
+          <Space>
+            {record.type !== 3 && (
+              <Button size="mini" onClick={() => openCreate(record.id)}>
+                新增子菜单
+              </Button>
+            )}
             <Button size="mini" onClick={() => openEdit(record)}>
               编辑
             </Button>
-          )}
-          {hasPerm('system:menu:delete') &&
-            (record.children?.length > 0 ? (
+            {record.children?.length > 0 ? (
               <Tooltip content="存在子节点，请先删除子节点">
                 <Button size="mini" status="danger" disabled>
                   删除
@@ -244,9 +249,9 @@ export default function MenuManage() {
                   删除
                 </Button>
               </Popconfirm>
-            ))}
-        </Space>
-      ),
+            )}
+          </Space>
+        ),
     },
   ]
 
@@ -270,10 +275,12 @@ export default function MenuManage() {
     <Card title="菜单管理">
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {hasPerm('system:menu:add') && (
+        {hasPerm('system:menu:edit') ? (
           <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
             新增菜单
           </Button>
+        ) : (
+          <div />
         )}
         <Space>
           <Button size="mini" icon={<IconRefresh />} onClick={fetchTree}>
@@ -371,7 +378,7 @@ export default function MenuManage() {
             {formType !== 3 && (
               <Col span={12}>
                 <FormItem label="图标" field="icon">
-                  <Input placeholder="如：IconUser" />
+                  <IconSelect />
                 </FormItem>
               </Col>
             )}
@@ -387,7 +394,7 @@ export default function MenuManage() {
             )}
             <Col span={12}>
               <FormItem label="排序" field="sort" triggerPropName="value">
-                <InputNumber min={0} placeholder="数字越小越靠前" />
+                <InputNumber min={1} placeholder="数字越小越靠前" />
               </FormItem>
             </Col>
             <Col span={12}>

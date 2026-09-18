@@ -37,7 +37,7 @@ mysql:
   port: 3306                  # 数据库端口
   username: root              # 数据库账号
   password: "Kzi493399hst"    # 数据库密码
-  dbname: test                # 库名（不存在时自动创建）
+  dbname: oa_test                # 库名（不存在时自动创建）
   table_prefix: oa_            # 表前缀
   charset: utf8mb4            # 字符集
   collation: utf8mb4_general_ci  # 排序规则

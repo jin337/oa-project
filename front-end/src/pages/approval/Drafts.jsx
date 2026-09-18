@@ -113,7 +113,7 @@ export default function Drafts() {
       drawerForm.setFieldsValue(bizData)
       setFormValues(bizData)
       // 从流程快照恢复发起人自选审批人（approverType=3 节点已注入的 members），
-      // 避免编辑打开时清空已选成员，导致保存草稿时 self_select_members 丢失并被后端清空暂存
+      // 避免编辑打开时清空已选成员，导致保存草稿时 approval_draft_members 丢失并被后端清空暂存
       setSelfSelectMembers(collectSelfSelectMembers(inst.approval_flow_json))
     } catch (e) {
       Message.error('草稿加载失败，请稍后重试')
@@ -145,7 +145,7 @@ export default function Drafts() {
         app_id: drawerApp.id,
         business_data_id: draftRecord.data_id ?? draftRecord.id,
         business_data: payload,
-        self_select_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+        approval_draft_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
       })
       Message.success('草稿更新成功')
       setDrawerVisible(false)

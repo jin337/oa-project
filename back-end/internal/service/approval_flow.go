@@ -96,7 +96,7 @@ func findNodeByID(nodes []flowNode, nodeID string) *flowNode {
 }
 
 // injectSelfSelectIntoNodes 将发起人自选审批人注入到 flow_snapshot 节点的 members 中，
-// 使 approverType=3 的节点在快照中即包含最终确定的审批人，消除对 self_select_members_json 的运行时依赖。
+// 使 approverType=3 的节点在快照中即包含最终确定的审批人，消除对 approval_draft_members 的运行时依赖。
 // 同时查询用户姓名填充 Label 字段，确保前端可直接渲染。
 func injectSelfSelectIntoNodes(nodes []flowNode, selfSelectMembers map[string][]uint) []flowNode {
 	if len(selfSelectMembers) == 0 {

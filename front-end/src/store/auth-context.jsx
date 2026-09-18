@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import * as authApi from 'src/api/auth'
 import { clearToken, getToken, setToken } from 'src/utils/auth'
 
@@ -36,6 +36,13 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // Provider 挂载时自动拉取用户资料（含菜单树/权限），动态路由依赖 menus 生成，必须先于布局加载
+  useEffect(() => {
+    if (getToken()) {
+      refreshProfile().catch(() => {})
+    }
+  }, [refreshProfile])
+
   // 局部更新当前用户信息（如切换部门后更新 dept_id），避免整包重新拉取
   const updateUser = useCallback((patch) => {
     setUser((prev) =>
@@ -46,6 +53,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = useCallback(() => {
+    // 清理页签持久化缓存，避免下一位用户看到上一用户的页签
+    sessionStorage.removeItem('oa-tabs')
     clearToken()
     setTokenState('')
     setUser(null)

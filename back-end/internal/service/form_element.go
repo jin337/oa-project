@@ -28,7 +28,8 @@ func checkFormElementTableKey(appID uint, tableKey string) error {
 }
 
 // FormElementList 表单元素分页列表：keyword 模糊匹配 label 或 field_key
-func FormElementList(appID uint, req *model.FormElementListReq) ([]model.FormElement, int64, error) {
+// 返回 FormElementListItem（不含 created_at/created_by/updated_at/updated_by 审计字段）
+func FormElementList(appID uint, req *model.FormElementListReq) ([]model.FormElementListItem, int64, error) {
 	app, err := ApplicationDetail(appID)
 	if err != nil {
 		return nil, 0, err
@@ -48,7 +49,31 @@ func FormElementList(appID uint, req *model.FormElementListReq) ([]model.FormEle
 	var list []model.FormElement
 	err = db.Order(buildFormElementTableOrder(app.TableName, app.SubTableName)).
 		Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
-	return list, total, err
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 转换为列表 DTO，去除审计字段
+	items := make([]model.FormElementListItem, 0, len(list))
+	for _, el := range list {
+		items = append(items, model.FormElementListItem{
+			ID:             el.ID,
+			AppID:          el.AppID,
+			Label:          el.Label,
+			FieldKey:       el.FieldKey,
+			TableKey:       el.TableKey,
+			ElementType:    el.ElementType,
+			Placeholder:    el.Placeholder,
+			Required:       el.Required,
+			DefaultValue:   el.DefaultValue,
+			ValidationRule: el.ValidationRule,
+			Visibility:     el.Visibility,
+			DynamicStates:  el.DynamicStates,
+			DataSource:     el.DataSource,
+			Actions:        el.Actions,
+		})
+	}
+	return items, total, nil
 }
 
 // buildFormElementTableOrder 生成表单元素列表的表级排序表达式：

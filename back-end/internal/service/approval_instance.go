@@ -245,7 +245,7 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 	}
 
 	// 1. 准备流程上下文
-	ctx, err := prepareApprovalContext(req.AppID, req.BusinessDataID, req.SelfSelectMembers)
+	ctx, err := prepareApprovalContext(req.AppID, req.BusinessDataID, req.ApprovalDraftMembers)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 			ExecutionPath:         ctx.execPath,
 			CurrentNodeIdx:        0,
 			Status:                model.InstanceStatusRunning,
-			SelfSelectMembersJSON: req.SelfSelectMembers, // 持久化自选审批人（撤回回退草稿后重新提交需要）
+			ApprovalDraftMembers: req.ApprovalDraftMembers, // 持久化自选审批人（撤回回退草稿后重新提交需要）
 		}
 		instance.CreatedBy, instance.UpdatedBy = curUserID, curUserID
 		if err := tx.Create(&instance).Error; err != nil {
@@ -304,7 +304,7 @@ func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 	}
 
 	// 1. 准备流程上下文（快照/表单/执行路径）
-	ctx, err := prepareApprovalContext(req.AppID, req.BusinessDataID, req.SelfSelectMembers)
+	ctx, err := prepareApprovalContext(req.AppID, req.BusinessDataID, req.ApprovalDraftMembers)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +318,7 @@ func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		ExecutionPath:         ctx.execPath,
 		CurrentNodeIdx:        0,
 		Status:                model.InstanceStatusDraft,
-		SelfSelectMembersJSON: req.SelfSelectMembers,
+		ApprovalDraftMembers: req.ApprovalDraftMembers,
 	}
 	instance.CreatedBy, instance.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&instance).Error; err != nil {
@@ -349,7 +349,7 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		}
 
 		// 3. 基于最新业务数据重新准备流程上下文（快照/执行路径随之刷新）
-		ctx, err := prepareApprovalContext(instance.AppID, req.BusinessDataID, req.SelfSelectMembers)
+		ctx, err := prepareApprovalContext(instance.AppID, req.BusinessDataID, req.ApprovalDraftMembers)
 		if err != nil {
 			return err
 		}
@@ -360,8 +360,8 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 
 		// 5. 自选成员：本次未传（nil）视为清空暂存，传了则覆盖暂存
 		selfSelectJSON := "null"
-		if req.SelfSelectMembers != nil {
-			b, _ := json.Marshal(req.SelfSelectMembers)
+		if req.ApprovalDraftMembers != nil {
+			b, _ := json.Marshal(req.ApprovalDraftMembers)
 			selfSelectJSON = string(b)
 		}
 
@@ -376,7 +376,7 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 				"execution_path":           string(execPathBytes),
 				"current_node_idx":         0,
 				"status":                   model.InstanceStatusDraft,
-				"self_select_members_json": selfSelectJSON,
+				"approval_draft_members": selfSelectJSON,
 				"updated_by":               curUserID,
 			})
 		if res.Error != nil {
@@ -413,9 +413,9 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 	instance = *owned
 
 	// 2. 合并发起人自选审批人：提交时传入 > 草稿暂存
-	selfSelectMembers := instance.SelfSelectMembersJSON
-	if req.SelfSelectMembers != nil {
-		selfSelectMembers = req.SelfSelectMembers
+	selfSelectMembers := instance.ApprovalDraftMembers
+	if req.ApprovalDraftMembers != nil {
+		selfSelectMembers = req.ApprovalDraftMembers
 	}
 
 	// 3. 准备流程上下文（重新评估执行路径）

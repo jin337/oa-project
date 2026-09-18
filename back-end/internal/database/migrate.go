@@ -151,9 +151,9 @@ func seedInitData(db *gorm.DB) error {
 	}
 
 	// 部门树
-	rootDept := model.Dept{Name: "总公司", Sort: 0, Status: 1}
-	rdDept := model.Dept{Name: "研发部", ParentID: 1, Sort: 1, Status: 1}
-	mkDept := model.Dept{Name: "市场部", ParentID: 1, Sort: 2, Status: 1}
+	rootDept := model.Dept{Name: "总公司", Sort: 1, Status: 1}
+	rdDept := model.Dept{Name: "研发部", ParentID: 1, Sort: 2, Status: 1}
+	mkDept := model.Dept{Name: "市场部", ParentID: 1, Sort: 3, Status: 1}
 	if err := db.Create(&rootDept).Error; err != nil {
 		return err
 	}
@@ -165,42 +165,81 @@ func seedInitData(db *gorm.DB) error {
 
 	// 角色
 	adminRole := model.Role{Name: "超级管理员", Code: model.RoleCodeAdmin, Sort: 1, Status: 1, DataScope: model.DataScopeAll, Remark: "拥有全部权限"}
-	commonRole := model.Role{Name: "普通员工", Code: "common", Sort: 2, Status: 1, DataScope: model.DataScopeDept, Remark: "仅本部门数据"}
-	if err := db.Create([]*model.Role{&adminRole, &commonRole}).Error; err != nil {
+	if err := db.Create([]*model.Role{&adminRole}).Error; err != nil {
 		return err
 	}
 
 	// 菜单树：目录 -> 页面菜单 -> 按钮/权限标识
-	dir := model.Menu{Name: "系统管理", Type: model.MenuTypeDir, Path: "/system", Icon: "setting", Sort: 1, Status: 1, Hidden: 0}
-	if err := db.Create(&dir).Error; err != nil {
+	// 设计（与业务/前端动态路由对齐）：
+	// - 审批管理：目录，下挂 申请/我的发起/我的待办/我审批的/抄送我的/草稿箱
+	// - 应用配置：页面菜单（/application 应用配置页），下挂 表管理/表单元素/布局/审批管理/列表页（hidden=1）+ 管理按钮
+	// - 用户设置：页面菜单（/profile，hidden=1，HeaderBar 头像下拉入口）
+	// 所有菜单创建后统一收集 ID，一次性绑定给超级管理员（避免遗漏目录/页面/按钮导致菜单不显示）
+	var allMenuIDs []uint
+	collectMenuIDs := func(ms ...model.Menu) {
+		for _, m := range ms {
+			allMenuIDs = append(allMenuIDs, m.ID)
+		}
+	}
+
+	userProfile := model.Menu{Name: "用户设置", Type: model.MenuTypeMenu, Path: "/profile", Perm: "profile", Sort: 1, Status: 1, Hidden: 1}
+	approvalDir := model.Menu{Name: "审批管理", Type: model.MenuTypeDir, Path: "/approval", Perm: "approval", Sort: 2, Status: 1, Hidden: 0}
+	applicationPage := model.Menu{Name: "应用配置", Type: model.MenuTypeMenu, Path: "/application", Perm: "application", Sort: 3, Status: 1, Hidden: 0}
+	systemDir := model.Menu{Name: "系统管理", Type: model.MenuTypeDir, Path: "/system", Perm: "system", Sort: 4, Status: 1, Hidden: 0}
+	if err := db.Create([]*model.Menu{&userProfile, &approvalDir, &applicationPage, &systemDir}).Error; err != nil {
 		return err
 	}
-	menus := []model.Menu{
-		{ParentID: dir.ID, Name: "用户管理", Type: model.MenuTypeMenu, Path: "/system/user", Sort: 1, Status: 1, Hidden: 0},
-		{ParentID: dir.ID, Name: "角色管理", Type: model.MenuTypeMenu, Path: "/system/role", Sort: 2, Status: 1, Hidden: 0},
-		{ParentID: dir.ID, Name: "菜单管理", Type: model.MenuTypeMenu, Path: "/system/menu", Sort: 3, Status: 1, Hidden: 0},
-		{ParentID: dir.ID, Name: "部门管理", Type: model.MenuTypeMenu, Path: "/system/dept", Sort: 4, Status: 1, Hidden: 0},
+	collectMenuIDs(userProfile, approvalDir, applicationPage, systemDir)
+
+	// 页面菜单：系统管理 / 应用配置 / 审批管理 三组合并为一个切片一次创建
+	// 索引顺序：0-3 系统管理、4-8 应用配置、9-14 审批管理（按钮引用依赖此顺序）
+	pageMenus := []model.Menu{
+		// 系统管理
+		{ParentID: systemDir.ID, Name: "用户管理", Type: model.MenuTypeMenu, Path: "/system/user", Perm: "system:user", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: systemDir.ID, Name: "角色管理", Type: model.MenuTypeMenu, Path: "/system/role", Perm: "system:role", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: systemDir.ID, Name: "菜单管理", Type: model.MenuTypeMenu, Path: "/system/menu", Perm: "system:menu", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: systemDir.ID, Name: "部门管理", Type: model.MenuTypeMenu, Path: "/system/dept", Perm: "system:dept", Sort: 4, Status: 1, Hidden: 0},
+		// 应用配置
+		{ParentID: applicationPage.ID, Name: "表管理", Type: model.MenuTypeMenu, Path: "/application/:id/tables", Perm: "application:tables", Sort: 1, Status: 1, Hidden: 1},
+		{ParentID: applicationPage.ID, Name: "表单元素管理", Type: model.MenuTypeMenu, Path: "/application/:id/form-elements", Perm: "application:form-elements", Sort: 2, Status: 1, Hidden: 1},
+		{ParentID: applicationPage.ID, Name: "布局管理", Type: model.MenuTypeMenu, Path: "/application/:id/layout", Perm: "application:layout", Sort: 3, Status: 1, Hidden: 1},
+		{ParentID: applicationPage.ID, Name: "审批管理", Type: model.MenuTypeMenu, Path: "/application/:id/examine", Perm: "application:examine", Sort: 4, Status: 1, Hidden: 1},
+		{ParentID: applicationPage.ID, Name: "列表页", Type: model.MenuTypeMenu, Path: "/application/list", Perm: "application:list", Sort: 5, Status: 1, Hidden: 1},
+		// 审批管理
+		{ParentID: approvalDir.ID, Name: "申请", Type: model.MenuTypeMenu, Path: "/approval/apply", Perm: "approval:apply", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: approvalDir.ID, Name: "我的发起", Type: model.MenuTypeMenu, Path: "/approval/initiated", Perm: "approval:initiated", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: approvalDir.ID, Name: "我的待办", Type: model.MenuTypeMenu, Path: "/approval/todo", Perm: "approval:todo", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: approvalDir.ID, Name: "我审批的", Type: model.MenuTypeMenu, Path: "/approval/workplace", Perm: "approval:workplace", Sort: 4, Status: 1, Hidden: 0},
+		{ParentID: approvalDir.ID, Name: "抄送我的", Type: model.MenuTypeMenu, Path: "/approval/tome", Perm: "approval:tome", Sort: 5, Status: 1, Hidden: 0},
+		{ParentID: approvalDir.ID, Name: "草稿箱", Type: model.MenuTypeMenu, Path: "/approval/drafts", Perm: "approval:drafts", Sort: 6, Status: 1, Hidden: 0},
 	}
-	if err := db.Create(&menus).Error; err != nil {
+	if err := db.Create(&pageMenus).Error; err != nil {
 		return err
 	}
+	collectMenuIDs(pageMenus...)
+
+	// 按钮/权限标识：挂在所属页面菜单下（type=3 不参与路由，仅用于按钮级权限判断）
 	buttons := []model.Menu{
-		{ParentID: menus[0].ID, Name: "用户新增", Type: model.MenuTypeButton, Perm: "system:user:add", Sort: 1, Status: 1, Hidden: 0},
-		{ParentID: menus[0].ID, Name: "用户修改", Type: model.MenuTypeButton, Perm: "system:user:edit", Sort: 2, Status: 1, Hidden: 0},
-		{ParentID: menus[0].ID, Name: "用户删除", Type: model.MenuTypeButton, Perm: "system:user:remove", Sort: 3, Status: 1, Hidden: 0},
+		// 系统管理（pageMenus: 0 用户管理 / 1 角色管理 / 2 菜单管理 / 3 部门管理）
+		{ParentID: pageMenus[0].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:user:edit", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[0].ID, Name: "详情", Type: model.MenuTypeButton, Perm: "system:user:detail", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[0].ID, Name: "重置密码", Type: model.MenuTypeButton, Perm: "system:user:resetPwd", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[1].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:role:edit", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[1].ID, Name: "分配菜单", Type: model.MenuTypeButton, Perm: "system:role:assignMenu", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[1].ID, Name: "绑定部门", Type: model.MenuTypeButton, Perm: "system:role:assignDept", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[2].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:menu:edit", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[3].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:dept:edit", Sort: 1, Status: 1, Hidden: 0},
+		// 应用配置页：管理按钮
+		{ParentID: applicationPage.ID, Name: "管理", Type: model.MenuTypeButton, Perm: "application:edit", Sort: 1, Status: 1, Hidden: 0},
+		// 审批-申请页：管理按钮（pageMenus[9] 申请）
+		{ParentID: pageMenus[9].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "approval:edit", Sort: 1, Status: 1, Hidden: 0},
 	}
 	if err := db.Create(&buttons).Error; err != nil {
 		return err
 	}
+	collectMenuIDs(buttons...)
 
-	// 超级管理员绑定全部菜单
-	allMenuIDs := []uint{dir.ID}
-	for _, m := range menus {
-		allMenuIDs = append(allMenuIDs, m.ID)
-	}
-	for _, b := range buttons {
-		allMenuIDs = append(allMenuIDs, b.ID)
-	}
+	// 超级管理员绑定全部菜单（目录 + 页面 + 按钮）
 	if err := db.Model(&adminRole).Association("Menus").Append(menuPtrs(db, allMenuIDs)); err != nil {
 		return err
 	}
