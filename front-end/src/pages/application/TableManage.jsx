@@ -5,7 +5,6 @@ import {
   Dropdown,
   Empty,
   Form,
-  Grid,
   Input,
   Menu,
   Message,
@@ -26,8 +25,6 @@ import * as applicationApi from 'src/api/application'
 import { useTabs } from 'src/store/tab-context'
 
 const FormItem = Form.Item
-const Row = Grid.Row
-const Col = Grid.Col
 const MenuItem = Menu.Item
 const TabPane = Tabs.TabPane
 

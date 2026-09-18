@@ -14,6 +14,7 @@ import {
   Table,
   Tag,
   TimePicker,
+  TreeSelect,
   Upload,
 } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon'
@@ -637,6 +638,29 @@ export const ELEMENT_RENDER_CONFIG = {
         <Select
           style={{ width: '100%' }}
           options={options.length ? options : undefined}
+          placeholder={el.placeholder || '请选择'}
+        />
+      )
+    },
+  },
+  treeselect: {
+    renderPreview: (el, pageType) => {
+      // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
+      if (pageType?.startsWith('move-')) {
+        return (
+          <TreeSelect
+            style={{ width: '100%' }}
+            placeholder={el.placeholder || '请选择'}
+            treeData={PREVIEW_OPTIONS}
+          />
+        )
+      }
+      // data_source 支持扁平 [{label,value}] 与树形 [{label,value,children}] 两种结构
+      const options = getStaticOptions(el)
+      return (
+        <TreeSelect
+          style={{ width: '100%' }}
+          treeData={options.length ? options : undefined}
           placeholder={el.placeholder || '请选择'}
         />
       )

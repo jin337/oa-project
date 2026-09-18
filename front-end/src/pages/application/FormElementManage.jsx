@@ -346,7 +346,6 @@ export default function FormElementManage() {
           url: '',
           method: undefined,
           label: '',
-          value: [],
         },
       })
     } else if (type === 'api') {
@@ -355,9 +354,8 @@ export default function FormElementManage() {
           type: 'api',
           options: [],
           url: '',
-          method: 'POST',
+          method: 'GET',
           label: '',
-          value: [],
           params: '',
         },
       })
@@ -397,8 +395,6 @@ export default function FormElementManage() {
       visible_if: record.dynamic_states?.visible_if || '',
       data_source: {
         ...(record.data_source || {}),
-        // value 兼容旧数据：旧版为字符串表达式，统一初始化为数组结构
-        value: Array.isArray(record.data_source?.value) ? record.data_source.value : [],
         // params 为对象结构，回填时反序列化为 JSON 字符串供 TextArea 展示
         params: safeStringify(record.data_source?.params),
       },
@@ -448,15 +444,11 @@ export default function FormElementManage() {
               // params 为 JSON 字符串输入，校验失败时保持空对象
             }
           }
-          const value = (Array.isArray(ds.value) ? ds.value : [])
-            .filter((v) => v && (v.source || v.target))
-            .map((v) => ({ source: v.source || '', target: v.target || '' }))
           return {
             type: 'api',
             url: ds.url || '',
-            method: ds.method || 'POST',
+            method: ds.method || 'GET',
             label: ds.label || '',
-            value,
             params,
           }
         }
@@ -902,51 +894,6 @@ export default function FormElementManage() {
                     <FormItem label="显示标签" field="data_source.label">
                       <Input placeholder="支持表达式：${form.name}" />
                     </FormItem>
-                  </Col>
-                  <Col span={24}>
-                    <div className="mb-2 text-gray-500">提交内容</div>
-                    <Form.List field="data_source.value">
-                      {(fields, { add, remove }) => (
-                        <>
-                          {fields.length > 0 && (
-                            <div className="mb-3 rounded border border-gray-200 bg-white p-3">
-                              {fields.map((item, index) => (
-                                <div
-                                  key={item.key}
-                                  className={`${index === 0 ? '' : 'mt-2'} flex items-center gap-2`}
-                                >
-                                  <FormItem
-                                    field={item.field + '.source'}
-                                    noStyle
-                                    className="mb-0! flex-1"
-                                  >
-                                    <Input placeholder="支持表达式，如 ${item.country}/${item.city}" />
-                                  </FormItem>
-                                  <span className="text-gray-400">→</span>
-                                  <FormItem
-                                    field={item.field + '.target'}
-                                    noStyle
-                                    className="mb-0! flex-1"
-                                  >
-                                    <Input placeholder="目标字段，如 city" />
-                                  </FormItem>
-                                  <Button status="danger" onClick={() => remove(index)}>
-                                    删除
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          <Button
-                            size="small"
-                            type="outline"
-                            onClick={() => add({ source: '', target: '' })}
-                          >
-                            + 添加提交内容
-                          </Button>
-                        </>
-                      )}
-                    </Form.List>
                   </Col>
                 </Row>
               )}

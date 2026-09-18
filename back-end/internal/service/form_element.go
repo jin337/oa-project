@@ -10,7 +10,7 @@ import (
 
 // validElementTypes 允许的表单元素类型白名单（与前端 FormElementManage.jsx ELEMENT_TYPES 一致）
 var validElementTypes = map[string]bool{
-	"input": true, "textarea": true, "number": true, "select": true,
+	"input": true, "textarea": true, "number": true, "select": true, "treeselect": true,
 	"radio": true, "checkbox": true, "datepicker": true, "timepicker": true,
 	"switch": true, "upload": true,
 }
@@ -111,19 +111,19 @@ func FormElementCreate(curUserID, appID uint, req *model.FormElementCreateReq) (
 		return nil, errors.New("不支持的字段类型: " + req.ElementType)
 	}
 	el := model.FormElement{
-		AppID: appID,
-		Label:         req.Label,
-		FieldKey:      req.FieldKey,
-		TableKey:      req.TableKey,
-		ElementType:   req.ElementType,
-		Placeholder:   req.Placeholder,
-		Required:      req.Required,
-		DefaultValue:  req.DefaultValue,
+		AppID:          appID,
+		Label:          req.Label,
+		FieldKey:       req.FieldKey,
+		TableKey:       req.TableKey,
+		ElementType:    req.ElementType,
+		Placeholder:    req.Placeholder,
+		Required:       req.Required,
+		DefaultValue:   req.DefaultValue,
 		ValidationRule: req.ValidationRule,
-		Visibility:    req.Visibility,
-		DynamicStates: req.DynamicStates,
-		DataSource:    req.DataSource,
-		Actions:       req.Actions,
+		Visibility:     req.Visibility,
+		DynamicStates:  req.DynamicStates,
+		DataSource:     req.DataSource,
+		Actions:        req.Actions,
 	}
 	el.CreatedBy, el.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&el).Error; err != nil {

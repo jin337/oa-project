@@ -45,6 +45,7 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'textarea', label: '多行文本', needDataSource: false, needPlaceholder: true },
   { value: 'number', label: '数字输入', needDataSource: false, needPlaceholder: true },
   { value: 'select', label: '下拉选择', needDataSource: true, needPlaceholder: true },
+  { value: 'treeselect', label: '树选择', needDataSource: true, needPlaceholder: true },
   { value: 'radio', label: '单选框', needDataSource: true, needPlaceholder: false },
   { value: 'checkbox', label: '多选框', needDataSource: true, needPlaceholder: false },
   { value: 'datepicker', label: '日期选择', needDataSource: false, needPlaceholder: true },
