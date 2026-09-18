@@ -18,7 +18,8 @@ import {
   Upload,
 } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon'
-import { memo, useMemo } from 'react'
+import { memo, useCallback, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import request from 'src/api/request'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 
 const FormItem = Form.Item
@@ -161,13 +162,38 @@ export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[eleme
  * - move-detail：画布只读预览，隐藏操作列与新增按钮，行内控件保持禁用态预览
  */
 const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
+  // 运行时上下文：列控件动态选项（api 数据源，与主表元素同结构解析）
+  const rt = useContext(RuntimeFormContext)
   // 可编辑：实际填写（form）与画布表单页（move-form）
   const isEditable = pageType === 'form' || pageType === 'move-form'
   // 详情只读：仅真实详情页（detail）渲染纯文本；画布 move-detail 保持禁用控件预览
   const isReadonlyText = pageType === 'detail'
+  const { form } = Form.useFormContext()
   // Form.List 字段名：优先关联子表名（table_key），其次元素 id 兜底
   const listField = el.table_key || el.id || 'table'
-  const { form } = Form.useFormContext()
+  // 按列 default_value 生成一行默认数据（列与元素同结构解析）
+  const genDefaultRow = () => {
+    const row = {}
+    ;(el.columns || []).forEach((col) => {
+      const key = col.dataIndex || col.field_key
+      if (key && col.default_value !== undefined && col.default_value !== '') {
+        const def = parseDefaultValue(col.default_value, col.element_type)
+        if (def !== undefined) row[key] = def
+      }
+    })
+    return row
+  }
+  // 列级 visible_if 依赖字段（全局表单值）：订阅变化重建列可见性
+  const colVifDeps = useMemo(() => {
+    const s = new Set()
+    ;(el.columns || []).forEach((col) => {
+      const vif = col.dynamic_states?.visible_if
+      if (vif) extractFormDeps(vif).forEach((d) => s.add(d))
+    })
+    return [...s]
+  }, [el.columns])
+  // 依赖字段变化时重渲染（常量 ${true}/${false} 时 deps 为空，初始渲染即完成列可见性计算）
+  Form.useWatch(colVifDeps, form)
   // 订阅该字段的表单状态（含校验错误），错误变化时自动重渲染
   const formState = Form.useFormState(listField, form)
   // 提取错误文本：Arco 返回的错误项为 b-validate 错误对象（含 message/type/value 等键），
@@ -215,12 +241,26 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
       field={listField}
       rules={needValidate ? rules : undefined}
       noStyle
-      initialValue={isEditable ? [{}] : undefined}
+      initialValue={isEditable ? [genDefaultRow()] : undefined}
     >
       {(fields, { add, remove }) => {
+        // 列级可见性（visible_if）：基于全局表单值求值，不满足则整列不渲染（列标题 + 单元格）
+        const globalVals = form?.getFieldsValue?.() || {}
+        // 列级可见性（visible_if）：基于全局表单值求值，不满足则整列不渲染（列标题 + 单元格）
+        const vifCols = (el.columns || []).filter((col) => {
+          const vif = col.dynamic_states?.visible_if
+          if (!vif) return true
+          return evalDynamicExpr(vif, globalVals)
+        })
+        // visible_if 不满足的隐藏列：整列过滤不渲染；其字段作为隐藏 Input 附加到
+        // set_value target 指向它的来源列单元格内，字段值仍可读取/提交（不卸载字段）
+        const hiddenCols = (el.columns || []).filter((col) => {
+          const vif = col.dynamic_states?.visible_if
+          return vif ? !evalDynamicExpr(vif, globalVals) : false
+        })
         // 字段权限 perm=1（隐藏）：子表列不渲染（与主表字段隐藏一致）；
         // 严格按 field + table_key 匹配，避免主表同名字段的权限误伤子表列
-        const permColumns = (el.columns || []).filter((col) => {
+        const permColumns = vifCols.filter((col) => {
           const colKey = col.dataIndex || col.field_key
           const fp = (fieldPerms || []).find(
             (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key)
@@ -248,6 +288,16 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
             // 注意：field 必须为单层字符串路径（Arco Form.List 的 getItemKey 会对 field 调用字符串 replace，
             // 传入数组 [field, colKey] 会触发 "fieldKey.replace is not a function" 错误）
             render: (cellValue, record, index) => {
+              const field = fields[index]?.field
+              // 被本列 actions.set_value 的 target 指向的隐藏列：作为隐藏 Input 附加在本列单元格内，
+              // 与 TreeSelect/Select 等控件同行注册，联动写入的值可读取/提交（不占独立列）
+              const linkedHidden = hiddenCols.filter((h) => {
+                const hKey = h.dataIndex || h.field_key
+                if (!hKey) return false
+                return (col.actions?.on_change || []).some(
+                  (a) => a.action_type === 'set_value' && Array.isArray(a.value) && a.value.some((m) => m?.target === hKey)
+                )
+              })
               const renderFn = renderPreviewConfig[col.element_type]
               if (!renderFn) return <span>{cellValue ?? ''}</span>
               // 审批节点字段权限：仅待办审批（editable）详情（detail）下该列 perm=2（可编辑）→ 渲染可编辑控件
@@ -258,28 +308,65 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
                   (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key)
                 )?.perm === 2
               const cellEditable = isEditable || colEditableByPerm
-              const field = fields[index]?.field
-              if (!field) {
-                // 行未注册到 Form store（如画布空态）：可编辑渲染可交互控件，详情渲染纯文本
-                return cellEditable ? (
-                  renderFn(col, 'form')
-                ) : isReadonlyText ? (
-                  <ReadonlyValue value={cellValue} elementType={col.element_type} dataSource={col.data_source} />
-                ) : (
-                  renderFn(col, undefined)
+              const colDS = col.dynamic_states
+              // 单元格控件渲染（extra 可覆盖 hidden/disabled 等属性）
+              const renderCellControl = (extra) => {
+                const main = !field
+                  ? // 行未注册到 Form store（如画布空态）：可编辑渲染可交互控件，详情渲染纯文本
+                    cellEditable
+                    ? renderFn(col, 'form', rt)
+                    : isReadonlyText
+                      ? <ReadonlyValue value={cellValue} elementType={col.element_type} dataSource={col.data_source} />
+                      : renderFn(col, undefined, rt)
+                  : (
+                    <FormItem field={`${field}.${colKey}`} noStyle {...extra}>
+                      {cellEditable ? (
+                        renderFn(col, 'form', rt)
+                      ) : isReadonlyText ? (
+                        <ReadonlyValue elementType={col.element_type} dataSource={col.data_source} />
+                      ) : (
+                        renderFn(col, undefined, rt)
+                      )}
+                    </FormItem>
+                  )
+                return (
+                  <>
+                    {main}
+                    {field &&
+                      linkedHidden.map((h) => {
+                        const hKey = h.dataIndex || h.field_key
+                        return (
+                          <FormItem key={`${el.table_key}-link-${index}-${hKey}`} field={`${field}.${hKey}`} hidden>
+                            <Input />
+                          </FormItem>
+                        )
+                      })}
+                  </>
                 )
               }
-              return (
-                <FormItem field={`${field}.${colKey}`} noStyle>
-                  {cellEditable ? (
-                    renderFn(col, 'form')
-                  ) : isReadonlyText ? (
-                    <ReadonlyValue elementType={col.element_type} dataSource={col.data_source} />
-                  ) : (
-                    renderFn(col, undefined)
-                  )}
-                </FormItem>
-              )
+              // 列级禁用状态（disabled_if）：与主表元素一致，通过 shouldUpdate 监听当前行值变化
+              // 注意：visible_if 已在列构建阶段做整列过滤（列标题+单元格一起隐藏），此处仅处理禁用
+              if (colDS?.disabled_if) {
+                const deps = extractFormDeps(colDS.disabled_if)
+                return (
+                  <Form.Item
+                    shouldUpdate={
+                      deps.size
+                        ? (prev, cur) =>
+                            [...deps].some((d) => prev?.[listField]?.[index]?.[d] !== cur?.[listField]?.[index]?.[d])
+                        : true
+                    }
+                    noStyle
+                  >
+                    {(formData) => {
+                      const row = formData?.[listField]?.[index] || {}
+                      const disabled = evalDynamicExpr(colDS.disabled_if, row)
+                      return renderCellControl({ disabled })
+                    }}
+                  </Form.Item>
+                )
+              }
+              return renderCellControl()
             },
           }
         })
@@ -377,7 +464,7 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
               <div className="mt-2 flex justify-between">
                 {/* 表格错误提示：显示 Form.List 校验错误（整体必填 / 必填列非空） */}
                 <div className="arco-form-message">{errorMessage || ''}</div>
-                <Button size="mini" type="primary" icon={<IconPlus />} onClick={() => add({})}>
+                <Button size="mini" type="primary" icon={<IconPlus />} onClick={() => add(genDefaultRow())}>
                   新增
                 </Button>
               </div>
@@ -622,7 +709,7 @@ export const ELEMENT_RENDER_CONFIG = {
     ),
   },
   select: {
-    renderPreview: (el, pageType) => {
+    renderPreview: (el, pageType, rt) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
       if (pageType?.startsWith('move-')) {
         return (
@@ -633,7 +720,9 @@ export const ELEMENT_RENDER_CONFIG = {
           />
         )
       }
-      const options = getStaticOptions(el)
+      // 运行时优先使用动态接口选项（data_source.type=api），其次静态 JSON 选项
+      const runtimeOptions = rt?.getOptions?.(el)
+      const options = runtimeOptions?.length ? runtimeOptions : getStaticOptions(el)
       return (
         <Select
           style={{ width: '100%' }}
@@ -644,7 +733,7 @@ export const ELEMENT_RENDER_CONFIG = {
     },
   },
   treeselect: {
-    renderPreview: (el, pageType) => {
+    renderPreview: (el, pageType, rt) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
       if (pageType?.startsWith('move-')) {
         return (
@@ -655,36 +744,43 @@ export const ELEMENT_RENDER_CONFIG = {
           />
         )
       }
-      // data_source 支持扁平 [{label,value}] 与树形 [{label,value,children}] 两种结构
-      const options = getStaticOptions(el)
+      // 运行时优先动态接口选项，其次静态 JSON；data_source 支持扁平 [{label,value}] 与树形 [{label,value,children}]
+      const runtimeOptions = rt?.getOptions?.(el)
+      const options = runtimeOptions?.length ? runtimeOptions : getStaticOptions(el)
       return (
         <TreeSelect
           style={{ width: '100%' }}
           treeData={options.length ? options : undefined}
+          // Arco TreeSelect 的 treeData 字段名为 key/title（Select 为 value/label），
+          // extractOptions 统一输出 value/title，此处通过 fieldNames 映射，
+          // 避免 TreeSelect 读不到 key 而自动生成索引路径（如 "-0-0"）作为 value
+          fieldNames={{ key: 'value', title: 'title', children: 'children' }}
           placeholder={el.placeholder || '请选择'}
         />
       )
     },
   },
   radio: {
-    renderPreview: (el, pageType) => {
+    renderPreview: (el, pageType, rt) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
       if (pageType?.startsWith('move-')) {
         return <Radio.Group style={{ width: '100%' }} options={PREVIEW_OPTIONS} />
       }
-      const options = getStaticOptions(el)
+      const runtimeOptions = rt?.getOptions?.(el)
+      const options = runtimeOptions?.length ? runtimeOptions : getStaticOptions(el)
       return (
         <Radio.Group style={{ width: '100%' }} options={options.length ? options : undefined} />
       )
     },
   },
   checkbox: {
-    renderPreview: (el, pageType) => {
+    renderPreview: (el, pageType, rt) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
       if (pageType?.startsWith('move-')) {
         return <Checkbox.Group style={{ width: '100%' }} options={PREVIEW_OPTIONS} />
       }
-      const options = getStaticOptions(el)
+      const runtimeOptions = rt?.getOptions?.(el)
+      const options = runtimeOptions?.length ? runtimeOptions : getStaticOptions(el)
       return (
         <Checkbox.Group style={{ width: '100%' }} options={options.length ? options : undefined} />
       )
@@ -725,6 +821,481 @@ export const ELEMENT_RENDER_CONFIG = {
 export const renderPreviewConfig = Object.fromEntries(
   Object.entries(ELEMENT_RENDER_CONFIG).map(([key, cfg]) => [key, cfg.renderPreview]),
 )
+
+// ==================== 动态表单运行时：数据源(api) + 事件联动(actions) ====================
+
+// 选项型元素（支持动态数据源）
+const OPTION_ELEMENT_TYPES = new Set(['select', 'radio', 'checkbox', 'treeselect'])
+
+/** 递归查找选项：树形选项（children 子节点）的选中项匹配需下钻子级 */
+const findOptionByValue = (opts, val) => {
+  for (const o of opts || []) {
+    if (String(o.value) === String(val)) return o
+    if (Array.isArray(o.children) && o.children.length) {
+      const found = findOptionByValue(o.children, val)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+/** 按点号路径取值：getByPath({ a: { b: 1 } }, 'a.b') -> 1 */
+const getByPath = (obj, path) => {
+  if (obj == null) return undefined
+  return String(path || '')
+    .split('.')
+    .reduce((o, k) => (o == null ? undefined : o[k]), obj)
+}
+
+/**
+ * 解析表达式字符串：支持 ${form.xxx}（表单字段）、${item.xxx}（选项项）与字面量拼接。
+ * 例：'/item/' + ${form.country}/${form.city} -> '/item/CN/北京'
+ */
+const resolveExpr = (expr, vars) => {
+  if (expr == null) return ''
+  const str = String(expr)
+  return str.replace(/\$\{([^}]+)\}/g, (_, pathExpr) => {
+    const parts = String(pathExpr).split('.')
+    const scope = parts[0]
+    const root = scope === 'form' ? vars?.form : scope === 'item' ? vars?.item : vars?.[scope]
+    const val = getByPath(root, parts.slice(1).join('.'))
+    return val === undefined || val === null ? '' : String(val)
+  })
+}
+
+/** 提取表达式中依赖的表单字段（去重），用于判断值变化时是否需刷新动态选项 */
+const extractFormDeps = (str) => {
+  const deps = new Set()
+  String(str ?? '').replace(/\$\{form\.([^}]+)\}/g, (_, p) => {
+    deps.add(p.split('.')[0])
+    return ''
+  })
+  return deps
+}
+
+/**
+ * 动态状态表达式求值（visible_if / disabled_if）：
+ * - 支持 ${form.xxx} 引用表单字段值（点路径）
+ * - 支持比较/逻辑/算术运算符（=== !== == != > < >= <= && || ! + - * /）
+ * - 字符白名单 + 原型链/全局关键字拦截，禁止语句注入
+ * - 求值失败或表达式为空一律返回 false
+ */
+const evalDynamicExpr = (expr, formValues) => {
+  if (!expr || !String(expr).trim()) return false
+  const code = String(expr).replace(/\$\{([^}]+)\}/g, (_, p) => {
+    const parts = String(p).split('.')
+    const scope = parts[0]
+    // 字面量支持：${true} / ${false} / ${数字}（不经过 form 查找）
+    if (scope === 'true') return 'true'
+    if (scope === 'false') return 'false'
+    if (/^-?\d+(\.\d+)?$/.test(scope)) return scope
+    const root = scope === 'form' ? formValues : undefined
+    const val = getByPath(root, parts.slice(1).join('.'))
+    return JSON.stringify(val ?? '')
+  })
+  if (!/^[\s\w.$"'`+\-*/%<>=!&|?:()\[\],]+$/.test(code)) return false
+  if (/(constructor|__proto__|prototype|Function|eval|window|globalThis|document)/i.test(code)) return false
+  try {
+    return Boolean(new Function(`"use strict"; return (${code});`)())
+  } catch (e) {
+    return false
+  }
+}
+
+/**
+ * 解析元素默认值 default_value：
+ * - 输入类：字符串原样作为输入框内容
+ * - 下拉/单选（select/radio/treeselect 单选）：值字符串（匹配选项 value）
+ * - 多选（checkbox/multi_select/treeselect 多选）：JSON 数组（'["a","b"]'）或逗号分隔（"a,b"）
+ * - 无法解析时原样返回
+ */
+const parseDefaultValue = (raw, elementType) => {
+  if (raw == null || raw === '') return undefined
+  try {
+    const v = JSON.parse(raw)
+    // 数组/对象按结构化值返回（多选默认选中项、树选择等）
+    if (Array.isArray(v)) return v
+    if (v !== null && typeof v === 'object') return v
+    return raw
+  } catch (e) {
+    // 多选型支持逗号分隔字符串
+    if (['checkbox', 'multi_select', 'treeselect'].includes(elementType) && String(raw).includes(',')) {
+      return String(raw)
+        .split(',')
+        .map((x) => x.trim())
+    }
+    return raw
+  }
+}
+
+/** 正则转义（列路径匹配用） */
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * 收集全部字段定义：顶层元素 + 各表（table）的列。
+ * 列与元素同结构解析（element_type/data_source/actions/default_value/dynamic_states），
+ * 运行时统一按字段定义加载动态选项，保证子表列与主表元素能力一致。
+ */
+const collectFieldDefs = (elements) => {
+  const defs = []
+  ;(elements || []).forEach((el) => {
+    defs.push({ ...el, __isColumn: false })
+    if (el.element_type === 'table' && Array.isArray(el.columns)) {
+      el.columns.forEach((col) => {
+        defs.push({
+          ...col,
+          __isColumn: true,
+          __tableKey: el.table_key || el.id || '',
+          field_key: col.dataIndex || col.field_key,
+        })
+      })
+    }
+  })
+  return defs
+}
+
+/** 规范化动态接口地址：绝对 URL 原样保留；/api/v1 前缀去掉（request 实例 baseURL 已含）；其余作为相对路径 */
+const normalizeApiUrl = (url) => {
+  if (!url) return ''
+  if (/^https?:\/\//.test(url)) return url
+  return url.replace(/^\/api\/v1/, '')
+}
+
+/** 解析请求参数：JSON 字符串（含表达式）或对象（值含表达式）统一转为普通对象 */
+const resolveParams = (params, vars) => {
+  if (!params) return {}
+  if (typeof params === 'string') {
+    const str = resolveExpr(params, vars)
+    if (!String(str).trim()) return {}
+    try {
+      return JSON.parse(str)
+    } catch (e) {
+      return {}
+    }
+  }
+  if (typeof params === 'object') {
+    const out = {}
+    for (const [k, v] of Object.entries(params)) {
+      out[k] = typeof v === 'string' ? resolveExpr(v, vars) : v
+    }
+    return out
+  }
+  return {}
+}
+
+/**
+ * 递归提取动态接口响应中的选项数组：
+ * - 直接数组：[...]
+ * - 常见包裹：{ data: [...] } / { data: { list: [...] } } / { list: [...] } / { records: [...] } / { rows: [...] }
+ * - 分页结构：{ data: { list: [...], page, size, total } }
+ * - 递归深度上限 3，避免意外深层循环
+ */
+const findListData = (obj, depth = 0) => {
+  if (depth > 3) return undefined
+  if (Array.isArray(obj)) return obj
+  if (obj && typeof obj === 'object') {
+    // 优先常见列表字段名
+    for (const key of ['list', 'records', 'rows', 'items', 'data', 'content', 'recordsList']) {
+      if (Array.isArray(obj[key])) return obj[key]
+    }
+    // 无命中时递归深入对象值（如 data = { list: [...] } / data = { data: [...] }）
+    for (const v of Object.values(obj)) {
+      const found = findListData(v, depth + 1)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
+/**
+ * 将动态接口响应转为选项数组：
+ * - 数组提取见 findListData（兼容多级/分页包裹）
+ * - 元素可为 {label,value} 或 {name,id,title,code} 或原始值
+ * - data_source.label 支持 ${item.xxx} 表达式（动态接口的"显示标签"，item 为列表元素，支持点路径如 ${item.dept.name}）
+ */
+const extractOptions = (resp, ds, vars) => {
+  const list = findListData(resp)
+  if (!Array.isArray(list)) return []
+  // 单个数据项 → 选项节点：label/title 双字段（Select 用 label，TreeSelect 用 title），
+  // 树形结构（treeselect）递归保留 children，避免拍平后树节点丢失
+  const mapItem = (item) => {
+    if (item == null) return null
+    if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+      return { label: String(item), title: String(item), value: String(item) }
+    }
+    const labelExpr = ds?.label
+    const label = labelExpr
+      ? resolveExpr(labelExpr, { ...vars, item })
+      : (item.label ?? item.name ?? item.title ?? '')
+    // 对应值 value_field：显式指定选项 value 取哪个字段（支持表达式 ${item.id}），
+    // 例：接口数据项字段为 id、而当前表单字段（field_key）为 user_id 时，配置 value_field=id，
+    // 选项 value 即取 item.id；留空默认按 value / id / key / code 顺序兜底
+    const vf = ds?.value_field
+    let value
+    if (vf && String(vf).trim()) {
+      const vfStr = String(vf).trim()
+      value = vfStr.includes('${')
+        ? resolveExpr(vfStr, { ...vars, item })
+        : item?.[vfStr]
+      if (value === undefined || value === null || value === '') value = ''
+    } else {
+      value = item.value ?? item.id ?? item.key ?? item.code
+    }
+    const node = {
+      label: String(label ?? ''),
+      title: String(label ?? ''),
+      value: value === undefined || value === null ? '' : String(value),
+      raw: item,
+    }
+    if (Array.isArray(item.children) && item.children.length) {
+      node.children = item.children.map(mapItem).filter(Boolean)
+    }
+    return node
+  }
+  return list.map(mapItem).filter((o) => o && o.label)
+}
+
+/** 运行时表单上下文：向选项型控件提供动态选项、向元素容器提供失焦回调 */
+const RuntimeFormContext = createContext(null)
+
+/**
+ * 运行时交互 Hook：动态数据源(api)加载 + 事件驱动联动(actions)执行。
+ * 仅在 pageType='form'（实际填写）时启用；画布/详情只读不触发。
+ */
+const useRuntimeForm = ({ elements, form, pageType }) => {
+  const [apiOptions, setApiOptions] = useState({})
+  const isRuntime = pageType === 'form'
+  const formRef = useRef(null)
+  formRef.current = form
+  // 最新动态选项（联动 set_value 需按选中项 raw 取值）
+  const apiOptionsRef = useRef({})
+  apiOptionsRef.current = apiOptions
+  const elementsRef = useRef([])
+  elementsRef.current = elements
+
+  /** 加载某元素动态接口选项（data_source.type='api'） */
+  const loadOptions = useCallback(async (el, allValues) => {
+    const ds = el.data_source
+    if (!ds?.url) return
+    const vars = { form: allValues || {} }
+    const url = normalizeApiUrl(ds.url)
+    const params = resolveParams(ds.params, vars)
+    const method = (ds.method || 'GET').toUpperCase()
+    try {
+      const res = await request({
+        url,
+        method,
+        params: method === 'GET' ? params : undefined,
+        data: method === 'GET' ? undefined : params,
+      })
+      const options = extractOptions(res?.data ?? res, ds, vars)
+      // 先同步更新 ref，保证紧随其后的补联动能取到刚加载的选项（state 提交是异步的）
+      apiOptionsRef.current = { ...apiOptionsRef.current, [el.id]: options }
+      setApiOptions((prev) => (prev[el.id] === options ? prev : { ...prev, [el.id]: options }))
+      // 选项加载完成：若该元素当前已有值（默认值/回填）且配置了 on_change，
+      // 补跑一次联动以按选中项填充字段（默认值设置时机早于选项加载，正常联动取不到选中项数据）
+      const cur = formRef.current?.getFieldValue?.(el.field_key)
+      if ((el.actions?.on_change?.length || 0) > 0 && cur !== undefined && cur !== null && cur !== '') {
+        runActionsRef.current?.('on_change', el, formRef.current?.getFieldsValue?.() || {})
+      }
+    } catch (e) {
+      // 动态接口请求失败：保留空选项，不打断表单
+    }
+  }, [])
+
+  /** 执行 fetch_and_fill 动作：请求接口并按 target_mapping 填充目标字段 */
+  const runFetchFill = useCallback(async (action, allValues) => {
+    const url = normalizeApiUrl(action.api_url)
+    const params = resolveParams(action.params, { form: allValues })
+    const method = (action.method || 'GET').toUpperCase()
+    try {
+      const res = await request({
+        url,
+        method,
+        params: method === 'GET' ? params : undefined,
+        data: method === 'GET' ? undefined : params,
+      })
+      const data = res?.data ?? res
+      const mapping = Array.isArray(action.target_mapping) ? action.target_mapping : []
+      const patch = {}
+      for (const m of mapping) {
+        if (m?.target) {
+          const v = getByPath(data, m.source)
+          if (v !== undefined) patch[m.target] = v
+        }
+      }
+      if (Object.keys(patch).length) formRef.current?.setFieldsValue?.(patch)
+    } catch (e) {
+      // 填充失败不打断流程
+    }
+  }, [])
+
+  /** 执行某元素指定触发时机的全部动作（set_value / fetch_and_fill）；colCtx 为子表列上下文（tableKey/index/fieldKey） */
+  const runActions = useCallback(
+    (trigger, el, allValues, colCtx) => {
+      const actions = Array.isArray(el.actions?.[trigger]) ? el.actions[trigger] : []
+      for (const action of actions) {
+        if (!action?.action_type) continue
+        if (action.action_type === 'set_value') {
+          const list = Array.isArray(action.value) ? action.value : []
+          const patch = {}
+          // 触发字段当前值：列场景读 tableKey[index].colKey，普通场景读 field_key
+          const currentVal = colCtx
+            ? formRef.current?.getFieldValue?.([colCtx.tableKey, colCtx.index, colCtx.fieldKey])
+            : el?.field_key
+              ? formRef.current?.getFieldValue?.(el.field_key)
+              : undefined
+          // 选中项完整数据：优先从该元素动态选项 raw 中匹配，回退为 { 字段: 值 }
+          const opts = apiOptionsRef.current[el?.id] || []
+          const sel = findOptionByValue(opts, currentVal)
+          const currentObj = sel?.raw || { [colCtx?.fieldKey || el?.field_key]: currentVal }
+          for (const m of list) {
+            if (m?.target) {
+              // 保护：目标字段等于触发字段自身时跳过写入。
+              // 选项型字段（select/radio/treeselect 等）的值应为选项 value（如 id），
+              // 若把选中项文本（如 username）覆盖到自身，值将不再匹配任何选项，
+              // 导致 label 无法渲染、校验误报"不能为空"。
+              const selfTarget = colCtx ? colCtx.fieldKey === m.target : m.target === el.field_key
+              if (selfTarget) continue
+              const src = m.source
+              let v
+              if (typeof src === 'string' && src.includes('${')) {
+                // 表达式：form = 表单值；item = 触发元素选中项数据
+                v = resolveExpr(src, { form: allValues, item: currentObj })
+              } else if (src != null) {
+                // 普通字段名：取选中项对应字段，缺失则回退空串
+                v = getByPath(currentObj, src)
+                if (v === undefined || v === null) v = ''
+              }
+              // 目标字段：列场景为同行 target（tableKey[索引].target，与 Arco Form.List 字段路径一致）
+              const targetKey = colCtx ? `${colCtx.tableKey}[${colCtx.index}].${m.target}` : m.target
+              // 与当前值相同则跳过，避免无效写入反复触发 onValuesChange 造成循环
+              if (v !== undefined && v !== formRef.current?.getFieldValue?.(targetKey)) {
+                patch[targetKey] = v
+              }
+            }
+          }
+          if (Object.keys(patch).length) formRef.current?.setFieldsValue?.(patch)
+        } else if (action.action_type === 'fetch_and_fill') {
+          runFetchFill(action, allValues)
+        }
+      }
+    },
+    [runFetchFill],
+  )
+
+  // 用 ref 持有最新回调，避免 useEffect 依赖链（on_mount 仅随 elements 变化执行一次）
+  const runActionsRef = useRef(null)
+  runActionsRef.current = runActions
+  const loadOptionsRef = useRef(null)
+  loadOptionsRef.current = loadOptions
+
+  // 挂载：应用默认值 + 执行 on_mount 动作 + 初始加载全部 api 动态选项
+  useEffect(() => {
+    if (!isRuntime || !elements?.length) return
+    const vals = formRef.current?.getFieldsValue?.() || {}
+    // 应用默认值 default_value：仅字段当前为空时填充（输入框->内容，选择型->默认选中）
+    const defPatch = {}
+    elements.forEach((el) => {
+      if (el.default_value === undefined || el.default_value === '') return
+      const current = formRef.current?.getFieldValue?.(el.field_key)
+      if (current === undefined || current === null || current === '') {
+        const def = parseDefaultValue(el.default_value, el.element_type)
+        if (def !== undefined) defPatch[el.field_key] = def
+      }
+    })
+    if (Object.keys(defPatch).length) formRef.current?.setFieldsValue?.(defPatch)
+    // 顶层元素：on_mount 动作（列级 on_mount 无行上下文，由列默认值/初始化承担）
+    elements.forEach((el) => {
+      runActionsRef.current?.('on_mount', el, vals)
+    })
+    // 全部字段定义（主表元素 + 子表列）：加载 api 动态选项（列与元素同结构解析）
+    collectFieldDefs(elements).forEach((el) => {
+      if (OPTION_ELEMENT_TYPES.has(el.element_type) && el.data_source?.type === 'api') {
+        loadOptionsRef.current?.(el, vals)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elements, isRuntime])
+
+  /** 值变化：执行 on_change 动作；依赖字段变化的 api 选项刷新 */
+  const handleValuesChange = useCallback((changed, allValues) => {
+    const changedKeys = Object.keys(changed || {})
+    elementsRef.current.forEach((el) => {
+      const actions = el.actions?.on_change
+      // on_change 语义：仅当该元素自身字段值变化时触发；
+      // 联动写入其他字段（set_value/fetch_and_fill 的目标）不会再次触发自身，避免死循环
+      if (Array.isArray(actions) && actions.length && changedKeys.includes(el.field_key)) {
+        runActionsRef.current?.('on_change', el, allValues)
+      }
+      if (OPTION_ELEMENT_TYPES.has(el.element_type) && el.data_source?.type === 'api') {
+        const ds = el.data_source
+        const depStr = [ds.params, ds.label].filter(Boolean).join(' ')
+        const deps = extractFormDeps(depStr)
+        if (changedKeys.some((k) => deps.has(k))) {
+          loadOptionsRef.current?.(el, allValues)
+        }
+      }
+      // 子表列：与元素同结构解析——on_change（同行联动）与 api 选项刷新
+      if (el.element_type === 'table' && Array.isArray(el.columns)) {
+        const tableKey = el.table_key || el.id || ''
+        el.columns.forEach((col) => {
+          const colKey = col.dataIndex || col.field_key
+          if (!colKey) return
+          // 命中 tableKey[索引].colKey（Arco Form.List 实际格式）或 tableKey.索引.colKey 变化：触发该列 on_change（同行联动）
+          const re = new RegExp(`^${escapeRe(tableKey)}(?:\\[\\d+\\]|\\.\\d+)\\.${escapeRe(colKey)}$`)
+          const rowHit = changedKeys.find((k) => re.test(k))
+          if (rowHit) {
+            const mIdx = rowHit.match(/\[(\d+)\]|\.(\d+)\./)
+            const idx = Number(mIdx ? mIdx[1] || mIdx[2] : 0)
+            const colActions = col.actions?.on_change
+            if (Array.isArray(colActions) && colActions.length) {
+              runActionsRef.current?.('on_change', col, allValues, { tableKey, index: idx, fieldKey: colKey })
+            }
+          }
+          // 列 api 选项刷新：依赖字段变化（顶层字段或同行字段）时重新加载
+          if (OPTION_ELEMENT_TYPES.has(col.element_type) && col.data_source?.type === 'api') {
+            const ds = col.data_source
+            const depStr = [ds.params, ds.label].filter(Boolean).join(' ')
+            const deps = extractFormDeps(depStr)
+            if (
+              [...deps].some(
+                (d) => changedKeys.includes(d) || changedKeys.some((k) => k.endsWith(`.${d}`))
+              )
+            ) {
+              loadOptionsRef.current?.(col, allValues)
+            }
+          }
+        })
+      }
+    })
+  }, [])
+
+  /** 元素失焦：执行 on_blur 动作 */
+  const handleElementBlur = useCallback(
+    (el) => {
+      if (!isRuntime) return
+      const vals = formRef.current?.getFieldsValue?.() || {}
+      runActionsRef.current?.('on_blur', el, vals)
+    },
+    [isRuntime],
+  )
+
+  const contextValue = useMemo(
+    () => ({ getOptions: (el) => apiOptions[el.id], handleElementBlur }),
+    [apiOptions, handleElementBlur],
+  )
+
+  return { contextValue, handleValuesChange }
+}
+
+/** 元素容器：仅对配置了 on_blur 动作的元素包一层 blur 捕获（focusout 冒泡），触发联动 */
+const RuntimeFieldWrap = ({ el, children }) => {
+  const rt = useContext(RuntimeFormContext)
+  const hasBlur = Array.isArray(el.actions?.on_blur) && el.actions.on_blur.length > 0
+  if (!hasBlur) return <>{children}</>
+  return <div onBlurCapture={() => rt?.handleElementBlur?.(el)}>{children}</div>
+}
 
 /**
  * 元素属性面板总分发：基础组件 → 专属 renderSettings；常规控件 → 通用属性面板
@@ -929,11 +1500,12 @@ const renderFormItemElement = (el, ctx) => {
     const baseCfg = getBaseElementConfig(el.element_type)
     if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, pageType)
     const render = renderPreviewConfig[el.element_type]
-    if (render) return render(el, pageType)
+    if (render) return render(el, pageType, ctx.runtime)
     return <Input disabled={!isFormMode && !permEditable} placeholder={el.placeholder || undefined} />
   }
 
-  return (
+  // 内部 FormItem 渲染（extra 可覆盖 hidden/disabled 等属性）
+  const renderItem = (extra) => (
     <FormItem
       field={isTableElement ? undefined : el.field_key || el.name || undefined}
       label={noLabel ? '' : el.label}
@@ -941,10 +1513,35 @@ const renderFormItemElement = (el, ctx) => {
       wrapperCol={wrapperCol}
       rules={rules}
       noStyle={noLabel}
+      {...extra}
     >
       {renderControl()}
     </FormItem>
   )
+
+  // 动态状态（visible_if / disabled_if）：通过 Form.Item shouldUpdate 监听依赖字段变化并重新渲染
+  // - hidden 关联 visible_if：表达式不成立时隐藏该字段
+  // - disabled 关联 disabled_if：表达式成立时禁用/只读该字段
+  // - 画布（isMoveMode）不应用动态状态，设计时始终完整展示
+  const ds = el.dynamic_states
+  if ((ds?.visible_if || ds?.disabled_if) && !isMoveMode) {
+    const deps = extractFormDeps([ds.visible_if, ds.disabled_if].filter(Boolean).join(' '))
+    return (
+      <Form.Item
+        shouldUpdate={deps.size ? (prev, cur) => [...deps].some((d) => prev[d] !== cur[d]) : true}
+        noStyle
+      >
+        {(formData) => {
+          const values = formData || {}
+          const visible = ds.visible_if ? evalDynamicExpr(ds.visible_if, values) : true
+          const disabled = ds.disabled_if ? evalDynamicExpr(ds.disabled_if, values) : false
+          return renderItem({ hidden: !visible, disabled })
+        }}
+      </Form.Item>
+    )
+  }
+
+  return renderItem()
 }
 
 /**
@@ -1066,6 +1663,9 @@ export default function DynamicForm({
   const elements = layout?.elements || []
   const formConfig = layout?.formConfig || DEFAULT_FORM_CONFIG
 
+  // 运行时交互：动态数据源(api)选项加载 + 事件联动(actions)执行（仅 pageType='form' 启用）
+  const { contextValue, handleValuesChange } = useRuntimeForm({ elements, form, pageType })
+
   const isMoveMode = pageType === 'move-form' || pageType === 'move-detail'
   // 表单渲染上下文（画布元素 memo 依赖）：仅当 formConfig / pageType 变化时重建，
   // 拖拽悬停、选中等高频状态更新不改变该引用，CanvasElement 可跳过无关重渲染
@@ -1095,7 +1695,10 @@ export default function DynamicForm({
         !(pageType === 'detail' && editable && (fieldPerms || []).some((p) => p && p.perm === 2))
       }
       autoComplete="off"
-      onValuesChange={(changed, allValues) => onValuesChange?.(allValues)}
+      onValuesChange={(changed, allValues) => {
+        handleValuesChange(changed, allValues)
+        onValuesChange?.(allValues)
+      }}
     >
       <Row>
         {isMoveMode
@@ -1124,7 +1727,9 @@ export default function DynamicForm({
               })
               .map((el, index) => (
                 <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
-                  {renderFormItemElement(el, formCtx)}
+                  <RuntimeFieldWrap el={el}>
+                    {renderFormItemElement(el, { ...formCtx, runtime: contextValue })}
+                  </RuntimeFieldWrap>
                 </Col>
               ))}
       </Row>
@@ -1132,8 +1737,9 @@ export default function DynamicForm({
   )
 
   // 画布模式：外层虚线容器承载空白区拖拽/点击，内部渲染元素表单
+  let node
   if (isMoveMode) {
-    return (
+    node = (
       <div
         className="m-4 flex-1 overflow-auto border-2 border-dashed border-gray-200 p-4"
         onDragOver={onCanvasDragOver}
@@ -1149,15 +1755,15 @@ export default function DynamicForm({
         )}
       </div>
     )
-  }
-
-  if (!elements.length) {
-    return (
+  } else if (!elements.length) {
+    node = (
       <>
         <Empty description="该应用暂未配置表单布局" />
       </>
     )
+  } else {
+    node = formNode
   }
 
-  return <>{formNode}</>
+  return <RuntimeFormContext.Provider value={contextValue}>{node}</RuntimeFormContext.Provider>
 }

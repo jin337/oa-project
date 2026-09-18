@@ -1,22 +1,22 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    Collapse,
-    Divider,
-    Drawer,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    Menu,
-    Message,
-    Popconfirm,
-    Popover,
-    Select,
-    Space,
-    Table,
-    Tag,
+  Button,
+  Card,
+  Checkbox,
+  Collapse,
+  Divider,
+  Drawer,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  Menu,
+  Message,
+  Popconfirm,
+  Popover,
+  Select,
+  Space,
+  Table,
+  Tag,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -449,6 +449,7 @@ export default function FormElementManage() {
             url: ds.url || '',
             method: ds.method || 'GET',
             label: ds.label || '',
+            value_field: ds.value_field || '',
             params,
           }
         }
@@ -890,10 +891,27 @@ export default function FormElementManage() {
                       />
                     </FormItem>
                   </Col>
-                  <Col span={24}>
+                  <Col span={12}>
                     <FormItem label="显示标签" field="data_source.label">
-                      <Input placeholder="支持表达式：${form.name}" />
+                      <Input placeholder="支持表达式：${item.name}" />
                     </FormItem>
+                  </Col>
+                  <Col span={12}>
+                    <FormItem label="对应值" field="data_source.value_field">
+                      <Input placeholder="字段名或表达式：id / ${item.id}" />
+                    </FormItem>
+                  </Col>
+                  <Col span={24}>
+                    <div className="-mt-2 mb-3 rounded bg-gray-200 p-2 text-xs leading-5 text-gray-400">
+                      item 为接口返回列表中的每个元素（data 数组 / data.list 分页 / data.records
+                      等结构自动识别），支持点路径与拼接：
+                      <br />
+                      显示标签：{'${item.name}'}；嵌套：{'${item.dept.name}'}；拼接：
+                      {'${item.name}-${item.code}'}
+                      <br />
+                      对应值：填字段名（如 id）或表达式（如 {'${item.id}'}），作为选项的 value
+                      提交到表单；留空默认取 item.value / item.id / item.key / item.code
+                    </div>
                   </Col>
                 </Row>
               )}
