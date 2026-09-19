@@ -10,7 +10,7 @@ const HOME_TAB = { path: HOME_PATH, title: '工作台', breadcrumbs: ['工作台
 // 不生成页签的系统路径（如无权限错误页，仅作临时提示，无需页签切换）
 const NO_TAB_PATHS = new Set(['/403'])
 // 页签持久化 key（sessionStorage，刷新后恢复页签与手动标题；每个浏览器标签页独立）
-const TABS_STORAGE_KEY = 'oa-tabs' 
+const TABS_STORAGE_KEY = 'oa-tabs'
 
 const TabContext = createContext(null)
 

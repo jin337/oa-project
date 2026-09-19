@@ -1,3 +1,4 @@
+import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -35,15 +36,6 @@ const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = ['index', 'name', 'code', 'data_scope', 'sort', 'status', 'remark']
-
-// 表格密度选项
-const SIZE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '中等', value: 'middle' },
-  { label: '紧凑', value: 'small' },
-  { label: '迷你', value: 'mini' },
-]
-
 // 数据范围枚举，与后端 data_scope 对齐
 const DATA_SCOPE_OPTIONS = [
   { label: '全部数据', value: 1 },

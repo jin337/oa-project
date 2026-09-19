@@ -53,3 +53,12 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'switch', label: '开关', needDataSource: false, needPlaceholder: false },
   { value: 'upload', label: '文件上传', needDataSource: true, needPlaceholder: true },
 ]
+
+// —— 表格密度选项 ——
+// 各管理页表格密度切换（默认 / 中等 / 紧凑 / 迷你）统一来源
+export const SIZE_OPTIONS = [
+  { label: '默认', value: 'default' },
+  { label: '中等', value: 'middle' },
+  { label: '紧凑', value: 'small' },
+  { label: '迷你', value: 'mini' },
+]

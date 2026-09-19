@@ -22,6 +22,7 @@ import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
+import { SIZE_OPTIONS } from 'src/config/app'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 import { useTabs } from 'src/store/tab-context'
 
@@ -46,15 +47,6 @@ const ALL_COL_KEYS = [
   'vis_list',
   'vis_search',
 ]
-
-// 表格密度选项
-const SIZE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '中等', value: 'middle' },
-  { label: '紧凑', value: 'small' },
-  { label: '迷你', value: 'mini' },
-]
-
 const EMPTY_FORM = {
   label: '',
   field_key: undefined,
@@ -754,7 +746,7 @@ export default function FormElementManage() {
             </Col>
             <Col span={12}>
               <FormItem label="默认值" field="default_value">
-                <Input placeholder="支持表达式，如 ${form.name}" />
+                <Input placeholder="支持表达式，如 ${form.id}-${form.name}" />
               </FormItem>
             </Col>
             <Col span={12}>
@@ -766,10 +758,7 @@ export default function FormElementManage() {
             </Col>
             <Col span={24}>
               <FormItem label="校验规则" field="validation_rule">
-                <Input.TextArea
-                  placeholder="支持正则表达式（如 /^1[3-9]\d{9}$/）或校验表达式（如 ${form.end_date} > ${form.start_date}）"
-                  autoSize={{ minRows: 1, maxRows: 4 }}
-                />
+                <Input placeholder="支持表达式，如 /^1[3-9]\d{9}$/ 或 ${form.end_date} > ${form.start_date}" />
               </FormItem>
               <FormItem label="错误提示" field="validation_message">
                 <Input placeholder="留空时使用默认提示（如：手机号格式不正确 / 手机号校验不通过）" />
@@ -794,14 +783,14 @@ export default function FormElementManage() {
           <FormItem label="动态显隐" field="visible_if">
             <Input.TextArea
               autoSize={{ minRows: 1, maxRows: 5 }}
-              placeholder='支持表达式：${form.country_id} === "CN"'
+              placeholder='支持表达式，如 ${form.country_id} === "CN"'
             />
           </FormItem>
 
           <FormItem label="动态禁用/只读" field="disabled_if">
             <Input.TextArea
               autoSize={{ minRows: 1, maxRows: 5 }}
-              placeholder='支持表达式：${form.user_id}===""'
+              placeholder='支持表达式，如 ${form.user_id}===""'
             />
           </FormItem>
 
@@ -899,25 +888,13 @@ export default function FormElementManage() {
                   </Col>
                   <Col span={12}>
                     <FormItem label="显示标签" field="data_source.label">
-                      <Input placeholder="支持表达式：${item.name}" />
+                      <Input placeholder="支持表达式，如 ${item.id}-${item.name}" />
                     </FormItem>
                   </Col>
                   <Col span={12}>
                     <FormItem label="对应值" field="data_source.value_field">
-                      <Input placeholder="字段名或表达式：id / ${item.id}" />
+                      <Input placeholder="支持表达式，如 ${item.id}" />
                     </FormItem>
-                  </Col>
-                  <Col span={24}>
-                    <div className="-mt-2 mb-3 rounded bg-gray-200 p-2 text-xs leading-5 text-gray-400">
-                      item 为接口返回列表中的每个元素（data 数组 / data.list 分页 / data.records
-                      等结构自动识别），支持点路径与拼接：
-                      <br />
-                      显示标签：{'${item.name}'}；嵌套：{'${item.dept.name}'}；拼接：
-                      {'${item.name}-${item.code}'}
-                      <br />
-                      对应值：填字段名（如 id）或表达式（如 {'${item.id}'}），作为选项的 value
-                      提交到表单；留空默认取 item.value / item.id / item.key / item.code
-                    </div>
                   </Col>
                 </Row>
               )}
@@ -979,7 +956,7 @@ export default function FormElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Input placeholder="赋值来源，如 ${form.city_id}" />
+                                            <Input placeholder="来源，如 user.city_name" />
                                           </FormItem>
                                           <span className="text-gray-400">→</span>
                                           <FormItem
@@ -987,7 +964,7 @@ export default function FormElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Input placeholder="目标字段，如 city_id" />
+                                            <Input placeholder="目标，如 city_name" />
                                           </FormItem>
                                           <Button
                                             status="danger"
@@ -1061,7 +1038,7 @@ export default function FormElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Input placeholder="支持表达式，如 ${data.base_salary}" />
+                                            <Input placeholder="来源，如 user.city_name" />
                                           </FormItem>
                                           <span className="text-gray-400">→</span>
                                           <FormItem
@@ -1069,7 +1046,7 @@ export default function FormElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Input placeholder="目标字段，如 net_salary" />
+                                            <Input placeholder="目标，如 city_name" />
                                           </FormItem>
                                           <Button status="danger" onClick={() => removeTm(tmIndex)}>
                                             删除

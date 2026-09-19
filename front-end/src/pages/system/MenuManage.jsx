@@ -1,3 +1,4 @@
+import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -42,15 +43,6 @@ const ALL_COL_KEYS = [
   'status',
   'hidden',
 ]
-
-// 表格密度选项
-const SIZE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '中等', value: 'middle' },
-  { label: '紧凑', value: 'small' },
-  { label: '迷你', value: 'mini' },
-]
-
 const TYPE_MAP = { 1: '目录', 2: '菜单', 3: '按钮' }
 
 function toTreeData(menus) {

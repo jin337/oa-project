@@ -1,3 +1,4 @@
+import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -47,15 +48,6 @@ const ALL_COL_KEYS = [
   'status',
   'created_at',
 ]
-
-// 表格密度选项
-const SIZE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '中等', value: 'middle' },
-  { label: '紧凑', value: 'small' },
-  { label: '迷你', value: 'mini' },
-]
-
 // 角色标签颜色池（Arco 预设色），按角色 ID 取模分配，保证同一角色颜色稳定
 const ROLE_COLORS = ['arcoblue', 'green', 'orangered', 'magenta', 'cyan', 'purple', 'lime', 'gold']
 

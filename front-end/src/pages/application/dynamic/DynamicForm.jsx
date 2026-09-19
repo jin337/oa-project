@@ -863,15 +863,32 @@ const resolveExpr = (expr, vars) => {
   return str.replace(/\$\{([^}]+)\}/g, (_, pathExpr) => {
     const parts = String(pathExpr).split('.')
     const scope = parts[0]
-    // ${form.xxx} / ${item.xxx} 显式作用域；${id} 等无前缀写法优先取选中项展开字段（vars.id），
-    // 回退表单字段（vars.form.id）——兼容 /users/${id} 路径模板（id 为选项 value 或选中项字段）
+    // ${form.xxx} / ${item.xxx} 显式作用域；无前缀 ${xxx} 一律视为表单字段简写（等价 ${form.xxx}），
+    // 选中项数据必须显式写 ${item.xxx}，语义唯一不依赖隐式规则
     let root
     if (scope === 'form') root = vars?.form
     else if (scope === 'item') root = vars?.item
-    else root = vars?.[scope] !== undefined ? vars[scope] : vars?.form?.[scope]
+    else root = vars?.form?.[scope]
     const val = getByPath(root, parts.slice(1).join('.'))
     return val === undefined || val === null ? '' : String(val)
   })
+}
+
+/**
+ * 统一取值路径解析（表达式规则：拼接才用 ${}，独立取值直接写路径）：
+ * - ${...} 内联：拼接场景，走 resolveExpr（如 ${item.username}-${item.dept.name}、/users/${item.id}）
+ * - form.xxx / item.xxx 前缀：独立取值场景，按作用域取（form=整个表单，item=选中项）
+ * - 无前缀：matched=false，由调用方按当前上下文处理（如 target_mapping 的响应字段路径）
+ */
+const resolvePath = (expr, roots) => {
+  if (expr == null || expr === '') return { value: undefined, matched: false }
+  const str = String(expr)
+  if (str.includes('${')) {
+    return { value: resolveExpr(str, { form: roots?.form, item: roots?.item }), matched: true }
+  }
+  if (str.startsWith('form.')) return { value: getByPath(roots?.form, str.slice(5)), matched: true }
+  if (str.startsWith('item.')) return { value: getByPath(roots?.item, str.slice(5)), matched: true }
+  return { value: undefined, matched: false }
 }
 
 /** 提取表达式中依赖的表单字段（去重），用于判断值变化时是否需刷新动态选项 */
@@ -1073,9 +1090,15 @@ const extractOptions = (resp, ds, vars) => {
       return { label: String(item), title: String(item), value: String(item) }
     }
     const labelExpr = ds?.label
-    const label = labelExpr
-      ? resolveExpr(labelExpr, { ...vars, item })
-      : (item.label ?? item.name ?? item.title ?? '')
+    let label
+    if (labelExpr) {
+      const r = resolvePath(labelExpr, { form: vars?.form, item })
+      // 拼接/前缀命中取解析值；纯文本（无 ${} 无前缀）原样显示
+      label = r.matched ? r.value : String(labelExpr)
+    } else {
+      label = item.label ?? item.name ?? item.title ?? ''
+    }
+    if (label === undefined || label === null) label = ''
     // 对应值 value_field：显式指定选项 value 取哪个字段（支持表达式 ${item.id}），
     // 例：接口数据项字段为 id、而当前表单字段（field_key）为 user_id 时，配置 value_field=id，
     // 选项 value 即取 item.id；留空默认按 value / id / key / code 顺序兜底
@@ -1083,9 +1106,9 @@ const extractOptions = (resp, ds, vars) => {
     let value
     if (vf && String(vf).trim()) {
       const vfStr = String(vf).trim()
-      value = vfStr.includes('${')
-        ? resolveExpr(vfStr, { ...vars, item })
-        : item?.[vfStr]
+      const r = resolvePath(vfStr, { form: vars?.form, item })
+      // 表达式/前缀命中取解析值；无前缀按选项项字段取（如 id）
+      value = r.matched ? r.value : item?.[vfStr]
       if (value === undefined || value === null || value === '') value = ''
     } else {
       value = item.value ?? item.id ?? item.key ?? item.code
@@ -1157,8 +1180,8 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
 
   /** 执行 fetch_and_fill 动作：请求接口并按 target_mapping 填充目标字段 */
   const runFetchFill = useCallback(async (action, allValues, currentObj) => {
-    // vars：form = 表单值；item/展开字段 = 选中项数据（api_url 中的 ${id} 可取选项 value）
-    const vars = { form: allValues || {}, item: currentObj, ...(currentObj || {}) }
+    // vars：form = 表单值；item = 选中项数据（api_url 中显式写 ${item.xxx} 引用）
+    const vars = { form: allValues || {}, item: currentObj }
     // 先解析 URL 中的 ${form.xxx} / ${xxx} 路径模板，避免 ${} 被请求层整体编码
     const url = normalizeApiUrl(resolveExpr(action.api_url, vars))
     const params = resolveParams(action.params, vars)
@@ -1175,12 +1198,8 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
       const patch = {}
       for (const m of mapping) {
         if (m?.target) {
-          // source 兼容 "item.xxx" 占位前缀（单对象返回时去掉前缀取值）
-          const src = String(m.source || '')
-          let v = getByPath(data, src)
-          if (v === undefined && src.startsWith('item.')) {
-            v = getByPath(data, src.replace(/^item\./, ''))
-          }
+          // source 为响应数据字段路径（点路径，如 profile.nickname）
+          const v = getByPath(data, String(m.source || ''))
           if (v !== undefined) patch[m.target] = v
         }
       }
@@ -1224,11 +1243,12 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
               const src = m.source
               let v
               if (typeof src === 'string' && src.includes('${')) {
-                // 表达式：form = 表单值；item = 触发元素选中项数据
+                // 拼接表达式：form = 表单值；item = 触发元素选中项数据
                 v = resolveExpr(src, { form: allValues, item: currentObj })
               } else if (src != null) {
-                // 普通字段名：取选中项对应字段，缺失则回退空串
-                v = getByPath(currentObj, src)
+                // 独立路径：item.xxx 取选中项字段 / form.xxx 取表单字段；无前缀按选中项字段取
+                const r = resolvePath(src, { form: allValues, item: currentObj })
+                v = r.matched ? r.value : getByPath(currentObj, src)
                 if (v === undefined || v === null) v = ''
               }
               // 目标字段：列场景为同行 target（tableKey[索引].target，与 Arco Form.List 字段路径一致）

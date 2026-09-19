@@ -1,3 +1,4 @@
+import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -37,15 +38,6 @@ const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = ['index', 'name', 'code', 'table_name', 'sub_table_name', 'status']
-
-// 表格密度选项
-const SIZE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '中等', value: 'middle' },
-  { label: '紧凑', value: 'small' },
-  { label: '迷你', value: 'mini' },
-]
-
 const EMPTY_FORM = {
   name: '',
   code: '',

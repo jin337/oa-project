@@ -1,3 +1,4 @@
+import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -32,15 +33,6 @@ const MODULE_LABEL = '表管理'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = ['index', 'name', 'type', 'length', 'not_null', 'default_value', 'comment']
-
-// 表格密度选项
-const SIZE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '中等', value: 'middle' },
-  { label: '紧凑', value: 'small' },
-  { label: '迷你', value: 'mini' },
-]
-
 // 常用字段类型
 const FIELD_TYPES = [
   'varchar',

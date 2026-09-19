@@ -1,17 +1,9 @@
+import { SIZE_OPTIONS } from 'src/config/app'
 import { useCallback, useEffect, useState } from 'react'
 import { Menu } from '@arco-design/web-react'
 import { useLocation } from 'react-router-dom'
 import * as approvalApi from 'src/api/approval'
 import { useTabs } from 'src/store/tab-context'
-
-// 表格密度选项（与 system 模块一致）
-const SIZE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '中等', value: 'middle' },
-  { label: '紧凑', value: 'small' },
-  { label: '迷你', value: 'mini' },
-]
-
 /**
  * 审批列表页通用 Hook：
  * 统一管理「列表数据 + 分页 + 加载 + 搜索 + 表格密度 + 列设置 + 详情 Drawer」状态与拉取逻辑，

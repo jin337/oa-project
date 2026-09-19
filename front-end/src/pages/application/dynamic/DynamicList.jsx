@@ -1,3 +1,4 @@
+import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -29,15 +30,6 @@ import { useApplicationDetailData } from 'src/pages/application/dynamic/useAppli
 
 const FormItem = Form.Item
 const MenuItem = Menu.Item
-
-// 表格密度选项（与系统管理页面统一）
-const SIZE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '中等', value: 'middle' },
-  { label: '紧凑', value: 'small' },
-  { label: '迷你', value: 'mini' },
-]
-
 /**
  * 根据元素类型获取单元格的展示文本：
  * 时间/日期类型（date/datetime/time 等）经 formatTimeValue 格式化为标准可读格式；
