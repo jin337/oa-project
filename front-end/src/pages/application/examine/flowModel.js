@@ -46,7 +46,7 @@ import { NODE_TYPE_META } from 'src/pages/application/constants'
  * @property {number} [strategy] 审批方式（1-依次审批 / 2-会签 / 3-或签）
  * @property {number} [emptyHandler] 审批人为空处理（1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员）
  * @property {ApprovalMember[]} [emptyMembers] 为空时指定的兜底人员
- * @property {number[]} [permissions] 审批人操作权限（1-拒绝 / 2-转交 / 3-加签）
+ * @property {number[]} [permissions] 审批人操作权限（1-退回 / 2-转交 / 3-加签）
  * @property {ApprovalFieldPerm[]} [fieldPerms] 表单字段权限
  * @property {number} [ccTiming] 抄送时机（1-审批通过后抄送 / 2-流程结束时统一抄送）
  * @property {number} [relation] 条件关系（1-且(AND) / 2-或(OR)）
@@ -88,7 +88,7 @@ export const createNode = (type) => {
       strategy: 1, // 审批方式：1-依次审批 / 2-会签 / 3-或签
       emptyHandler: 1, // 审批人为空处理：1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员
       emptyMembers: [],
-      permissions: [1, 2, 3], // 审批人操作权限：1-拒绝 / 2-转交 / 3-加签
+      permissions: [1, 2, 3], // 审批人操作权限：1-退回 / 2-转交 / 3-加签
       fieldPerms: [], // 表单字段权限 [{ field, perm: 1-隐藏 | 2-可编辑 }]
     }
   if (type === 4)

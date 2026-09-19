@@ -1,4 +1,15 @@
-import { Button, Drawer, Empty, Input, Message, Radio, Space, Spin } from '@arco-design/web-react'
+import {
+  Button,
+  Drawer,
+  Empty,
+  Input,
+  Message,
+  Modal,
+  Radio,
+  Select,
+  Space,
+  Spin,
+} from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
@@ -20,7 +31,14 @@ import ApprovalTimeline from 'src/pages/approval/ApprovalTimeline.jsx'
  * @param {object} props.currentTask   当前用户的待办任务（含 id / instance_id），传入时显示同意/拒绝按钮
  * @param {function} props.onAction    操作成功后的回调（通知父组件刷新列表）
  */
-export default function DetailDrawer({ record, visible, onCancel, currentTask, onAction }) {
+export default function DetailDrawer({
+  record,
+  visible,
+  onCancel,
+  currentTask,
+  onAction,
+  initialEditing = false,
+}) {
   const [loading, setLoading] = useState(false)
   const [instance, setInstance] = useState(null)
   const [loadError, setLoadError] = useState(false)
@@ -28,6 +46,8 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   const [operating, setOperating] = useState(false)
   // 审批详情动态表单实例（字段权限 perm=2 可编辑字段修改后，提交时读取最新值）
   const [detailForm, setDetailForm] = useState(null)
+  // 已驳回发起人侧：只读态 -> 点"编辑"进入修改态，footer 显示"重新提交"
+  const [editing, setEditing] = useState(false)
 
   // 转交 Modal（用户选择统一使用 PersonSelectorModal）
   const [delegateVisible, setDelegateVisible] = useState(false)
@@ -44,6 +64,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     setInstance(null)
     setLoadError(false)
     setComment('')
+    setEditing(initialEditing)
 
     if (record.instance_id) {
       approvalApi
@@ -108,9 +129,32 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     return node?.permissions?.length ? node.permissions : [1, 2, 3]
   })()
 
-  const canReject = showApproveButtons && currentNodePerms.includes(1)
+  // 退回权限：permissions 含 1（对齐钉钉，拒绝为审批人默认操作不受配置控制）
+  const canReturn = showApproveButtons && currentNodePerms.includes(1)
   const canDelegate = showDelegateButtons && currentNodePerms.includes(2)
   const canAddSign = showDelegateButtons && currentNodePerms.includes(3)
+
+  // 退回选择：Modal + 目标节点列表
+  const [returnModalVisible, setReturnModalVisible] = useState(false)
+  const [returnTarget, setReturnTarget] = useState('')
+  // 可退回节点：当前节点之前的所有审批节点（type=2）
+  const returnableNodes = (() => {
+    const snapshot = instance?.approval_flow_json || []
+    const list = []
+    const walk = (nodes) => {
+      ;(nodes || []).forEach((n) => {
+        if (n.type === 2 && n.id !== currentTask?.node_id) list.push({ id: n.id, label: n.label || n.name || n.id })
+        ;(n.branches || []).forEach((b) => walk(b && b.children))
+      })
+    }
+    walk(snapshot)
+    return list
+  })()
+
+  // 已驳回（status=3）的发起人侧详情：表单可编辑，footer 显示"重新提交"（对齐钉钉退回语义）
+  const showResubmit = !currentTask && Number(instance?.status) === 3
+  // 已驳回：默认只读，点"编辑"后表单才可改
+  const resubmitEditing = showResubmit && editing
 
   // ========== 审批操作 ==========
   // 收集审批人修改后的表单数据：序列化时间字段后与实例初始数据比对，有差异才随审批提交
@@ -140,8 +184,13 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     return fullValues
   }
 
-  const handleApprove = async (action) => {
+  const handleApprove = async (action, targetNodeId) => {
     if (!currentTask) return
+    // 退回意见必填（对齐钉钉）
+    if (action === 3 && !comment.trim()) {
+      Message.warning('退回时必须填写退回意见')
+      return
+    }
     setOperating(true)
     try {
       const businessData = buildModifiedBusinessData()
@@ -149,10 +198,28 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         action,
         comment: comment.trim() || undefined,
         business_data: businessData,
+        target_node_id: targetNodeId || undefined,
       })
-      const names = { 1: '已同意', 2: '已拒绝', 3: '已驳回' }
+      const names = { 1: '已同意', 2: '已拒绝', 3: '已退回' }
       Message.success(names[action] || '操作成功')
       setComment('')
+      onAction?.()
+      onCancel?.()
+    } catch {
+      // 错误已在请求层提示
+    } finally {
+      setOperating(false)
+    }
+  }
+
+  // ========== 已驳回重新提交 ==========
+  const handleResubmit = async () => {
+    if (!instance) return
+    setOperating(true)
+    try {
+      const businessData = buildModifiedBusinessData()
+      await approvalApi.resubmitApprovalInstance(instance.id || record.instance_id, businessData)
+      Message.success('已重新提交')
       onAction?.()
       onCancel?.()
     } catch {
@@ -212,6 +279,20 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
 
   // 操作按钮区域
   const renderActions = () => {
+    if (showResubmit && editing) {
+      return (
+        <div className="flex items-center justify-end">
+          <Space>
+            <Button size="small" onClick={onCancel}>
+              取消
+            </Button>
+            <Button type="primary" size="small" loading={operating} onClick={handleResubmit}>
+              重新提交
+            </Button>
+          </Space>
+        </div>
+      )
+    }
     if (!showApproveButtons && !showDelegateButtons) return null
     return (
       <>
@@ -238,21 +319,21 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
                 加签
               </Button>
             )}
-            {canReject && (
-              <Button size="small" loading={operating} onClick={() => handleApprove(2)}>
-                拒绝
+            {canReturn && (
+              <Button
+                status="danger"
+                size="small"
+                loading={operating}
+                onClick={() => { setReturnTarget(''); setReturnModalVisible(true) }}
+              >
+                退回
               </Button>
             )}
           </Space>
           {showApproveButtons && (
             <Space>
-              <Button
-                status="danger"
-                size="small"
-                loading={operating}
-                onClick={() => handleApprove(3)}
-              >
-                驳回
+              <Button status="danger" size="small" loading={operating} onClick={() => handleApprove(2)}>
+                拒绝
               </Button>
               <Button
                 type="primary"
@@ -291,7 +372,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
               initialData={instance?.business_data}
               fieldPerms={instance?.field_perms}
               onFormReady={setDetailForm}
-              editable={Boolean(currentTask)}
+              editable={Boolean(currentTask) || resubmitEditing}
             />
             <ApprovalTimeline
               instanceId={record?.instance_id}
@@ -354,6 +435,33 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
           onCancel={() => setAddSignerVisible(false)}
         />
       )}
+      {/* 退回选择 Modal：退回发起人 / 退回给指定节点 */}
+      <Modal
+        title="退回"
+        visible={returnModalVisible}
+        onCancel={() => setReturnModalVisible(false)}
+        onOk={() => {
+          setReturnModalVisible(false)
+          handleApprove(3, returnTarget)
+        }}
+        okText="确定退回"
+        cancelText="取消"
+      >
+        <div className="mb-2">退回目标</div>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="选择退回目标"
+          value={returnTarget}
+          onChange={(v) => setReturnTarget(v || '')}
+        >
+          <Select.Option value="">退回给：发起人</Select.Option>
+          {returnableNodes.map((n) => (
+            <Select.Option key={n.id} value={n.id}>
+              退回给：{n.label}
+            </Select.Option>
+          ))}
+        </Select>
+      </Modal>
     </PersonSelectorProvider>
   )
 }

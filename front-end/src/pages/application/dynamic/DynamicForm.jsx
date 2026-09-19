@@ -758,7 +758,6 @@ export const ELEMENT_RENDER_CONFIG = {
           treeData={options.length ? options : undefined}
           // Arco TreeSelect 的 treeData 字段名为 key/title（Select 为 value/label），
           // extractOptions 统一输出 value/title，此处通过 fieldNames 映射，
-          // 避免 TreeSelect 读不到 key 而自动生成索引路径（如 "-0-0"）作为 value
           fieldNames={{ key: 'value', title: 'title', children: 'children' }}
           placeholder={el.placeholder || '请选择'}
         />
@@ -901,6 +900,13 @@ const extractFormDeps = (str) => {
   return deps
 }
 
+/** 提取选项型元素的 api 数据源依赖字段（params/label 中的 ${form.xxx}）；非 api 数据源返回 null */
+const apiOptionDeps = (el) => {
+  if (!OPTION_ELEMENT_TYPES.has(el?.element_type) || el?.data_source?.type !== 'api') return null
+  const ds = el.data_source
+  return extractFormDeps([ds.params, ds.label].filter(Boolean).join(' '))
+}
+
 /**
  * 动态状态表达式求值（visible_if / disabled_if）：
  * - 支持 ${form.xxx} 引用表单字段值（点路径）
@@ -928,6 +934,30 @@ const evalDynamicExpr = (expr, formValues) => {
   } catch (e) {
     return false
   }
+}
+
+/**
+ * 预计算布局中所有动态状态字段（visible_if / disabled_if）的求值结果（detail 只读静态化用）：
+ * 基于完整业务数据一次性求值，返回 { field_key: { visible, disabled }, ... }，
+ * 使 detail 只读场景无需 shouldUpdate 响应式监听，同时绕开 Arco setFieldsValue 快照覆盖问题。
+ */
+export function evaluateDynamicStates(layout, data) {
+  const result = {}
+  const values = data || {}
+  const collect = (els) => {
+    ;(Array.isArray(els) ? els : []).forEach((el) => {
+      if (Array.isArray(el)) return collect(el)
+      if (!el || typeof el !== 'object') return
+      if (el.field_key && (el.dynamic_states?.visible_if || el.dynamic_states?.disabled_if)) {
+        result[el.field_key] = {
+          visible: el.dynamic_states.visible_if ? !!evalDynamicExpr(el.dynamic_states.visible_if, values) : true,
+          disabled: el.dynamic_states.disabled_if ? !!evalDynamicExpr(el.dynamic_states.disabled_if, values) : false,
+        }
+      }
+    })
+  }
+  collect(layout?.elements)
+  return result
 }
 
 /**
@@ -1027,6 +1057,32 @@ const normalizeApiUrl = (url) => {
   return url.replace(/^\/api\/v1/, '')
 }
 
+/**
+ * 动态接口请求构造：解析 url 模板（${form.xxx} / ${item.xxx}）与 params 表达式后发起请求。
+ * cfg.url / cfg.api_url 均可（数据源用 url，联动动作用 api_url）。
+ */
+const requestDynamicApi = async (cfg, vars) => {
+  const url = normalizeApiUrl(resolveExpr(cfg?.url || cfg?.api_url, vars))
+  const params = resolveParams(cfg?.params, vars)
+  const method = (cfg?.method || 'GET').toUpperCase()
+  return request({
+    url,
+    method,
+    params: method === 'GET' ? params : undefined,
+    data: method === 'GET' ? undefined : params,
+  })
+}
+
+/** 判断联动写入标记是否命中当前变化值（写回触发字段时跳过二次联动） */
+const isLinkWritten = (lw, key, val) => {
+  if (!lw || !Object.prototype.hasOwnProperty.call(lw, key)) return false
+  try {
+    return JSON.stringify(lw[key]) === JSON.stringify(val)
+  } catch {
+    return lw[key] === val
+  }
+}
+
 /** 解析请求参数：JSON 字符串（含表达式）或对象（值含表达式）统一转为普通对象 */
 const resolveParams = (params, vars) => {
   if (!params) return {}
@@ -1116,7 +1172,9 @@ const extractOptions = (resp, ds, vars) => {
     const node = {
       label: String(label ?? ''),
       title: String(label ?? ''),
-      value: value === undefined || value === null ? '' : String(value),
+      // 保留原始类型（数字/字符串）：接口字段与表单值同源，字符串化会导致
+      // 回填（如 user_id=1 数字）与选项 value（"1" 字符串）严格匹配失败，Select 显示 raw value
+      value: value === undefined || value === null ? '' : value,
       raw: item,
     }
     if (Array.isArray(item.children) && item.children.length) {
@@ -1152,21 +1210,13 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
     const ds = el.data_source
     if (!ds?.url) return
     const vars = { form: allValues || {} }
-    // 先解析 URL 中的 ${form.xxx} / ${xxx} 路径模板，避免 ${} 被请求层整体编码
-    const url = normalizeApiUrl(resolveExpr(ds.url, vars))
-    const params = resolveParams(ds.params, vars)
-    const method = (ds.method || 'GET').toUpperCase()
+    // 先解析 URL 中的 ${form.xxx} / ${item.xxx} 路径模板，避免 ${} 被请求层整体编码
     try {
-      const res = await request({
-        url,
-        method,
-        params: method === 'GET' ? params : undefined,
-        data: method === 'GET' ? undefined : params,
-      })
+      const res = await requestDynamicApi(ds, vars)
       const options = extractOptions(res?.data ?? res, ds, vars)
       // 先同步更新 ref，保证紧随其后的补联动能取到刚加载的选项（state 提交是异步的）
       apiOptionsRef.current = { ...apiOptionsRef.current, [el.id]: options }
-      setApiOptions((prev) => (prev[el.id] === options ? prev : { ...prev, [el.id]: options }))
+      setApiOptions((prev) => ({ ...prev, [el.id]: options }))
       // 选项加载完成：若该元素当前已有值（默认值/回填）且配置了 on_change，
       // 补跑一次联动以按选中项填充字段（默认值设置时机早于选项加载，正常联动取不到选中项数据）
       const cur = formRef.current?.getFieldValue?.(el.field_key)
@@ -1182,17 +1232,9 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
   const runFetchFill = useCallback(async (action, allValues, currentObj) => {
     // vars：form = 表单值；item = 选中项数据（api_url 中显式写 ${item.xxx} 引用）
     const vars = { form: allValues || {}, item: currentObj }
-    // 先解析 URL 中的 ${form.xxx} / ${xxx} 路径模板，避免 ${} 被请求层整体编码
-    const url = normalizeApiUrl(resolveExpr(action.api_url, vars))
-    const params = resolveParams(action.params, vars)
-    const method = (action.method || 'GET').toUpperCase()
+    // 先解析 URL 中的 ${form.xxx} / ${item.xxx} 路径模板，避免 ${} 被请求层整体编码
     try {
-      const res = await request({
-        url,
-        method,
-        params: method === 'GET' ? params : undefined,
-        data: method === 'GET' ? undefined : params,
-      })
+      const res = await requestDynamicApi(action, vars)
       const data = res?.data ?? res
       const mapping = Array.isArray(action.target_mapping) ? action.target_mapping : []
       const patch = {}
@@ -1264,7 +1306,7 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
             formRef.current?.setFieldsValue?.(patch)
           }
         } else if (action.action_type === 'fetch_and_fill') {
-          // 传入选中项完整数据：api_url 中的 ${id} / ${form.xxx} 均可解析
+          // 传入选中项完整数据：api_url 中的 ${item.xxx} / ${form.xxx} 均可解析
           runFetchFill(action, allValues, currentObj)
         }
       }
@@ -1308,6 +1350,10 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
 
   /** 值变化：执行 on_change 动作；依赖字段变化的 api 选项刷新 */
   const handleValuesChange = useCallback((changed, allValues) => {
+    // 仅填写场景（pageType='form'）启用联动：detail 展示/审批场景无填写交互，
+    // 且 Arco setFieldsValue 回填也会触发 onValuesChange——若此处执行 on_change，
+    // 无选中项上下文时 set_value 会把目标字段清空（如 user_id 联动清空 phone/email）
+    if (!isRuntime) return
     const changedKeys = Object.keys(changed || {})
     elementsRef.current.forEach((el) => {
       const actions = el.actions?.on_change
@@ -1316,28 +1362,16 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
       if (Array.isArray(actions) && actions.length && changedKeys.includes(el.field_key)) {
         const lw = linkWrittenRef.current
         const val = changed[el.field_key]
-        const isLinkWrite =
-          Object.prototype.hasOwnProperty.call(lw, el.field_key) &&
-          (() => {
-            try {
-              return JSON.stringify(lw[el.field_key]) === JSON.stringify(val)
-            } catch {
-              return lw[el.field_key] === val
-            }
-          })()
+        const isLinkWrite = isLinkWritten(lw, el.field_key, val)
         if (isLinkWrite) {
           delete lw[el.field_key]
         } else {
           runActionsRef.current?.('on_change', el, allValues)
         }
       }
-      if (OPTION_ELEMENT_TYPES.has(el.element_type) && el.data_source?.type === 'api') {
-        const ds = el.data_source
-        const depStr = [ds.params, ds.label].filter(Boolean).join(' ')
-        const deps = extractFormDeps(depStr)
-        if (changedKeys.some((k) => deps.has(k))) {
-          loadOptionsRef.current?.(el, allValues)
-        }
+      const deps = apiOptionDeps(el)
+      if (deps && changedKeys.some((k) => deps.has(k))) {
+        loadOptionsRef.current?.(el, allValues)
       }
       // 子表列：与元素同结构解析——on_change（同行联动）与 api 选项刷新
       if (el.element_type === 'table' && Array.isArray(el.columns)) {
@@ -1357,17 +1391,14 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
             }
           }
           // 列 api 选项刷新：依赖字段变化（顶层字段或同行字段）时重新加载
-          if (OPTION_ELEMENT_TYPES.has(col.element_type) && col.data_source?.type === 'api') {
-            const ds = col.data_source
-            const depStr = [ds.params, ds.label].filter(Boolean).join(' ')
-            const deps = extractFormDeps(depStr)
-            if (
-              [...deps].some(
-                (d) => changedKeys.includes(d) || changedKeys.some((k) => k.endsWith(`.${d}`))
-              )
-            ) {
-              loadOptionsRef.current?.(col, allValues)
-            }
+          const colDeps = apiOptionDeps(col)
+          if (
+            colDeps &&
+            [...colDeps].some(
+              (d) => changedKeys.includes(d) || changedKeys.some((k) => k.endsWith(`.${d}`))
+            )
+          ) {
+            loadOptionsRef.current?.(col, allValues)
           }
         })
       }
@@ -1554,7 +1585,7 @@ const ReadonlyValue = ({ value, elementType, dataSource }) => {
  * @param {object} ctx  渲染上下文 { isHorizontal, formConfig, pageType, isMoveMode }
  */
 const renderFormItemElement = (el, ctx) => {
-  const { isHorizontal, formConfig, pageType, isMoveMode, fieldPerms, editable } = ctx
+  const { isHorizontal, formConfig, pageType, isMoveMode, fieldPerms, editable, detailDynamicStates } = ctx
   const noLabel = isNoLabelElement(el.element_type)
   const isTableElement = el.element_type === 'table'
   const isFormMode = pageType === 'form'
@@ -1632,7 +1663,16 @@ const renderFormItemElement = (el, ctx) => {
   // - 画布（isMoveMode）不应用动态状态，设计时始终完整展示
   const ds = el.dynamic_states
   if ((ds?.visible_if || ds?.disabled_if) && !isMoveMode) {
+    // detail 只读（字段级不可编辑）：使用父组件按完整业务数据预计算的静态映射，
+    // 无需响应式监听，同时绕开 Arco setFieldsValue 同批写入依赖/目标字段时的快照覆盖问题
+    if (isDetailMode && !permEditable && ctx.detailDynamicStates) {
+      const st = ctx.detailDynamicStates[el.field_key]
+      if (st) return renderItem({ hidden: !st.visible, disabled: st.disabled })
+    }
     const deps = extractFormDeps([ds.visible_if, ds.disabled_if].filter(Boolean).join(' '))
+    // 自身字段也纳入依赖：setFieldsValue 回填/联动写入该字段时 shouldUpdate 需感知变化并重新渲染，
+    // 否则 store 值已更新但 UI 仍停留在旧值（如详情回填 phone 后显示空）
+    if (el.field_key) deps.add(el.field_key)
     return (
       <Form.Item
         shouldUpdate={deps.size ? (prev, cur) => [...deps].some((d) => prev[d] !== cur[d]) : true}
@@ -1764,6 +1804,7 @@ export default function DynamicForm({
   onCanvasClick,
   fieldPerms,
   editable = false,
+  detailDynamicStates,
 }) {
   // 布局解析缓存：仅当布局 JSON 变化时重新解析，拖拽/选中等状态更新不触发重复解析
   const layout = useMemo(() => parseLayoutJson(app?.form_layout_json), [app?.form_layout_json])
@@ -1784,8 +1825,9 @@ export default function DynamicForm({
       isMoveMode,
       fieldPerms,
       editable,
+      detailDynamicStates,
     }),
-    [formConfig, pageType, isMoveMode, fieldPerms, editable],
+    [formConfig, pageType, isMoveMode, fieldPerms, editable, detailDynamicStates],
   )
 
   // 表单节点：根据页面类型渲染不同内容

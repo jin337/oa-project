@@ -30,7 +30,7 @@ const TASK_STATUS_META = {
   0: { label: '待处理', color: 'orange', icon: IconClockCircle },
   1: { label: '已通过', color: 'green', icon: IconCheckCircle },
   2: { label: '已拒绝', color: 'red', icon: IconCloseCircle },
-  3: { label: '已驳回', color: 'orangered', icon: IconCloseCircle },
+  3: { label: '已退回', color: 'orangered', icon: IconCloseCircle },
   4: { label: '已转交', color: 'blue', icon: IconRedo },
   5: { label: '已取消', color: 'gray', icon: IconCloseCircle },
 }
@@ -40,7 +40,7 @@ const INSTANCE_STATUS_META = {
   0: { label: '进行中', color: 'blue' },
   1: { label: '已通过', color: 'green' },
   2: { label: '已拒绝', color: 'red' },
-  3: { label: '已驳回', color: 'orangered' },
+  3: { label: '已退回', color: 'orangered' },
   4: { label: '已作废', color: 'gray' },
   5: { label: '已撤回', color: 'gray' },
 }

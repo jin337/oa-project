@@ -74,9 +74,9 @@ export const EMPTY_HANDLER_OPTIONS = [
   { value: 4, label: '指定人员' },
 ]
 
-/** 审批人操作权限（数组元素：1-拒绝 / 2-转交 / 3-加签） */
+/** 审批人操作权限（数组元素：1-退回 / 2-转交 / 3-加签） */
 export const PERMISSION_OPTIONS = [
-  { value: 1, label: '拒绝' },
+  { value: 1, label: '退回' },
   { value: 2, label: '转交' },
   { value: 3, label: '加签' },
 ]

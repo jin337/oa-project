@@ -18,6 +18,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"back-end/internal/database"
@@ -141,7 +142,90 @@ func advanceToNextNodeWith(tx *gorm.DB, instance *model.ApprovalInstance, allNod
 	return generateTasksForCurrentNode(tx, instance, allNodes, curUserID)
 }
 
-// finishInstance 完成流程实例（通过/拒绝/驳回/撤回），同步更新实例状态并取消所有待处理任务
+// rejectToNode 退回给指定节点（对齐钉钉"退回给指定节点"）：
+// 流程直接回退到目标节点重新审批（不退回发起人），实例保持进行中。
+// 校验：目标节点必须在当前节点之前；取消当前及之后待处理任务；回退游标并重新生成目标节点任务。
+func rejectToNode(tx *gorm.DB, instance *model.ApprovalInstance, targetNodeID, comment string, curUserID uint) error {
+	// 解析执行路径
+	pathNodeIDs := instance.ExecutionPath
+	if len(pathNodeIDs) == 0 {
+		return errors.New("流程执行路径解析失败")
+	}
+	// 找目标节点索引
+	targetIdx := -1
+	for i, nid := range pathNodeIDs {
+		if nid == targetNodeID {
+			targetIdx = i
+			break
+		}
+	}
+	if targetIdx < 0 {
+		return errors.New("退回目标节点不存在")
+	}
+	// 必须退回到当前节点之前
+	if targetIdx >= instance.CurrentNodeIdx {
+		return errors.New("只能退回到当前节点之前的节点")
+	}
+
+	now := time.Now()
+
+	// 取消当前及之后所有待处理/等待任务（历史已通过任务保留）
+	if err := tx.Model(&model.ApprovalInstanceTask{}).
+		Where("instance_id = ? AND node_sort >= ? AND status IN (?, ?)", instance.ID, targetIdx+1, model.TaskStatusPending, model.TaskStatusWaiting).
+		Updates(map[string]interface{}{
+			"status":     model.TaskStatusCancelled,
+			"updated_at": now,
+			"updated_by": curUserID,
+		}).Error; err != nil {
+		return err
+	}
+
+	// 回退游标到目标节点
+	instance.CurrentNodeIdx = targetIdx
+	if err := tx.Model(instance).Update("current_node_idx", targetIdx).Error; err != nil {
+		return err
+	}
+
+	// 解析流程节点并为目标节点重新生成任务
+	nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
+	if err != nil {
+		return err
+	}
+	return generateTasksForCurrentNode(tx, instance, nodes, curUserID)
+}
+
+// rejectToInitiator 驳回（打回发起人，对齐钉钉）：
+// 实例进入"已驳回(3)"挂起态（非终态），清掉 finished_at；取消其余待处理任务；
+// 不写 ccTiming=2 的流程结束抄送。发起人修改表单后调 Resubmit 从当前节点继续审批。
+func rejectToInitiator(tx *gorm.DB, instance *model.ApprovalInstance, result string, curUserID uint) error {
+	now := time.Now()
+	instance.Status = model.InstanceStatusReturned
+	instance.Result = result
+	instance.FinishedAt = nil
+
+	if err := tx.Model(instance).Updates(map[string]interface{}{
+		"status":      model.InstanceStatusReturned,
+		"result":      result,
+		"finished_at": nil,
+		"updated_by":  curUserID,
+	}).Error; err != nil {
+		return err
+	}
+
+	// 取消其余待处理/加签等待任务（当前被驳回任务状态已在上面置为已驳回）
+	if err := tx.Model(&model.ApprovalInstanceTask{}).
+		Where("instance_id = ? AND status IN (?, ?)", instance.ID, model.TaskStatusPending, model.TaskStatusWaiting).
+		Updates(map[string]interface{}{
+			"status":     model.TaskStatusCancelled,
+			"updated_at": now,
+			"updated_by": curUserID,
+		}).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+// finishInstance 完成流程实例（通过/拒绝/撤回），同步更新实例状态并取消所有待处理任务
 func finishInstance(tx *gorm.DB, instance *model.ApprovalInstance, status int, result string, curUserID uint) error {
 	now := time.Now()
 	instance.Status = status
@@ -311,8 +395,32 @@ func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.App
 			return handleNodeApproval(tx, &instance, task, curUserID)
 		case model.TaskStatusRejected: // 拒绝
 			return finishInstance(tx, &instance, model.InstanceStatusRejected, req.Comment, curUserID)
-		case model.TaskStatusReturned: // 驳回
-			return finishInstance(tx, &instance, model.InstanceStatusReturned, req.Comment, curUserID)
+		case model.TaskStatusReturned: // 退回：校验节点开放退回权限（permissions 含 1）；退回意见必填
+			if strings.TrimSpace(req.Comment) == "" {
+				return errors.New("退回时必须填写退回意见")
+			}
+			nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
+			if err != nil {
+				return err
+			}
+			curNode := findNodeByID(nodes, task.NodeID)
+			if curNode == nil {
+				return errors.New("当前审批节点不存在")
+			}
+			hasReturnPerm := false
+			for _, p := range curNode.Permissions {
+				if p == 1 {
+					hasReturnPerm = true
+					break
+				}
+			}
+			if !hasReturnPerm {
+				return errors.New("当前节点未开放退回权限")
+			}
+			if req.TargetNodeID != "" {
+				return rejectToNode(tx, &instance, req.TargetNodeID, req.Comment, curUserID)
+			}
+			return rejectToInitiator(tx, &instance, req.Comment, curUserID)
 		default:
 			return errors.New("非法的操作类型")
 		}

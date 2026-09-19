@@ -1,7 +1,7 @@
 import { Empty, Form, Spin } from '@arco-design/web-react'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
-import DynamicForm from 'src/pages/application/dynamic/DynamicForm'
+import DynamicForm, { evaluateDynamicStates } from 'src/pages/application/dynamic/DynamicForm'
 import { useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
 
 /**
@@ -32,7 +32,8 @@ export default function DynamicDetail({ app, dataId: propDataId, initialData, fi
     autoFetch: !initialData,
   })
 
-  // 外部数据变化时同步回填表单
+  // 外部数据变化时同步回填表单：detail 模式联动已禁用（handleValuesChange 按 isRuntime 控制），
+  // setFieldsValue 回填不会触发 on_change 清空目标字段，普通回填即可
   useEffect(() => {
     if (initialData && form) {
       form.setFieldsValue(initialData)
@@ -40,6 +41,16 @@ export default function DynamicDetail({ app, dataId: propDataId, initialData, fi
   }, [initialData, form])
 
   const displayData = initialData || detailData
+
+  // detail 只读静态映射：基于完整业务数据预计算各动态状态字段（visible_if/disabled_if）的求值结果，
+  // 传给 DynamicForm 后只读分支直接渲染，无需 shouldUpdate（可编辑审批字段 perm=2 仍走 shouldUpdate）
+  const detailDynamicStates = useMemo(
+    () =>
+      app?.detail_layout_json && displayData
+        ? evaluateDynamicStates(app.detail_layout_json, displayData)
+        : undefined,
+    [app?.detail_layout_json, displayData],
+  )
 
   if (loading) {
     return (
@@ -54,5 +65,14 @@ export default function DynamicDetail({ app, dataId: propDataId, initialData, fi
   }
 
   // detailApp 已由 hook 将 detail_layout_json 映射为 form_layout_json
-  return <DynamicForm app={detailApp} form={form} pageType="detail" fieldPerms={fieldPerms} editable={editable} />
+  return (
+    <DynamicForm
+      app={detailApp}
+      form={form}
+      pageType="detail"
+      fieldPerms={fieldPerms}
+      editable={editable}
+      detailDynamicStates={detailDynamicStates}
+    />
+  )
 }

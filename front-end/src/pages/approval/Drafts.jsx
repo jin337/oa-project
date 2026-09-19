@@ -60,30 +60,30 @@ export default function Drafts() {
   // 发起人自选审批人（nodeId -> [{ type, key, label }]），提交时转为 nodeId -> [userId] 传给后端
   const [selfSelectMembers, setSelfSelectMembers] = useState({})
 
-  // 从流程快照收集发起人自选成员（approverType=3 节点已注入的 members），兼容 JSON 字符串与节点数组；
-  // 用于编辑草稿打开时回填 selfSelectMembers 状态，保存时原样回传，避免自选审批人在编辑后丢失
-  const collectSelfSelectMembers = (flowSnapshot) => {
-    const result = {}
+  // 将草稿暂存的自选成员（nodeId -> [{ type, key, label }]）注入审批流配置的自选节点 members，
+  // 供 DynamicFlowView 展示已选审批人/抄送人；兼容 JSON 字符串与节点数组，条件分支 children 递归处理
+  const injectDraftMembers = (flowSnapshot, membersMap) => {
     let nodes = flowSnapshot
     if (typeof flowSnapshot === 'string' && flowSnapshot) {
       try {
         nodes = JSON.parse(flowSnapshot)
       } catch {
-        return result
+        return flowSnapshot
       }
     }
-    const walk = (list) => {
-      for (const n of list || []) {
-        if (n && n.approverType === 3 && Array.isArray(n.members) && n.members.length) {
-          result[n.id] = n.members
+    if (!Array.isArray(nodes)) return flowSnapshot
+    const walk = (list) =>
+      (list || []).map((n) => {
+        const node = { ...n }
+        if (membersMap[node.id]) {
+          node.members = [...membersMap[node.id]]
         }
-        if (n && n.type === 4 && Array.isArray(n.branches)) {
-          n.branches.forEach((b) => walk(b && b.children))
+        if (node.type === 4 && Array.isArray(node.branches)) {
+          node.branches = node.branches.map((b) => ({ ...b, children: walk(b && b.children) }))
         }
-      }
-    }
-    walk(Array.isArray(nodes) ? nodes : [])
-    return result
+        return node
+      })
+    return walk(nodes)
   }
 
   // 继续编辑：通过实例接口一次获取全部数据
@@ -102,19 +102,30 @@ export default function Drafts() {
       // 一次请求获取实例详情（含 business_data + detail_layout_json）
       const res = await approvalApi.getApprovalInstanceDetail(record.instance_id)
       const inst = res.data
+      // 从草稿暂存 approval_draft_members（nodeId -> [userId]）恢复发起人自选审批人/抄送人，
+      // 姓名经 assignee_name_map 映射；应用最新审批流配置中自选节点 members 为空，需注入后供 DynamicFlowView 展示
+      const draftMembers = inst.approval_draft_members || {}
+      const nameMap = inst.assignee_name_map || {}
+      const selfSel = {}
+      Object.entries(draftMembers).forEach(([nodeId, ids]) => {
+        selfSel[nodeId] = (Array.isArray(ids) ? ids : []).map((uid) => ({
+          type: 1,
+          key: `user_${uid}`,
+          label: nameMap[String(uid)] || `用户${uid}`,
+        }))
+      })
       // 构造 app 配置：detail_layout_json → form_layout_json 映射供 DynamicForm 使用，approval_flow_json → approval_flow_json 映射供 DynamicFlowView 使用
       setDrawerApp({
         id: inst.app_id,
         name: inst.app_name,
         form_layout_json: inst.detail_layout_json,
-        approval_flow_json: inst.approval_flow_json,
+        approval_flow_json: injectDraftMembers(inst.approval_flow_json, selfSel),
       })
       const bizData = inst.business_data || {}
       drawerForm.setFieldsValue(bizData)
       setFormValues(bizData)
-      // 从流程快照恢复发起人自选审批人（approverType=3 节点已注入的 members），
-      // 避免编辑打开时清空已选成员，导致保存草稿时 approval_draft_members 丢失并被后端清空暂存
-      setSelfSelectMembers(collectSelfSelectMembers(inst.approval_flow_json))
+      // 回填自选成员状态：编辑打开时恢复已选成员，避免清空后保存草稿时 approval_draft_members 丢失并被后端清空暂存
+      setSelfSelectMembers(selfSel)
     } catch (e) {
       Message.error('草稿加载失败，请稍后重试')
       setDrawerVisible(false)

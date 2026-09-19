@@ -110,6 +110,24 @@ func ApprovalInstanceWithdraw(c *gin.Context) {
 	response.OKMsg(c, "撤回成功")
 }
 
+// ApprovalInstanceResubmit PUT /api/v1/approval/instance/:id/resubmit 已驳回实例重新提交
+func ApprovalInstanceResubmit(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req model.ApprovalInstanceResubmitReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	if _, err := service.ApprovalInstanceResubmit(middleware.CurrentUserID(c), id, &req); err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	response.OKMsg(c, "已重新提交")
+}
+
 // ApprovalInstanceDelete DELETE /api/v1/approval/instance/:id 删除已终结实例
 func ApprovalInstanceDelete(c *gin.Context) {
 	id, ok := parseID(c)

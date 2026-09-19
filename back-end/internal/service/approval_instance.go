@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 	"strconv"
 	"strings"
 
@@ -170,7 +169,7 @@ func instanceStatusName(status int) string {
 	case model.InstanceStatusRejected:
 		return "已拒绝"
 	case model.InstanceStatusReturned:
-		return "已驳回"
+		return "已退回"
 	case model.InstanceStatusVoided:
 		return "已作废"
 	case model.InstanceStatusWithdrawn:
@@ -265,8 +264,9 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 			ApprovalFlowJSON:      ctx.injectedNodes, // 直接传入结构化数据，由 GORM serializer:json 统一序列化
 			ExecutionPath:         ctx.execPath,
 			CurrentNodeIdx:        0,
-			Status:                model.InstanceStatusRunning,
-			ApprovalDraftMembers: req.ApprovalDraftMembers, // 持久化自选审批人（撤回回退草稿后重新提交需要）
+			Status: model.InstanceStatusRunning,
+			// 提交即进入审批流转，不持久化草稿暂存（approval_draft_members 仅草稿专用）；
+			// 撤回回退草稿时由 ApprovalInstanceWithdraw 从快照自选节点写回暂存
 		}
 		instance.CreatedBy, instance.UpdatedBy = curUserID, curUserID
 		if err := tx.Create(&instance).Error; err != nil {
@@ -443,6 +443,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 				"execution_path":           string(execPathBytes),
 				"current_node_idx":         0,
 				"status":                   model.InstanceStatusRunning,
+				"approval_draft_members":   nil, // 草稿暂存提交后清空（成员已注入快照；撤回时由 Withdraw 写回）
 				"updated_by":               curUserID,
 			})
 		if res.Error != nil {
@@ -469,6 +470,57 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 	return &instance, nil
 }
 
+// ApprovalInstanceResubmit 已驳回实例重新提交（对齐钉钉"退回"）：
+//  1. 校验实例存在、属于当前用户、状态=已驳回(3)
+//  2. 可选更新业务表单数据（发起人修改后的值）
+//  3. 事务内原子流转（已驳回→进行中），在驳回节点（current_node_idx）重新生成审批任务
+func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.ApprovalInstanceResubmitReq) (*model.ApprovalInstance, error) {
+	var instance model.ApprovalInstance
+	owned, err := loadOwnedInstance(database.DB, curUserID, instanceID, "重新提交", model.InstanceStatusReturned)
+	if err != nil {
+		return nil, err
+	}
+	instance = *owned
+
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		// 1. 更新业务表单数据（发起人修改，可选）
+		if req != nil && len(req.BusinessData) > 0 {
+			if err := ApplicationDataUpdateWithDB(tx, instance.AppID, instance.BusinessDataID, curUserID, req.BusinessData); err != nil {
+				return err
+			}
+		}
+
+		// 2. 原子守卫：仅当实例仍为已驳回时流转为进行中
+		res := tx.Model(&model.ApprovalInstance{}).
+			Where("id = ? AND status = ?", instanceID, model.InstanceStatusReturned).
+			Updates(map[string]interface{}{
+				"status":      model.InstanceStatusRunning,
+				"finished_at": nil,
+				"updated_by":  curUserID,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errors.New("该实例状态已变更，请刷新后重试")
+		}
+
+		// 3. 重新加载实例（快照/执行游标保持驳回节点），在该节点重新生成任务
+		if err := tx.First(&instance, instanceID).Error; err != nil {
+			return err
+		}
+		nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
+		if err != nil {
+			return err
+		}
+		return generateTasksForCurrentNode(tx, &instance, nodes, curUserID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &instance, nil
+}
+
 // ApprovalInstanceWithdraw 撤回流程实例（仅发起人、仅进行中）：
 // 回退为草稿（草稿箱可重新编辑/提交/删除），同时取消所有待处理任务。
 // 流程快照与发起人自选成员保留，重新提交时按当时表单数据重新评估执行路径。
@@ -478,24 +530,29 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 		if err != nil {
 			return err
 		}
-		now := time.Now()
-		// 1. 取消所有待处理/加签等待任务（前加签挂起的原任务一并取消）
-		if err := tx.Model(&model.ApprovalInstanceTask{}).
-			Where("instance_id = ? AND status IN (?, ?)", instance.ID, model.TaskStatusPending, model.TaskStatusWaiting).
-			Updates(map[string]interface{}{
-				"status":     model.TaskStatusCancelled,
-				"updated_at": now,
-				"updated_by": curUserID,
-			}).Error; err != nil {
+		// 1. 删除当前实例的全部审批任务（对齐钉钉：撤回=整条流程重来，
+		// 重新提交时从首节点全新生成任务，当前流程视图不再堆叠历史"已取消"任务）
+		if err := tx.Where("instance_id = ?", instance.ID).
+			Delete(&model.ApprovalInstanceTask{}).Error; err != nil {
 			return err
 		}
-		// 2. 回退为草稿：重置执行游标与结果，finished_at 置空
+		// 2. 从快照自选节点提取运行时成员写回草稿暂存（approval_draft_members），
+		// 撤回后草稿箱编辑可恢复已选审批人/抄送人，重新提交时直接使用
+		draftMembersJSON := "null"
+		if nodes, err := parseFlowNodes(instance.ApprovalFlowJSON); err == nil {
+			if members := extractSelfSelectUserIDs(nodes); len(members) > 0 {
+				b, _ := json.Marshal(members)
+				draftMembersJSON = string(b)
+			}
+		}
+		// 3. 回退为草稿：重置执行游标与结果，finished_at 置空
 		if err := tx.Model(instance).Updates(map[string]interface{}{
-			"status":           model.InstanceStatusDraft,
-			"current_node_idx": 0,
-			"finished_at":      nil,
-			"result":           "",
-			"updated_by":       curUserID,
+			"status":                 model.InstanceStatusDraft,
+			"current_node_idx":       0,
+			"finished_at":            nil,
+			"result":                 "",
+			"approval_draft_members": draftMembersJSON,
+			"updated_by":             curUserID,
 		}).Error; err != nil {
 			return err
 		}
@@ -525,12 +582,19 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	}
 
 	// 查询应用配置（名称 + 详情页布局快照）
+	// 布局采用增量存储（compact）：detail_layout_json 仅存布局自身字段 + 覆盖项，
+	// 读取时按 element_id 从表单元素管理合并补全（与 form_layout_json 一致），
+	// 保证修改表单元素设置后详情页即时生效、无需回布局管理重新拖拽
 	var app model.Application
 	appName := ""
 	var detailLayoutJSON any
+	var latestFlowJSON any // 审批流展示用应用最新配置（与 detail_layout_json 一致，读取时合并）
 	if err := database.DB.First(&app, instance.AppID).Error; err == nil {
 		appName = app.Name
-		detailLayoutJSON = app.DetailLayoutJSON
+		detailLayoutJSON = mergeLayoutJSON(app.DetailLayoutJSON, instance.AppID)
+		// 审批流展示应用最新配置；自选节点（approverType=3）的运行时成员从实例快照取（提交时注入），
+		// 避免详情/时间线丢失发起人已选的审批人、抄送人
+		latestFlowJSON = mergeFlowRuntimeMembers(app.ApprovalFlowJSON, instance.ApprovalFlowJSON)
 	}
 
 	// 查询发起人姓名
@@ -564,6 +628,11 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 		Tasks:            tasks,
 		AssigneeNameMap:  assigneeNameMap,
 		FieldPerms:       fieldPerms,
+	}
+	// 审批流配置返回应用最新值（ExamineManage 修改后详情即时生效），与 detail_layout_json 策略一致；
+	// fieldPerms 已按实例冻结快照计算完毕（currentNodeFieldPerms），此处覆盖输出不影响字段权限判定
+	if latestFlowJSON != nil {
+		result.ApprovalFlowJSON = latestFlowJSON
 	}
 	return result, nil
 }
@@ -614,6 +683,94 @@ func splitSubTables(subTableName string) []string {
 		}
 	}
 	return result
+}
+
+// extractSelfSelectUserIDs 从流程快照提取自选节点（approverType=3）的运行时成员用户 ID：
+// 撤回回退草稿时写回 approval_draft_members 暂存，供草稿箱编辑恢复与重新提交；条件分支 children 递归
+func extractSelfSelectUserIDs(nodes []flowNode) map[string][]uint {
+	result := map[string][]uint{}
+	var walk func(list []flowNode)
+	walk = func(list []flowNode) {
+		for _, n := range list {
+			if n.ApproverType == 3 && len(n.Members) > 0 {
+				var ids []uint
+				for _, m := range n.Members {
+					if m.Type == 1 && strings.HasPrefix(m.Key, "user_") {
+						if id, err := strconv.ParseUint(strings.TrimPrefix(m.Key, "user_"), 10, 64); err == nil {
+							ids = append(ids, uint(id))
+						}
+					}
+				}
+				if len(ids) > 0 {
+					result[n.ID] = ids
+				}
+			}
+			if n.Type == 4 {
+				for _, b := range n.Branches {
+					walk(b.Children)
+				}
+			}
+		}
+	}
+	walk(nodes)
+	return result
+}
+
+// mergeFlowRuntimeMembers 将实例快照中自选节点（approverType=3）的运行时 members 合并进最新流程配置：
+// 详情展示跟随应用最新配置（节点结构/字段），但发起人自选审批人/抄送人保留提交时注入的运行时人选。
+// 草稿实例快照无运行时成员时原样返回最新配置（草稿编辑由前端按 approval_draft_members 注入）。
+func mergeFlowRuntimeMembers(latest any, snapshot any) any {
+	latestNodes, err := parseFlowNodes(latest)
+	if err != nil || len(latestNodes) == 0 {
+		return latest
+	}
+	snapshotNodes, err := parseFlowNodes(snapshot)
+	if err != nil || len(snapshotNodes) == 0 {
+		return latest
+	}
+	// 收集快照中所有自选节点的运行时成员（含条件分支 children 递归）
+	runtimeMembers := map[string][]flowMember{}
+	var collect func(list []flowNode)
+	collect = func(list []flowNode) {
+		for _, n := range list {
+			if len(n.Members) > 0 {
+				runtimeMembers[n.ID] = n.Members
+			}
+			if n.Type == 4 {
+				for _, b := range n.Branches {
+					collect(b.Children)
+				}
+			}
+		}
+	}
+	collect(snapshotNodes)
+	if len(runtimeMembers) == 0 {
+		return latest
+	}
+	// 合并：最新流程中自选节点（approverType=3）若快照有同名节点成员则覆盖
+	var merge func(list []flowNode) []flowNode
+	merge = func(list []flowNode) []flowNode {
+		out := make([]flowNode, 0, len(list))
+		for _, n := range list {
+			node := n
+			if node.ApproverType == 3 {
+				if m, ok := runtimeMembers[node.ID]; ok {
+					node.Members = m
+				}
+			}
+			if node.Type == 4 && len(node.Branches) > 0 {
+				branches := make([]flowBranch, len(node.Branches))
+				for i, b := range node.Branches {
+					branches[i] = b
+					branches[i].Children = merge(b.Children)
+				}
+				node.Branches = branches
+			}
+			out = append(out, node)
+		}
+		return out
+	}
+	return merge(latestNodes)
 }
 
 // currentNodeFieldPerms 当前执行节点的表单字段权限：

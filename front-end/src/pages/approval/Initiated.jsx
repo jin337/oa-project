@@ -1,9 +1,25 @@
-import { Button, Card, Message, Popconfirm, Space, Table } from '@arco-design/web-react'
+import {
+  Button,
+  Card,
+  Drawer,
+  Form,
+  Message,
+  Popconfirm,
+  Space,
+  Spin,
+  Table,
+} from '@arco-design/web-react'
+import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 import { useApprovalList } from 'src/pages/approval/useApprovalList'
+import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
+import DynamicForm, {
+  parseLayoutJson,
+  serializeTimeFields,
+} from 'src/pages/application/dynamic/DynamicForm'
 import { formatTime } from 'src/utils/format'
 
 const PAGE_TITLE = '我的发起'
@@ -12,11 +28,13 @@ const PAGE_TITLE = '我的发起'
 const WITHDRAWABLE_STATUSES = [2]
 // 删除：已终结实例可删除（不通过 / 已驳回）
 const DELETABLE_STATUSES = [4, 5]
+// 已驳回（业务状态 5）：可编辑后重新提交
+const REJECTED_STATUS = 5
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = ['index', 'app_name', 'dept_name', 'created_at', 'finished_at', 'approval_status']
 
-/** 我的发起：展示当前用户发起的所有审批记录（排除草稿），支持查看详情、撤回、删除 */
+/** 我的发起：展示当前用户发起的所有审批记录（排除草稿），支持查看详情、撤回、删除、已驳回重新提交 */
 export default function Initiated() {
   const {
     list,
@@ -39,6 +57,65 @@ export default function Initiated() {
     setVisibleCols,
     sizeMenu,
   } = useApprovalList('initiated', { title: PAGE_TITLE, colKeys: ALL_COL_KEYS })
+
+  // 已驳回编辑 Drawer（仿草稿箱编辑）：打开完整动态表单 + 审批流，底部"重新提交"
+  const [editVisible, setEditVisible] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editApp, setEditApp] = useState(null)
+  const [editRecord, setEditRecord] = useState(null)
+  const [editForm] = Form.useForm()
+  const [formValues, setFormValues] = useState({})
+
+  // 打开已驳回编辑 Drawer：加载实例详情回填动态表单（参考草稿箱 openDraftEdit）
+  const openRejectedEdit = async (record) => {
+    setEditRecord(record)
+    setEditVisible(true)
+    setEditLoading(true)
+    setEditApp(null)
+    editForm.resetFields()
+    try {
+      const res = await approvalApi.getApprovalInstanceDetail(record.instance_id || record.id)
+      const inst = res.data
+      setEditApp({
+        id: inst.app_id,
+        name: inst.app_name,
+        form_layout_json: inst.detail_layout_json,
+        approval_flow_json: inst.approval_flow_json,
+      })
+      const bizData = inst.business_data || {}
+      editForm.setFieldsValue(bizData)
+      setFormValues(bizData)
+    } catch (e) {
+      Message.error('数据加载失败，请稍后重试')
+      setEditVisible(false)
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  // 重新提交：收集表单数据，调 resubmit 接口从驳回节点继续审批
+  const handleResubmit = async () => {
+    let values
+    try {
+      values = await editForm.validate()
+    } catch (e) {
+      return
+    }
+    setEditSaving(true)
+    try {
+      const layout = parseLayoutJson(editApp?.form_layout_json)
+      const payload = serializeTimeFields(values, layout?.elements || [])
+      await approvalApi.resubmitApprovalInstance(editRecord.instance_id || editRecord.id, payload)
+      Message.success('已重新提交')
+      setEditVisible(false)
+      fetchList()
+    } catch (e) {
+      // 错误已在请求层提示
+    } finally {
+      setEditSaving(false)
+    }
+  }
 
   // 撤回申请：调用流程实例撤回接口（仅进行中状态可撤回，转为草稿）
   const handleWithdraw = async (record) => {
@@ -84,12 +161,18 @@ export default function Initiated() {
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 180,
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => openDetail(r)}>
             详情
           </Button>
+          {/* 已驳回：编辑后重新提交（参考草稿箱编辑 Drawer，底部为"重新提交"） */}
+          {Number(r.approval_status) === REJECTED_STATUS && (
+            <Button type="text" size="small" onClick={() => openRejectedEdit(r)}>
+              编辑
+            </Button>
+          )}
           {WITHDRAWABLE_STATUSES.includes(r.approval_status) && (
             <Popconfirm position="lb" title="撤回后该申请将转为草稿，确定撤回？" onOk={() => handleWithdraw(r)}>
               <Button type="text" size="small" status="warning">
@@ -144,11 +227,45 @@ export default function Initiated() {
           },
         }}
       />
+
+      {/* 详情 Drawer（只读查看） */}
       <ApprovalDetailDrawer
         record={detailRecord}
         visible={Boolean(detailRecord)}
         onCancel={closeDetail}
       />
+
+      {/* 已驳回编辑 Drawer（仿草稿箱编辑，底部"重新提交"） */}
+      <Drawer
+        width="50%"
+        visible={editVisible}
+        onCancel={() => setEditVisible(false)}
+        title={`编辑 - ${editApp?.item_name || editApp?.name || ''}`}
+        unmountOnExit
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setEditVisible(false)}>取消</Button>
+            <Button type="primary" loading={editSaving} onClick={handleResubmit}>
+              重新提交
+            </Button>
+          </div>
+        }
+      >
+        {editLoading ? (
+          <div className="flex h-40 items-center justify-center">
+            <Spin />
+          </div>
+        ) : editApp ? (
+          <>
+            <DynamicForm app={editApp} form={editForm} pageType="form" onValuesChange={setFormValues} />
+            {/* 审批流只读还原 */}
+            <DynamicFlowView
+              raw={editApp?.approval_flow_json}
+              formData={formValues}
+            />
+          </>
+        ) : null}
+      </Drawer>
     </Card>
   )
 }

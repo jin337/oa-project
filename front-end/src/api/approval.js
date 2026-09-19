@@ -78,6 +78,11 @@ export function withdrawApprovalInstance(id) {
   return request.put(`/approval/instance/${id}/withdraw`)
 }
 
+// PUT /approval/instance/:id/resubmit 已驳回实例重新提交（发起人修改表单后继续审批）
+export function resubmitApprovalInstance(id, businessData) {
+  return request.put(`/approval/instance/${id}/resubmit`, { business_data: businessData })
+}
+
 // DELETE /approval/instance/:id 删除已终结的流程实例
 export function deleteApprovalInstance(id) {
   return request.delete(`/approval/instance/${id}`)

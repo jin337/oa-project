@@ -3,6 +3,49 @@ import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 
 /**
+ * 安全回填表单值：规避 Arco Form 缺陷 ——
+ * setFieldsValue 一次写入时，若同时包含 shouldUpdate 依赖字段（如 disabled_if: "${form.user_id}"
+ * 依赖的 user_id）与目标字段（phone），shouldUpdate 重渲染会使用中间快照将目标字段覆盖为空。
+ * 因此在整体回填后，再对配置了动态状态（visible_if / disabled_if）的字段单独补写一次。
+ * @param {object} form   Arco Form 实例
+ * @param {object} data   业务数据（主表字段 + 子表数组）
+ * @param {object} layout 应用布局（form_layout_json / detail_layout_json，含 elements 与子表 columns）
+ */
+export function safeSetFieldsValue(form, data, layout) {
+  if (!form || !data) return
+  form.setFieldsValue(data)
+  const patch = {}
+  const collect = (els) => {
+    ;(Array.isArray(els) ? els : []).forEach((el) => {
+      if (Array.isArray(el)) return collect(el)
+      if (!el || typeof el !== 'object') return
+      // 主表元素：自身配置了动态状态
+      if (el.field_key && (el.dynamic_states?.visible_if || el.dynamic_states?.disabled_if) && data[el.field_key] !== undefined) {
+        patch[el.field_key] = data[el.field_key]
+      }
+      // 子表元素：列级动态状态，按行补写（cgsq_detail[i].colKey）
+      if (Array.isArray(el.columns)) {
+        const rows = data[el.field_key]
+        if (Array.isArray(rows)) {
+          el.columns.forEach((col) => {
+            if (col.field_key && (col.dynamic_states?.visible_if || col.dynamic_states?.disabled_if)) {
+              rows.forEach((row, i) => {
+                if (row && row[col.field_key] !== undefined) {
+                  patch[`${el.field_key}[${i}].${col.field_key}`] = row[col.field_key]
+                }
+              })
+            }
+          })
+        }
+      }
+    })
+  }
+  collect(layout?.elements)
+  if (Object.keys(patch).length) form.setFieldsValue(patch)
+}
+
+
+/**
  * 动态业务数据详情加载 Hook：
  * 统一"详情数据请求 + 加载状态 + 表单回填 + detail_layout_json → form_layout_json 映射"，
  * 供 DynamicDetail（只读详情）与 DynamicList（编辑回填）等场景复用，
@@ -49,10 +92,10 @@ export function useApplicationDetailData(app, dataId, form, options = {}) {
     if (autoFetch) fetchDetail()
   }, [fetchDetail, autoFetch])
 
-  // 数据加载完成后回填表单（含子表 Form.List 数组）
+  // 数据加载完成后回填表单（含子表 Form.List 数组；safeSetFieldsValue 规避 shouldUpdate 字段被覆盖）
   useEffect(() => {
-    if (detailData && form) form.setFieldsValue(detailData)
-  }, [detailData, form])
+    if (detailData && form) safeSetFieldsValue(form, detailData, app?.form_layout_json || app?.detail_layout_json)
+  }, [detailData, form, app])
 
   // detail_layout_json → form_layout_json 字段映射（DynamicForm 统一读取 form_layout_json）
   const detailApp = app ? { ...app, form_layout_json: app?.detail_layout_json } : null

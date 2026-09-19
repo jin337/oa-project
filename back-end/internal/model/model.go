@@ -611,11 +611,17 @@ type ApprovalInstanceSubmitDraftReq struct {
 	ApprovalDraftMembers map[string][]uint `json:"approval_draft_members" validate:"omitempty" label:"发起人自选审批人"` // nodeId -> 用户ID列表，覆盖草稿暂存值
 }
 
+// ApprovalInstanceResubmitReq 已驳回实例重新提交请求（发起人修改表单数据后从驳回节点继续审批）
+type ApprovalInstanceResubmitReq struct {
+	BusinessData map[string]interface{} `json:"business_data" validate:"omitempty" label:"业务数据"` // 发起人修改后的表单数据，可选
+}
+
 // ApprovalInstanceTaskApproveReq 审批操作请求
 type ApprovalInstanceTaskApproveReq struct {
-	Action       int                    `json:"action" validate:"required,oneof=1 2 3" label:"操作"` // 1-通过 2-拒绝 3-驳回
+	Action       int                    `json:"action" validate:"required,oneof=1 2 3" label:"操作"` // 1-通过 2-拒绝 3-退回
 	Comment      string                 `json:"comment" validate:"omitempty,max=500" label:"审批意见"`
 	BusinessData map[string]interface{} `json:"business_data" validate:"omitempty" label:"业务数据"` // 审批人修改后的业务数据（字段权限 perm=2 可编辑字段），可选
+	TargetNodeID string                 `json:"target_node_id" validate:"omitempty" label:"退回目标节点ID"` // 退回给指定节点时传入；为空则退回发起人挂起
 }
 
 // ApprovalInstanceTaskDelegateReq 转交请求

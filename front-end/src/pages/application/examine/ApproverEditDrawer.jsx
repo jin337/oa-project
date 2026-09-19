@@ -40,7 +40,7 @@ export function ApproverEditDrawer({
   // 审批人为空处理：1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员
   const [emptyHandler, setEmptyHandler] = useState(node.emptyHandler || 1)
   const [emptyMembers, setEmptyMembers] = useState(normalizeMembers(node.emptyMembers))
-  // 审批人操作权限数组元素：1-拒绝 / 2-转交 / 3-加签
+  // 审批人操作权限数组元素：1-退回 / 2-转交 / 3-加签
   const [permissions, setPermissions] = useState(node.permissions || [1])
   // 表单字段权限：选中字段时同步记录 table_key（主表 / 子表），回显兼容旧数据缺失 table_key
   const [fieldPerms, setFieldPerms] = useState(

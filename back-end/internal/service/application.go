@@ -927,7 +927,7 @@ func approvalStatusName(status int) string {
 	case model.ApprovalStatusRejected:
 		return "不通过"
 	case model.ApprovalStatusReturned:
-		return "已驳回"
+		return "已退回"
 	case model.ApprovalStatusVoided:
 		return "已作废"
 	case model.ApprovalStatusDeleted:
