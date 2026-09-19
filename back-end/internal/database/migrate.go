@@ -64,14 +64,13 @@ var migrations = []migration{
 			)
 		},
 	},
-	// 示例：后续迭代追加增量迁移，只加表/加字段，不删数据
-	// {
-	// 	Version: 3,
-	// 	Name:    "add_user_avatar",
-	// 	Up: func(db *gorm.DB) error {
-	// 		return db.AutoMigrate(&model.User{})
-	// 	},
-	// },
+	{
+		Version: 3,
+		Name:    "add_notification",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.Notification{})
+		},
+	},
 }
 
 // migrateLogger 迁移日志（可开关、可自定义路径）

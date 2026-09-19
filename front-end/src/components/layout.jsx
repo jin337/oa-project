@@ -14,6 +14,7 @@ import { useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import * as userApi from 'src/api/user'
 import { MenuIcon } from 'src/components/icon-select'
+import NotificationBell from 'src/components/notification-bell'
 import TabsBar from 'src/components/tabs-bar'
 import { APP_NAME } from 'src/config/app.js'
 import { useMenuMeta } from 'src/hooks/useMenuMeta'
@@ -99,7 +100,7 @@ function ContentBreadcrumb() {
 function HeaderBar() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, menus, logout, updateUser } = useAuth()
+  const { user, menus, logout, updateUser, hasPerm } = useAuth()
   // 当前路径对应的菜单链（精确匹配或最长前缀匹配），用于顶部导航高亮
   const { chain: activeChain } = useMenuMeta(location.pathname)
   // 渲染可见菜单 key 集合（status=1、非按钮、非 hidden、有 path）
@@ -146,9 +147,11 @@ function HeaderBar() {
         if (key === 'profile') navigate('/profile')
       }}
     >
-      <MenuItem key="profile" icon={<IconUser />}>
-        用户设置
-      </MenuItem>
+      {hasPerm('profile') && (
+        <MenuItem key="profile" icon={<IconUser />}>
+          用户设置
+        </MenuItem>
+      )}
       <MenuItem key="logout">退出登录</MenuItem>
     </Menu>
   )
@@ -185,6 +188,7 @@ function HeaderBar() {
 
       {/* 右侧：切换部门 + 用户信息 + 退出登录 */}
       <Space className="shrink-0">
+        <NotificationBell />
         <Select
           bordered={false}
           className="w-20!"

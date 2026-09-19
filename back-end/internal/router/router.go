@@ -116,6 +116,16 @@ func Setup() *gin.Engine {
 		}
 	}
 
+	// 站内通知
+	notifications := v1.Group("/notifications")
+	notifications.Use(middleware.JWTAuth())
+	{
+		notifications.GET("", handler.NotificationList)
+		notifications.GET("/unread-count", handler.NotificationUnreadCount)
+		notifications.PUT("/read-all", handler.NotificationReadAll)
+		notifications.PUT("/:id/read", handler.NotificationRead)
+	}
+
 	// 页面配置管理
 	applications := v1.Group("/application")
 	applications.Use(middleware.JWTAuth())

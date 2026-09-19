@@ -683,3 +683,23 @@ type ApprovalListReq struct {
 	Scope   string `json:"scope" form:"scope" validate:"required" label:"范围"`
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty,max=64" label:"关键词"`
 }
+
+// Notification 站内通知
+type Notification struct {
+	ID         uint       `json:"id" gorm:"primaryKey"`
+	UserID     uint       `json:"user_id" gorm:"index;not null;comment:接收人ID"`
+	Type       int        `json:"type" gorm:"not null;comment:通知类型 1待办 2退回 3抄送 4结果"`
+	Title      string     `json:"title" gorm:"size:200;comment:标题（应用名）"`
+	Msg        string     `json:"msg" gorm:"size:200;comment:消息描述"`
+	Content    string     `json:"content" gorm:"size:500;comment:内容（审批意见）"`
+	InstanceID uint       `json:"instance_id" gorm:"index;comment:关联审批实例ID"`
+	ReadAt     *time.Time `json:"read_at" gorm:"comment:阅读时间"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+func (Notification) TableName() string { return "oa_notifications" }
+
+// NotificationListReq 通知列表请求
+type NotificationListReq struct {
+	BaseListReq
+}

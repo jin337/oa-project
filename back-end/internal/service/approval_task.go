@@ -38,11 +38,34 @@ func createPendingTask(tx *gorm.DB, instance *model.ApprovalInstance, nodeID, no
 		Status:     model.TaskStatusPending,
 	}
 	task.CreatedBy, task.UpdatedBy = curUserID, curUserID
-	return tx.Create(&task).Error
+	if err := tx.Create(&task).Error; err != nil {
+		return err
+	}
+	// 待办通知（类型1）
+	appName := getInstanceAppName(instance)
+	n := model.Notification{
+		UserID:     assigneeID,
+		Type:       1,
+		Title:      appName,
+		Msg:        "您有新的审批待办",
+		Content:    "",
+		InstanceID: instance.ID,
+	}
+	tx.Create(&n)
+	return nil
+}
+
+// getInstanceAppName 查实例所属应用名称
+func getInstanceAppName(instance *model.ApprovalInstance) string {
+	var app model.Application
+	if err := database.DB.Select("name").First(&app, instance.AppID).Error; err != nil {
+		return ""
+	}
+	return app.Name
 }
 
 // generateTasksForCurrentNode 为当前节点生成审批任务
-func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint) error {
+func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint, autoResult string) error {
 	// 解析执行路径
 	pathNodeIDs := instance.ExecutionPath
 	idx := instance.CurrentNodeIdx
@@ -64,7 +87,7 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 				return err
 			}
 		}
-		return advanceToNextNode(tx, instance, allNodes, curUserID)
+		return advanceToNextNode(tx, instance, allNodes, curUserID, autoResult)
 	}
 
 	// 解析审批人（approverType=3 的自选成员已在提交时注入 node.Members，解析器优先读取）
@@ -115,9 +138,9 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 	return nil
 }
 
-// advanceToNextNode 推进到下一个审批节点（普通通过场景，result 为空）
-func advanceToNextNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint) error {
-	return advanceToNextNodeWith(tx, instance, allNodes, curUserID, "")
+// advanceToNextNode 推进到下一个审批节点（普通通过场景）
+func advanceToNextNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint, result string) error {
+	return advanceToNextNodeWith(tx, instance, allNodes, curUserID, result)
 }
 
 // advanceToNextNodeWith 推进到下一个节点：
@@ -139,7 +162,7 @@ func advanceToNextNodeWith(tx *gorm.DB, instance *model.ApprovalInstance, allNod
 	}
 
 	// 为新节点生成任务（自选成员已在 flow_snapshot 的 members 中，无需额外传入）
-	return generateTasksForCurrentNode(tx, instance, allNodes, curUserID)
+	return generateTasksForCurrentNode(tx, instance, allNodes, curUserID, autoResult)
 }
 
 // rejectToInitiator 驳回（打回发起人，对齐钉钉）：
@@ -170,6 +193,17 @@ func rejectToInitiator(tx *gorm.DB, instance *model.ApprovalInstance, result str
 		}).Error; err != nil {
 		return err
 	}
+	// 退回通知给发起人（类型2）
+	appName := getInstanceAppName(instance)
+	n := model.Notification{
+		UserID:     instance.CreatedBy,
+		Type:       2,
+		Title:      appName,
+		Msg:        "审批被退回",
+		Content:    result,
+		InstanceID: instance.ID,
+	}
+	tx.Create(&n)
 	return nil
 }
 
@@ -202,6 +236,22 @@ func finishInstance(tx *gorm.DB, instance *model.ApprovalInstance, status int, r
 
 	// 流程终结：为 ccTiming=2（流程结束时统一抄送）的抄送节点写入抄送记录（幂等）
 	writeCCRecordsOnFinish(tx, instance, curUserID)
+
+	// 结果通知给发起人（类型4）
+	appName := getInstanceAppName(instance)
+	resultTitle := "审批已通过"
+	if status == model.InstanceStatusRejected {
+		resultTitle = "审批被拒绝"
+	}
+	n := model.Notification{
+		UserID:     instance.CreatedBy,
+		Type:       4,
+		Title:      appName,
+		Msg:        resultTitle,
+		Content:    result,
+		InstanceID: instance.ID,
+	}
+	tx.Create(&n)
 
 	return nil
 }
@@ -427,7 +477,7 @@ func handleNodeApproval(tx *gorm.DB, instance *model.ApprovalInstance, task *mod
 				"updated_at": time.Now(),
 				"updated_by": curUserID,
 			})
-		return advanceToNextNode(tx, instance, nodes, curUserID)
+		return advanceToNextNode(tx, instance, nodes, curUserID, task.Comment)
 
 	case 2: // 会签：全部审批人通过 -> 节点通过
 		var pendingCount int64
@@ -438,18 +488,18 @@ func handleNodeApproval(tx *gorm.DB, instance *model.ApprovalInstance, task *mod
 		if pendingCount > 0 {
 			return nil // 还有人未审批，等待
 		}
-		return advanceToNextNode(tx, instance, nodes, curUserID)
+		return advanceToNextNode(tx, instance, nodes, curUserID, task.Comment)
 
 	case 1: // 依次审批：当前人通过 -> 生成下一个人的任务
-		return handleSequentialNext(tx, instance, node, nodes, curUserID)
+		return handleSequentialNext(tx, instance, node, nodes, curUserID, task)
 
 	default:
-		return advanceToNextNode(tx, instance, nodes, curUserID)
+		return advanceToNextNode(tx, instance, nodes, curUserID, task.Comment)
 	}
 }
 
 // handleSequentialNext 依次审批：检查同节点是否还有后续审批人
-func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *flowNode, allNodes []flowNode, curUserID uint) error {
+func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *flowNode, allNodes []flowNode, curUserID uint, task *model.ApprovalInstanceTask) error {
 	// 统计同节点已生成的任务数（排除转交衍生任务 delegated_from>0 与加签任务 add_sign_from>0）
 	var taskCount int64
 	tx.Model(&model.ApprovalInstanceTask{}).
@@ -486,7 +536,7 @@ func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *f
 	}
 
 	// 该节点所有人已审批完 -> 推进到下一节点
-	return advanceToNextNode(tx, instance, allNodes, curUserID)
+	return advanceToNextNode(tx, instance, allNodes, curUserID, task.Comment)
 }
 
 // ApprovalTaskDelegate 转交审批任务：

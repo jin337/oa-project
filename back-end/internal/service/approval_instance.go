@@ -273,7 +273,7 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 			return err
 		}
 		// 为首个审批节点生成任务（自选成员已在快照 members 中，无需额外传入）
-		if err := generateTasksForCurrentNode(tx, &instance, ctx.injectedNodes, curUserID); err != nil {
+		if err := generateTasksForCurrentNode(tx, &instance, ctx.injectedNodes, curUserID, ""); err != nil {
 			return err
 		}
 		return nil
@@ -459,7 +459,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		}
 
 		// 生成首个审批节点任务（自选成员已在快照 members 中）
-		if err := generateTasksForCurrentNode(tx, &instance, ctx.injectedNodes, curUserID); err != nil {
+		if err := generateTasksForCurrentNode(tx, &instance, ctx.injectedNodes, curUserID, ""); err != nil {
 			return err
 		}
 		return nil
@@ -531,7 +531,7 @@ func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.Approv
 		if err := tx.First(&instance, instanceID).Error; err != nil {
 			return err
 		}
-		return generateTasksForCurrentNode(tx, &instance, nodes, curUserID)
+		return generateTasksForCurrentNode(tx, &instance, nodes, curUserID, "")
 	})
 	if err != nil {
 		return nil, err

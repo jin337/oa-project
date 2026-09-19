@@ -275,6 +275,9 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 	}
 
 	records := make([]model.ApprovalRecord, 0, len(tasks))
+	// 待办场景：审批节点列显示当前待办任务的审批人姓名
+	nameMap := queryUserNames(map[uint]bool{curUserID: true})
+	assigneeName := nameMap[curUserID]
 	for _, t := range tasks {
 		var inst model.ApprovalInstance
 		if err := database.DB.First(&inst, t.InstanceID).Error; err != nil {
@@ -287,7 +290,7 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 		rec := model.ApprovalRecord{
 			ID:             t.ID,
 			InstanceID:     inst.ID,
-			NodeName:       t.NodeName,
+			NodeName:       assigneeName,
 			BusinessDataID: inst.BusinessDataID,
 			AppID:          app.ID,
 			AppCode:        app.Code,
