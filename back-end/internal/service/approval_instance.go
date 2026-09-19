@@ -473,7 +473,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 // ApprovalInstanceResubmit 已驳回实例重新提交（对齐钉钉"退回"）：
 //  1. 校验实例存在、属于当前用户、状态=已驳回(3)
 //  2. 可选更新业务表单数据（发起人修改后的值）
-//  3. 事务内原子流转（已驳回→进行中），在驳回节点（current_node_idx）重新生成审批任务
+//  3. 事务内原子流转（已驳回→进行中），清空历史任务，重置游标到首节点，整条流程从头走
 func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.ApprovalInstanceResubmitReq) (*model.ApprovalInstance, error) {
 	var instance model.ApprovalInstance
 	owned, err := loadOwnedInstance(database.DB, curUserID, instanceID, "重新提交", model.InstanceStatusReturned)
@@ -490,13 +490,31 @@ func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.Approv
 			}
 		}
 
-		// 2. 原子守卫：仅当实例仍为已驳回时流转为进行中
+		// 2. 重新读取业务数据并重新评估执行路径（退回后是新审批，条件分支按新表单数据重新走）
+		formData, err := ApplicationDataDetail(instance.AppID, instance.BusinessDataID, &model.ApplicationDataDetailReq{})
+		if err != nil {
+			return fmt.Errorf("读取业务数据快照失败: %w", err)
+		}
+		nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
+		if err != nil {
+			return err
+		}
+		execPath := flattenExecutionPath(nodes, formData)
+		if len(execPath) == 0 {
+			return errors.New("审批流评估后无审批节点，请检查流程配置")
+		}
+		execPathBytes, _ := json.Marshal(execPath)
+
+		// 3. 原子守卫：仅当实例仍为已驳回时流转为进行中，重置游标到首节点，更新执行路径
 		res := tx.Model(&model.ApprovalInstance{}).
 			Where("id = ? AND status = ?", instanceID, model.InstanceStatusReturned).
 			Updates(map[string]interface{}{
-				"status":      model.InstanceStatusRunning,
-				"finished_at": nil,
-				"updated_by":  curUserID,
+				"status":           model.InstanceStatusRunning,
+				"current_node_idx": 0,
+				"execution_path":   string(execPathBytes),
+				"finished_at":      nil,
+				"result":           "",
+				"updated_by":       curUserID,
 			})
 		if res.Error != nil {
 			return res.Error
@@ -505,12 +523,12 @@ func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.Approv
 			return errors.New("该实例状态已变更，请刷新后重试")
 		}
 
-		// 3. 重新加载实例（快照/执行游标保持驳回节点），在该节点重新生成任务
-		if err := tx.First(&instance, instanceID).Error; err != nil {
+		// 4. 清空历史任务，从首节点重新生成任务（整条流程从头走）
+		if err := tx.Where("instance_id = ?", instanceID).
+			Delete(&model.ApprovalInstanceTask{}).Error; err != nil {
 			return err
 		}
-		nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
-		if err != nil {
+		if err := tx.First(&instance, instanceID).Error; err != nil {
 			return err
 		}
 		return generateTasksForCurrentNode(tx, &instance, nodes, curUserID)

@@ -137,18 +137,25 @@ export default function DetailDrawer({
   // 退回选择：Modal + 目标节点列表
   const [returnModalVisible, setReturnModalVisible] = useState(false)
   const [returnTarget, setReturnTarget] = useState('')
-  // 可退回节点：当前节点之前的所有审批节点（type=2）
+  // 可退回节点：当前节点之前的审批节点（从 execution_path 定位当前节点索引，只取索引之前的节点）
   const returnableNodes = (() => {
     const snapshot = instance?.approval_flow_json || []
-    const list = []
+    const path = instance?.execution_path || []
+    const curIdx = path.indexOf(currentTask?.node_id)
+    if (curIdx <= 0) return [] // 当前节点是第一个，无可退回节点
+    // 节点 ID -> 节点名 映射
+    const nodeMap = {}
     const walk = (nodes) => {
       ;(nodes || []).forEach((n) => {
-        if (n.type === 2 && n.id !== currentTask?.node_id) list.push({ id: n.id, label: n.label || n.name || n.id })
+        if (n.id) nodeMap[n.id] = n.label || n.name || n.id
         ;(n.branches || []).forEach((b) => walk(b && b.children))
       })
     }
     walk(snapshot)
-    return list
+    // 只取当前节点之前的节点
+    return path.slice(0, curIdx)
+      .filter((id) => nodeMap[id])
+      .map((id) => ({ id, label: nodeMap[id] }))
   })()
 
   // 已驳回（status=3）的发起人侧详情：表单可编辑，footer 显示"重新提交"（对齐钉钉退回语义）
@@ -184,11 +191,11 @@ export default function DetailDrawer({
     return fullValues
   }
 
-  const handleApprove = async (action, targetNodeId) => {
+  const handleApprove = async (action) => {
     if (!currentTask) return
-    // 退回意见必填（对齐钉钉）
-    if (action === 3 && !comment.trim()) {
-      Message.warning('退回时必须填写退回意见')
+    // 拒绝/退回意见必填（对齐钉钉）
+    if ((action === 2 || action === 3) && !comment.trim()) {
+      Message.warning(action === 3 ? '退回时必须填写退回意见' : '拒绝时必须填写拒绝意见')
       return
     }
     setOperating(true)
@@ -198,7 +205,6 @@ export default function DetailDrawer({
         action,
         comment: comment.trim() || undefined,
         business_data: businessData,
-        target_node_id: targetNodeId || undefined,
       })
       const names = { 1: '已同意', 2: '已拒绝', 3: '已退回' }
       Message.success(names[action] || '操作成功')
@@ -321,10 +327,9 @@ export default function DetailDrawer({
             )}
             {canReturn && (
               <Button
-                status="danger"
                 size="small"
                 loading={operating}
-                onClick={() => { setReturnTarget(''); setReturnModalVisible(true) }}
+                onClick={() => handleApprove(3)}
               >
                 退回
               </Button>
@@ -435,33 +440,6 @@ export default function DetailDrawer({
           onCancel={() => setAddSignerVisible(false)}
         />
       )}
-      {/* 退回选择 Modal：退回发起人 / 退回给指定节点 */}
-      <Modal
-        title="退回"
-        visible={returnModalVisible}
-        onCancel={() => setReturnModalVisible(false)}
-        onOk={() => {
-          setReturnModalVisible(false)
-          handleApprove(3, returnTarget)
-        }}
-        okText="确定退回"
-        cancelText="取消"
-      >
-        <div className="mb-2">退回目标</div>
-        <Select
-          style={{ width: '100%' }}
-          placeholder="选择退回目标"
-          value={returnTarget}
-          onChange={(v) => setReturnTarget(v || '')}
-        >
-          <Select.Option value="">退回给：发起人</Select.Option>
-          {returnableNodes.map((n) => (
-            <Select.Option key={n.id} value={n.id}>
-              退回给：{n.label}
-            </Select.Option>
-          ))}
-        </Select>
-      </Modal>
     </PersonSelectorProvider>
   )
 }
