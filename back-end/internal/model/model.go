@@ -408,6 +408,7 @@ type FormElement struct {
 	Required       int                    `gorm:"default:0;comment:是否必填 1是 0否" json:"required"`
 	DefaultValue   string                 `gorm:"size:255;comment:默认值" json:"default_value"`
 	ValidationRule string                 `gorm:"size:255;comment:校验规则" json:"validation_rule"`
+	ValidationMessage string               `gorm:"size:255;comment:错误提示" json:"validation_message"`
 	Visibility     map[string]interface{} `gorm:"serializer:json;type:json;comment:列表与搜索行为" json:"visibility"`
 	DynamicStates  map[string]interface{} `gorm:"serializer:json;type:json;comment:动态状态控制" json:"dynamic_states"`
 	DataSource     map[string]interface{} `gorm:"serializer:json;type:json;comment:数据源配置" json:"data_source"`
@@ -426,6 +427,7 @@ type FormElementListItem struct {
 	Required       int                    `json:"required"`
 	DefaultValue   string                 `json:"default_value"`
 	ValidationRule string                 `json:"validation_rule"`
+	ValidationMessage string               `json:"validation_message"`
 	Visibility     map[string]interface{} `json:"visibility"`
 	DynamicStates  map[string]interface{} `json:"dynamic_states"`
 	DataSource     map[string]interface{} `json:"data_source"`
@@ -441,6 +443,7 @@ type FormElementCreateReq struct {
 	Required       int                    `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"`
 	DefaultValue   string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
 	ValidationRule string                 `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
+	ValidationMessage string               `json:"validation_message" validate:"omitempty,max=255" label:"错误提示"`
 	Visibility     map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
 	DynamicStates  map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
 	DataSource     map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
@@ -456,6 +459,7 @@ type FormElementUpdateReq struct {
 	Required       *int                   `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"` // 指针区分未传与 0
 	DefaultValue   string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
 	ValidationRule string                 `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
+	ValidationMessage string               `json:"validation_message" validate:"omitempty,max=255" label:"错误提示"`
 	Visibility     map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
 	DynamicStates  map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
 	DataSource     map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`

@@ -64,6 +64,7 @@ const EMPTY_FORM = {
   required: false,
   default_value: '',
   validation_rule: '',
+  validation_message: '',
   vis_list: true,
   vis_search: false,
   disabled_if: '',
@@ -389,6 +390,7 @@ export default function FormElementManage() {
       required: Boolean(record.required),
       default_value: record.default_value || '',
       validation_rule: record.validation_rule || '',
+      validation_message: record.validation_message || '',
       vis_list: record.visibility?.list ?? true,
       vis_search: record.visibility?.search ?? false,
       disabled_if: record.dynamic_states?.disabled_if || '',
@@ -418,6 +420,7 @@ export default function FormElementManage() {
       required: values.required ? 1 : 0,
       default_value: values.default_value,
       validation_rule: values.validation_rule || '',
+      validation_message: values.validation_message || '',
       visibility: {
         list: values.vis_list ? 1 : 0,
         search: values.vis_search ? 1 : 0,
@@ -767,6 +770,9 @@ export default function FormElementManage() {
                   placeholder="支持正则表达式（如 /^1[3-9]\d{9}$/）或校验表达式（如 ${form.end_date} > ${form.start_date}）"
                   autoSize={{ minRows: 1, maxRows: 4 }}
                 />
+              </FormItem>
+              <FormItem label="错误提示" field="validation_message">
+                <Input placeholder="留空时使用默认提示（如：手机号格式不正确 / 手机号校验不通过）" />
               </FormItem>
             </Col>
             <Col span={24} className={'[&_.arco-checkbox]:mr-4 [&_.arco-checkbox]:pl-0!'}>

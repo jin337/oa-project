@@ -319,7 +319,12 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
                       ? <ReadonlyValue value={cellValue} elementType={col.element_type} dataSource={col.data_source} />
                       : renderFn(col, undefined, rt)
                   : (
-                    <FormItem field={`${field}.${colKey}`} noStyle {...extra}>
+                    <FormItem
+                      field={`${field}.${colKey}`}
+                      noStyle
+                      {...extra}
+                      rules={cellEditable ? buildValidationRules(col, () => form?.getFieldsValue?.() || {}, false, true) : undefined}
+                    >
                       {cellEditable ? (
                         renderFn(col, 'form', rt)
                       ) : isReadonlyText ? (
@@ -903,6 +908,44 @@ const evalDynamicExpr = (expr, formValues) => {
 }
 
 /**
+ * 构建 Arco Form 校验规则（required + validation_rule）：
+ * - validation_rule 支持正则表达式（如 /^1[3-9]\\d{9}$/，Arco 用 match 承载）
+ *   或校验表达式（如 ${form.end_date} > ${form.start_date}，求值为 false 时校验失败，用 validator 承载）
+ * - isDetail：详情只读模式跳过必填；skipRequired：必填移交外部（表格整体规则）时跳过
+ * - getFormValues：返回当前表单值的函数（表达式校验求值用）
+ */
+const buildValidationRules = (el, getFormValues, isDetail, skipRequired) => {
+  const rules = []
+  const label = el.label || '此项'
+  if (el.required && !isDetail && !skipRequired) {
+    rules.push({ required: true, message: `${label}不能为空` })
+  }
+  const ruleStr = el.validation_rule
+  if (ruleStr) {
+    const str = String(ruleStr).trim()
+    if (str.startsWith('/')) {
+      const m = str.match(/^\/([\s\S]*)\/([a-z]*)$/i)
+      if (m) {
+        try {
+          rules.push({ match: new RegExp(m[1], m[2]), message: el.validation_message || `${label}格式不正确` })
+        } catch { /* 非法正则忽略 */ }
+      }
+    } else if (str.includes('${')) {
+      rules.push({
+        validator: (value, callback) => {
+          try {
+            const ok = evalDynamicExpr(str, getFormValues?.() || {})
+            if (ok) callback()
+            else callback(el.validation_message || `${label}校验不通过`)
+          } catch { callback() }
+        },
+      })
+    }
+  }
+  return rules.length ? rules : undefined
+}
+
+/**
  * 解析元素默认值 default_value：
  * - 输入类：字符串原样作为输入框内容
  * - 下拉/单选（select/radio/treeselect 单选）：值字符串（匹配选项 value）
@@ -1282,7 +1325,11 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
   )
 
   const contextValue = useMemo(
-    () => ({ getOptions: (el) => apiOptions[el.id], handleElementBlur }),
+    () => ({
+      getOptions: (el) => apiOptions[el.id],
+      handleElementBlur,
+      getFormValues: () => formRef.current?.getFieldsValue?.() || {},
+    }),
     [apiOptions, handleElementBlur],
   )
 
@@ -1477,12 +1524,12 @@ const renderFormItemElement = (el, ctx) => {
     ? Boolean(el.required)
     : Boolean(el.required) && (!noLabel || isTableElement)
 
-  // 校验规则：表格元素校验移交给内部 Form.List；常规元素用 required 规则（驱动星号与底层校验）
-  const rules = isTableElement
+  // 校验规则：表格元素校验移交给内部 Form.List；详情只读不校验；
+  // 常规元素由 rules 统一承载（required 必填 + validation_rule 正则/表达式），
+  // Arco 依据 rules 中的 required 自动渲染必填星号，表达式校验经 ctx.runtime.getFormValues 求值
+  const rules = isTableElement || isDetailMode
     ? undefined
-    : isRequired && !isDetailMode
-      ? [{ required: true, message: `${el.label || '此项'}不能为空` }]
-      : undefined
+    : buildValidationRules(el, () => ctx.runtime?.getFormValues?.() || {}, false, false)
 
   // 控件渲染分发：
   // - 详情只读模式（pageType='detail'）：常规控件与字段型组件（如 upload）渲染为纯文本（空值显示 '-'），

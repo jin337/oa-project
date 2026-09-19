@@ -152,14 +152,14 @@ func seedInitData(db *gorm.DB) error {
 
 	// 部门树
 	rootDept := model.Dept{Name: "总公司", Sort: 1, Status: 1}
-	rdDept := model.Dept{Name: "研发部", ParentID: 1, Sort: 2, Status: 1}
-	mkDept := model.Dept{Name: "市场部", ParentID: 1, Sort: 3, Status: 1}
 	if err := db.Create(&rootDept).Error; err != nil {
 		return err
 	}
-	rdDept.ParentID = rootDept.ID
-	mkDept.ParentID = rootDept.ID
-	if err := db.Create([]*model.Dept{&rdDept, &mkDept}).Error; err != nil {
+	childDepts := []model.Dept{
+		{Name: "研发部", ParentID: rootDept.ID, Sort: 2, Status: 1},
+		{Name: "市场部", ParentID: rootDept.ID, Sort: 3, Status: 1},
+	}
+	if err := db.Create(&childDepts).Error; err != nil {
 		return err
 	}
 
