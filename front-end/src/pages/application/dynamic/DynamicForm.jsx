@@ -847,9 +847,10 @@ const findOptionByValue = (opts, val) => {
 /** 按点号路径取值：getByPath({ a: { b: 1 } }, 'a.b') -> 1 */
 const getByPath = (obj, path) => {
   if (obj == null) return undefined
-  return String(path || '')
-    .split('.')
-    .reduce((o, k) => (o == null ? undefined : o[k]), obj)
+  const p = String(path || '')
+  // 空路径直接返回根对象（${id} 无剩余路径时取当前值本身）
+  if (p === '') return obj
+  return p.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj)
 }
 
 /**
@@ -862,7 +863,12 @@ const resolveExpr = (expr, vars) => {
   return str.replace(/\$\{([^}]+)\}/g, (_, pathExpr) => {
     const parts = String(pathExpr).split('.')
     const scope = parts[0]
-    const root = scope === 'form' ? vars?.form : scope === 'item' ? vars?.item : vars?.[scope]
+    // ${form.xxx} / ${item.xxx} 显式作用域；${id} 等无前缀写法优先取选中项展开字段（vars.id），
+    // 回退表单字段（vars.form.id）——兼容 /users/${id} 路径模板（id 为选项 value 或选中项字段）
+    let root
+    if (scope === 'form') root = vars?.form
+    else if (scope === 'item') root = vars?.item
+    else root = vars?.[scope] !== undefined ? vars[scope] : vars?.form?.[scope]
     const val = getByPath(root, parts.slice(1).join('.'))
     return val === undefined || val === null ? '' : String(val)
   })
@@ -1109,6 +1115,8 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
   const [apiOptions, setApiOptions] = useState({})
   const isRuntime = pageType === 'form'
   const formRef = useRef(null)
+  // 联动写入标记：set_value/fetch_and_fill 写入的字段值，onValuesChange 识别并跳过（防写回触发字段导致二次联动）
+  const linkWrittenRef = useRef({})
   formRef.current = form
   // 最新动态选项（联动 set_value 需按选中项 raw 取值）
   const apiOptionsRef = useRef({})
@@ -1121,7 +1129,8 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
     const ds = el.data_source
     if (!ds?.url) return
     const vars = { form: allValues || {} }
-    const url = normalizeApiUrl(ds.url)
+    // 先解析 URL 中的 ${form.xxx} / ${xxx} 路径模板，避免 ${} 被请求层整体编码
+    const url = normalizeApiUrl(resolveExpr(ds.url, vars))
     const params = resolveParams(ds.params, vars)
     const method = (ds.method || 'GET').toUpperCase()
     try {
@@ -1147,9 +1156,12 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
   }, [])
 
   /** 执行 fetch_and_fill 动作：请求接口并按 target_mapping 填充目标字段 */
-  const runFetchFill = useCallback(async (action, allValues) => {
-    const url = normalizeApiUrl(action.api_url)
-    const params = resolveParams(action.params, { form: allValues })
+  const runFetchFill = useCallback(async (action, allValues, currentObj) => {
+    // vars：form = 表单值；item/展开字段 = 选中项数据（api_url 中的 ${id} 可取选项 value）
+    const vars = { form: allValues || {}, item: currentObj, ...(currentObj || {}) }
+    // 先解析 URL 中的 ${form.xxx} / ${xxx} 路径模板，避免 ${} 被请求层整体编码
+    const url = normalizeApiUrl(resolveExpr(action.api_url, vars))
+    const params = resolveParams(action.params, vars)
     const method = (action.method || 'GET').toUpperCase()
     try {
       const res = await request({
@@ -1163,11 +1175,19 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
       const patch = {}
       for (const m of mapping) {
         if (m?.target) {
-          const v = getByPath(data, m.source)
+          // source 兼容 "item.xxx" 占位前缀（单对象返回时去掉前缀取值）
+          const src = String(m.source || '')
+          let v = getByPath(data, src)
+          if (v === undefined && src.startsWith('item.')) {
+            v = getByPath(data, src.replace(/^item\./, ''))
+          }
           if (v !== undefined) patch[m.target] = v
         }
       }
-      if (Object.keys(patch).length) formRef.current?.setFieldsValue?.(patch)
+      if (Object.keys(patch).length) {
+        linkWrittenRef.current = { ...patch }
+        formRef.current?.setFieldsValue?.(patch)
+      }
     } catch (e) {
       // 填充失败不打断流程
     }
@@ -1179,19 +1199,20 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
       const actions = Array.isArray(el.actions?.[trigger]) ? el.actions[trigger] : []
       for (const action of actions) {
         if (!action?.action_type) continue
+        // 触发字段当前值 + 选中项完整数据（set_value / fetch_and_fill 共用）：
+        // 触发字段值读 tableKey[index].colKey（列场景）或 field_key（普通场景）
+        const currentVal = colCtx
+          ? formRef.current?.getFieldValue?.([colCtx.tableKey, colCtx.index, colCtx.fieldKey])
+          : el?.field_key
+            ? formRef.current?.getFieldValue?.(el.field_key)
+            : undefined
+        // 选中项完整数据：优先从该元素动态选项 raw 中匹配，回退为 { 字段: 值 }
+        const opts = apiOptionsRef.current[el?.id] || []
+        const sel = findOptionByValue(opts, currentVal)
+        const currentObj = sel?.raw || { [colCtx?.fieldKey || el?.field_key]: currentVal }
         if (action.action_type === 'set_value') {
           const list = Array.isArray(action.value) ? action.value : []
           const patch = {}
-          // 触发字段当前值：列场景读 tableKey[index].colKey，普通场景读 field_key
-          const currentVal = colCtx
-            ? formRef.current?.getFieldValue?.([colCtx.tableKey, colCtx.index, colCtx.fieldKey])
-            : el?.field_key
-              ? formRef.current?.getFieldValue?.(el.field_key)
-              : undefined
-          // 选中项完整数据：优先从该元素动态选项 raw 中匹配，回退为 { 字段: 值 }
-          const opts = apiOptionsRef.current[el?.id] || []
-          const sel = findOptionByValue(opts, currentVal)
-          const currentObj = sel?.raw || { [colCtx?.fieldKey || el?.field_key]: currentVal }
           for (const m of list) {
             if (m?.target) {
               // 保护：目标字段等于触发字段自身时跳过写入。
@@ -1218,9 +1239,13 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
               }
             }
           }
-          if (Object.keys(patch).length) formRef.current?.setFieldsValue?.(patch)
+          if (Object.keys(patch).length) {
+            linkWrittenRef.current = { ...patch }
+            formRef.current?.setFieldsValue?.(patch)
+          }
         } else if (action.action_type === 'fetch_and_fill') {
-          runFetchFill(action, allValues)
+          // 传入选中项完整数据：api_url 中的 ${id} / ${form.xxx} 均可解析
+          runFetchFill(action, allValues, currentObj)
         }
       }
     },
@@ -1267,9 +1292,24 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
     elementsRef.current.forEach((el) => {
       const actions = el.actions?.on_change
       // on_change 语义：仅当该元素自身字段值变化时触发；
-      // 联动写入其他字段（set_value/fetch_and_fill 的目标）不会再次触发自身，避免死循环
+      // 联动写入（set_value/fetch_and_fill 的目标）按 linkWrittenRef 标记跳过，避免写回触发字段造成二次联动
       if (Array.isArray(actions) && actions.length && changedKeys.includes(el.field_key)) {
-        runActionsRef.current?.('on_change', el, allValues)
+        const lw = linkWrittenRef.current
+        const val = changed[el.field_key]
+        const isLinkWrite =
+          Object.prototype.hasOwnProperty.call(lw, el.field_key) &&
+          (() => {
+            try {
+              return JSON.stringify(lw[el.field_key]) === JSON.stringify(val)
+            } catch {
+              return lw[el.field_key] === val
+            }
+          })()
+        if (isLinkWrite) {
+          delete lw[el.field_key]
+        } else {
+          runActionsRef.current?.('on_change', el, allValues)
+        }
       }
       if (OPTION_ELEMENT_TYPES.has(el.element_type) && el.data_source?.type === 'api') {
         const ds = el.data_source

@@ -15,14 +15,13 @@ import {
   Table,
 } from '@arco-design/web-react'
 import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
-import { cloneElement, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
 import DynamicForm, {
   formatTimeValue,
   getStaticOptions,
   parseLayoutJson,
-  renderPreviewConfig,
   serializeTimeFields,
   TIME_ELEMENT_TYPES,
 } from 'src/pages/application/dynamic/DynamicForm'
@@ -62,35 +61,6 @@ function getDisplayValue(col, value) {
     }
   }
   return String(value)
-}
-
-// 支持 allowClear 的搜索控件类型（Switch/Radio/Checkbox/Upload 等不支持该属性，不注入）
-const SEARCH_ALLOW_CLEAR_TYPES = [
-  'input',
-  'textarea',
-  'number',
-  'select',
-  'date',
-  'datepicker',
-  'time',
-  'timepicker',
-]
-
-/**
- * 搜索控件动态分发：根据 field.element_type 复用 DynamicForm 的 renderPreviewConfig 映射对应的
- * Arco 控件（select/radio/checkbox 经 getStaticOptions 注入静态选项、number → InputNumber、
- * datepicker → DatePicker、timepicker → TimePicker 等），搜索场景始终以可交互模式
- * （pageType='form'）渲染并统一注入 allowClear；未匹配的类型回退为 Input
- */
-function renderSearchControl(field) {
-  const render = renderPreviewConfig[field.element_type]
-  const control = render ? render(field, 'form') : null
-  if (control) {
-    return SEARCH_ALLOW_CLEAR_TYPES.includes(field.element_type)
-      ? cloneElement(control, { allowClear: true })
-      : control
-  }
-  return <Input placeholder={field.placeholder || `请输入${field.label || '内容'}`} allowClear />
 }
 
 /**
@@ -341,7 +311,10 @@ export default function DynamicList({ app, code }) {
           <Form form={searchForm} layout="inline">
             {searchFields.map((field) => (
               <FormItem key={field.field_key} field={field.field_key} label={field.label}>
-                {renderSearchControl(field)}
+                <Input
+                  placeholder={field.placeholder || `请输入${field.label || '内容'}`}
+                  allowClear
+                />
               </FormItem>
             ))}
             <FormItem>
