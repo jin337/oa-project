@@ -68,12 +68,12 @@ export default function NotificationBell() {
   }
 
   const dropdown = (
-    <div className="max-h-96 w-80 overflow-auto rounded-lg bg-white shadow-lg">
+    <div className="max-h-96 w-80 overflow-auto rounded-lg bg-white shadow-lg border border-gray-100">
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
         <Typography.Text className="font-medium">通知</Typography.Text>
-        <Button type="text" size="mini" onClick={handleReadAll}>
+        {count > 0&&<Button type="text" size="mini" onClick={handleReadAll}>
           全部已读
-        </Button>
+        </Button>}
       </div>
       {loading ? (
         <div className="flex justify-center py-8">
@@ -121,9 +121,14 @@ export default function NotificationBell() {
       onVisibleChange={handleVisibleChange}
       position="br"
     >
-      <Badge count={count} dot={count > 0}>
-        <Button type="text" icon={<IconNotification />} />
-      </Badge>
+      <Button
+        type="text"
+        icon={
+          <Badge count={count} dot={count > 0}>
+            <IconNotification />
+          </Badge>
+        }
+      />
     </Dropdown>
   )
 }
