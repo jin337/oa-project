@@ -21,6 +21,7 @@ import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon
 import { memo, useCallback, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import request from 'src/api/request'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
+import { renderUploadPreview, renderUploadSettings } from './elements/UploadElement'
 
 const FormItem = Form.Item
 const FormList = Form.List
@@ -34,10 +35,10 @@ const SummaryCell = Table.Summary.Cell
 
 // 元素宽度占比（24 栅格，短标签适配按钮式 Radio）
 const WIDTH_OPTIONS = [
-  { label: '100%', value: 24, tip: '整行' },
-  { label: '50%', value: 12, tip: '1/2' },
-  { label: '33%', value: 8, tip: '1/3' },
-  { label: '25%', value: 6, tip: '1/4' },
+  { value: 24, label: '整行' },
+  { value: 12, label: '1/2' },
+  { value: 8, label: '1/3' },
+  { value: 6, label: '1/4' },
 ]
 
 // 画布模式（move-*）下依赖选项组件的统一预览占位选项（不解析真实 data_source）
@@ -112,7 +113,7 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
       >
         {WIDTH_OPTIONS.map((opt) => (
           <Radio key={opt.value} value={opt.value}>
-            {opt.tip}
+            {opt.label}
           </Radio>
         ))}
       </Radio.Group>
@@ -495,6 +496,7 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
  *
  * 新增基础组件只需在此对象中追加一项，左侧组件库、画布预览、属性面板自动生效。
  */
+
 export const BASE_ELEMENT_CONFIGS = {
   divider: {
     meta: {
@@ -611,7 +613,7 @@ export const BASE_ELEMENT_CONFIGS = {
         >
           添加列
         </Button>
-        <div className='flex justify-between'>
+        <div className="flex justify-between">
           <div className="text-sm text-gray-600">开启合计</div>
           <Switch
             size="small"
@@ -642,7 +644,6 @@ export const BASE_ELEMENT_CONFIGS = {
                     })
                   }
                 />
-
                 <Button
                   size="small"
                   status="danger"
@@ -688,6 +689,7 @@ export const BASE_LAYOUT_ELEMENTS = Object.values(BASE_ELEMENT_CONFIGS).map(({ m
   required: false,
   ...(meta.defaultProps || {}),
 }))
+
 
 /**
  * 组件统一渲染配置中心：每个 element_type 一个配置对象，
@@ -814,7 +816,8 @@ export const ELEMENT_RENDER_CONFIG = {
     renderPreview: (el) => <Switch />,
   },
   upload: {
-    renderPreview: (el) => <Upload action="/" tip={el.placeholder || undefined} />,
+    renderPreview: renderUploadPreview,
+    renderSettings: renderUploadSettings,
   },
 }
 
@@ -1186,13 +1189,13 @@ const extractOptions = (resp, ds, vars) => {
 }
 
 /** 运行时表单上下文：向选项型控件提供动态选项、向元素容器提供失焦回调 */
-const RuntimeFormContext = createContext(null)
+export const RuntimeFormContext = createContext(null)
 
 /**
  * 运行时交互 Hook：动态数据源(api)加载 + 事件驱动联动(actions)执行。
  * 仅在 pageType='form'（实际填写）时启用；画布/详情只读不触发。
  */
-const useRuntimeForm = ({ elements, form, pageType }) => {
+const useRuntimeForm = ({ elements, form, pageType, app }) => {
   const [apiOptions, setApiOptions] = useState({})
   const isRuntime = pageType === 'form'
   const formRef = useRef(null)
@@ -1380,11 +1383,13 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
           const colKey = col.dataIndex || col.field_key
           if (!colKey) return
           // 命中 tableKey[索引].colKey（Arco Form.List 实际格式）或 tableKey.索引.colKey 变化：触发该列 on_change（同行联动）
-          const re = new RegExp(`^${escapeRe(tableKey)}(?:\\[\\d+\\]|\\.\\d+)\\.${escapeRe(colKey)}$`)
-          const rowHit = changedKeys.find((k) => re.test(k))
+          // 用字符串前缀+后缀匹配替代每次 new RegExp，高频字段变更下避免反复编译正则
+          const suffix = `.${colKey}`
+          const rowHit = changedKeys.find((k) => k.startsWith(tableKey) && k.endsWith(suffix))
           if (rowHit) {
-            const mIdx = rowHit.match(/\[(\d+)\]|\.(\d+)\./)
-            const idx = Number(mIdx ? mIdx[1] || mIdx[2] : 0)
+            // 提取索引：tableKey[3].colKey -> 3；tableKey.3.colKey -> 3
+            const idxMatch = rowHit.match(/\[(\d+)\]|\.(\d+)\./)
+            const idx = Number(idxMatch ? idxMatch[1] || idxMatch[2] : 0)
             const colActions = col.actions?.on_change
             if (Array.isArray(colActions) && colActions.length) {
               runActionsRef.current?.('on_change', col, allValues, { tableKey, index: idx, fieldKey: colKey })
@@ -1415,13 +1420,18 @@ const useRuntimeForm = ({ elements, form, pageType }) => {
     [isRuntime],
   )
 
+  // getOptions 依赖 apiOptions 变化重建；getFormValues 经 ref 读取可稳定引用
+  const getOptions = useCallback((el) => apiOptionsRef.current?.[el.id] || apiOptions[el.id], [apiOptions])
+  const getFormValues = useCallback(() => formRef.current?.getFieldsValue?.() || {}, [])
+
   const contextValue = useMemo(
     () => ({
-      getOptions: (el) => apiOptions[el.id],
+      getOptions,
       handleElementBlur,
-      getFormValues: () => formRef.current?.getFieldsValue?.() || {},
+      getFormValues,
+      appCode: app?.code || '',
     }),
-    [apiOptions, handleElementBlur],
+    [getOptions, handleElementBlur, getFormValues, app?.code],
   )
 
   return { contextValue, handleValuesChange }
@@ -1440,8 +1450,13 @@ const RuntimeFieldWrap = ({ el, children }) => {
  * LayoutManage 右侧"元素属性"Tab 统一调用此函数，无需再关心具体类型。
  */
 export const renderElementSettings = (el, ctx) => {
+  // 基础元素（divider/table）走 BASE_ELEMENT_CONFIGS；
+  // 常规元素走 ELEMENT_RENDER_CONFIG 自带的 renderSettings；
+  // 都没有时回退通用配置。
   const baseCfg = getBaseElementConfig(el.element_type)
   if (baseCfg?.renderSettings) return baseCfg.renderSettings(ctx)
+  const runtimeCfg = ELEMENT_RENDER_CONFIG[el.element_type]
+  if (runtimeCfg?.renderSettings) return runtimeCfg.renderSettings(ctx)
   return renderCommonSettings(ctx)
 }
 
@@ -1565,7 +1580,15 @@ const labelOfValue = (value, dataSource) => {
  * （数组值逐项映射后以 ", " 连接），空值显示 '-'。
  * elementType 为时间/日期类型时，value 经 formatTimeValue 格式化为标准可读的日期/时间字符串。
  */
-const ReadonlyValue = ({ value, elementType, dataSource }) => {
+const ReadonlyValue = ({ value, elementType, dataSource, renderUpload }) => {
+  // upload 类型：解析 JSON 字符串或数组，渲染文件链接/图片预览
+  if (elementType === 'upload') {
+    let list = value
+    if (typeof list === 'string') {
+      try { list = JSON.parse(list) } catch { list = null }
+    }
+    return <UploadReadOnlyList list={list} />
+  }
   let text
   if (value == null || value === '') {
     text = '-'
@@ -1577,6 +1600,29 @@ const ReadonlyValue = ({ value, elementType, dataSource }) => {
     text = String(labelOfValue(value, dataSource))
   }
   return <span className="break-all whitespace-pre-wrap">{text}</span>
+}
+
+// upload 只读文件列表渲染
+const UploadReadOnlyList = ({ list }) => {
+  if (!Array.isArray(list) || list.length === 0) return <span className="text-gray-400">-</span>
+  return (
+    <div className="flex flex-col gap-1">
+      {list.map((f, i) => {
+        const url = f?.url || ''
+        const name = f?.name || url
+        const isImg = /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(name)
+        return isImg ? (
+          <a key={i} href={url} target="_blank" rel="noreferrer">
+            <img src={url} alt={name} className="h-16 w-16 rounded border object-cover" />
+          </a>
+        ) : (
+          <a key={i} href={url} target="_blank" rel="noreferrer" className="text-blue-600 break-all">
+            {name}
+          </a>
+        )
+      })}
+    </div>
+  )
 }
 
 /**
@@ -1632,7 +1678,11 @@ const renderFormItemElement = (el, ctx) => {
       // 表格（子表）：透传字段权限，支持 detail 下按列 perm=2 渲染可编辑控件
       return <TableElementField el={el} pageType={pageType} fieldPerms={fieldPerms} editable={editable} />
     }
+    // detail 只读：upload 走专属只读渲染（文件链接/图片预览），其他走 ReadonlyValue
     if (pageType === 'detail' && el.element_type !== 'divider' && !permEditable) {
+      if (el.element_type === 'upload') {
+        return <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} renderUpload />
+      }
       return <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} />
     }
     const baseCfg = getBaseElementConfig(el.element_type)
@@ -1812,7 +1862,7 @@ export default function DynamicForm({
   const formConfig = layout?.formConfig || DEFAULT_FORM_CONFIG
 
   // 运行时交互：动态数据源(api)选项加载 + 事件联动(actions)执行（仅 pageType='form' 启用）
-  const { contextValue, handleValuesChange } = useRuntimeForm({ elements, form, pageType })
+  const { contextValue, handleValuesChange } = useRuntimeForm({ elements, form, pageType, app })
 
   const isMoveMode = pageType === 'move-form' || pageType === 'move-detail'
   // 表单渲染上下文（画布元素 memo 依赖）：仅当 formConfig / pageType 变化时重建，

@@ -16,6 +16,9 @@ func Setup() *gin.Engine {
 	// 根路径健康检查：无需鉴权，用于验证服务与数据库是否正常
 	r.GET("/", handler.Health)
 
+	// 上传文件静态服务：直接映射磁盘 uploads 目录
+	r.Static("/uploads", handler.UploadDir)
+
 	v1 := r.Group("/api/v1")
 
 	// 认证（登录无需鉴权）
@@ -117,6 +120,13 @@ func Setup() *gin.Engine {
 	}
 
 	// 站内通知
+	// 文件上传
+	upload := v1.Group("/upload")
+	upload.Use(middleware.JWTAuth())
+	{
+		upload.POST("", handler.Upload)
+	}
+
 	notifications := v1.Group("/notifications")
 	notifications.Use(middleware.JWTAuth())
 	{

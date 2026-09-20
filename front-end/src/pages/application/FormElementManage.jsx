@@ -231,9 +231,8 @@ export default function FormElementManage() {
   const currentTab = tabs.find((t) => t.path === activeTab)
   const cardTitle = currentTab?.title || MODULE_LABEL
 
-  // 当前元素类型的配置元数据（用于联动控制 placeholder / data_source 显隐）
+  // 当前元素类型的配置元数据（用于联动控制 data_source 显隐）
   const typeConfig = ELEMENT_TYPE_OPTIONS.find((o) => o.value === currentElementType)
-  const showPlaceholder = typeConfig ? typeConfig.needPlaceholder : true
   const showDataSource = typeConfig ? typeConfig.needDataSource : false
 
   const fetchList = useCallback(
@@ -675,7 +674,6 @@ export default function FormElementManage() {
               const val = changedValues.element_type
               setCurrentElementType(val)
               const cfg = ELEMENT_TYPE_OPTIONS.find((o) => o.value === val)
-              if (cfg && !cfg.needPlaceholder) form.setFieldsValue({ placeholder: '' })
               if (cfg && !cfg.needDataSource) {
                 form.setFieldsValue({ data_source: {} })
               }
@@ -750,11 +748,9 @@ export default function FormElementManage() {
               </FormItem>
             </Col>
             <Col span={12}>
-              {showPlaceholder && (
-                <FormItem label="占位提示" field="placeholder">
-                  <Input placeholder="如：请输入或选择" />
-                </FormItem>
-              )}
+              <FormItem label="占位提示" field="placeholder">
+                <Input placeholder="如：请输入或选择" />
+              </FormItem>
             </Col>
             <Col span={24}>
               <FormItem label="校验规则" field="validation_rule">

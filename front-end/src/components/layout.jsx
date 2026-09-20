@@ -125,6 +125,12 @@ function HeaderBar() {
     return location.pathname
   }, [activeChain, visibleMenuKeys, location.pathname])
 
+  // 菜单树渲染结果缓存：菜单数据不变时不重新生成整棵菜单 JSX
+  const menuItems = useMemo(
+    () => (menus && menus.length > 0 ? renderMenus(menus) : null),
+    [menus],
+  )
+
   // 切换当前部门：调用接口成功后更新全局用户状态中的 dept_id
   const handleSwitchDept = async (deptId) => {
     if (!deptId) return
@@ -183,7 +189,7 @@ function HeaderBar() {
         <MenuItem key="/" icon={<IconHome />}>
           工作台
         </MenuItem>
-        {menus && menus.length > 0 ? renderMenus(menus) : null}
+        {menuItems}
       </Menu>
 
       {/* 右侧：切换部门 + 用户信息 + 退出登录 */}

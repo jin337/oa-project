@@ -688,6 +688,15 @@ func loadBusinessData(instance model.ApprovalInstance) map[string]interface{} {
 			}
 		}
 	}
+	// JSON 字段（如 upload 文件列表）反序列化成对象，前端直接用
+	for k, v := range bizData {
+		if str, ok := v.(string); ok && len(str) > 0 && (str[0] == '{' || str[0] == '[') {
+			var parsed interface{}
+			if json.Unmarshal([]byte(str), &parsed) == nil {
+				bizData[k] = parsed
+			}
+		}
+	}
 	return bizData
 }
 

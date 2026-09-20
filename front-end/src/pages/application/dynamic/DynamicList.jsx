@@ -1,4 +1,3 @@
-import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -18,6 +17,7 @@ import {
 import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as applicationApi from 'src/api/application'
+import { SIZE_OPTIONS } from 'src/config/app'
 import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
 import DynamicForm, {
   formatTimeValue,
@@ -178,9 +178,9 @@ export default function DynamicList({ app, code }) {
             <Button type="text" size="small" onClick={() => openDrawer(record, 'detail')}>
               查看
             </Button>
-            <Button type="text" size="small" onClick={() => openDrawer(record, 'form')}>
+            {/* <Button type="text" size="small" onClick={() => openDrawer(record, 'form')}>
               编辑
-            </Button>
+            </Button> */}
             <Popconfirm position="lb" title="确认删除该条数据？" onOk={() => handleDelete(record)}>
               <Button type="text" size="small" status="danger">
                 删除

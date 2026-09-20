@@ -43,6 +43,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: () => '/',
       },
+      // 上传文件静态资源代理
+      '/uploads': {
+        target: 'http://localhost:8180',
+        changeOrigin: true,
+      },
     },
   },
   build: {

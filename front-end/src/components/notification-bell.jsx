@@ -1,12 +1,15 @@
 import { Badge, Button, Dropdown, Empty, List, Spin, Typography } from '@arco-design/web-react'
 import { IconNotification } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as notificationApi from 'src/api/notification'
 import { formatTime } from 'src/utils/format'
 
 // 通知类型文案
 const TYPE_TEXT = { 1: '待办', 2: '退回', 3: '抄送', 4: '结果' }
+// 轮询间隔：有未读 15s 轮询，无未读 60s 轮询（减少后台请求）
+const POLL_ACTIVE = 15000
+const POLL_IDLE = 60000
 
 export default function NotificationBell() {
   const navigate = useNavigate()
@@ -14,6 +17,9 @@ export default function NotificationBell() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
   const [visible, setVisible] = useState(false)
+  // 用 ref 跟踪可见性/下拉打开态，避免 useEffect 依赖频繁重建定时器
+  const pageVisibleRef = useRef(!document.hidden)
+  const dropdownOpenRef = useRef(false)
 
   const loadCount = useCallback(async () => {
     try {
@@ -36,15 +42,39 @@ export default function NotificationBell() {
     }
   }, [])
 
-  // 未读数轮询 30s
+  // 未读数轮询：页面可见且下拉未打开时才轮询；有未读短间隔，无未读长间隔
   useEffect(() => {
+    let timer
+    let interval = 0
+
+    const tick = () => {
+      if (!pageVisibleRef.current || dropdownOpenRef.current) return
+      loadCount()
+      // 动态调整间隔：下一次按当前未读数决定
+      clearInterval(timer)
+      interval = count > 0 ? POLL_ACTIVE : POLL_IDLE
+      timer = setInterval(tick, interval)
+    }
+
+    // 页面可见性变化：切回前台立即查一次
+    const onVisibility = () => {
+      pageVisibleRef.current = !document.hidden
+      if (pageVisibleRef.current) loadCount()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
     loadCount()
-    const t = setInterval(loadCount, 30000)
-    return () => clearInterval(t)
-  }, [loadCount])
+    timer = setInterval(tick, POLL_IDLE)
+
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [loadCount, count])
 
   const handleVisibleChange = (v) => {
     setVisible(v)
+    dropdownOpenRef.current = v
     if (v) loadList()
   }
 
@@ -71,7 +101,7 @@ export default function NotificationBell() {
     <div className="max-h-96 w-80 overflow-auto rounded-lg bg-white shadow-lg border border-gray-100">
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
         <Typography.Text className="font-medium">通知</Typography.Text>
-        {count > 0&&<Button type="text" size="mini" onClick={handleReadAll}>
+        {count > 0 && <Button type="text" size="mini" onClick={handleReadAll}>
           全部已读
         </Button>}
       </div>

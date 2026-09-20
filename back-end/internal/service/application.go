@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"encoding/json"
 	"time"
 
 	"back-end/internal/config"
@@ -613,6 +614,16 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 		}
 		mainColumns = append(mainColumns, "`"+k+"`")
 		mainPlaceholders = append(mainPlaceholders, "?")
+		// 非标量（map/slice，如 upload 文件列表）序列化成 JSON 字符串入库
+		if _, ok := v.(map[string]interface{}); ok {
+			if b, err := json.Marshal(v); err == nil {
+				v = string(b)
+			}
+		} else if _, ok := v.([]interface{}); ok {
+			if b, err := json.Marshal(v); err == nil {
+				v = string(b)
+			}
+		}
 		mainArgs = append(mainArgs, v)
 	}
 

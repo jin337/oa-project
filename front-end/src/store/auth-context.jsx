@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import * as authApi from 'src/api/auth'
 import { clearToken, getToken, setToken } from 'src/utils/auth'
 
@@ -66,21 +66,25 @@ export function AuthProvider({ children }) {
   // 判断是否拥有某个权限标识（按钮级权限）
   const hasPerm = useCallback((perm) => perms.includes(perm), [perms])
 
+  // Context value 稳定引用：仅在实际状态/回调变化时更新，避免切换部门等局部更新波及所有消费者
+  const contextValue = useMemo(
+    () => ({
+      token,
+      user,
+      menus,
+      perms,
+      menusLoaded,
+      login,
+      logout,
+      refreshProfile,
+      updateUser,
+      hasPerm,
+    }),
+    [token, user, menus, perms, menusLoaded, login, logout, refreshProfile, updateUser, hasPerm],
+  )
+
   return (
-    <AuthContext.Provider
-      value={{
-        token,
-        user,
-        menus,
-        perms,
-        menusLoaded,
-        login,
-        logout,
-        refreshProfile,
-        updateUser,
-        hasPerm,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   )
