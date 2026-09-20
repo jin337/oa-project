@@ -34,23 +34,18 @@ export function UploadElement({ el, pageType, value, onChange }) {
 
   // onChange(fileList, file)：file 是当前操作的文件，上传成功后 file.response 含后端返回
   // 用 file（带 response）直接替换 list 里对应项，避免受控模式下 list 里 file 过期
-  const handleChange = (list, file) => {
-    if (!file) {
-      onChange?.(list || [])
-      return
+  const handleChange = (list) => {
+    // 统一只保留 uid/url/name/size 四个字段，去掉 response/status/percent 等
+    const clean = (f) => {
+      const data = f?.response?.data || {}
+      return {
+        uid: f.uid,
+        name: data.name || f.name,
+        url: data.url || f.url || '',
+        size: data.size || f.size || 0,
+      }
     }
-    const data = file?.response?.data || {}
-    const merged = (list || []).map((f) =>
-      f.uid === file.uid
-        ? {
-            name: data.name || f.name,
-            url: data.url || f.url || '',
-            size: data.size || f.size || 0,
-            uid: file.uid,
-          }
-        : f,
-    )
-    onChange?.(merged)
+    onChange?.((list || []).map(clean))
   }
 
   return (
