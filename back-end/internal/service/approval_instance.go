@@ -606,10 +606,12 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	var app model.Application
 	appName := ""
 	var detailLayoutJSON any
+	var formLayoutJSON any
 	var latestFlowJSON any // 审批流展示用应用最新配置（与 detail_layout_json 一致，读取时合并）
 	if err := database.DB.First(&app, instance.AppID).Error; err == nil {
 		appName = app.Name
 		detailLayoutJSON = mergeLayoutJSON(app.DetailLayoutJSON, instance.AppID)
+		formLayoutJSON = mergeLayoutJSON(app.FormLayoutJSON, instance.AppID)
 		// 审批流展示应用最新配置；自选节点（approverType=3）的运行时成员从实例快照取（提交时注入），
 		// 避免详情/时间线丢失发起人已选的审批人、抄送人
 		latestFlowJSON = mergeFlowRuntimeMembers(app.ApprovalFlowJSON, instance.ApprovalFlowJSON)
@@ -643,6 +645,7 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 		CreatedByName:    createdByName,
 		BusinessData:     bizData,
 		DetailLayoutJSON: detailLayoutJSON,
+		FormLayoutJSON:   formLayoutJSON,
 		Tasks:            tasks,
 		AssigneeNameMap:  assigneeNameMap,
 		FieldPerms:       fieldPerms,

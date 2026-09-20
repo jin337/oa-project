@@ -75,7 +75,7 @@ function normalizeValue(val) {
 
 function normalizeOne(item) {
   if (typeof item === 'string') return { name: item, url: item }
-  return { name: item.name || item.filename || '文件', url: item.url || item.path || '' }
+  return { name: item.name || item.filename || '文件', url: item.url || item.path || '', uid: item.uid || '' }
 }
 
 /** 只读渲染：解析 JSON 字符串/数组，渲染文件链接/图片预览（供 detail 模式调用） */
@@ -93,7 +93,7 @@ export function renderUploadReadOnly(value) {
         const isImg = /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(name)
         return isImg ? (
           <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-1">
-            <img src={url} alt={name} className="h-16 w-16 rounded border object-cover" /> {name}
+            <img src={url} alt={name} className="h-6 w-6 rounded border object-cover" /> {name}
           </a>
         ) : (
           <a key={i} href={url} target="_blank" rel="noreferrer" className="text-blue-600 break-all">

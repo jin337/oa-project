@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"gorm.io/gorm"
@@ -842,6 +842,16 @@ func ApplicationDataUpdateWithDB(db *gorm.DB, appID, dataID uint, curUserID uint
 			return fmt.Errorf("字段不存在: %s", k)
 		}
 		sets = append(sets, "`"+k+"` = ?")
+		// 非标量（map/slice，如 upload 文件列表）序列化成 JSON 字符串入库
+		if _, ok := v.(map[string]interface{}); ok {
+			if b, err := json.Marshal(v); err == nil {
+				v = string(b)
+			}
+		} else if _, ok := v.([]interface{}); ok {
+			if b, err := json.Marshal(v); err == nil {
+				v = string(b)
+			}
+		}
 		args = append(args, v)
 	}
 

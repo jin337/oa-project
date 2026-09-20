@@ -651,7 +651,8 @@ type ApprovalInstanceDetailResult struct {
 	AppName          string                 `json:"app_name"`
 	CreatedByName    string                 `json:"created_by_name"`              // 发起人姓名
 	BusinessData     map[string]interface{} `json:"business_data,omitempty"`      // 业务数据（含子表）
-	DetailLayoutJSON any                    `json:"detail_layout_json,omitempty"` // 详情页布局快照
+	DetailLayoutJSON any                    `json:"detail_layout_json,omitempty"` // 详情页布局快照（只读展示）
+	FormLayoutJSON   any                    `json:"form_layout_json,omitempty"`   // 表单页布局（草稿/退回编辑用，可交互）
 	Tasks            []ApprovalInstanceTask `json:"approval_flow_tasks,omitempty"`
 	AssigneeNameMap  map[string]string      `json:"assignee_name_map,omitempty"` // 用户ID -> 姓名
 	FieldPerms       []interface{}          `json:"field_perms,omitempty"`       // 当前执行节点的表单字段权限 [{field, perm}]

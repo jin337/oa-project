@@ -11,7 +11,6 @@ import {
 } from '@arco-design/web-react'
 import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
-import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
   parseLayoutJson,
@@ -19,6 +18,7 @@ import DynamicForm, {
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import { useApprovalList } from 'src/pages/approval/useApprovalList'
 import { formatTime } from 'src/utils/format'
 
@@ -99,7 +99,7 @@ export default function Drafts() {
         setDrawerVisible(false)
         return
       }
-      // 一次请求获取实例详情（含 business_data + detail_layout_json）
+      // 一次请求获取实例详情（含 business_data + form_layout_json）
       const res = await approvalApi.getApprovalInstanceDetail(record.instance_id)
       const inst = res.data
       // 从草稿暂存 approval_draft_members（nodeId -> [userId]）恢复发起人自选审批人/抄送人，
@@ -114,11 +114,11 @@ export default function Drafts() {
           label: nameMap[String(uid)] || `用户${uid}`,
         }))
       })
-      // 构造 app 配置：detail_layout_json → form_layout_json 映射供 DynamicForm 使用，approval_flow_json → approval_flow_json 映射供 DynamicFlowView 使用
+      // 构造 app 配置：form_layout_json → form_layout_json 映射供 DynamicForm 使用，approval_flow_json → approval_flow_json 映射供 DynamicFlowView 使用
       setDrawerApp({
         id: inst.app_id,
         name: inst.app_name,
-        form_layout_json: inst.detail_layout_json,
+        form_layout_json: inst.form_layout_json,
         approval_flow_json: injectDraftMembers(inst.approval_flow_json, selfSel),
       })
       const bizData = inst.business_data || {}

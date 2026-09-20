@@ -28,3 +28,6 @@ strong {
   border: none;
   background-color: var(--color-neutral-2);
 }
+.arco-upload-list-item:first-of-type {
+  margin-top: 10px !important;
+}
