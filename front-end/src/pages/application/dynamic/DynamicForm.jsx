@@ -1,4 +1,4 @@
-import {
+﻿import {
   Button,
   Checkbox,
   DatePicker,
@@ -14,14 +14,13 @@ import {
   Table,
   Tag,
   TimePicker,
-  TreeSelect,
-  Upload,
+  TreeSelect
 } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon'
-import { memo, useCallback, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import request from 'src/api/request'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
-import { renderUploadPreview, renderUploadSettings } from './elements/UploadElement'
+import { renderUploadPreview, renderUploadReadOnly, renderUploadSettings } from './elements/UploadElement'
 
 const FormItem = Form.Item
 const FormList = Form.List
@@ -1580,14 +1579,10 @@ const labelOfValue = (value, dataSource) => {
  * （数组值逐项映射后以 ", " 连接），空值显示 '-'。
  * elementType 为时间/日期类型时，value 经 formatTimeValue 格式化为标准可读的日期/时间字符串。
  */
-const ReadonlyValue = ({ value, elementType, dataSource, renderUpload }) => {
-  // upload 类型：解析 JSON 字符串或数组，渲染文件链接/图片预览
+const ReadonlyValue = ({ value, elementType, dataSource }) => {
+  // upload 类型：走 UploadElement 的只读渲染
   if (elementType === 'upload') {
-    let list = value
-    if (typeof list === 'string') {
-      try { list = JSON.parse(list) } catch { list = null }
-    }
-    return <UploadReadOnlyList list={list} />
+    return renderUploadReadOnly(value)
   }
   let text
   if (value == null || value === '') {
@@ -1602,28 +1597,6 @@ const ReadonlyValue = ({ value, elementType, dataSource, renderUpload }) => {
   return <span className="break-all whitespace-pre-wrap">{text}</span>
 }
 
-// upload 只读文件列表渲染
-const UploadReadOnlyList = ({ list }) => {
-  if (!Array.isArray(list) || list.length === 0) return <span className="text-gray-400">-</span>
-  return (
-    <div className="flex flex-col gap-1">
-      {list.map((f, i) => {
-        const url = f?.url || ''
-        const name = f?.name || url
-        const isImg = /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(name)
-        return isImg ? (
-          <a key={i} href={url} target="_blank" rel="noreferrer">
-            <img src={url} alt={name} className="h-16 w-16 rounded border object-cover" />
-          </a>
-        ) : (
-          <a key={i} href={url} target="_blank" rel="noreferrer" className="text-blue-600 break-all">
-            {name}
-          </a>
-        )
-      })}
-    </div>
-  )
-}
 
 /**
  * 渲染单个表单控件项（标签 / 栅格 / 校验规则 / 控件），画布与常规模式共用。

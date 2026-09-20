@@ -1,4 +1,4 @@
-import { Button, Upload } from '@arco-design/web-react'
+import { Button, Input, Radio, Tag, Upload } from '@arco-design/web-react'
 import { useContext } from 'react'
 import { RuntimeFormContext } from '../DynamicForm'
 
@@ -18,11 +18,11 @@ export function UploadElement({ el, pageType, value, onChange }) {
 
   // detail / move-detail：只读展示
   if (pageType === 'detail') {
-    return renderReadOnly(fileList)
+    return renderUploadReadOnly(fileList)
   }
   if (pageType === 'move-detail') {
-    if (fileList.length > 0) return renderReadOnly(fileList)
-    return renderReadOnly([
+    if (fileList.length > 0) return renderUploadReadOnly(fileList)
+    return renderUploadReadOnly([
       { uid: '-1', name: '文件1.pdf', url: '' },
       { uid: '-2', name: '文件2.pdf', url: '' },
     ])
@@ -35,8 +35,8 @@ export function UploadElement({ el, pageType, value, onChange }) {
   // onChange(fileList, file)：file 是当前操作的文件，上传成功后 file.response 含后端返回
   // 用 file（带 response）直接替换 list 里对应项，避免受控模式下 list 里 file 过期
   const handleChange = (list) => {
-    // 统一只保留 uid/url/name/size 四个字段，去掉 response/status/percent 等
-    const clean = (f) => {
+    // 每个文件都检查自己的 response，合并 url/name/size
+    const merged = (list || []).map((f) => {
       const data = f?.response?.data || {}
       return {
         uid: f.uid,
@@ -44,8 +44,8 @@ export function UploadElement({ el, pageType, value, onChange }) {
         url: data.url || f.url || '',
         size: data.size || f.size || 0,
       }
-    }
-    onChange?.((list || []).map(clean))
+    })
+    onChange?.(merged)
   }
 
   return (
@@ -78,26 +78,31 @@ function normalizeOne(item) {
   return { name: item.name || item.filename || '文件', url: item.url || item.path || '' }
 }
 
-function renderReadOnly(list) {
-  if (!list || list.length === 0) return <span className="text-gray-400">-</span>
+/** 只读渲染：解析 JSON 字符串/数组，渲染文件链接/图片预览（供 detail 模式调用） */
+export function renderUploadReadOnly(value) {
+  let list = value
+  if (typeof list === 'string') {
+    try { list = JSON.parse(list) } catch { list = null }
+  }
+  if (!Array.isArray(list) || list.length === 0) return <span className="text-gray-400">-</span>
   return (
     <div className="flex flex-col gap-1">
-      {list.map((f, i) =>
-        isImage(f) ? (
-          <Image key={i} width={64} height={64} src={f.url} />
-        ) : (
-          <a key={i} href={f.url} target="_blank" rel="noreferrer" className="text-blue-600">
-            {f.name}
+      {list.map((f, i) => {
+        const url = f?.url || ''
+        const name = f?.name || url
+        const isImg = /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(name)
+        return isImg ? (
+          <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-1">
+            <img src={url} alt={name} className="h-16 w-16 rounded border object-cover" /> {name}
           </a>
-        ),
-      )}
+        ) : (
+          <a key={i} href={url} target="_blank" rel="noreferrer" className="text-blue-600 break-all">
+            {name}
+          </a>
+        )
+      })}
     </div>
   )
-}
-
-function isImage(f) {
-  const ext = (f.name || '').split('.').pop().toLowerCase()
-  return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)
 }
 
 // 元素宽度占比（24 栅格，短标签适配按钮式 Radio）
