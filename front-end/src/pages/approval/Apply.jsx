@@ -72,6 +72,7 @@ export default function Apply() {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [drawerLoading, setDrawerLoading] = useState(false)
   const [drawerApp, setDrawerApp] = useState(null)
+  const [drawerTitle, setDrawerTitle] = useState('')
   const [drawerSaving, setDrawerSaving] = useState(false)
   const [drawerForm] = Form.useForm()
   // 抽屉内动态表单实时值（供审批流程条件分支命中评估使用）
@@ -223,6 +224,7 @@ export default function Apply() {
     setDrawerVisible(true)
     setDrawerLoading(true)
     setDrawerApp(null)
+    setDrawerTitle(record.name || '申请表单')
     drawerForm.resetFields()
     try {
       const res = await applicationApi.getApplicationByCode(code.trim(), state.trim() || 'form')
@@ -248,7 +250,19 @@ export default function Apply() {
     // （YYYY-MM-DD / YYYY-MM-DD HH:mm:ss / HH:mm:ss），避免前端 ISO 8601
     // （如 2026-09-14T00:00:00+08:00）导致 MySQL Error 1292 更新失败
     const layout = parseLayoutJson(drawerApp?.form_layout_json)
-    return serializeTimeFields(values, layout?.elements || [])
+    const result = serializeTimeFields(values, layout?.elements || [])
+    // 清理子表空行：过滤掉所有值都为空的行（避免提交 [{}]）
+    Object.keys(result).forEach((key) => {
+      const val = result[key]
+      if (Array.isArray(val)) {
+        result[key] = val.filter((row) => {
+          if (!row || typeof row !== 'object') return false
+          // 判断是否所有字段都为空
+          return Object.values(row).some((v) => v !== '' && v !== null && v !== undefined)
+        })
+      }
+    })
+    return result
   }
 
   // 保存草稿：校验表单 + 一次调用保存审批草稿实例（后端自动创建业务数据）
@@ -505,7 +519,7 @@ export default function Apply() {
         width="50%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
-        title={drawerApp?.name || '申请表单'}
+        title={drawerTitle || '申请表单'}
         unmountOnExit
         footer={
           <div className="flex justify-end gap-2">

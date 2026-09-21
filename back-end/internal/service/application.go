@@ -12,6 +12,7 @@ import (
 
 	"back-end/internal/config"
 	"back-end/internal/database"
+	"back-end/internal/middleware"
 	"back-end/internal/model"
 )
 
@@ -390,7 +391,7 @@ func compactLayoutJSON(layout map[string]interface{}, appID uint) map[string]int
 //   - 空/未知：返回完整配置（兼容旧调用方）
 //
 // filters 为动态搜索字段（field_key → 值），仅 state=list 时作用于数据列表过滤
-func ApplicationByCode(code, state string, page, size int, filters map[string]string) (*model.ApplicationByCodeResult, error) {
+func ApplicationByCode(code, state string, page, size int, filters map[string]string, curUserID uint) (*model.ApplicationByCodeResult, error) {
 	var app model.Application
 	if err := database.DB.Where("code = ?", code).First(&app).Error; err != nil {
 		return nil, errors.New("页面配置不存在")
@@ -417,7 +418,7 @@ func ApplicationByCode(code, state string, page, size int, filters map[string]st
 			}
 		}
 		// 主表数据列表（复用动态数据查询逻辑，filters 作为动态过滤条件，过滤软删除；排除草稿——list 态为已提交数据视图）
-		list, total, err := ApplicationDataList(app.ID, &model.ApplicationDataListReq{
+		list, total, err := ApplicationDataList(app.ID, curUserID, &model.ApplicationDataListReq{
 			BaseListReq: model.BaseListReq{Page: page, Size: size},
 			TableName:   app.TableName,
 			Filters:     filters,
@@ -452,7 +453,7 @@ func ApplicationByCode(code, state string, page, size int, filters map[string]st
 //  1. 按 table_name 定位页面配置归属的业务物理表（含前缀）
 //  2. 动态搜索字段（field_key）经真实列名校验后拼装等值条件，值走参数绑定，防 SQL 注入
 //  3. 过滤软删除行，支持分页，返回标准分页结构
-func ApplicationDataList(appID uint, req *model.ApplicationDataListReq) ([]map[string]interface{}, int64, error) {
+func ApplicationDataList(appID uint, curUserID uint, req *model.ApplicationDataListReq) ([]map[string]interface{}, int64, error) {
 	real, err := getApplicationBizTableBy(appID, req.TableName)
 	if err != nil {
 		return nil, 0, err
@@ -474,6 +475,12 @@ func ApplicationDataList(appID uint, req *model.ApplicationDataListReq) ([]map[s
 		conds = append(conds, "`"+k+"` = ?")
 		args = append(args, v)
 	}
+
+	// 应用数据权限过滤（按用户角色数据范围自动过滤）
+	dpConds, dpArgs := buildDataPermissionConds(curUserID, colSet)
+	conds = append(conds, dpConds...)
+	args = append(args, dpArgs...)
+
 	where := ""
 	if len(conds) > 0 {
 		where = " WHERE " + strings.Join(conds, " AND ")
@@ -494,6 +501,74 @@ func ApplicationDataList(appID uint, req *model.ApplicationDataListReq) ([]map[s
 	}
 	return list, total, nil
 }
+
+// buildDataPermissionConds 构建数据权限过滤条件（按用户角色数据范围自动过滤）
+// 数据范围：1全部 2自定义部门 3本部门 4本部门及以下
+// 过滤字段：默认用 created_by（创建人）
+func buildDataPermissionConds(userID uint, colSet map[string]bool) ([]string, []interface{}) {
+	// 查当前用户的角色
+	var user model.User
+	if err := database.DB.Preload("Roles").First(&user, userID).Error; err != nil {
+		return []string{"1 = 0"}, []interface{}{}
+	}
+
+	// 检查是否有"全部数据"权限
+	showAll := false
+	showDeptAndBelow := false
+	showDept := false
+	for _, role := range user.Roles {
+		if role.Status != 1 {
+			continue
+		}
+		switch role.DataScope {
+		case model.DataScopeAll:
+			showAll = true
+		case model.DataScopeDeptAndBelow:
+			showDeptAndBelow = true
+		case model.DataScopeDept:
+			showDept = true
+		}
+	}
+
+	// 全部数据，不过滤
+	if showAll {
+		return []string{}, []interface{}{}
+	}
+
+	// 没有 created_by 字段，不过滤
+	if !colSet["created_by"] {
+		return []string{}, []interface{}{}
+	}
+
+	// 获取用户有权限的用户 ID
+	var userIDs []uint
+	if showDeptAndBelow {
+		// 本部门及以下
+		deptIDs := middleware.CollectDeptAndBelow(user.DeptID)
+		var users []model.User
+		database.DB.Where("dept_id IN ?", deptIDs).Find(&users)
+		for _, u := range users {
+			userIDs = append(userIDs, u.ID)
+		}
+	} else if showDept {
+		// 本部门
+		var users []model.User
+		database.DB.Where("dept_id = ?", user.DeptID).Find(&users)
+		for _, u := range users {
+			userIDs = append(userIDs, u.ID)
+		}
+	} else {
+		// 仅本人
+		userIDs = []uint{userID}
+	}
+
+	if len(userIDs) == 0 {
+		return []string{"1 = 0"}, []interface{}{}
+	}
+
+	return []string{"`created_by` IN ?"}, []interface{}{userIDs}
+}
+
 
 // ApplicationDataDetail 动态数据详情：
 //  1. 根据应用配置的主表 table_name 查询 dataId 对应行（过滤软删除）

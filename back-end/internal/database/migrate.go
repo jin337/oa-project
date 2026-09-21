@@ -225,7 +225,6 @@ func seedInitData(db *gorm.DB) error {
 		{ParentID: pageMenus[0].ID, Name: "重置密码", Type: model.MenuTypeButton, Perm: "system:user:resetPwd", Sort: 3, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[1].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:role:edit", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[1].ID, Name: "分配菜单", Type: model.MenuTypeButton, Perm: "system:role:assignMenu", Sort: 2, Status: 1, Hidden: 0},
-		{ParentID: pageMenus[1].ID, Name: "绑定部门", Type: model.MenuTypeButton, Perm: "system:role:assignDept", Sort: 3, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[2].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:menu:edit", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[3].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:dept:edit", Sort: 1, Status: 1, Hidden: 0},
 		// 应用配置页：管理按钮

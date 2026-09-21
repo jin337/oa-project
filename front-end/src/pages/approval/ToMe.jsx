@@ -1,6 +1,6 @@
 import { Button, Card, Space, Table } from '@arco-design/web-react'
-import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 import { useApprovalList } from 'src/pages/approval/useApprovalList'
 import { formatTime } from 'src/utils/format'
@@ -8,7 +8,15 @@ import { formatTime } from 'src/utils/format'
 const PAGE_TITLE = '抄送我的'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'app_name', 'dept_name', 'created_name', 'created_at', 'finished_at', 'approval_status']
+const ALL_COL_KEYS = [
+  'index',
+  'item_name',
+  'dept_name',
+  'created_name',
+  'created_at',
+  'finished_at',
+  'approval_status',
+]
 
 /** 抄送我的：展示流程中抄送给当前用户的申请记录，只读查看详情 */
 export default function ToMe() {
@@ -42,11 +50,23 @@ export default function ToMe() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { title: '模块', key: 'app_name', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '模块', key: 'item_name', dataIndex: 'item_name', render: (v, r) => v || '-' },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
     { title: '申请人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
-    { title: '申请时间', key: 'created_at', dataIndex: 'created_at', width: 170, render: formatTime },
-    { title: '完成时间', key: 'finished_at', dataIndex: 'finished_at', width: 170, render: formatTime },
+    {
+      title: '申请时间',
+      key: 'created_at',
+      dataIndex: 'created_at',
+      width: 170,
+      render: formatTime,
+    },
+    {
+      title: '完成时间',
+      key: 'finished_at',
+      dataIndex: 'finished_at',
+      width: 170,
+      render: formatTime,
+    },
     {
       title: '状态',
       key: 'approval_status',

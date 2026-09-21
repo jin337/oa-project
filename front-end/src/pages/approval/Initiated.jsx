@@ -11,15 +11,15 @@ import {
 } from '@arco-design/web-react'
 import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
-import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
-import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
-import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
-import { useApprovalList } from 'src/pages/approval/useApprovalList'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
   parseLayoutJson,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
+import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
+import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
+import { useApprovalList } from 'src/pages/approval/useApprovalList'
 import { formatTime } from 'src/utils/format'
 
 const PAGE_TITLE = '我的发起'
@@ -32,7 +32,7 @@ const DELETABLE_STATUSES = [4, 5]
 const REJECTED_STATUS = 5
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'app_name', 'dept_name', 'created_at', 'finished_at', 'approval_status']
+const ALL_COL_KEYS = ['index', 'item_name', 'dept_name', 'created_at', 'finished_at', 'approval_status']
 
 /** 我的发起：展示当前用户发起的所有审批记录（排除草稿），支持查看详情、撤回、删除、已驳回重新提交 */
 export default function Initiated() {
@@ -147,7 +147,7 @@ export default function Initiated() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { title: '模块', key: 'app_name', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '模块', key: 'item_name', dataIndex: 'item_name', render: (v) => v || '-' },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
     { title: '申请时间', key: 'created_at', dataIndex: 'created_at', width: 170, render: formatTime },
     { title: '完成时间', key: 'finished_at', dataIndex: 'finished_at', width: 170, render: formatTime },
@@ -161,7 +161,7 @@ export default function Initiated() {
     {
       title: '操作',
       key: 'action',
-      width: 180,
+      width: 60,
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => openDetail(r)}>

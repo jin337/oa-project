@@ -13,6 +13,7 @@ import (
 	"back-end/internal/database"
 	"back-end/internal/pkg/logger"
 	"back-end/internal/router"
+	"back-end/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -58,7 +59,18 @@ func main() {
 		}
 	}()
 
-	// 6. 优雅停机
+	// 6. 定时清理已读超过30天的通知
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := service.NotificationCleanup(); err != nil {
+				logger.Errorf("通知清理失败: %v", err)
+			}
+		}
+	}()
+
+	// 7. 优雅停机
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"back-end/internal/database"
+	"back-end/internal/middleware"
 	"back-end/internal/model"
 
 	"gorm.io/gorm"
@@ -199,6 +200,9 @@ func ApprovalCategoryItemDelete(id uint) error {
 // 各列表作用域（我的发起/草稿箱/我审批的/抄送我的）共用，保证字段口径与排序字段一致。
 func buildApprovalRecord(inst model.ApprovalInstance, app model.Application) model.ApprovalRecord {
 	bizStatus := instanceStatusToBizStatus(inst.Status)
+	// 根据 app.Code 关联查申请项名称
+	var item model.ApprovalCategoryItem
+	database.DB.Where("code = ?", app.Code).First(&item)
 	return model.ApprovalRecord{
 		ID:             inst.ID,
 		InstanceID:     inst.ID,
@@ -206,6 +210,7 @@ func buildApprovalRecord(inst model.ApprovalInstance, app model.Application) mod
 		AppID:          app.ID,
 		AppCode:        app.Code,
 		AppName:        app.Name,
+		ItemName:       item.Name,
 		Status:         bizStatus,
 		StatusName:     approvalStatusName(bizStatus),
 		CreatedBy:      inst.CreatedBy,
@@ -309,16 +314,19 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 
 // approvalListInitiated 我的发起列表：从 approval_instance 表查询当前用户发起的实例
 func approvalListInitiated(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
+	// 数据权限：部门主管能看本部门所有人发起的审批单
+	userIDs := getUserIDsByDataScope(curUserID)
+
 	var total int64
 	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
-		Where("oa_approval_instances.created_by = ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", curUserID, model.InstanceStatusDraft).
+		Where("oa_approval_instances.created_by IN ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", userIDs, model.InstanceStatusDraft).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var instances []model.ApprovalInstance
 	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
-		Where("oa_approval_instances.created_by = ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", curUserID, model.InstanceStatusDraft).
+		Where("oa_approval_instances.created_by IN ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", userIDs, model.InstanceStatusDraft).
 		Order("oa_approval_instances.id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
 		Find(&instances).Error; err != nil {
@@ -591,20 +599,31 @@ func fillApprovalUserInfo(records []model.ApprovalRecord) {
 		return
 	}
 
-	// 批量查询用户（含部门 ID 收集）：GORM IN 子句需要 slice
+	// 批量查询用户（姓名）：GORM IN 子句需要 slice
 	userName := queryUserNames(uidSet)
-	userDept := map[uint]uint{} // 用户ID -> 部门ID
+	// 收集实例表中的部门 ID（快照）
 	deptIDSet := map[uint]bool{}
-	uidList := make([]uint, 0, len(uidSet))
-	for uid := range uidSet {
-		uidList = append(uidList, uid)
+	for i := range records {
+		if records[i].DeptID > 0 {
+			deptIDSet[records[i].DeptID] = true
+		}
 	}
-	var users []model.User
-	if err := database.DB.Unscoped().Preload("Profile").Where("id IN ?", uidList).Find(&users).Error; err == nil {
-		for _, u := range users {
-			userDept[u.ID] = u.DeptID
-			if u.DeptID > 0 {
-				deptIDSet[u.DeptID] = true
+	// 旧数据兼容：实例表 DeptID 为 0 的，实时查用户表部门
+	needUserDept := []uint{}
+	for i := range records {
+		if records[i].DeptID == 0 {
+			needUserDept = append(needUserDept, records[i].CreatedBy)
+		}
+	}
+	userDept := map[uint]uint{}
+	if len(needUserDept) > 0 {
+		var users []model.User
+		if err := database.DB.Unscoped().Select("id, dept_id").Where("id IN ?", needUserDept).Find(&users).Error; err == nil {
+			for _, u := range users {
+				userDept[u.ID] = u.DeptID
+				if u.DeptID > 0 {
+					deptIDSet[u.DeptID] = true
+				}
 			}
 		}
 	}
@@ -615,7 +634,11 @@ func fillApprovalUserInfo(records []model.ApprovalRecord) {
 	for i := range records {
 		r := &records[i]
 		r.CreatedName = userName[r.CreatedBy]
-		if did, ok := userDept[r.CreatedBy]; ok {
+		// 优先用实例表快照的部门 ID
+		if r.DeptID > 0 {
+			r.DeptName = deptName[r.DeptID]
+		} else if did, ok := userDept[r.CreatedBy]; ok {
+			// 旧数据兼容：实时查用户表部门
 			r.DeptName = deptName[did]
 		}
 	}
@@ -680,4 +703,55 @@ func rowBizData(row map[string]interface{}) map[string]interface{} {
 		return nil
 	}
 	return biz
+}
+
+
+// getUserIDsByDataScope 根据当前用户数据范围获取可见的用户 ID 列表
+// 部门主管能看本部门所有人，普通用户只能看自己
+func getUserIDsByDataScope(curUserID uint) []uint {
+	var user model.User
+	if err := database.DB.Preload("Roles").First(&user, curUserID).Error; err != nil {
+		return []uint{curUserID}
+	}
+
+	// 检查是否有"全部数据"或"本部门及以下"权限
+	showAll := false
+	showDeptAndBelow := false
+	for _, role := range user.Roles {
+		if role.Status != 1 {
+			continue
+		}
+		switch role.DataScope {
+		case model.DataScopeAll:
+			showAll = true
+		case model.DataScopeDeptAndBelow:
+			showDeptAndBelow = true
+		}
+	}
+
+	if showAll {
+		// 全部数据：返回所有用户
+		var users []model.User
+		database.DB.Find(&users)
+		ids := make([]uint, 0, len(users))
+		for _, u := range users {
+			ids = append(ids, u.ID)
+		}
+		return ids
+	}
+
+	if showDeptAndBelow {
+		// 本部门及以下：返回本部门及子部门的所有用户
+		deptIDs := middleware.CollectDeptAndBelow(user.DeptID)
+		var users []model.User
+		database.DB.Where("dept_id IN ?", deptIDs).Find(&users)
+		ids := make([]uint, 0, len(users))
+		for _, u := range users {
+			ids = append(ids, u.ID)
+		}
+		return ids
+	}
+
+	// 默认：只看自己
+	return []uint{curUserID}
 }

@@ -67,7 +67,7 @@ func ApplicationByCode(c *gin.Context) {
 			filters[k] = vs[0]
 		}
 	}
-	result, err := service.ApplicationByCode(code, state, page, size, filters)
+	result, err := service.ApplicationByCode(code, state, page, size, filters, middleware.CurrentUserID(c))
 	if err != nil {
 		response.Fail(c, response.CodeNotFound, err.Error())
 		return

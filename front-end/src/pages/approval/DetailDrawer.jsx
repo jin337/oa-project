@@ -103,7 +103,7 @@ export default function DetailDrawer({
         detail_layout_json: instance.detail_layout_json,
       }
     : null
-  const title = instance?.app_name || record?.item_name || record?.name || ''
+  const title = record?.item_name || instance?.app_name || record?.name || ''
 
   // 是否显示审批操作按钮（同意/拒绝）
   const showApproveButtons = Boolean(currentTask?.id)

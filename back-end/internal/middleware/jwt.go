@@ -45,6 +45,10 @@ func JWTAuth() gin.HandlerFunc {
 		if len(tokenStr) > 7 && tokenStr[:7] == "Bearer " {
 			tokenStr = tokenStr[7:]
 		}
+		// 兼容 SSE 等无法自定义 header 的场景，从 query 读取 token
+		if tokenStr == "" {
+			tokenStr = c.Query("token")
+		}
 		if tokenStr == "" {
 			response.FailWithHTTP(c, 401, response.CodeUnauthorized, "未登录或登录已过期")
 			c.Abort()

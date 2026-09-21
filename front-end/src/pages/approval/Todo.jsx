@@ -1,7 +1,6 @@
 import { Button, Card, Table } from '@arco-design/web-react'
-import * as approvalApi from 'src/api/approval'
-import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 import { useApprovalList } from 'src/pages/approval/useApprovalList'
 import { formatTime } from 'src/utils/format'
@@ -9,7 +8,15 @@ import { formatTime } from 'src/utils/format'
 const PAGE_TITLE = '我的待办'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'app_name', 'node_name', 'dept_name', 'created_name', 'created_at', 'approval_status']
+const ALL_COL_KEYS = [
+  'index',
+  'item_name',
+  'node_name',
+  'dept_name',
+  'created_name',
+  'created_at',
+  'approval_status',
+]
 
 /** 我的待办：展示当前用户待处理的审批任务，支持审批/转交/加签/查看详情 */
 export default function Todo() {
@@ -44,7 +51,7 @@ export default function Todo() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { title: '模块', key: 'app_name', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '模块', key: 'item_name', dataIndex: 'item_name', render: (v, r) => v || '-' },
     { title: '审批节点', key: 'node_name', dataIndex: 'node_name', render: (v) => v || '-' },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
     { title: '申请人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
@@ -67,7 +74,11 @@ export default function Todo() {
       key: 'action',
       width: 90,
       render: (_, r) => (
-        <Button type="primary" size="small" onClick={() => openDetail(r, { id: r.id, instance_id: r.instance_id })}>
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => openDetail(r, { id: r.id, instance_id: r.instance_id })}
+        >
           审批
         </Button>
       ),

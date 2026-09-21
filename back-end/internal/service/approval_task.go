@@ -286,6 +286,15 @@ func writeCCRecordsOnFinish(tx *gorm.DB, instance *model.ApprovalInstance, curUs
 			}
 			rec.CreatedBy, rec.UpdatedBy = curUserID, curUserID
 			tx.Create(&rec)
+			// 抄送通知（类型3）
+			appName := getInstanceAppName(instance)
+			tx.Create(&model.Notification{
+				UserID:     uid,
+				Type:       3,
+				Title:      appName,
+				Msg:        "您有新的抄送通知",
+				InstanceID: instance.ID,
+			})
 		}
 	}
 }
@@ -322,6 +331,15 @@ func writeCCRecords(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []fl
 		if err := tx.Create(&rec).Error; err != nil {
 			return err
 		}
+		// 抄送通知（类型3）
+		appName := getInstanceAppName(instance)
+		tx.Create(&model.Notification{
+			UserID:     uid,
+			Type:       3,
+			Title:      appName,
+			Msg:        "您有新的抄送通知",
+			InstanceID: instance.ID,
+		})
 	}
 	return nil
 }

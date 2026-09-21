@@ -568,6 +568,7 @@ type ApprovalInstance struct {
 	Result               string            `gorm:"size:255;comment:最终审批意见" json:"result"`
 	FinishedAt           *time.Time        `gorm:"comment:流程结束时间" json:"finished_at"`
 	ApprovalDraftMembers map[string][]uint `gorm:"column:approval_draft_members;serializer:json;type:json;comment:发起人自选审批人(仅草稿暂存，提交后注入approval_flow_json)" json:"approval_draft_members,omitempty"`
+	DeptID               uint              `gorm:"index;comment:发起人当时的部门ID(快照)" json:"dept_id"`
 
 	App *Application `gorm:"foreignKey:AppID" json:"app,omitempty"`
 }
@@ -667,10 +668,12 @@ type ApprovalRecord struct {
 	AppID          uint                   `json:"app_id"`                // 页面配置 ID
 	AppCode        string                 `json:"code"`                  // 页面编码
 	AppName        string                 `json:"app_name"`              // 页面名称
+	ItemName       string                 `json:"item_name"`             // 申请项名称
 	Status         int                    `json:"approval_status"`       // 审核状态 0草稿 1待审核 2审核中 3已通过 4不通过 5已驳回 6已作废 7已删除
 	StatusName     string                 `json:"status_name"`           // 审核状态中文名
 	CreatedBy      uint                   `json:"created_by"`            // 发起人 ID
 	CreatedName    string                 `json:"created_name"`          // 发起人姓名
+	DeptID         uint                   `json:"dept_id"`               // 发起人部门 ID（快照）
 	DeptName       string                 `json:"dept_name"`             // 发起人部门名称
 	FinishedAt     *time.Time             `json:"finished_at"`           // 完成时间
 	UpdatedAt      *time.Time             `json:"-"`                     // 底层记录更新时间（终态时作为完成时间，不对外输出）

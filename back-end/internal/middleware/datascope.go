@@ -18,7 +18,13 @@ func ApplyDataScope(db *gorm.DB, userID uint, deptColumn string) *gorm.DB {
 	var user model.User
 	if err := database.DB.Preload("Roles.Depts").First(&user, userID).Error; err != nil {
 		// 查不到用户时最严格：无数据
+		println("[ApplyDataScope] user not found:", err.Error())
 		return db.Where("1 = 0")
+	}
+
+	println("[ApplyDataScope] userID:", userID, "deptID:", user.DeptID, "roles:", len(user.Roles))
+	for _, r := range user.Roles {
+		println("[ApplyDataScope] role:", r.ID, r.Name, "status:", r.Status, "dataScope:", r.DataScope, "depts:", len(r.Depts))
 	}
 
 	deptIDs := map[uint]bool{}
@@ -37,11 +43,12 @@ func ApplyDataScope(db *gorm.DB, userID uint, deptColumn string) *gorm.DB {
 		case model.DataScopeDept:
 			deptIDs[user.DeptID] = true
 		case model.DataScopeDeptAndBelow:
-			for _, id := range collectDeptAndBelow(user.DeptID) {
+			for _, id := range CollectDeptAndBelow(user.DeptID) {
 				deptIDs[id] = true
 			}
 		}
 	}
+	println("[ApplyDataScope] all:", all, "deptIDs:", len(deptIDs))
 	if all {
 		return db
 	}
@@ -56,7 +63,7 @@ func ApplyDataScope(db *gorm.DB, userID uint, deptColumn string) *gorm.DB {
 }
 
 // collectDeptAndBelow 收集某部门及其所有下级部门 ID（基于 parent_id 树）
-func collectDeptAndBelow(deptID uint) []uint {
+func CollectDeptAndBelow(deptID uint) []uint {
 	result := []uint{deptID}
 	queue := []uint{deptID}
 	for len(queue) > 0 {

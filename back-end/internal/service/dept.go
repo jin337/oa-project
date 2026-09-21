@@ -4,15 +4,18 @@ import (
 	"errors"
 
 	"back-end/internal/database"
+	"back-end/internal/middleware"
 	"back-end/internal/model"
 )
 
-// DeptTree 部门树
-func DeptTree(req *model.DeptListReq) ([]*model.Dept, error) {
+// DeptTree 部门树（按当前用户数据范围过滤）
+func DeptTree(curUserID uint, req *model.DeptListReq) ([]*model.Dept, error) {
 	db := database.DB.Model(&model.Dept{})
 	if req.Name != "" {
 		db = db.Where("name LIKE ?", "%"+req.Name+"%")
 	}
+	// 数据权限过滤：只显示有权限的部门
+	db = middleware.ApplyDataScope(db, curUserID, "id")
 	var list []*model.Dept
 	if err := db.Order("sort ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err
@@ -208,10 +211,35 @@ func isDeptDescendant(target, rootID uint) bool {
 }
 
 func buildDeptTree(list []*model.Dept, parentID uint) []*model.Dept {
+	return buildDeptTreeVisited(list, parentID, true, map[uint]bool{})
+}
+
+func buildDeptTreeVisited(list []*model.Dept, parentID uint, isRoot bool, visited map[uint]bool) []*model.Dept {
+	if len(list) == 0 {
+		return []*model.Dept{}
+	}
+	// 建索引：id -> dept
+	idSet := map[uint]bool{}
+	for _, d := range list {
+		idSet[d.ID] = true
+	}
 	var nodes []*model.Dept
 	for _, d := range list {
-		if d.ParentID == parentID {
-			d.Children = buildDeptTree(list, d.ID)
+		// 跳过已访问的（防止环）
+		if visited[d.ID] {
+			continue
+		}
+		match := false
+		if isRoot {
+			// 最顶层：parentID 匹配，或者父节点不在列表里（作为根节点）
+			match = d.ParentID == parentID || !idSet[d.ParentID]
+		} else {
+			// 递归层：只用 parentID 匹配
+			match = d.ParentID == parentID
+		}
+		if match {
+			visited[d.ID] = true
+			d.Children = buildDeptTreeVisited(list, d.ID, false, visited)
 			nodes = append(nodes, d)
 		}
 	}

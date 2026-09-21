@@ -1,4 +1,3 @@
-import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -20,6 +19,7 @@ import {
   Tag,
   Tooltip,
   Tree,
+  TreeSelect,
   Typography,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
@@ -27,6 +27,7 @@ import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import * as menuApi from 'src/api/menu'
 import * as roleApi from 'src/api/role'
+import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
@@ -39,9 +40,9 @@ const ALL_COL_KEYS = ['index', 'name', 'code', 'data_scope', 'sort', 'status', '
 // 数据范围枚举，与后端 data_scope 对齐
 const DATA_SCOPE_OPTIONS = [
   { label: '全部数据', value: 1 },
-  { label: '自定义部门', value: 2 },
   { label: '仅本部门', value: 3 },
   { label: '本部门及下级', value: 4 },
+  { label: '自定义部门', value: 2 },
 ]
 
 const DATA_SCOPE_MAP = Object.fromEntries(DATA_SCOPE_OPTIONS.map((o) => [o.value, o.label]))
@@ -69,6 +70,7 @@ function menuToTree(menus) {
 function deptToTree(depts) {
   return (depts || []).map((d) => ({
     key: String(d.id),
+    value: String(d.id),
     title: d.name,
     children: d.children ? deptToTree(d.children) : undefined,
   }))
@@ -111,10 +113,10 @@ export default function RoleManage() {
   const [menuTree, setMenuTree] = useState([])
   const [checkedMenus, setCheckedMenus] = useState([])
 
-  // 绑定部门弹窗（仅数据范围=自定义部门时使用）
-  const [deptModal, setDeptModal] = useState(null)
-  const [deptTree, setDeptTree] = useState([])
-  const [checkedDepts, setCheckedDepts] = useState([])
+
+  // 编辑弹窗内的部门选择（自定义部门时显示）
+  const [editDeptTree, setEditDeptTree] = useState([])
+  const [editCheckedDepts, setEditCheckedDepts] = useState([])
 
   const fetchList = useCallback(
     async (p = page, s = size) => {
@@ -155,10 +157,11 @@ export default function RoleManage() {
     setEditing(null)
     form.setFieldsValue(EMPTY_FORM)
     setDataScope(EMPTY_FORM.data_scope)
+    setEditCheckedDepts([])
     setModalVisible(true)
   }
 
-  const openEdit = (record) => {
+  const openEdit = async (record) => {
     setEditing(record)
     form.setFieldsValue({
       name: record.name,
@@ -169,6 +172,18 @@ export default function RoleManage() {
       remark: record.remark,
     })
     setDataScope(record.data_scope)
+    // 如果是自定义部门，加载部门树和已选部门
+    if (record.data_scope === 2) {
+      try {
+        const [treeRes, detailRes] = await Promise.all([
+          deptApi.getDeptTree(),
+          roleApi.getRole(record.id),
+        ])
+        setEditDeptTree(treeRes.data || [])
+        setEditCheckedDepts((detailRes.data.depts || []).map((d) => String(d.id)))
+      } catch (e) {
+      }
+    }
     setModalVisible(true)
   }
 
@@ -176,12 +191,19 @@ export default function RoleManage() {
     const values = await form.validate()
     setSaving(true)
     try {
+      let roleId
       if (editing) {
-        await roleApi.updateRole(editing.id, values)
+        const res = await roleApi.updateRole(editing.id, values)
+        roleId = editing.id
         Message.success('保存成功')
       } else {
-        await roleApi.createRole(values)
+        const res = await roleApi.createRole(values)
+        roleId = res.data.id
         Message.success('创建成功')
+      }
+      // 如果是自定义部门，保存后绑定部门
+      if (values.data_scope === 2 && editCheckedDepts.length > 0) {
+        await roleApi.assignRoleDepts(roleId, editCheckedDepts.map(Number))
       }
       setModalVisible(false)
       fetchList()
@@ -228,31 +250,6 @@ export default function RoleManage() {
       await roleApi.assignRoleMenus(menuModal.id, checkedMenus.map(Number))
       Message.success('菜单分配成功')
       setMenuModal(null)
-    } catch (e) {
-      // 错误已在请求层提示
-    }
-  }
-
-  // 打开绑定部门：加载部门树 + 角色详情拿到已绑定部门
-  const openAssignDepts = async (record) => {
-    try {
-      const [treeRes, detailRes] = await Promise.all([
-        deptApi.getDeptTree(),
-        roleApi.getRole(record.id),
-      ])
-      setDeptTree(treeRes.data || [])
-      setCheckedDepts((detailRes.data.depts || []).map((d) => String(d.id)))
-      setDeptModal(record)
-    } catch (e) {
-      // 错误已在请求层提示
-    }
-  }
-
-  const handleSaveDepts = async () => {
-    try {
-      await roleApi.assignRoleDepts(deptModal.id, checkedDepts.map(Number))
-      Message.success('部门绑定成功')
-      setDeptModal(null)
     } catch (e) {
       // 错误已在请求层提示
     }
@@ -322,11 +319,6 @@ export default function RoleManage() {
           {hasPerm('system:role:assignMenu') && (
             <Button size="mini" onClick={() => openAssignMenus(record)}>
               分配菜单
-            </Button>
-          )}
-          {hasPerm('system:role:assignDept') && record.data_scope === 2 && (
-            <Button size="mini" onClick={() => openAssignDepts(record)}>
-              绑定部门
             </Button>
           )}
           {hasPerm('system:role:edit') && (
@@ -456,6 +448,12 @@ export default function RoleManage() {
           onValuesChange={(changed) => {
             if (changed.data_scope !== undefined) {
               setDataScope(changed.data_scope)
+              // 如果切换到自定义部门，加载部门树
+              if (changed.data_scope === 2 && editDeptTree.length === 0) {
+                deptApi.getDeptTree().then((res) => {
+                  setEditDeptTree(res.data || [])
+                }).catch(() => {})
+              }
             }
           }}
         >
@@ -495,9 +493,19 @@ export default function RoleManage() {
             </Radio.Group>
           </FormItem>
           {dataScope === 2 && (
-            <div className="mb-3 text-sm text-gray-500">
-              保存后请在列表中点击「绑定部门」为该角色选择自定义数据范围。
-            </div>
+            <FormItem label="选择部门">
+              <TreeSelect
+                multiple
+                treeCheckable
+                allowClear
+                placeholder="请选择部门"
+                treeData={deptToTree(editDeptTree)}
+                value={editCheckedDepts}
+                onChange={(keys) => setEditCheckedDepts(keys)}
+                treeCheckedStrategy={TreeSelect.SHOW_CHILD}
+                className="w-full"
+              />
+            </FormItem>
           )}
           <Row gutter={20}>
             <Col span={12}>
@@ -539,24 +547,6 @@ export default function RoleManage() {
             const checked = Array.isArray(keys) ? keys : keys?.checked || []
             setCheckedMenus(checked)
           }}
-          className="max-h-100 overflow-auto"
-        />
-      </Modal>
-
-      <Modal
-        title={`绑定部门 - ${deptModal?.name || ''}`}
-        visible={Boolean(deptModal)}
-        onOk={handleSaveDepts}
-        onCancel={() => setDeptModal(null)}
-        unmountOnExit
-        className="w-120! max-w-[90vw]"
-      >
-        <Tree
-          checkable
-          defaultExpandAll
-          treeData={deptToTree(deptTree)}
-          checkedKeys={checkedDepts}
-          onCheck={(keys) => setCheckedDepts(keys)}
           className="max-h-100 overflow-auto"
         />
       </Modal>

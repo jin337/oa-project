@@ -257,6 +257,9 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 	// 3. 创建流程实例（事务）：状态=进行中，生成首个审批节点任务
 	var instance model.ApprovalInstance
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		// 查发起人当前部门，记录快照
+		var creator model.User
+		database.DB.Select("dept_id").First(&creator, curUserID)
 		instance = model.ApprovalInstance{
 			AppID:                 req.AppID,
 			BusinessTable:         ctx.app.TableName,
@@ -265,6 +268,7 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 			ExecutionPath:         ctx.execPath,
 			CurrentNodeIdx:        0,
 			Status: model.InstanceStatusRunning,
+			DeptID:                creator.DeptID,
 			// 提交即进入审批流转，不持久化草稿暂存（approval_draft_members 仅草稿专用）；
 			// 撤回回退草稿时由 ApprovalInstanceWithdraw 从快照自选节点写回暂存
 		}
@@ -310,6 +314,9 @@ func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 	}
 
 	// 2. 创建草稿实例
+	// 查发起人当前部门，记录快照
+	var creator model.User
+	database.DB.Select("dept_id").First(&creator, curUserID)
 	instance := model.ApprovalInstance{
 		AppID:                 req.AppID,
 		BusinessTable:         ctx.app.TableName,
@@ -319,6 +326,7 @@ func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		CurrentNodeIdx:        0,
 		Status:                model.InstanceStatusDraft,
 		ApprovalDraftMembers: req.ApprovalDraftMembers,
+		DeptID:                creator.DeptID,
 	}
 	instance.CreatedBy, instance.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&instance).Error; err != nil {

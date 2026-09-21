@@ -194,6 +194,15 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
   }, [el.columns])
   // 依赖字段变化时重渲染（常量 ${true}/${false} 时 deps 为空，初始渲染即完成列可见性计算）
   Form.useWatch(colVifDeps, form)
+  // 可编辑模式下：子表为空（如草稿回填空数组）时自动加一行，避免空白表格无法填写
+  useEffect(() => {
+    if (!isEditable) return
+    const val = form.getFieldValue(listField)
+    if (!Array.isArray(val) || val.length === 0) {
+      form.setFieldValue(listField, [genDefaultRow()])
+    }
+  }, [isEditable, listField, form])
+
   // 订阅该字段的表单状态（含校验错误），错误变化时自动重渲染
   const formState = Form.useFormState(listField, form)
   // 提取错误文本：Arco 返回的错误项为 b-validate 错误对象（含 message/type/value 等键），
@@ -213,7 +222,8 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
       validateTrigger: 'submit',
       validator: (val, callback) => {
         const rows = Array.isArray(val) ? val : []
-        if (el.required && rows.length === 0) {
+        const hasRequiredCol = (el.columns || []).some((c) => c.required)
+        if ((el.required || hasRequiredCol) && rows.length === 0) {
           callback(`${el.label || '表格'}至少需要添加一行数据`)
           return
         }

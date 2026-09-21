@@ -28,7 +28,12 @@ func NotificationCreate(userID uint, nType int, title, content string, instanceI
 		Content:    content,
 		InstanceID: instanceID,
 	}
-	return database.DB.Create(&n).Error
+	if err := database.DB.Create(&n).Error; err != nil {
+		return err
+	}
+	// 实时推送给在线用户
+	PushNotification(userID, &n)
+	return nil
 }
 
 // NotificationList 我的通知列表
@@ -75,4 +80,11 @@ func NotificationRead(userID, id uint) error {
 		return errors.New("通知不存在或已读")
 	}
 	return nil
+}
+
+// NotificationCleanup 清理已读超过30天的通知
+func NotificationCleanup() error {
+	return database.DB.Unscoped().
+		Where("read_at IS NOT NULL AND read_at < DATE_SUB(NOW(), INTERVAL 30 DAY)").
+		Delete(&model.Notification{}).Error
 }

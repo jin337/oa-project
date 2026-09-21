@@ -46,6 +46,7 @@ const EMPTY_FORM = {
   status: 1,
 }
 
+
 export default function ApplicationManage() {
   const navigate = useNavigate()
   const { addTab } = useTabs()
@@ -69,6 +70,8 @@ export default function ApplicationManage() {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
+
+
 
   const fetchList = useCallback(
     async (p = page, s = size) => {
@@ -413,6 +416,7 @@ export default function ApplicationManage() {
                 <Input placeholder="多个子表用逗号隔开，如：order_item,order_detail" />
               </FormItem>
             </Col>
+
           </Row>
         </Form>
       </Modal>

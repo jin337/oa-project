@@ -259,7 +259,7 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
         </div>
         <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node)}</div>
       </div>
-      <div className="flex shrink-0 flex-wrap justify-end gap-y-1 relative">
+      <div className="relative flex shrink-0 flex-wrap justify-end gap-y-1">
         {node.approverType === 3 ? (
           // 3-发起人自选：已选择渲染头像+姓名，未选择仅展示「+」按钮；均可点击唤起选择器
           <>
@@ -290,7 +290,7 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
               </Avatar>
             ) : null}
             {!(node.members || []).length && (
-              <span className="text-xs text-red-500 absolute -top-1.5 -right-0.5">*</span>
+              <span className="absolute -top-1.5 -right-0.5 text-xs text-red-500">*</span>
             )}
           </>
         ) : (
@@ -431,7 +431,7 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
       </Divider>
       <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
         <Timeline>
-          {flattenedNodes.map((n) => {
+          {flattenedNodes.map((n, i) => {
             const meta = APPROVAL_NODE_META[n.type] || {
               label: `未知节点(${n.type})`,
               bg: 'bg-gray-400',
@@ -440,6 +440,7 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
             const Icon = meta.icon
             return (
               <Timeline.Item
+                className={`min-h-10! ${flattenedNodes.length - 1 !== i ? 'pb-5' : ''}`}
                 key={n.id || n.label}
                 dot={
                   <span

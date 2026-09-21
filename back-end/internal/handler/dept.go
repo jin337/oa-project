@@ -17,7 +17,7 @@ func DeptTree(c *gin.Context) {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	tree, err := service.DeptTree(&req)
+	tree, err := service.DeptTree(middleware.CurrentUserID(c), &req)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, "查询部门失败")
 		return

@@ -25,7 +25,7 @@ import { formatTime } from 'src/utils/format'
 const PAGE_TITLE = '草稿箱'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'app_name', 'dept_name', 'created_at', 'approval_status']
+const ALL_COL_KEYS = ['index', 'item_name', 'dept_name', 'created_at', 'approval_status']
 
 /** 草稿箱：展示当前用户状态为「草稿」的申请记录，支持继续编辑 / 提交审核 / 删除 */
 export default function Drafts() {
@@ -156,7 +156,9 @@ export default function Drafts() {
         app_id: drawerApp.id,
         business_data_id: draftRecord.data_id ?? draftRecord.id,
         business_data: payload,
-        approval_draft_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+        approval_draft_members: Object.keys(selfSelectUserIDs).length
+          ? selfSelectUserIDs
+          : undefined,
       })
       Message.success('草稿更新成功')
       setDrawerVisible(false)
@@ -182,9 +184,12 @@ export default function Drafts() {
         })
       }
       Message.success('提交成功，等待审核')
+      setDrawerVisible(false)
       fetchList()
     } catch (e) {
       // 错误已在请求层提示
+    } finally {
+      setDrawerSaving(false)
     }
   }
 
@@ -207,9 +212,15 @@ export default function Drafts() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { title: '模块', key: 'app_name', dataIndex: 'app_name', render: (v) => v || '-' },
+    { title: '模块', key: 'item_name', dataIndex: 'item_name', render: (v, r) => v || '-' },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
-    { title: '创建时间', key: 'created_at', dataIndex: 'created_at', width: 170, render: formatTime },
+    {
+      title: '创建时间',
+      key: 'created_at',
+      dataIndex: 'created_at',
+      width: 170,
+      render: formatTime,
+    },
     {
       title: '状态',
       key: 'approval_status',
@@ -220,14 +231,11 @@ export default function Drafts() {
     {
       title: '操作',
       key: 'action',
-      width: 240,
+      width: 160,
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => openDraftEdit(r)}>
             编辑
-          </Button>
-          <Button type="text" size="small" onClick={() => handleSubmit(r)}>
-            提交
           </Button>
           <Popconfirm position="lb" title="确定删除该草稿吗？" onOk={() => handleDelete(r)}>
             <Button type="text" size="small" status="danger">
@@ -283,11 +291,16 @@ export default function Drafts() {
         title={`编辑 - ${drawerApp?.item_name || drawerApp?.name || ''}`}
         unmountOnExit
         footer={
-          <div className="flex justify-end gap-2">
-            <Button onClick={() => setDrawerVisible(false)}>取消</Button>
-            <Button type="primary" loading={drawerSaving} onClick={handleDraftSave}>
-              保存草稿
+          <div className="flex justify-between gap-2">
+            <Button type="primary" loading={drawerSaving} onClick={() => handleSubmit(draftRecord)}>
+              提交审核
             </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setDrawerVisible(false)}>取消</Button>
+              <Button type="primary" loading={drawerSaving} onClick={handleDraftSave}>
+                保存草稿
+              </Button>
+            </div>
           </div>
         }
       >
@@ -297,7 +310,12 @@ export default function Drafts() {
           </div>
         ) : drawerApp ? (
           <>
-            <DynamicForm app={drawerApp} form={drawerForm} pageType="form" onValuesChange={setFormValues} />
+            <DynamicForm
+              app={drawerApp}
+              form={drawerForm}
+              pageType="form"
+              onValuesChange={setFormValues}
+            />
             {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
             <DynamicFlowView
               raw={drawerApp?.approval_flow_json}

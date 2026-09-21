@@ -131,6 +131,7 @@ func Setup() *gin.Engine {
 	notifications.Use(middleware.JWTAuth())
 	{
 		notifications.GET("", handler.NotificationList)
+		notifications.GET("/stream", handler.NotificationStream)
 		notifications.GET("/unread-count", handler.NotificationUnreadCount)
 		notifications.PUT("/read-all", handler.NotificationReadAll)
 		notifications.PUT("/:id/read", handler.NotificationRead)
