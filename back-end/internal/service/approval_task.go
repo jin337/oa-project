@@ -55,11 +55,16 @@ func createPendingTask(tx *gorm.DB, instance *model.ApprovalInstance, nodeID, no
 	return nil
 }
 
-// getInstanceAppName 查实例所属应用名称
+// getInstanceAppName 查实例所属申请项名称
 func getInstanceAppName(instance *model.ApprovalInstance) string {
 	var app model.Application
-	if err := database.DB.Select("name").First(&app, instance.AppID).Error; err != nil {
+	if err := database.DB.Select("name, code").First(&app, instance.AppID).Error; err != nil {
 		return ""
+	}
+	// 根据 app.Code 查申请项名称
+	var item model.ApprovalCategoryItem
+	if err := database.DB.Select("name").Where("code = ?", app.Code).First(&item).Error; err == nil && item.Name != "" {
+		return item.Name
 	}
 	return app.Name
 }
