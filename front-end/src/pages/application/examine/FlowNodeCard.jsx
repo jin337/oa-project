@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import { Input, Popconfirm, Popover, Tag } from '@arco-design/web-react'
 import { IconBranch, IconClose, IconEdit } from '@arco-design/web-react/icon'
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { NODE_TYPE_META } from 'src/pages/application/constants'
 import { foldDeptMembers } from 'src/pages/application/examine/flowModel'
 
@@ -129,7 +128,6 @@ export const FlowNodeCard = memo(function FlowNodeCard({
   return (
     <div
       className="relative w-55 cursor-pointer rounded border border-(--color-neutral-3) bg-white shadow"
-      onClick={() => onEdit?.(node)}
     >
       <div
         className={`flex items-center justify-between border-b border-(--color-neutral-3) px-2 py-1 text-white ${meta.bg}`}
@@ -155,7 +153,7 @@ export const FlowNodeCard = memo(function FlowNodeCard({
           </Popconfirm>
         )}
       </div>
-      <div className="px-3 py-2">{renderNodeSummary(node, userDeptMap, deptDescMap)}</div>
+      <div className="px-3 py-2"  onClick={() => onEdit?.(node)}>{renderNodeSummary(node, userDeptMap, deptDescMap)}</div>
     </div>
   )
 })

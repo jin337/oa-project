@@ -137,6 +137,13 @@ func Setup() *gin.Engine {
 		notifications.PUT("/:id/read", handler.NotificationRead)
 	}
 
+	// 工具接口（需要鉴权）
+	utils := v1.Group("/utils")
+	utils.Use(middleware.JWTAuth())
+	{
+		utils.POST("/calculate", handler.Calculate) // 公共计算/转换接口
+	}
+
 	// 页面配置管理
 	applications := v1.Group("/application")
 	applications.Use(middleware.JWTAuth())

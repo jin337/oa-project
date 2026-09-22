@@ -857,7 +857,7 @@ export default function FormElementManage() {
                       field="data_source.url"
                       rules={[{ required: true, message: '请输入接口地址' }]}
                     >
-                      <Input placeholder="/api/user/list" />
+                      <Input placeholder="/user/list" />
                     </FormItem>
                   </Col>
                   <Col span={8}>
@@ -993,7 +993,7 @@ export default function FormElementManage() {
                                       field={item.field + '.api_url'}
                                       rules={[{ required: true, message: '请输入接口地址' }]}
                                     >
-                                      <Input placeholder="/api/user/salary-detail" />
+                                      <Input placeholder="/user/salary-detail" />
                                     </FormItem>
                                   </Col>
                                   <Col span={8}>

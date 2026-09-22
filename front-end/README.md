@@ -200,3 +200,24 @@ server {
 ```
 
 > 后端服务部署与配置说明见同级目录 `back-end/README.md`。
+
+**公共计算/转换接口**：`POST /api/v1/utils/calculate`
+
+**支持的计算类型**：
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| `number_to_upper` | 数字转大写金额 | 100 → 壹佰元整 |
+| `number_to_lower` | 数字转小写 | 100.00 → 100 |
+| `add` | 加法 | 100 + 200 = 300 |
+| `subtract` | 减法 | 200 - 100 = 100 |
+| `multiply` | 乘法 | 100 * 2 = 200 |
+| `divide` | 除法 | 200 / 2 = 100 |
+
+**在表单元素管理中的使用方式**：
+
+在元素的事件驱动与联动中，添加 on_blur 动作：
+- **动作类型**：`fetch_and_fill`
+- **请求地址**：`/api/v1/utils/calculate`
+- **请求方法**：`POST`
+- **请求参数**：`{"type": "number_to_upper", "value": "${form.project_amount}"}`
+- **结果映射**：`result → amount_upper`
