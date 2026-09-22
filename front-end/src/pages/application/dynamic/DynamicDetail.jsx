@@ -64,7 +64,6 @@ export default function DynamicDetail({ app, dataId: propDataId, initialData, fi
     return <Empty description="数据不存在或已删除" />
   }
 
-  // detailApp 已由 hook 将 detail_layout_json 映射为 form_layout_json
   return (
     <DynamicForm
       app={detailApp}
