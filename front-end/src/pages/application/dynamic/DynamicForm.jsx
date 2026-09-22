@@ -1867,7 +1867,7 @@ export default function DynamicForm({
   // - 画布模式：memo 化 CanvasElement（拖拽/悬停/选中仅影响目标元素重渲染）
   // - 常规模式：直接渲染 Col + FormItem
   const formNode = (
-    <Form
+    <Form size='small'
       form={form}
       className={isMoveMode ? 'mx-auto max-w-187.5' : undefined}
       layout={formConfig.layout}
