@@ -1,13 +1,13 @@
 import { Button, Empty, Form, Spin } from '@arco-design/web-react'
-import { useMemo } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useEffect, useMemo } from 'react'
+import { useLocation, useParams } from 'react-router-dom'
 import { findMenuByPath } from 'src/hooks/useMenuMeta'
-import { useAuth } from 'src/store/auth-context'
-import NotFound from 'src/pages/error/NotFound'
-import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
-import DynamicForm from 'src/pages/application/dynamic/DynamicForm'
+import DynamicForm, { evaluateDynamicStates } from 'src/pages/application/dynamic/DynamicForm'
 import DynamicList from 'src/pages/application/dynamic/DynamicList'
 import { useApplicationData } from 'src/pages/application/dynamic/useApplicationData'
+import { safeSetFieldsValue, useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
+import NotFound from 'src/pages/error/NotFound'
+import { useAuth } from 'src/store/auth-context'
 
 // 合法页面状态与默认降级状态
 const VALID_STATES = ['list', 'form', 'detail']
@@ -28,7 +28,7 @@ function parseLinkApp(linkApp) {
 
 /**
  * 动态页面入口：按当前路径反查菜单项，读取 link_app（code:state）后分发渲染
- * list → DynamicList / form → DynamicForm / detail → DynamicDetail；
+ * list → DynamicList / form → DynamicForm / detail → DynamicForm(pageType=detail)；
  * 菜单缺失、link_app 未配置、state 非法、加载失败时均有容错展示
  */
 export default function DynamicPage() {
@@ -40,6 +40,8 @@ export default function DynamicPage() {
   // 1) 优先取导航 state（location.state.link_app，不暴露于 URL）；
   // 2) 回退 sessionStorage 缓存（刷新 / 页签切换等 state 丢失场景）；
   // 3) 最后回退菜单项 link_app；均未配置 → 空 code 走 NotFound
+  const { id: routeDataId } = useParams()
+
   const { code, state } = useMemo(() => {
     const stateLink = location.state?.link_app
     const cached = sessionStorage.getItem(`link_app:${location.pathname}`)
@@ -48,6 +50,30 @@ export default function DynamicPage() {
 
   // 应用配置加载（请求 / Loading / 错误态与重试统一由 Hook 管理）
   const { app, loading, error, retry } = useApplicationData(code, state)
+
+  // 详情模式数据加载（仅 state=detail 时启用；autoFetch 在 app 加载后才为 true）
+  const { detailData, loading: detailLoading } = useApplicationDetailData(
+    state === 'detail' ? app : null,
+    state === 'detail' ? routeDataId : null,
+    form,
+    { autoFetch: state === 'detail' && Boolean(app) },
+  )
+
+  // 动态状态预计算：基于完整业务数据一次性求值 visible_if/disabled_if
+  const detailDynamicStates = useMemo(
+    () =>
+      state === 'detail' && app?.detail_layout_json && detailData
+        ? evaluateDynamicStates(app.detail_layout_json, detailData)
+        : undefined,
+    [state, app?.detail_layout_json, detailData],
+  )
+
+  // 详情数据回填表单（safeSetFieldsValue 补写动态状态字段，规避 Arco 快照覆盖）
+  useEffect(() => {
+    if (state === 'detail' && detailData) {
+      safeSetFieldsValue(form, detailData, app?.detail_layout_json)
+    }
+  }, [state, detailData, form, app?.detail_layout_json])
 
   // 容错：link_app 未配置 → NotFound
   if (!code) {
@@ -59,7 +85,7 @@ export default function DynamicPage() {
     return <Empty description={`不支持的页面状态：${state}`} />
   }
 
-  if (loading) {
+  if (loading || detailLoading) {
     return (
       <div className="flex h-40 items-center justify-center">
         <Spin />
@@ -85,7 +111,14 @@ export default function DynamicPage() {
     case 'form':
       return <DynamicForm app={app} form={form} pageType="form" />
     case 'detail':
-      return <DynamicDetail app={app} />
+      return (
+        <DynamicForm
+          app={{ ...app, form_layout_json: app?.detail_layout_json }}
+          form={form}
+          pageType="detail"
+          detailDynamicStates={detailDynamicStates}
+        />
+      )
     default:
       // 兜底：合法校验后不可达，渲染默认列表页
       return <DynamicList app={app} code={code} />

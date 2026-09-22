@@ -48,7 +48,7 @@ export function safeSetFieldsValue(form, data, layout) {
 /**
  * 动态业务数据详情加载 Hook：
  * 统一"详情数据请求 + 加载状态 + 表单回填 + detail_layout_json → form_layout_json 映射"，
- * 供 DynamicDetail（只读详情）与 DynamicList（编辑回填）等场景复用，
+ * 供 DynamicForm(pageType=detail) 与 DynamicList（编辑回填）等场景复用，
  * 保持 DynamicForm 的纯渲染职责不变。
  *
  * @param {object} app          应用配置（含 id / detail_layout_json；传 null 表示不由 hook 自动请求）

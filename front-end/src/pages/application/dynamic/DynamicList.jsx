@@ -1,4 +1,4 @@
-import {
+﻿import {
   Button,
   Card,
   Checkbox,
@@ -8,25 +8,24 @@ import {
   Input,
   Menu,
   Message,
-  Popconfirm,
   Popover,
   Space,
   Spin,
-  Table,
+  Table
 } from '@arco-design/web-react'
 import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 import { SIZE_OPTIONS } from 'src/config/app'
-import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
 import DynamicForm, {
+  evaluateDynamicStates,
   formatTimeValue,
   getStaticOptions,
   parseLayoutJson,
   serializeTimeFields,
   TIME_ELEMENT_TYPES,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
+import { safeSetFieldsValue, useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
 
 const FormItem = Form.Item
 const MenuItem = Menu.Item
@@ -94,6 +93,7 @@ export default function DynamicList({ app, code }) {
   const [drawerApp, setDrawerApp] = useState(null)
   const [drawerRecord, setDrawerRecord] = useState(null)
   const [drawerForm] = Form.useForm()
+  const [detailDynamicStates, setDetailDynamicStates] = useState(undefined)
 
   // 详情数据加载 Hook：编辑模式回填复用（手动触发，回填由 hook 内部 effect 完成）
   const { fetchDetail: fetchRecordDetail } = useApplicationDetailData(null, null, drawerForm, {
@@ -115,6 +115,19 @@ export default function DynamicList({ app, code }) {
       if (state === 'form') {
         // 列表行 record 仅含主表字段；调用详情接口获取完整数据（含子表），由 hook 回填到表单
         await fetchRecordDetail(res.data.id, record.id)
+        setDetailDynamicStates(undefined)
+      } else {
+        // 查看模式：请求完整数据（含子表）用于动态状态预计算 + 表单回填
+        drawerForm.resetFields()
+        const detailRes = await applicationApi.getApplicationDataDetail(res.data.id, record.id)
+        const detailData = detailRes.data
+        setDetailDynamicStates(
+          detailData ? evaluateDynamicStates(res.data.detail_layout_json, detailData) : undefined,
+        )
+        // 回填表单（safeSetFieldsValue 补写动态状态字段，规避 Arco 快照覆盖）
+        if (detailData) {
+          safeSetFieldsValue(drawerForm, detailData, res.data.detail_layout_json)
+        }
       }
     } catch (e) {
       Message.error('应用配置加载失败，请稍后重试')
@@ -172,7 +185,7 @@ export default function DynamicList({ app, code }) {
         key: 'action',
         title: '操作',
         dataIndex: 'operation',
-        width: 160,
+        width: 60,
         render: (_, record) => (
           <Space>
             <Button type="text" size="small" onClick={() => openDrawer(record, 'detail')}>
@@ -181,11 +194,11 @@ export default function DynamicList({ app, code }) {
             {/* <Button type="text" size="small" onClick={() => openDrawer(record, 'form')}>
               编辑
             </Button> */}
-            <Popconfirm position="lb" title="确认删除该条数据？" onOk={() => handleDelete(record)}>
+            {/* <Popconfirm position="lb" title="确认删除该条数据？" onOk={() => handleDelete(record)}>
               <Button type="text" size="small" status="danger">
                 删除
               </Button>
-            </Popconfirm>
+            </Popconfirm> */}
           </Space>
         ),
       },
@@ -362,7 +375,7 @@ export default function DynamicList({ app, code }) {
         }}
       />
 
-      {/* 编辑 / 查看 Drawer：按 drawerState 渲染 DynamicForm（编辑）或 DynamicDetail（查看） */}
+      {/* 编辑 / 查看 Drawer：按 drawerState 渲染 DynamicForm（编辑 / pageType=detail 查看） */}
       <Drawer
         width="50%"
         title={
@@ -372,9 +385,11 @@ export default function DynamicList({ app, code }) {
         }
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
-        onOk={drawerState === 'form' ? handleDrawerSubmit : undefined}
-        okLoading={drawerSubmitting}
-        footer={drawerState === 'detail' ? null : undefined}
+        footer={drawerState === 'detail' ? null : (
+          <Button type="primary" loading={drawerSubmitting} onClick={handleDrawerSubmit}>
+            提交
+          </Button>
+        )}
         unmountOnExit
       >
         {drawerLoading ? (
@@ -385,7 +400,12 @@ export default function DynamicList({ app, code }) {
           drawerState === 'form' ? (
             <DynamicForm app={drawerApp} form={drawerForm} pageType="form" />
           ) : (
-            <DynamicDetail app={drawerApp} dataId={drawerRecord?.id} />
+            <DynamicForm
+              app={{ ...drawerApp, form_layout_json: drawerApp?.detail_layout_json }}
+              form={drawerForm}
+              pageType="detail"
+              detailDynamicStates={detailDynamicStates}
+            />
           )
         ) : null}
       </Drawer>

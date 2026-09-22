@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 // ============================================================
 // 流程实例生命周期
@@ -588,6 +588,7 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 
 // ApprovalInstanceDelete 删除流程实例（软删除）
 // 仅允许发起人删除已终结的实例（已拒绝/已驳回/已作废/已撤回/草稿）
+// 同时级联软删除对应的业务表数据
 func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "删除",
@@ -596,6 +597,15 @@ func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 		if err != nil {
 			return err
 		}
+
+		// 级联软删除业务表数据
+		if instance.BusinessDataID > 0 {
+			if err := deleteBusinessData(tx, instance.AppID, instance.BusinessDataID); err != nil {
+				return fmt.Errorf("删除业务数据失败: %w", err)
+			}
+		}
+
+		// 软删除审批实例
 		return tx.Delete(instance).Error
 	})
 }

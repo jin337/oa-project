@@ -3,7 +3,6 @@
   Checkbox,
   DatePicker,
   Divider,
-  Empty,
   Form,
   Grid,
   Input,
@@ -1204,7 +1203,7 @@ export const RuntimeFormContext = createContext(null)
  * 运行时交互 Hook：动态数据源(api)加载 + 事件驱动联动(actions)执行。
  * 仅在 pageType='form'（实际填写）时启用；画布/详情只读不触发。
  */
-const useRuntimeForm = ({ elements, form, pageType, app }) => {
+export const useRuntimeForm = ({ elements, form, pageType, app }) => {
   const [apiOptions, setApiOptions] = useState({})
   const isRuntime = pageType === 'form'
   const formRef = useRef(null)
@@ -1447,7 +1446,7 @@ const useRuntimeForm = ({ elements, form, pageType, app }) => {
 }
 
 /** 元素容器：仅对配置了 on_blur 动作的元素包一层 blur 捕获（focusout 冒泡），触发联动 */
-const RuntimeFieldWrap = ({ el, children }) => {
+export const RuntimeFieldWrap = ({ el, children }) => {
   const rt = useContext(RuntimeFormContext)
   const hasBlur = Array.isArray(el.actions?.on_blur) && el.actions.on_blur.length > 0
   if (!hasBlur) return <>{children}</>
@@ -1613,7 +1612,7 @@ const ReadonlyValue = ({ value, elementType, dataSource }) => {
  * @param {object} el   布局元素
  * @param {object} ctx  渲染上下文 { isHorizontal, formConfig, pageType, isMoveMode }
  */
-const renderFormItemElement = (el, ctx) => {
+export const renderFormItemElement = (el, ctx) => {
   const { isHorizontal, formConfig, pageType, isMoveMode, fieldPerms, editable, detailDynamicStates } = ctx
   const noLabel = isNoLabelElement(el.element_type)
   const isTableElement = el.element_type === 'table'
@@ -1728,7 +1727,7 @@ const renderFormItemElement = (el, ctx) => {
  * 画布模式元素容器（memo 化）：拖拽/选中/悬停等高频状态变化时，
  * 仅目标元素的 isSelected / isDragOver 变化触发自身重渲染，其余元素跳过组件树更新。
  */
-const CanvasElement = memo(function CanvasElement({
+export const CanvasElement = memo(function CanvasElement({
   el,
   index,
   isSelected,
@@ -1790,13 +1789,16 @@ const CanvasElement = memo(function CanvasElement({
   )
 })
 
-// ==================== 核心组件：DynamicForm ====================
+// ==================== 核心组件：DynamicForm（路由分发器） ====================
+
+import DetailMode from './modes/DetailMode'
+import FormMode from './modes/FormMode'
+import MoveDetailMode from './modes/MoveDetailMode'
+import MoveFormMode from './modes/MoveFormMode'
 
 /**
- * 动态表单渲染组件（纯展示/填写，不含数据加载）：
- * 根据应用配置的 form_layout_json 将布局还原为可填写的动态表单。
- * 供动态表单页面（DynamicRender）与抽屉场景（如审批申请）共用。
- * 元素渲染统一分发至本文件的组件配置中心（renderPreviewConfig / BASE_ELEMENT_CONFIGS）。
+ * 动态表单路由分发器（Dispatcher）：
+ * 解析布局配置后，根据 pageType 分发至对应的模式组件。
  *
  * @param {object} app         应用配置对象（含 form_layout_json 等字段）
  * @param {object} form        Arco Form 实例（可由调用方通过 Form.useForm() 创建）
@@ -1844,108 +1846,59 @@ export default function DynamicForm({
   const elements = layout?.elements || []
   const formConfig = layout?.formConfig || DEFAULT_FORM_CONFIG
 
-  // 运行时交互：动态数据源(api)选项加载 + 事件联动(actions)执行（仅 pageType='form' 启用）
-  const { contextValue, handleValuesChange } = useRuntimeForm({ elements, form, pageType, app })
-
-  const isMoveMode = pageType === 'move-form' || pageType === 'move-detail'
-  // 表单渲染上下文（画布元素 memo 依赖）：仅当 formConfig / pageType 变化时重建，
-  // 拖拽悬停、选中等高频状态更新不改变该引用，CanvasElement 可跳过无关重渲染
-  const formCtx = useMemo(
-    () => ({
-      isHorizontal: formConfig.layout === 'horizontal',
-      formConfig,
-      pageType,
-      isMoveMode,
-      fieldPerms,
-      editable,
-      detailDynamicStates,
-    }),
-    [formConfig, pageType, isMoveMode, fieldPerms, editable, detailDynamicStates],
-  )
-
-  // 表单节点：根据页面类型渲染不同内容
-  // - 画布模式：memo 化 CanvasElement（拖拽/悬停/选中仅影响目标元素重渲染）
-  // - 常规模式：直接渲染 Col + FormItem
-  const formNode = (
-    <Form size='small'
-      form={form}
-      className={isMoveMode ? 'mx-auto max-w-187.5' : undefined}
-      layout={formConfig.layout}
-      labelAlign={formConfig.labelAlign}
-      disabled={
-        pageType !== 'form' &&
-        !(pageType === 'detail' && editable && (fieldPerms || []).some((p) => p && p.perm === 2))
-      }
-      autoComplete="off"
-      onValuesChange={(changed, allValues) => {
-        handleValuesChange(changed, allValues)
-        onValuesChange?.(allValues)
-      }}
-    >
-      <Row>
-        {isMoveMode
-          ? elements.map((el, index) => (
-              <CanvasElement
-                key={el.id || `el_${el.element_type}_${index}`}
-                el={el}
-                index={index}
-                isSelected={el.id === selectedId}
-                isDragOver={dragOverIndex === index}
-                ctx={formCtx}
-                onSelectElement={onSelectElement}
-                onRemoveElement={onRemoveElement}
-                onElementDragStart={onElementDragStart}
-                onElementDragOver={onElementDragOver}
-                onElementDrop={onElementDrop}
-                onDragEnd={onDragEnd}
-              />
-            ))
-          : elements
-              .filter((el) => {
-                // 字段权限过滤：perm=1（隐藏）不渲染；未配置权限的字段默认渲染
-                if (!fieldPerms || !el.field_key) return true
-                const fp = fieldPerms.find((p) => p && p.field === el.field_key)
-                return !fp || fp.perm !== 1
-              })
-              .map((el, index) => (
-                <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
-                  <RuntimeFieldWrap el={el}>
-                    {renderFormItemElement(el, { ...formCtx, runtime: contextValue })}
-                  </RuntimeFieldWrap>
-                </Col>
-              ))}
-      </Row>
-    </Form>
-  )
-
-  // 画布模式：外层虚线容器承载空白区拖拽/点击，内部渲染元素表单
-  let node
-  if (isMoveMode) {
-    node = (
-      <div
-        className="m-4 flex-1 overflow-auto border-2 border-dashed border-gray-200 p-4"
-        onDragOver={onCanvasDragOver}
-        onDrop={onCanvasDrop}
-        onClick={onCanvasClick}
-      >
-        {elements.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
-            <Empty description="从左侧拖拽表单元素到此处开始设计" />
-          </div>
-        ) : (
-          formNode
-        )}
-      </div>
-    )
-  } else if (!elements.length) {
-    node = (
-      <>
-        <Empty description="该应用暂未配置表单布局" />
-      </>
-    )
-  } else {
-    node = formNode
+  // 根据 pageType 分发对应的模式组件
+  switch (pageType) {
+    case 'form':
+      return (
+        <FormMode
+          app={app}
+          form={form}
+          elements={elements}
+          formConfig={formConfig}
+          onValuesChange={onValuesChange}
+          fieldPerms={fieldPerms}
+        />
+      )
+    case 'detail':
+      return (
+        <DetailMode
+          form={form}
+          elements={elements}
+          formConfig={formConfig}
+          onValuesChange={onValuesChange}
+          fieldPerms={fieldPerms}
+          editable={editable}
+          detailDynamicStates={detailDynamicStates}
+        />
+      )
+    case 'move-form':
+      return (
+        <MoveFormMode
+          form={form}
+          elements={elements}
+          formConfig={formConfig}
+          selectedId={selectedId}
+          dragOverIndex={dragOverIndex}
+          onSelectElement={onSelectElement}
+          onRemoveElement={onRemoveElement}
+          onElementDragStart={onElementDragStart}
+          onElementDragOver={onElementDragOver}
+          onElementDrop={onElementDrop}
+          onDragEnd={onDragEnd}
+          onCanvasDragOver={onCanvasDragOver}
+          onCanvasDrop={onCanvasDrop}
+          onCanvasClick={onCanvasClick}
+        />
+      )
+    case 'move-detail':
+      return (
+        <MoveDetailMode
+          form={form}
+          elements={elements}
+          formConfig={formConfig}
+        />
+      )
+    default:
+      return null
   }
-
-  return <RuntimeFormContext.Provider value={contextValue}>{node}</RuntimeFormContext.Provider>
 }

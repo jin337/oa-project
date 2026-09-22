@@ -788,6 +788,11 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 //     表无 deleted_at 列时降级为物理删除
 //  3. 级联处理子表数据（parent_id = dataId），删除策略与主表一致，避免产生孤儿数据
 func ApplicationDataDelete(appID, dataID uint) error {
+	return deleteBusinessData(database.DB, appID, dataID)
+}
+
+// deleteBusinessData 在指定 DB/事务句柄中删除业务数据（供审批实例删除等事务内调用）
+func deleteBusinessData(db *gorm.DB, appID, dataID uint) error {
 	app, err := ApplicationDetail(appID)
 	if err != nil {
 		return err
@@ -797,15 +802,6 @@ func ApplicationDataDelete(appID, dataID uint) error {
 	}
 	real := bizTableName(app.TableName)
 
-	// 校验目标行存在（过滤软删除）
-	var cnt int64
-	if err := database.DB.Raw("SELECT COUNT(*) FROM `"+real+"` WHERE `id` = ? AND `deleted_at` IS NULL", dataID).Scan(&cnt).Error; err != nil {
-		return err
-	}
-	if cnt == 0 {
-		return errors.New("数据不存在")
-	}
-
 	// 删除主表行：有 deleted_at 列用软删除，否则物理删除
 	mainColSet, err := queryColumnSet(real)
 	if err != nil {
@@ -813,11 +809,11 @@ func ApplicationDataDelete(appID, dataID uint) error {
 	}
 	if mainColSet["deleted_at"] {
 		// 软删除：置 deleted_at
-		if err := database.DB.Exec("UPDATE `"+real+"` SET `deleted_at` = ? WHERE `id` = ?", time.Now(), dataID).Error; err != nil {
+		if err := db.Exec("UPDATE `"+real+"` SET `deleted_at` = ? WHERE `id` = ?", time.Now(), dataID).Error; err != nil {
 			return fmt.Errorf("删除数据失败: %w", err)
 		}
 	} else {
-		if err := database.DB.Exec("DELETE FROM `"+real+"` WHERE `id` = ?", dataID).Error; err != nil {
+		if err := db.Exec("DELETE FROM `"+real+"` WHERE `id` = ?", dataID).Error; err != nil {
 			return fmt.Errorf("删除数据失败: %w", err)
 		}
 	}
@@ -835,11 +831,11 @@ func ApplicationDataDelete(appID, dataID uint) error {
 				return fmt.Errorf("查询子表 %s 结构失败: %w", sub, err)
 			}
 			if subColSet["deleted_at"] {
-				if err := database.DB.Exec("UPDATE `"+subReal+"` SET `deleted_at` = ? WHERE `parent_id` = ?", time.Now(), dataID).Error; err != nil {
+				if err := db.Exec("UPDATE `"+subReal+"` SET `deleted_at` = ? WHERE `parent_id` = ?", time.Now(), dataID).Error; err != nil {
 					return fmt.Errorf("删除子表 %s 数据失败: %w", sub, err)
 				}
 			} else {
-				if err := database.DB.Exec("DELETE FROM `"+subReal+"` WHERE `parent_id` = ?", dataID).Error; err != nil {
+				if err := db.Exec("DELETE FROM `"+subReal+"` WHERE `parent_id` = ?", dataID).Error; err != nil {
 					return fmt.Errorf("删除子表 %s 数据失败: %w", sub, err)
 				}
 			}
@@ -847,7 +843,6 @@ func ApplicationDataDelete(appID, dataID uint) error {
 	}
 	return nil
 }
-
 // ApplicationDataUpdate 动态业务数据更新（编辑表单提交）：
 //  1. 根据应用配置获取主表真实物理表名，校验目标记录存在（过滤软删除）
 //  2. 区分主表字段与子表数据：key 匹配子表名且值为数组时视为子表行数据，不作为主表字段校验

@@ -1,19 +1,22 @@
-import {
+﻿import {
   Button,
   Drawer,
   Empty,
+  Form,
   Input,
   Message,
-  Modal,
   Radio,
-  Select,
   Space,
   Spin,
 } from '@arco-design/web-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
-import DynamicDetail from 'src/pages/application/dynamic/DynamicDetail'
-import { parseLayoutJson, serializeTimeFields } from 'src/pages/application/dynamic/DynamicForm'
+import DynamicForm, {
+  evaluateDynamicStates,
+  parseLayoutJson,
+  serializeTimeFields,
+} from 'src/pages/application/dynamic/DynamicForm'
+import { safeSetFieldsValue } from 'src/pages/application/dynamic/useApplicationDetailData'
 import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
 import PersonSelectorProvider from 'src/pages/application/examine/PersonSelectorProvider'
 import { userIdFromKey } from 'src/pages/application/examine/flowModel'
@@ -45,7 +48,7 @@ export default function DetailDrawer({
   const [comment, setComment] = useState('')
   const [operating, setOperating] = useState(false)
   // 审批详情动态表单实例（字段权限 perm=2 可编辑字段修改后，提交时读取最新值）
-  const [detailForm, setDetailForm] = useState(null)
+  const [detailForm] = Form.useForm()
   // 已驳回发起人侧：只读态 -> 点"编辑"进入修改态，footer 显示"重新提交"
   const [editing, setEditing] = useState(false)
 
@@ -105,6 +108,24 @@ export default function DetailDrawer({
     : null
   const title = record?.item_name || instance?.app_name || record?.name || ''
 
+  // 动态状态预计算：基于完整业务数据一次性求值 visible_if/disabled_if，
+  // 传给 DynamicForm 后只读分支直接渲染，无需 shouldUpdate 响应式监听
+  const detailDynamicStates = useMemo(
+    () =>
+      appFromInstance?.detail_layout_json && instance?.business_data
+        ? evaluateDynamicStates(appFromInstance.detail_layout_json, instance.business_data)
+        : undefined,
+    [appFromInstance?.detail_layout_json, instance?.business_data],
+  )
+
+  // 外部预加载数据回填表单：instance.business_data 已由审批实例接口返回，
+  // 使用 safeSetFieldsValue 补写动态状态字段（visible_if/disabled_if），规避 Arco 快照覆盖
+  useEffect(() => {
+    if (instance?.business_data) {
+      safeSetFieldsValue(detailForm, instance.business_data, appFromInstance?.detail_layout_json)
+    }
+  }, [instance?.business_data, detailForm, appFromInstance?.detail_layout_json])
+
   // 是否显示审批操作按钮（同意/拒绝）
   const showApproveButtons = Boolean(currentTask?.id)
   // 是否显示转交/加签按钮（有待办任务时）
@@ -153,7 +174,8 @@ export default function DetailDrawer({
     }
     walk(snapshot)
     // 只取当前节点之前的节点
-    return path.slice(0, curIdx)
+    return path
+      .slice(0, curIdx)
       .filter((id) => nodeMap[id])
       .map((id) => ({ id, label: nodeMap[id] }))
   })()
@@ -183,7 +205,7 @@ export default function DetailDrawer({
   }
 
   const buildModifiedBusinessData = () => {
-    if (!detailForm || !instance?.business_data) return undefined
+    if (!instance?.business_data) return undefined
     const layout = parseLayoutJson(instance?.detail_layout_json)
     const values = serializeTimeFields(detailForm.getFieldsValue(), layout?.elements || [])
     const fullValues = mergeHiddenColumns(values, instance.business_data)
@@ -326,18 +348,19 @@ export default function DetailDrawer({
               </Button>
             )}
             {canReturn && (
-              <Button
-                size="small"
-                loading={operating}
-                onClick={() => handleApprove(3)}
-              >
+              <Button size="small" loading={operating} onClick={() => handleApprove(3)}>
                 退回
               </Button>
             )}
           </Space>
           {showApproveButtons && (
             <Space>
-              <Button status="danger" size="small" loading={operating} onClick={() => handleApprove(2)}>
+              <Button
+                status="danger"
+                size="small"
+                loading={operating}
+                onClick={() => handleApprove(2)}
+              >
                 拒绝
               </Button>
               <Button
@@ -355,9 +378,23 @@ export default function DetailDrawer({
     )
   }
 
+  // 审批状态映射
+  const getStatusConfig = (status) => {
+    const statusMap = {
+      0: { text: '审批中', color: '#ffb400' },
+      1: { text: '审批通过', color: '#00b42a' },
+      2: { text: '审批拒绝', color: '#f53f3f' },
+      3: { text: '审批退回', color: '#ff7d00' },
+    }
+    return statusMap[Number(status)] || { text: '未知状态', color: '#86909c' }
+  }
+
+  const statusConfig = getStatusConfig(instance?.status)
+
   return (
     <PersonSelectorProvider>
       <Drawer
+        className={'relative'}
         width="50%"
         title={`详情 - ${title}`}
         visible={visible}
@@ -365,19 +402,34 @@ export default function DetailDrawer({
         footer={renderActions() || null}
         unmountOnExit
       >
+        {/* 审批状态印章：显示在标题栏右上角 */}
+        {instance && (
+          <div className="absolute top-3 right-5 z-10 -rotate-45">
+            <span
+              className="flex h-20 w-20 items-center justify-center rounded-full text-base font-bold opacity-80"
+              style={{
+                border: `2px solid ${statusConfig.color}`,
+                color: statusConfig.color,
+              }}
+            >
+              {statusConfig.text}
+            </span>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex h-40 items-center justify-center">
             <Spin />
           </div>
         ) : instance ? (
           <>
-            <DynamicDetail
-              app={appFromInstance}
-              dataId={dataId}
-              initialData={instance?.business_data}
+            <DynamicForm
+              app={{ ...appFromInstance, form_layout_json: appFromInstance?.detail_layout_json }}
+              form={detailForm}
+              pageType="detail"
               fieldPerms={instance?.field_perms}
-              onFormReady={setDetailForm}
               editable={Boolean(currentTask) || resubmitEditing}
+              detailDynamicStates={detailDynamicStates}
             />
             <ApprovalTimeline
               instanceId={record?.instance_id}
