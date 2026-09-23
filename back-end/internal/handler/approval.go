@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 // ============================================================
 // 审批分类、申请项、审批列表
@@ -90,7 +90,7 @@ func ApprovalCategoryItemList(c *gin.Context) {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	list, total, err := service.ApprovalCategoryItemList(&req)
+	list, total, err := service.ApprovalCategoryItemList(middleware.CurrentUserID(c), &req)
 	if err != nil {
 		respondServiceError(c, err)
 		return

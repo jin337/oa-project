@@ -14,12 +14,7 @@ import {
   Space,
   Spin,
 } from '@arco-design/web-react'
-import {
-  IconDelete,
-  IconEdit,
-  IconPlus,
-  IconSettings,
-} from '@arco-design/web-react/icon'
+import { IconDelete, IconEdit, IconPlus, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 import * as approvalApi from 'src/api/approval'
@@ -30,14 +25,12 @@ import DynamicForm, {
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
 
-import { usePermission } from 'src/hooks/usePermission'
 import IconSelect, { MenuIcon } from 'src/components/icon-select'
+import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
 const Row = Grid.Row
 const Col = Grid.Col
-
-
 
 /**
  * 审批申请页：上下按行排列的流式布局——每个分类独占一行（左侧名称与编辑/删除，右侧新增申请项），
@@ -275,7 +268,9 @@ export default function Apply() {
       await approvalApi.saveDraftInstance({
         app_id: drawerApp.id,
         business_data: payload,
-        approval_draft_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+        approval_draft_members: Object.keys(selfSelectUserIDs).length
+          ? selfSelectUserIDs
+          : undefined,
       })
       Message.success('草稿保存成功')
       setDrawerVisible(false)
@@ -300,7 +295,9 @@ export default function Apply() {
       await approvalApi.createApprovalInstance({
         app_id: drawerApp.id,
         business_data: payload,
-        approval_draft_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+        approval_draft_members: Object.keys(selfSelectUserIDs).length
+          ? selfSelectUserIDs
+          : undefined,
       })
       Message.success('提交成功，等待审核')
       setDrawerVisible(false)
@@ -314,6 +311,7 @@ export default function Apply() {
 
   return (
     <Card
+      className="h-full"
       title="审批申请"
       extra={
         hasPerm('approval:edit') && (
@@ -340,6 +338,10 @@ export default function Apply() {
         <div className="space-y-4">
           {categories.map((c) => {
             const catItems = items.filter((it) => it.category_id === c.id)
+            // 没有管理权限时，如果分类下无申请项，就隐藏这个分类
+            if (!hasPerm('approval:edit') && catItems.length === 0) {
+              return null
+            }
             return (
               <div key={c.id}>
                 {/* 分类行：左侧名称 + 编辑/删除图标，右侧新增申请项按钮（管理模式展示） */}

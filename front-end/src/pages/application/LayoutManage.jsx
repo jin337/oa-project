@@ -12,13 +12,13 @@ import { IconDelete, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
-import { useTabs } from 'src/store/tab-context'
 import DynamicForm, {
   BASE_LAYOUT_ELEMENTS,
   DEFAULT_FORM_CONFIG,
   parseLayoutJson,
   renderElementSettings,
 } from 'src/pages/application/dynamic/DynamicForm'
+import { useTabs } from 'src/store/tab-context'
 
 const TabPane = Tabs.TabPane
 
@@ -399,7 +399,7 @@ export default function LayoutManage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-160px)] items-stretch border border-gray-200 bg-white">
+    <div className="flex h-full items-stretch border border-gray-200 bg-white">
       {/* ========== 左侧：组件库（按表分组，两列网格） ========== */}
       <div className="flex w-56 shrink-0 flex-col">
         <div className="shrink-0 border-b border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-800">

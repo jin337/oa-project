@@ -146,12 +146,14 @@ export default function NotificationBell() {
   })()
 
   const dropdown = (
-    <div className="max-h-96 w-80 overflow-auto rounded-lg bg-white shadow-lg border border-gray-100">
+    <div className="max-h-96 w-80 overflow-auto rounded-lg border border-gray-100 bg-white shadow-lg">
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
         <Typography.Text className="font-medium">通知</Typography.Text>
-        {count > 0 && <Button type="text" size="mini" onClick={handleReadAll}>
-          全部已读
-        </Button>}
+        {count > 0 && (
+          <Button type="text" size="mini" onClick={handleReadAll}>
+            全部已读
+          </Button>
+        )}
       </div>
       {loading ? (
         <div className="flex justify-center py-8">
@@ -162,8 +164,9 @@ export default function NotificationBell() {
       ) : (
         groupList.map(([groupName, items]) => (
           <div key={groupName}>
-            <div className="bg-gray-50 px-3 py-1 text-xs text-gray-500">{groupName}</div>
+            <div className="bg-gray-50 px-3 py-1 text-xs text-gray-500 border-b border-(--color-neutral-3)">{groupName}</div>
             <List
+              bordered={false}
               dataSource={items}
               render={(n) => (
                 <List.Item
@@ -180,7 +183,9 @@ export default function NotificationBell() {
                         {formatTime(n.created_at)}
                       </Typography.Text>
                     </div>
-                    <Typography.Text className="block text-xs text-gray-500">{n.msg}</Typography.Text>
+                    <Typography.Text className="block text-xs text-gray-500">
+                      {n.msg}
+                    </Typography.Text>
                   </div>
                 </List.Item>
               )}

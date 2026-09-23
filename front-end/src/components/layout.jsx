@@ -228,7 +228,7 @@ export default function MainLayout() {
         <Content className="flex-1 overflow-auto bg-gray-50 p-4">
           {/* 面包屑：由当前激活页签的 breadcrumbs 驱动 */}
           <ContentBreadcrumb />
-          <Outlet />
+          <div className="w-full h-[calc(100vh-160px)]"><Outlet /></div>
         </Content>
       </Layout>
     </TabProvider>

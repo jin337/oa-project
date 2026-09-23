@@ -9,22 +9,18 @@ import (
 
 // ApplyDataScope 根据当前登录用户角色的数据范围，对部门维度查询追加过滤条件
 // 实现架构图中的「过滤查询 (如: WHERE dept_id IN ?)」：
-//  1 全部数据      -> 不过滤
-//  2 自定义部门    -> dept_id IN (角色绑定部门)
-//  3 仅本部门      -> dept_id = 用户部门
-//  4 本部门及下级  -> dept_id IN (用户部门及其所有子部门)
+//
+//	1 全部数据      -> 不过滤
+//	2 自定义部门    -> dept_id IN (角色绑定部门)
+//	3 仅本部门      -> dept_id = 用户部门
+//	4 本部门及下级  -> dept_id IN (用户部门及其所有子部门)
+//
 // deptColumn 为目标表的部门字段，如 "users.dept_id"
 func ApplyDataScope(db *gorm.DB, userID uint, deptColumn string) *gorm.DB {
 	var user model.User
 	if err := database.DB.Preload("Roles.Depts").First(&user, userID).Error; err != nil {
 		// 查不到用户时最严格：无数据
-		println("[ApplyDataScope] user not found:", err.Error())
 		return db.Where("1 = 0")
-	}
-
-	println("[ApplyDataScope] userID:", userID, "deptID:", user.DeptID, "roles:", len(user.Roles))
-	for _, r := range user.Roles {
-		println("[ApplyDataScope] role:", r.ID, r.Name, "status:", r.Status, "dataScope:", r.DataScope, "depts:", len(r.Depts))
 	}
 
 	deptIDs := map[uint]bool{}
@@ -48,7 +44,6 @@ func ApplyDataScope(db *gorm.DB, userID uint, deptColumn string) *gorm.DB {
 			}
 		}
 	}
-	println("[ApplyDataScope] all:", all, "deptIDs:", len(deptIDs))
 	if all {
 		return db
 	}

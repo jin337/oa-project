@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 // ============================================================
 // 审批分类、申请项、审批列表聚合
@@ -92,8 +92,8 @@ func ApprovalCategoryDelete(id uint) error {
 	return database.DB.Delete(&model.ApprovalCategory{}, id).Error
 }
 
-// ApprovalCategoryItemList 申请项分页列表
-func ApprovalCategoryItemList(req *model.ApprovalCategoryItemListReq) ([]model.ApprovalCategoryItem, int64, error) {
+// ApprovalCategoryItemList 申请项分页列表（带发起人权限过滤）
+func ApprovalCategoryItemList(curUserID uint, req *model.ApprovalCategoryItemListReq) ([]model.ApprovalCategoryItem, int64, error) {
 	db := database.DB.Model(&model.ApprovalCategoryItem{})
 	if req.CategoryID > 0 {
 		db = db.Where("category_id = ?", req.CategoryID)
@@ -104,7 +104,142 @@ func ApprovalCategoryItemList(req *model.ApprovalCategoryItemListReq) ([]model.A
 	}
 	var list []model.ApprovalCategoryItem
 	err := db.Order("sort ASC, id ASC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
-	return list, total, err
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 管理员可以看到所有申请项
+	if isAdmin(curUserID) {
+		return list, total, nil
+	}
+
+	// 获取当前用户的角色和部门
+	user, err := getUserWithRolesAndDepts(curUserID)
+	if err != nil {
+		return nil, 0, err
+	}
+	userRoleIDs := getUserRoleIDs(user)
+	userDeptIDs := getUserDeptIDs(user)
+
+	// 过滤申请项：只保留用户有权限发起的
+	filteredList := make([]model.ApprovalCategoryItem, 0, len(list))
+	for _, item := range list {
+		canStart, err := canUserStartApproval(item.Code, curUserID, userRoleIDs, userDeptIDs)
+		if err != nil {
+			continue // 出错的项暂时跳过
+		}
+		if canStart {
+			filteredList = append(filteredList, item)
+		}
+	}
+
+	return filteredList, int64(len(filteredList)), nil
+}
+
+// getUserWithRolesAndDepts 获取用户及其角色和部门
+func getUserWithRolesAndDepts(userID uint) (*model.User, error) {
+	var user model.User
+	if err := database.DB.Preload("Roles").Preload("DeptIDs").First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// getUserRoleIDs 获取用户的角色 ID 列表
+func getUserRoleIDs(user *model.User) []uint {
+	roleIDs := make([]uint, 0, len(user.Roles))
+	for _, role := range user.Roles {
+		roleIDs = append(roleIDs, role.ID)
+	}
+	return roleIDs
+}
+
+// getUserDeptIDs 获取用户的部门 ID 列表
+func getUserDeptIDs(user *model.User) []uint {
+	deptIDs := make([]uint, 0, len(user.DeptIDs))
+	for _, dept := range user.DeptIDs {
+		deptIDs = append(deptIDs, dept.ID)
+	}
+	return deptIDs
+}
+
+// canUserStartApproval 检查用户是否有权限发起某个审批
+// appCode: 应用编码
+// userID: 用户 ID
+// userRoleIDs: 用户的角色 ID 列表
+// userDeptIDs: 用户的部门 ID 列表
+func canUserStartApproval(appCode string, userID uint, userRoleIDs, userDeptIDs []uint) (bool, error) {
+	// 查询应用配置
+	var app model.Application
+	if err := database.DB.Where("code = ?", appCode).First(&app).Error; err != nil {
+		return false, err
+	}
+
+	// 如果没有配置审批流，默认允许
+	if app.ApprovalFlowJSON == nil {
+		return true, nil
+	}
+
+	// 解析审批流节点
+	nodes, err := parseFlowNodes(app.ApprovalFlowJSON)
+	if err != nil {
+		return false, err
+	}
+
+	// 找到发起人节点（type=1）
+	var creatorNode *flowNode
+	for i := range nodes {
+		if nodes[i].Type == 1 {
+			creatorNode = &nodes[i]
+			break
+		}
+	}
+
+	// 如果没有发起人节点，默认允许
+	if creatorNode == nil {
+		return true, nil
+	}
+
+	// 检查发起人成员列表
+	for _, member := range creatorNode.Members {
+		switch member.Type {
+		case 1: // 人员
+			// 提取用户 ID（格式：user_1）
+			var memberUserID uint
+			if _, err := fmt.Sscanf(member.Key, "user_%d", &memberUserID); err == nil {
+				if memberUserID == userID {
+					return true, nil
+				}
+			}
+		case 2: // 部门
+			// 提取部门 ID（格式：dept_2）
+			var memberDeptID uint
+			if _, err := fmt.Sscanf(member.Key, "dept_%d", &memberDeptID); err == nil {
+				for _, userDeptID := range userDeptIDs {
+					if userDeptID == memberDeptID {
+						return true, nil
+					}
+				}
+			}
+		case 3: // 角色
+			// 提取角色 ID（格式：role_3）
+			var memberRoleID uint
+			if _, err := fmt.Sscanf(member.Key, "role_%d", &memberRoleID); err == nil {
+				for _, userRoleID := range userRoleIDs {
+					if userRoleID == memberRoleID {
+						return true, nil
+					}
+				}
+			}
+		}
+	}
+
+	// 如果发起人成员列表为空，默认允许（向后兼容）
+	if len(creatorNode.Members) == 0 {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // ApprovalCategoryItemCreate 新增申请项
