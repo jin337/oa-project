@@ -749,7 +749,7 @@ export default function FormElementManage() {
             </Col>
             <Col span={12}>
               <FormItem label="占位提示" field="placeholder">
-                <Input placeholder="如：请输入或选择" />
+                <Input.TextArea placeholder="如：请输入或选择" autoSize={{ minRows: 1, maxRows: 3 }} />
               </FormItem>
             </Col>
             <Col span={24}>

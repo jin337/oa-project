@@ -395,7 +395,7 @@ export default function DetailDrawer({
     <PersonSelectorProvider>
       <Drawer
         className={'relative'}
-        width="50%"
+        width="60%"
         title={`详情 - ${title}`}
         visible={visible}
         onCancel={onCancel}
@@ -406,7 +406,7 @@ export default function DetailDrawer({
         {instance && (
           <div className="absolute top-5 right-6 z-10">
             <span
-              className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full text-base font-bold opacity-80"
+              className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full text-base font-bold bg-white"
               style={{
                 border: `2px solid ${statusConfig.color}`,
                 color: statusConfig.color,

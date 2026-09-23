@@ -518,7 +518,7 @@ export default function Apply() {
 
       {/* 动态表单 Drawer：点击申请项卡片后加载应用配置并注入动态表单组件 */}
       <Drawer
-        width="50%"
+        width="60%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
         title={drawerTitle || '申请表单'}

@@ -75,14 +75,22 @@ function normalizeValue(val) {
 
 function normalizeOne(item) {
   if (typeof item === 'string') return { name: item, url: item }
-  return { name: item.name || item.filename || '文件', url: item.url || item.path || '', uid: item.uid || '' }
+  return {
+    name: item.name || item.filename || '文件',
+    url: item.url || item.path || '',
+    uid: item.uid || '',
+  }
 }
 
 /** 只读渲染：解析 JSON 字符串/数组，渲染文件链接/图片预览（供 detail 模式调用） */
 export function renderUploadReadOnly(value) {
   let list = value
   if (typeof list === 'string') {
-    try { list = JSON.parse(list) } catch { list = null }
+    try {
+      list = JSON.parse(list)
+    } catch {
+      list = null
+    }
   }
   if (!Array.isArray(list) || list.length === 0) return <span className="text-gray-400">-</span>
   return (
@@ -92,11 +100,23 @@ export function renderUploadReadOnly(value) {
         const name = f?.name || url
         const isImg = /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(name)
         return isImg ? (
-          <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-1">
+          <a
+            key={i}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1"
+          >
             <img src={url} alt={name} className="h-6 w-6 rounded border object-cover" /> {name}
           </a>
         ) : (
-          <a key={i} href={url} target="_blank" rel="noreferrer" className="text-blue-600 break-all">
+          <a
+            key={i}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="break-all text-blue-600"
+          >
             {name}
           </a>
         )
@@ -110,7 +130,9 @@ const WIDTH_OPTIONS = [
   { value: 24, label: '整行' },
   { value: 12, label: '1/2' },
   { value: 8, label: '1/3' },
+  { value: 16, label: '2/3' },
   { value: 6, label: '1/4' },
+  { value: 18, label: '3/4' },
 ]
 
 /** 运行时 renderPreview 入口：供 ELEMENT_RENDER_CONFIG 注册 */
@@ -127,13 +149,14 @@ export function renderUploadSettings({ selectedElement, updateSelectedElement })
     <>
       <div>
         <div className="mb-2 text-sm text-gray-600">元素类型</div>
-        <Tag color="arcoblue" size="medium">
+        <Tag color="arcoblue" size="mini">
           文件上传
         </Tag>
       </div>
       <div>
         <div className="mb-2 text-sm text-gray-600">字段名称</div>
         <Input
+          size="mini"
           value={selectedElement.label || ''}
           onChange={(v) => updateSelectedElement({ label: v })}
           placeholder="请输入字段名称"
@@ -142,6 +165,7 @@ export function renderUploadSettings({ selectedElement, updateSelectedElement })
       <div>
         <div className="mb-2 text-sm text-gray-600">宽度占比</div>
         <Radio.Group
+          size="mini"
           type="button"
           value={selectedElement.width}
           onChange={(v) => updateSelectedElement({ width: v })}
@@ -156,6 +180,7 @@ export function renderUploadSettings({ selectedElement, updateSelectedElement })
       <div>
         <div className="mb-2 text-sm text-gray-600">按钮文字</div>
         <Input
+          size="mini"
           value={selectedElement.buttonText || ''}
           onChange={(v) => updateSelectedElement({ buttonText: v })}
           placeholder="留空默认：点击上传"
@@ -164,6 +189,7 @@ export function renderUploadSettings({ selectedElement, updateSelectedElement })
       <div>
         <div className="mb-2 text-sm text-gray-600">上传模式</div>
         <Radio.Group
+          size="mini"
           type="button"
           value={selectedElement.multiple ? 'multiple' : 'single'}
           onChange={(v) => updateSelectedElement({ multiple: v === 'multiple' })}
@@ -176,6 +202,7 @@ export function renderUploadSettings({ selectedElement, updateSelectedElement })
       <div>
         <div className="mb-2 text-sm text-gray-600">允许文件类型</div>
         <Input
+          size="mini"
           value={selectedElement.accept || ''}
           onChange={(v) => updateSelectedElement({ accept: v })}
           placeholder="如 .png,.jpg,.pdf，留空不限制"

@@ -550,7 +550,7 @@ export default function LayoutManage() {
             <div className="flex flex-col gap-4 py-2">
               <div>
                 <div className="mb-2 text-sm text-gray-600">布局方式</div>
-                <Radio.Group
+                <Radio.Group size="mini"
                   type="button"
                   value={formConfig.layout}
                   onChange={(v) => updateFormConfig({ layout: v })}
@@ -561,7 +561,7 @@ export default function LayoutManage() {
                 <>
                   <div>
                     <div className="mb-2 text-sm text-gray-600">标签宽度</div>
-                    <InputNumber
+                    <InputNumber size="mini"
                       min={40}
                       max={300}
                       value={formConfig.labelWidth}
@@ -571,7 +571,7 @@ export default function LayoutManage() {
                   </div>
                   <div>
                     <div className="mb-2 text-sm text-gray-600">标签对齐方式</div>
-                    <Radio.Group
+                    <Radio.Group size="mini"
                       type="button"
                       value={formConfig.labelAlign}
                       onChange={(v) => updateFormConfig({ labelAlign: v })}

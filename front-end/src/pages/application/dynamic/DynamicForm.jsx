@@ -49,7 +49,9 @@ const WIDTH_OPTIONS = [
   { value: 24, label: '整行' },
   { value: 12, label: '1/2' },
   { value: 8, label: '1/3' },
+  { value: 16, label: '2/3' },
   { value: 6, label: '1/4' },
+  { value: 18, label: '3/4' },
 ]
 
 // 画布模式（move-*）下依赖选项组件的统一预览占位选项（不解析真实 data_source）
@@ -103,13 +105,13 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
   <>
     <div>
       <div className="mb-2 text-sm text-gray-600">元素类型</div>
-      <Tag color="arcoblue" size="medium">
+      <Tag color="arcoblue" size="mini">
         {getTypeLabel(selectedElement.element_type)}
       </Tag>
     </div>
     <div>
       <div className="mb-2 text-sm text-gray-600">字段名称</div>
-      <Input
+      <Input size="mini"
         value={selectedElement.label}
         onChange={(v) => updateSelectedElement({ label: v })}
         placeholder="请输入字段名称"
@@ -118,6 +120,7 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
     <div>
       <div className="mb-2 text-sm text-gray-600">宽度占比</div>
       <Radio.Group
+        size="mini"
         type="button"
         value={selectedElement.width}
         onChange={(v) => updateSelectedElement({ width: v })}
@@ -563,13 +566,13 @@ export const BASE_ELEMENT_CONFIGS = {
       <>
         <div>
           <div className="mb-2 text-sm text-gray-600">元素类型</div>
-          <Tag color="arcoblue" size="medium">
+          <Tag color="arcoblue" size="mini">
             分割线
           </Tag>
         </div>
         <div>
           <div className="mb-2 text-sm text-gray-600">分割线文字</div>
-          <Input
+          <Input size="mini"
             value={selectedElement.text || ''}
             onChange={(v) => updateSelectedElement({ text: v })}
             placeholder="可选，留空为纯分割线"
@@ -577,7 +580,7 @@ export const BASE_ELEMENT_CONFIGS = {
         </div>
         <div>
           <div className="mb-2 text-sm text-gray-600">文字位置</div>
-          <Radio.Group
+          <Radio.Group size="mini"
             type="button"
             value={selectedElement.orientation || 'center'}
             onChange={(v) => updateSelectedElement({ orientation: v })}
@@ -620,7 +623,7 @@ export const BASE_ELEMENT_CONFIGS = {
       <>
         <div>
           <div className="mb-2 text-sm text-gray-600">元素类型</div>
-          <Tag color="arcoblue" size="medium">
+          <Tag color="arcoblue" size="mini">
             表格
           </Tag>
         </div>
