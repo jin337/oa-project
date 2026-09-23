@@ -18,14 +18,17 @@ export function UploadElement({ el, pageType, value, onChange }) {
 
   // detail / move-detail：只读展示
   if (pageType === 'detail') {
-    return renderUploadReadOnly(fileList)
+    return renderUploadReadOnly(fileList, el)
   }
   if (pageType === 'move-detail') {
-    if (fileList.length > 0) return renderUploadReadOnly(fileList)
-    return renderUploadReadOnly([
-      { uid: '-1', name: '文件1.pdf', url: '' },
-      { uid: '-2', name: '文件2.pdf', url: '' },
-    ])
+    if (fileList.length > 0) return renderUploadReadOnly(fileList, el)
+    return renderUploadReadOnly(
+      [
+        { uid: '-1', name: '文件1.pdf', url: '' },
+        { uid: '-2', name: '文件2.pdf', url: '' },
+      ],
+      el,
+    )
   }
 
   // form / move-form：可交互上传
@@ -48,12 +51,30 @@ export function UploadElement({ el, pageType, value, onChange }) {
     onChange?.(merged)
   }
 
+  // 处理 tip：如果有换行符，就用 div 包裹每一行
+  const renderTip = () => {
+    const placeholder = el?.placeholder
+    if (!placeholder) return undefined
+    // 如果包含换行符，就按换行分割并用 div 包裹
+    if (placeholder.includes('\n')) {
+      return (
+        <div>
+          {placeholder.split('\n').map((line, index) => (
+            <div key={index}>{line}</div>
+          ))}
+        </div>
+      )
+    }
+    // 没有换行符，直接返回文本
+    return placeholder
+  }
+
   return (
     <Upload
       action="/api/v1/upload"
       headers={{ Authorization: `Bearer ${token}` }}
       data={{ app_code: appCode }}
-      tip={el?.placeholder || undefined}
+      tip={renderTip()}
       defaultFileList={fileList}
       onChange={handleChange}
       multiple={el?.multiple !== false}
@@ -83,7 +104,7 @@ function normalizeOne(item) {
 }
 
 /** 只读渲染：解析 JSON 字符串/数组，渲染文件链接/图片预览（供 detail 模式调用） */
-export function renderUploadReadOnly(value) {
+export function renderUploadReadOnly(value, el) {
   let list = value
   if (typeof list === 'string') {
     try {
@@ -92,9 +113,34 @@ export function renderUploadReadOnly(value) {
       list = null
     }
   }
-  if (!Array.isArray(list) || list.length === 0) return <span className="text-gray-400">-</span>
+
+  // 处理 placeholder：如果有换行符，就按换行分割并用 div 包裹
+  const renderPlaceholder = () => {
+    const placeholder = el?.placeholder
+    if (!placeholder) return null
+    if (placeholder.includes('\n')) {
+      return (
+        <div className="mt-1 text-xs text-gray-400">
+          {placeholder.split('\n').map((line, index) => (
+            <div key={index}>{line}</div>
+          ))}
+        </div>
+      )
+    }
+    return <div className="mt-1 text-xs text-gray-400">{placeholder}</div>
+  }
+
+  if (!Array.isArray(list) || list.length === 0) {
+    return (
+      <div>
+        {renderPlaceholder()}
+        <span className="text-gray-400">-</span>
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col gap-1">
+      {renderPlaceholder()}
       {list.map((f, i) => {
         const url = f?.url || ''
         const name = f?.name || url

@@ -1662,10 +1662,10 @@ const labelOfValue = (value, dataSource) => {
  * （数组值逐项映射后以 ", " 连接），空值显示 '-'。
  * elementType 为时间/日期类型时，value 经 formatTimeValue 格式化为标准可读的日期/时间字符串。
  */
-const ReadonlyValue = ({ value, elementType, dataSource }) => {
+const ReadonlyValue = ({ value, elementType, dataSource, el }) => {
   // upload 类型：走 UploadElement 的只读渲染
   if (elementType === 'upload') {
-    return renderUploadReadOnly(value)
+    return renderUploadReadOnly(value, el)
   }
   let text
   if (value == null || value === '') {
@@ -1753,7 +1753,7 @@ export const renderFormItemElement = (el, ctx) => {
     if (pageType === 'detail' && el.element_type !== 'divider' && !permEditable) {
       if (el.element_type === 'upload') {
         return (
-          <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} renderUpload />
+          <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} el={el} renderUpload />
         )
       }
       return <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} />
@@ -2014,3 +2014,8 @@ export default function DynamicForm({
       return null
   }
 }
+
+
+
+
+
