@@ -57,7 +57,7 @@ export default function MoveDetailMode({
         <Form
           size="small"
           form={form}
-          className="mx-auto max-w-187.5"
+          className="mx-auto max-w-187.5 detail-form-descriptions"
           layout={formConfig.layout}
           labelAlign={formConfig.labelAlign}
           disabled

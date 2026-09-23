@@ -404,9 +404,9 @@ export default function DetailDrawer({
       >
         {/* 审批状态印章：显示在标题栏右上角 */}
         {instance && (
-          <div className="absolute top-3 right-5 z-10 -rotate-45">
+          <div className="absolute top-5 right-6 z-10">
             <span
-              className="flex h-20 w-20 items-center justify-center rounded-full text-base font-bold opacity-80"
+              className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full text-base font-bold opacity-80"
               style={{
                 border: `2px solid ${statusConfig.color}`,
                 color: statusConfig.color,
