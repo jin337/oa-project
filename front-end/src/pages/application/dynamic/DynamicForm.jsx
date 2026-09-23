@@ -13,13 +13,26 @@
   Table,
   Tag,
   TimePicker,
-  TreeSelect
+  TreeSelect,
 } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow, IconPlus } from '@arco-design/web-react/icon'
-import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createContext,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import request from 'src/api/request'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
-import { renderUploadPreview, renderUploadReadOnly, renderUploadSettings } from './elements/UploadElement'
+import {
+  renderUploadPreview,
+  renderUploadReadOnly,
+  renderUploadSettings,
+} from './elements/UploadElement'
 
 const FormItem = Form.Item
 const FormList = Form.List
@@ -272,7 +285,7 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
         const permColumns = vifCols.filter((col) => {
           const colKey = col.dataIndex || col.field_key
           const fp = (fieldPerms || []).find(
-            (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key)
+            (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key),
           )
           return !fp || fp.perm !== 1
         })
@@ -304,7 +317,10 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
                 const hKey = h.dataIndex || h.field_key
                 if (!hKey) return false
                 return (col.actions?.on_change || []).some(
-                  (a) => a.action_type === 'set_value' && Array.isArray(a.value) && a.value.some((m) => m?.target === hKey)
+                  (a) =>
+                    a.action_type === 'set_value' &&
+                    Array.isArray(a.value) &&
+                    a.value.some((m) => m?.target === hKey),
                 )
               })
               const renderFn = renderPreviewConfig[col.element_type]
@@ -314,35 +330,50 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
                 editable &&
                 pageType === 'detail' &&
                 (fieldPerms || []).find(
-                  (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key)
+                  (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key),
                 )?.perm === 2
               const cellEditable = isEditable || colEditableByPerm
               const colDS = col.dynamic_states
               // 单元格控件渲染（extra 可覆盖 hidden/disabled 等属性）
               const renderCellControl = (extra) => {
-                const main = !field
-                  ? // 行未注册到 Form store（如画布空态）：可编辑渲染可交互控件，详情渲染纯文本
-                    cellEditable
-                    ? renderFn(col, 'form', rt)
-                    : isReadonlyText
-                      ? <ReadonlyValue value={cellValue} elementType={col.element_type} dataSource={col.data_source} />
-                      : renderFn(col, undefined, rt)
-                  : (
-                    <FormItem
-                      field={`${field}.${colKey}`}
-                      noStyle
-                      {...extra}
-                      rules={cellEditable ? buildValidationRules(col, () => form?.getFieldsValue?.() || {}, false, true) : undefined}
-                    >
-                      {cellEditable ? (
-                        renderFn(col, 'form', rt)
-                      ) : isReadonlyText ? (
-                        <ReadonlyValue elementType={col.element_type} dataSource={col.data_source} />
-                      ) : (
-                        renderFn(col, undefined, rt)
-                      )}
-                    </FormItem>
+                const main = !field ? (
+                  // 行未注册到 Form store（如画布空态）：可编辑渲染可交互控件，详情渲染纯文本
+                  cellEditable ? (
+                    renderFn(col, 'form', rt)
+                  ) : isReadonlyText ? (
+                    <ReadonlyValue
+                      value={cellValue}
+                      elementType={col.element_type}
+                      dataSource={col.data_source}
+                    />
+                  ) : (
+                    renderFn(col, undefined, rt)
                   )
+                ) : (
+                  <FormItem
+                    field={`${field}.${colKey}`}
+                    noStyle
+                    {...extra}
+                    rules={
+                      cellEditable
+                        ? buildValidationRules(
+                            col,
+                            () => form?.getFieldsValue?.() || {},
+                            false,
+                            true,
+                          )
+                        : undefined
+                    }
+                  >
+                    {cellEditable ? (
+                      renderFn(col, 'form', rt)
+                    ) : isReadonlyText ? (
+                      <ReadonlyValue elementType={col.element_type} dataSource={col.data_source} />
+                    ) : (
+                      renderFn(col, undefined, rt)
+                    )}
+                  </FormItem>
+                )
                 return (
                   <>
                     {main}
@@ -350,7 +381,11 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
                       linkedHidden.map((h) => {
                         const hKey = h.dataIndex || h.field_key
                         return (
-                          <FormItem key={`${el.table_key}-link-${index}-${hKey}`} field={`${field}.${hKey}`} hidden>
+                          <FormItem
+                            key={`${el.table_key}-link-${index}-${hKey}`}
+                            field={`${field}.${hKey}`}
+                            hidden
+                          >
                             <Input />
                           </FormItem>
                         )
@@ -367,7 +402,10 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
                     shouldUpdate={
                       deps.size
                         ? (prev, cur) =>
-                            [...deps].some((d) => prev?.[listField]?.[index]?.[d] !== cur?.[listField]?.[index]?.[d])
+                            [...deps].some(
+                              (d) =>
+                                prev?.[listField]?.[index]?.[d] !== cur?.[listField]?.[index]?.[d],
+                            )
                         : true
                     }
                     noStyle
@@ -478,7 +516,12 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
               <div className="mt-2 flex justify-between">
                 {/* 表格错误提示：显示 Form.List 校验错误（整体必填 / 必填列非空） */}
                 <div className="arco-form-message">{errorMessage || ''}</div>
-                <Button size="mini" type="primary" icon={<IconPlus />} onClick={() => add(genDefaultRow())}>
+                <Button
+                  size="mini"
+                  type="primary"
+                  icon={<IconPlus />}
+                  onClick={() => add(genDefaultRow())}
+                >
                   新增
                 </Button>
               </div>
@@ -697,7 +740,6 @@ export const BASE_LAYOUT_ELEMENTS = Object.values(BASE_ELEMENT_CONFIGS).map(({ m
   required: false,
   ...(meta.defaultProps || {}),
 }))
-
 
 /**
  * 组件统一渲染配置中心：每个 element_type 一个配置对象，
@@ -939,7 +981,8 @@ const evalDynamicExpr = (expr, formValues) => {
     return JSON.stringify(val ?? '')
   })
   if (!/^[\s\w.$"'`+\-*/%<>=!&|?:()\[\],]+$/.test(code)) return false
-  if (/(constructor|__proto__|prototype|Function|eval|window|globalThis|document)/i.test(code)) return false
+  if (/(constructor|__proto__|prototype|Function|eval|window|globalThis|document)/i.test(code))
+    return false
   try {
     return Boolean(new Function(`"use strict"; return (${code});`)())
   } catch (e) {
@@ -961,8 +1004,12 @@ export function evaluateDynamicStates(layout, data) {
       if (!el || typeof el !== 'object') return
       if (el.field_key && (el.dynamic_states?.visible_if || el.dynamic_states?.disabled_if)) {
         result[el.field_key] = {
-          visible: el.dynamic_states.visible_if ? !!evalDynamicExpr(el.dynamic_states.visible_if, values) : true,
-          disabled: el.dynamic_states.disabled_if ? !!evalDynamicExpr(el.dynamic_states.disabled_if, values) : false,
+          visible: el.dynamic_states.visible_if
+            ? !!evalDynamicExpr(el.dynamic_states.visible_if, values)
+            : true,
+          disabled: el.dynamic_states.disabled_if
+            ? !!evalDynamicExpr(el.dynamic_states.disabled_if, values)
+            : false,
         }
       }
     })
@@ -991,8 +1038,13 @@ const buildValidationRules = (el, getFormValues, isDetail, skipRequired) => {
       const m = str.match(/^\/([\s\S]*)\/([a-z]*)$/i)
       if (m) {
         try {
-          rules.push({ match: new RegExp(m[1], m[2]), message: el.validation_message || `${label}格式不正确` })
-        } catch { /* 非法正则忽略 */ }
+          rules.push({
+            match: new RegExp(m[1], m[2]),
+            message: el.validation_message || `${label}格式不正确`,
+          })
+        } catch {
+          /* 非法正则忽略 */
+        }
       }
     } else if (str.includes('${')) {
       rules.push({
@@ -1001,7 +1053,9 @@ const buildValidationRules = (el, getFormValues, isDetail, skipRequired) => {
             const ok = evalDynamicExpr(str, getFormValues?.() || {})
             if (ok) callback()
             else callback(el.validation_message || `${label}校验不通过`)
-          } catch { callback() }
+          } catch {
+            callback()
+          }
         },
       })
     }
@@ -1026,7 +1080,10 @@ const parseDefaultValue = (raw, elementType) => {
     return raw
   } catch (e) {
     // 多选型支持逗号分隔字符串
-    if (['checkbox', 'multi_select', 'treeselect'].includes(elementType) && String(raw).includes(',')) {
+    if (
+      ['checkbox', 'multi_select', 'treeselect'].includes(elementType) &&
+      String(raw).includes(',')
+    ) {
       return String(raw)
         .split(',')
         .map((x) => x.trim())
@@ -1231,7 +1288,12 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
       // 选项加载完成：若该元素当前已有值（默认值/回填）且配置了 on_change，
       // 补跑一次联动以按选中项填充字段（默认值设置时机早于选项加载，正常联动取不到选中项数据）
       const cur = formRef.current?.getFieldValue?.(el.field_key)
-      if ((el.actions?.on_change?.length || 0) > 0 && cur !== undefined && cur !== null && cur !== '') {
+      if (
+        (el.actions?.on_change?.length || 0) > 0 &&
+        cur !== undefined &&
+        cur !== null &&
+        cur !== ''
+      ) {
         runActionsRef.current?.('on_change', el, formRef.current?.getFieldsValue?.() || {})
       }
     } catch (e) {
@@ -1305,7 +1367,9 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
                 if (v === undefined || v === null) v = ''
               }
               // 目标字段：列场景为同行 target（tableKey[索引].target，与 Arco Form.List 字段路径一致）
-              const targetKey = colCtx ? `${colCtx.tableKey}[${colCtx.index}].${m.target}` : m.target
+              const targetKey = colCtx
+                ? `${colCtx.tableKey}[${colCtx.index}].${m.target}`
+                : m.target
               // 与当前值相同则跳过，避免无效写入反复触发 onValuesChange 造成循环
               if (v !== undefined && v !== formRef.current?.getFieldValue?.(targetKey)) {
                 patch[targetKey] = v
@@ -1400,7 +1464,11 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
             const idx = Number(idxMatch ? idxMatch[1] || idxMatch[2] : 0)
             const colActions = col.actions?.on_change
             if (Array.isArray(colActions) && colActions.length) {
-              runActionsRef.current?.('on_change', col, allValues, { tableKey, index: idx, fieldKey: colKey })
+              runActionsRef.current?.('on_change', col, allValues, {
+                tableKey,
+                index: idx,
+                fieldKey: colKey,
+              })
             }
           }
           // 列 api 选项刷新：依赖字段变化（顶层字段或同行字段）时重新加载
@@ -1408,7 +1476,7 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
           if (
             colDeps &&
             [...colDeps].some(
-              (d) => changedKeys.includes(d) || changedKeys.some((k) => k.endsWith(`.${d}`))
+              (d) => changedKeys.includes(d) || changedKeys.some((k) => k.endsWith(`.${d}`)),
             )
           ) {
             loadOptionsRef.current?.(col, allValues)
@@ -1429,7 +1497,10 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
   )
 
   // getOptions 依赖 apiOptions 变化重建；getFormValues 经 ref 读取可稳定引用
-  const getOptions = useCallback((el) => apiOptionsRef.current?.[el.id] || apiOptions[el.id], [apiOptions])
+  const getOptions = useCallback(
+    (el) => apiOptionsRef.current?.[el.id] || apiOptions[el.id],
+    [apiOptions],
+  )
   const getFormValues = useCallback(() => formRef.current?.getFieldsValue?.() || {}, [])
 
   const contextValue = useMemo(
@@ -1606,14 +1677,21 @@ const ReadonlyValue = ({ value, elementType, dataSource }) => {
   return <span className="break-all whitespace-pre-wrap">{text}</span>
 }
 
-
 /**
  * 渲染单个表单控件项（标签 / 栅格 / 校验规则 / 控件），画布与常规模式共用。
  * @param {object} el   布局元素
  * @param {object} ctx  渲染上下文 { isHorizontal, formConfig, pageType, isMoveMode }
  */
 export const renderFormItemElement = (el, ctx) => {
-  const { isHorizontal, formConfig, pageType, isMoveMode, fieldPerms, editable, detailDynamicStates } = ctx
+  const {
+    isHorizontal,
+    formConfig,
+    pageType,
+    isMoveMode,
+    fieldPerms,
+    editable,
+    detailDynamicStates,
+  } = ctx
   const noLabel = isNoLabelElement(el.element_type)
   const isTableElement = el.element_type === 'table'
   const isFormMode = pageType === 'form'
@@ -1646,9 +1724,10 @@ export const renderFormItemElement = (el, ctx) => {
   // 校验规则：表格元素校验移交给内部 Form.List；详情只读不校验；
   // 常规元素由 rules 统一承载（required 必填 + validation_rule 正则/表达式），
   // Arco 依据 rules 中的 required 自动渲染必填星号，表达式校验经 ctx.runtime.getFormValues 求值
-  const rules = isTableElement || isDetailMode
-    ? undefined
-    : buildValidationRules(el, () => ctx.runtime?.getFormValues?.() || {}, false, false)
+  const rules =
+    isTableElement || isDetailMode
+      ? undefined
+      : buildValidationRules(el, () => ctx.runtime?.getFormValues?.() || {}, false, false)
 
   // 控件渲染分发：
   // - 详情只读模式（pageType='detail'）：常规控件与字段型组件（如 upload）渲染为纯文本（空值显示 '-'），
@@ -1658,12 +1737,21 @@ export const renderFormItemElement = (el, ctx) => {
   const renderControl = () => {
     if (el.element_type === 'table') {
       // 表格（子表）：透传字段权限，支持 detail 下按列 perm=2 渲染可编辑控件
-      return <TableElementField el={el} pageType={pageType} fieldPerms={fieldPerms} editable={editable} />
+      return (
+        <TableElementField
+          el={el}
+          pageType={pageType}
+          fieldPerms={fieldPerms}
+          editable={editable}
+        />
+      )
     }
     // detail 只读：upload 走专属只读渲染（文件链接/图片预览），其他走 ReadonlyValue
     if (pageType === 'detail' && el.element_type !== 'divider' && !permEditable) {
       if (el.element_type === 'upload') {
-        return <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} renderUpload />
+        return (
+          <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} renderUpload />
+        )
       }
       return <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} />
     }
@@ -1671,7 +1759,9 @@ export const renderFormItemElement = (el, ctx) => {
     if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, pageType)
     const render = renderPreviewConfig[el.element_type]
     if (render) return render(el, pageType, ctx.runtime)
-    return <Input disabled={!isFormMode && !permEditable} placeholder={el.placeholder || undefined} />
+    return (
+      <Input disabled={!isFormMode && !permEditable} placeholder={el.placeholder || undefined} />
+    )
   }
 
   // 内部 FormItem 渲染（extra 可覆盖 hidden/disabled 等属性）
@@ -1752,17 +1842,25 @@ export const CanvasElement = memo(function CanvasElement({
         onDragOver={(e) => onElementDragOver?.(e, index)}
         onDrop={(e) => onElementDrop?.(e, index)}
         onDragEnd={onDragEnd}
-        className={`group relative h-full cursor-pointer border transition-colors ${
+        className={`group relative h-full cursor-pointer ${
           isSelected
-            ? 'border-[rgb(var(--arcoblue-6))] bg-[rgb(var(--arcoblue-1))]'
+            ? 'bg-[rgb(var(--arcoblue-1))]'
             : isDragOver
-              ? 'border-dashed border-[rgb(var(--arcoblue-6))] bg-[rgb(var(--arcoblue-1))]'
-              : 'border-transparent bg-white hover:border-[rgb(var(--arcoblue-6))]'
+              ? 'bg-[rgb(var(--arcoblue-1))]'
+              : 'bg-white'
         }`}
       >
         {renderFormItemElement(el, ctx)}
         {/* 透明蒙层阻止触发表单控件原生交互（置于容器内，避免 FormItem children 成数组导致字段注入失效） */}
-        <div className="absolute inset-0 z-1"></div>
+        <div
+          className={`absolute inset-0 z-1 border transition-colors ${
+            isSelected
+              ? 'border-[rgb(var(--arcoblue-6))] '
+              : isDragOver
+                ? 'border-dashed border-[rgb(var(--arcoblue-6))] '
+                : 'border-transparent hover:border-[rgb(var(--arcoblue-6))]'
+          }`}
+        ></div>
         {isSelected && (
           <>
             {/* 拖拽图标：绝对定位左下角 */}
