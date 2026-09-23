@@ -50,6 +50,7 @@ export default function DetailMode({
       disabled={!(editable && (fieldPerms || []).some((p) => p && p.perm === 2))}
       autoComplete="off"
       onValuesChange={onValuesChange ? (changed, allValues) => onValuesChange(allValues) : undefined}
+      className="detail-form-descriptions"
     >
       <Row>
         {elements

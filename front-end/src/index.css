@@ -22,12 +22,84 @@ strong {
 .arco-tabs-header-nav-card-gutter .arco-tabs-header-title-active:hover {
   background-color: var(--color-neutral-2);
 }
+
 .arco-tabs-header-nav-card .arco-tabs-header-title,
 .arco-tabs-header-nav-card-gutter .arco-tabs-header-title:hover,
 .arco-tabs-header-nav-card-gutter .arco-tabs-header-title {
   border: none;
   background-color: var(--color-neutral-2);
 }
+
 .arco-upload-list-item:first-of-type {
   margin-top: 10px !important;
+}
+
+/* —— 详情页 Form 样式：模拟 Descriptions 组件 —— */
+.detail-form-descriptions {
+  border-left: 1px solid #e5e6eb;
+  border-top: 1px solid #e5e6eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.detail-form-descriptions .arco-table-th.arco-table-col-first,
+.detail-form-descriptions .arco-table-td.arco-table-col-first {
+  border-left: none !important;
+}
+
+.detail-form-descriptions .arco-table-container,
+.detail-form-descriptions .arco-table table thead tr:first-child th:first-child,
+.detail-form-descriptions .arco-table table thead tr:first-child th:last-child {
+  border-radius: 0 !important;
+}
+
+.detail-form-descriptions .arco-form-layout-vertical {
+  margin-bottom: 0 !important;
+  align-items: stretch !important;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.detail-form-descriptions .arco-form-layout-vertical .arco-form-label-item {
+  border-right: 1px solid #e5e6eb;
+  margin-bottom: 0;
+  background-color: #f7f8fa !important;
+  padding: 10px 8px !important;
+}
+
+.detail-form-descriptions .arco-form-layout-vertical .arco-form-item-wrapper {
+  border-top: 1px solid #e5e6eb;
+  border-right: 1px solid #e5e6eb;
+  margin-bottom: 0;
+  padding: 10px 8px !important;
+}
+
+.detail-form-descriptions .arco-form-layout-horizontal {
+  margin-bottom: 0 !important;
+  align-items: stretch !important;
+  border-bottom: 1px solid #e5e6eb;
+}
+.detail-form-descriptions .arco-divider-horizontal {
+  border-right: 1px solid #e5e6eb;
+  padding: 20px 0;
+  margin: 0;
+}
+
+.detail-form-descriptions .arco-form-layout-horizontal .arco-form-label-item {
+  background-color: #f7f8fa !important;
+  border-right: 1px solid #e5e6eb;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  line-height: 1.5;
+  padding: 10px 8px !important;
+  margin: 0;
+}
+
+.detail-form-descriptions .arco-form-layout-horizontal .arco-form-label-item label {
+  width: 100%;
+}
+
+.detail-form-descriptions .arco-form-layout-horizontal .arco-form-item-wrapper {
+  border-right: 1px solid #e5e6eb;
+  padding: 10px 8px !important;
 }

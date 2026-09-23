@@ -1896,6 +1896,17 @@ export default function DynamicForm({
           form={form}
           elements={elements}
           formConfig={formConfig}
+          selectedId={selectedId}
+          dragOverIndex={dragOverIndex}
+          onSelectElement={onSelectElement}
+          onRemoveElement={onRemoveElement}
+          onElementDragStart={onElementDragStart}
+          onElementDragOver={onElementDragOver}
+          onElementDrop={onElementDrop}
+          onDragEnd={onDragEnd}
+          onCanvasDragOver={onCanvasDragOver}
+          onCanvasDrop={onCanvasDrop}
+          onCanvasClick={onCanvasClick}
         />
       )
     default:
