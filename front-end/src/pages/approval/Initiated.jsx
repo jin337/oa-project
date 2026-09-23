@@ -80,7 +80,7 @@ export default function Initiated() {
       setEditApp({
         id: inst.app_id,
         name: inst.app_name,
-        form_layout_json: inst.detail_layout_json,
+        form_layout_json: inst.form_layout_json,
         approval_flow_json: inst.approval_flow_json,
       })
       const bizData = inst.business_data || {}

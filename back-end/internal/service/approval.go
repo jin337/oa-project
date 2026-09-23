@@ -427,6 +427,10 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 		if err := database.DB.First(&app, inst.AppID).Error; err != nil {
 			continue
 		}
+		// 查询申请项名称
+		var item model.ApprovalCategoryItem
+		database.DB.Where("code = ?", app.Code).First(&item)
+		
 		rec := model.ApprovalRecord{
 			ID:             t.ID,
 			InstanceID:     inst.ID,
@@ -435,6 +439,7 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 			AppID:          app.ID,
 			AppCode:        app.Code,
 			AppName:        app.Name,
+			ItemName:       item.Name,
 			Status:         model.ApprovalStatusReviewing,
 			StatusName:     approvalStatusName(model.ApprovalStatusReviewing),
 			CreatedBy:      inst.CreatedBy,
@@ -890,3 +895,4 @@ func getUserIDsByDataScope(curUserID uint) []uint {
 	// 默认：只看自己
 	return []uint{curUserID}
 }
+

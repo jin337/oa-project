@@ -499,6 +499,10 @@ func ApplicationDataList(appID uint, curUserID uint, req *model.ApplicationDataL
 	if list == nil {
 		list = []map[string]interface{}{}
 	}
+	// 过滤掉 deleted_at 字段，不返回给前端
+	for i := range list {
+		delete(list[i], "deleted_at")
+	}
 	return list, total, nil
 }
 
@@ -1348,3 +1352,4 @@ func ApplicationDelete(id uint) error {
 	// 物理表全部删除成功后，再软删除配置记录
 	return database.DB.Delete(&model.Application{}, id).Error
 }
+
