@@ -174,18 +174,13 @@ export default function NotificationBell() {
                   <div className="w-full">
                     <div className="flex items-center justify-between">
                       <Typography.Text className={n.read_at ? '' : 'font-medium'}>
-                        {n.title}
+                        [{TYPE_TEXT[n.type] || ''}]{n.title}
                       </Typography.Text>
                       <Typography.Text className="text-xs text-gray-400">
                         {formatTime(n.created_at)}
                       </Typography.Text>
                     </div>
                     <Typography.Text className="block text-xs text-gray-500">{n.msg}</Typography.Text>
-                    {n.content && (
-                      <Typography.Text className="block text-xs text-gray-500">
-                        [{TYPE_TEXT[n.type] || ''}意见] {n.content}
-                      </Typography.Text>
-                    )}
                   </div>
                 </List.Item>
               )}
