@@ -22,11 +22,7 @@ type CalculateRequest struct {
 // POST /api/v1/utils/calculate
 // 支持类型：
 //   - number_to_upper: 数字转大写金额
-//   - number_to_lower: 数字转小写
-//   - add: 加法
-//   - subtract: 减法
-//   - multiply: 乘法
-//   - divide: 除法
+//   - calc: 表达式计算（支持加减乘除和括号）
 func Calculate(c *gin.Context) {
 	var req CalculateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -40,16 +36,14 @@ func Calculate(c *gin.Context) {
 	switch req.Type {
 	case "number_to_upper":
 		result, err = NumberToUpper(req.Value)
-	case "number_to_lower":
-		result, err = NumberToLower(req.Value)
-	case "add":
-		result, err = CalculateArithmetic(req.Value, req.Params, "add")
-	case "subtract":
-		result, err = CalculateArithmetic(req.Value, req.Params, "subtract")
-	case "multiply":
-		result, err = CalculateArithmetic(req.Value, req.Params, "multiply")
-	case "divide":
-		result, err = CalculateArithmetic(req.Value, req.Params, "divide")
+	case "calc":
+		// 表达式计算，支持类似 (100+2)*3 的表达式
+		expr, ok := req.Value.(string)
+		if !ok {
+			response.Fail(c, response.CodeParamError, "参数错误: value 必须是表达式字符串")
+			return
+		}
+		result, err = CalculateExpression(expr)
 	default:
 		response.Fail(c, response.CodeParamError, "不支持的计算类型: "+req.Type)
 		return
@@ -184,38 +178,143 @@ func NumberToUpper(value interface{}) (string, error) {
 	return result, nil
 }
 
-// NumberToLower 数字转小写（去除多余的小数位）
-func NumberToLower(value interface{}) (float64, error) {
-	return toFloat64(value)
+// CalculateExpression 计算数学表达式（支持加减乘除和括号）
+func CalculateExpression(expr string) (float64, error) {
+	// 移除所有空格
+	expr = strings.ReplaceAll(expr, " ", "")
+	if expr == "" {
+		return 0, fmt.Errorf("表达式不能为空")
+	}
+
+	// 使用递归下降解析器
+	parser := &exprParser{input: expr, pos: 0}
+	result, err := parser.parseExpression()
+	if err != nil {
+		return 0, err
+	}
+	if parser.pos != len(parser.input) {
+		return 0, fmt.Errorf("表达式解析错误，位置: %d", parser.pos)
+	}
+	return result, nil
 }
 
-// CalculateArithmetic 基本数学计算
-func CalculateArithmetic(a, b interface{}, op string) (float64, error) {
-	numA, err := toFloat64(a)
+// exprParser 表达式解析器
+type exprParser struct {
+	input string
+	pos   int
+}
+
+// parseExpression 解析表达式（加减）
+func (p *exprParser) parseExpression() (float64, error) {
+	left, err := p.parseTerm()
 	if err != nil {
 		return 0, err
 	}
 
-	numB, err := toFloat64(b)
-	if err != nil {
-		return 0, err
-	}
-
-	switch op {
-	case "add":
-		return numA + numB, nil
-	case "subtract":
-		return numA - numB, nil
-	case "multiply":
-		return numA * numB, nil
-	case "divide":
-		if numB == 0 {
-			return 0, fmt.Errorf("除数不能为零")
+	for p.pos < len(p.input) {
+		op := p.input[p.pos]
+		if op != '+' && op != '-' {
+			break
 		}
-		return numA / numB, nil
-	default:
-		return 0, fmt.Errorf("不支持的运算")
+		p.pos++
+
+		right, err := p.parseTerm()
+		if err != nil {
+			return 0, err
+		}
+
+		if op == '+' {
+			left += right
+		} else {
+			left -= right
+		}
 	}
+
+	return left, nil
+}
+
+// parseTerm 解析项（乘除取模）
+func (p *exprParser) parseTerm() (float64, error) {
+	left, err := p.parseFactor()
+	if err != nil {
+		return 0, err
+	}
+
+	for p.pos < len(p.input) {
+		op := p.input[p.pos]
+		if op != '*' && op != '/' && op != '%' {
+			break
+		}
+		p.pos++
+
+		right, err := p.parseFactor()
+		if err != nil {
+			return 0, err
+		}
+
+		if op == '*' {
+			left *= right
+		} else if op == '/' {
+			if right == 0 {
+				return 0, fmt.Errorf("除数不能为零")
+			}
+			left /= right
+		} else { // %
+			if right == 0 {
+				return 0, fmt.Errorf("取模运算的除数不能为零")
+			}
+			left = math.Mod(left, right)
+		}
+	}
+
+	return left, nil
+}
+
+// parseFactor 解析因子（数字或括号表达式）
+func (p *exprParser) parseFactor() (float64, error) {
+	if p.pos >= len(p.input) {
+		return 0, fmt.Errorf("表达式不完整")
+	}
+
+	ch := p.input[p.pos]
+
+	// 处理括号
+	if ch == '(' {
+		p.pos++
+		result, err := p.parseExpression()
+		if err != nil {
+			return 0, err
+		}
+		if p.pos >= len(p.input) || p.input[p.pos] != ')' {
+			return 0, fmt.Errorf("缺少右括号")
+		}
+		p.pos++
+		return result, nil
+	}
+
+	// 处理数字
+	if ch == '-' || ch == '+' || (ch >= '0' && ch <= '9') || ch == '.' {
+		start := p.pos
+		if ch == '-' || ch == '+' {
+			p.pos++
+		}
+		for p.pos < len(p.input) {
+			c := p.input[p.pos]
+			if (c >= '0' && c <= '9') || c == '.' {
+				p.pos++
+			} else {
+				break
+			}
+		}
+		numStr := p.input[start:p.pos]
+		num, err := strconv.ParseFloat(numStr, 64)
+		if err != nil {
+			return 0, fmt.Errorf("无效的数字: %s", numStr)
+		}
+		return num, nil
+	}
+
+	return 0, fmt.Errorf("意外的字符: %c", ch)
 }
 
 // toFloat64 转换为 float64

@@ -1,26 +1,26 @@
-# front-end
+﻿# front-end
 
 OA 管理系统前端，承接同级目录 `back-end`（Go + Gin 服务，默认端口 8180）的全部业务界面。覆盖 **RBAC 系统管理**（用户/角色/菜单/部门）、**低代码应用配置**（数据表/表单元素/布局/审批流可视化编排）、**动态表单引擎**（数据源/联动/显隐/校验/子表/文件上传）与 **审批工作台**（发起、待办、已办、抄送、草稿箱、审批详情、站内通知）四大模块。
 
 ## 技术栈
 
-| 分类 | 技术 | 说明 |
-| --- | --- | --- |
-| UI 框架 | React 19 | 函数组件 + Hooks |
-| 构建工具 | Vite 8 | 开发服务 8181 端口，产物分包与压缩优化 |
-| 路由 | react-router-dom v7 | Data Mode（`createBrowserRouter` + `RouterProvider`），loader 做登录守卫 |
-| 组件库 | Arco Design（@arco-design/web-react） | 布局、表格、表单、抽屉、时间线等 |
-| 样式 | Tailwind CSS v4（@tailwindcss/vite） | 原子化 CSS，配合 Prettier 类名排序插件 |
-| 请求 | axios | 统一拦截器：错误提示 / 401 登出 / 业务码处理 |
-| 代码规范 | Prettier 3 + prettier-plugin-tailwindcss | 无分号、单引号、行宽 100 |
+| 分类     | 技术                                     | 说明                                                                     |
+| -------- | ---------------------------------------- | ------------------------------------------------------------------------ |
+| UI 框架  | React 19                                 | 函数组件 + Hooks                                                         |
+| 构建工具 | Vite 8                                   | 开发服务 8181 端口，产物分包与压缩优化                                   |
+| 路由     | react-router-dom v7                      | Data Mode（`createBrowserRouter` + `RouterProvider`），loader 做登录守卫 |
+| 组件库   | Arco Design（@arco-design/web-react）    | 布局、表格、表单、抽屉、时间线等                                         |
+| 样式     | Tailwind CSS v4（@tailwindcss/vite）     | 原子化 CSS，配合 Prettier 类名排序插件                                   |
+| 请求     | axios                                    | 统一拦截器：错误提示 / 401 登出 / 业务码处理                             |
+| 代码规范 | Prettier 3 + prettier-plugin-tailwindcss | 无分号、单引号、行宽 100                                                 |
 
 ## 环境依赖
 
-| 依赖 | 版本要求 | 说明 |
-| --- | --- | --- |
-| Node.js | ≥ 20.19 或 ≥ 22.12 | Vite 8 的 engines 要求，推荐使用 22 LTS |
-| npm | ≥ 10 | 与 Node.js 配套 |
-| back-end 服务 | 运行中 | 开发环境通过 Vite 代理转发 `/api` 到 `http://localhost:8180` |
+| 依赖          | 版本要求           | 说明                                                         |
+| ------------- | ------------------ | ------------------------------------------------------------ |
+| Node.js       | ≥ 20.19 或 ≥ 22.12 | Vite 8 的 engines 要求，推荐使用 22 LTS                      |
+| npm           | ≥ 10               | 与 Node.js 配套                                              |
+| back-end 服务 | 运行中             | 开发环境通过 Vite 代理转发 `/api` 到 `http://localhost:8180` |
 
 ## 快速开始
 
@@ -44,12 +44,12 @@ npm run preview
 
 ### 可用脚本
 
-| 命令 | 说明 |
-| --- | --- |
-| `npm run dev` | 启动 Vite 开发服务（8181，自动打开浏览器） |
-| `npm run build` | 生产构建，产物输出 `dist/` |
-| `npm run preview` | 本地预览构建产物 |
-| `npm run format` | Prettier 格式化 `src` 下全部 js/jsx/css |
+| 命令              | 说明                                       |
+| ----------------- | ------------------------------------------ |
+| `npm run dev`     | 启动 Vite 开发服务（8181，自动打开浏览器） |
+| `npm run build`   | 生产构建，产物输出 `dist/`                 |
+| `npm run preview` | 本地预览构建产物                           |
+| `npm run format`  | Prettier 格式化 `src` 下全部 js/jsx/css    |
 
 ## 目录结构
 
@@ -110,12 +110,12 @@ front-end/
 
 ## 配置文件说明
 
-| 文件 | 说明 |
-| --- | --- |
-| `vite.config.js` | 开发端口 8181（`strictPort`）、`/api` 与 `/health` 代理到后端 8180、`/uploads` 代理上传文件静态目录、路径别名 `src`、构建分包与 gzip/brotli 压缩 |
-| `src/config/app.js` | 系统名称（注入 `<title>`）、登录页文案与功能亮点、表单元素类型选项——改系统名只动此文件 |
-| `jsconfig.json` | 编辑器路径解析：`src/*`、`@/*` → `./src/*` |
-| `.prettierrc` | 代码风格：无分号、单引号、尾逗号 all、行宽 100、Tailwind 类名自动排序 |
+| 文件                | 说明                                                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `vite.config.js`    | 开发端口 8181（`strictPort`）、`/api` 与 `/health` 代理到后端 8180、`/uploads` 代理上传文件静态目录、路径别名 `src`、构建分包与 gzip/brotli 压缩 |
+| `src/config/app.js` | 系统名称（注入 `<title>`）、登录页文案与功能亮点、表单元素类型选项——改系统名只动此文件                                                           |
+| `jsconfig.json`     | 编辑器路径解析：`src/*`、`@/*` → `./src/*`                                                                                                       |
+| `.prettierrc`       | 代码风格：无分号、单引号、尾逗号 all、行宽 100、Tailwind 类名自动排序                                                                            |
 
 ## 路由与权限
 
@@ -129,6 +129,11 @@ front-end/
 低代码应用的核心运行时，根据后端返回的 `form_layout_json` 动态渲染表单：
 
 - **元素类型**：Input / InputNumber / Select / Radio / Checkbox / DatePicker / TimePicker / TreeSelect / Switch / Upload / 子表（Table）等，通过 `ELEMENT_RENDER_CONFIG` 统一注册分发
+- **四种布局模式**：
+  - `form`：可编辑表单模式（填报/编辑）
+  - `detail`：只读详情模式（审批详情/查看）
+  - `move-form`：设计器表单页模式（拖拽设计）
+  - `move-detail`：设计器详情页模式（拖拽设计只读预览）
 - **动态数据源**（`data_source`）：支持 `type=api` 按配置 `url/method/params` 请求接口，自动解析返回数据为选项；`label`/`value_field` 支持点路径取值（如 `data.list`、`profile.nickname`）
 - **取值表达式约定**：
   - **`form.xxx`**：引用整个表单当前值，如 `form.dept_id` 表示取表单中 `dept_id` 字段的值，用于参数拼接、联动目标值等
@@ -139,15 +144,36 @@ front-end/
 - **动态显隐/禁用**（`dynamic_states`）：`visible_if` / `disabled_if` 支持表达式（如 `${form.dept_id === '1'}`），通过 Arco Form `shouldUpdate` 实时重渲染
 - **校验规则**（`validation_rule`）：透传 Arco Form rules，支持 `required` / `pattern` / `min/max` 等，`validation_message` 自定义错误提示
 - **子表**：columns 配置渲染为表格，支持行内编辑、联动、隐藏列（值仍保留提交）
-- **文件上传**：`UploadElement` 自定义组件，对接后端 `/api/v1/upload`，支持单/多选、文件类型限制、按钮文字自定义
+- **文件上传**：`UploadElement` 自定义组件，对接后端 `/api/v1/upload`，支持单/多选、文件类型限制、按钮文字自定义、placeholder 提示
+- **公共计算/转换接口**：`POST /utils/calculate`，支持以下类型：
+  - `number_to_upper`：数字转大写金额（如 100000 → "壹拾万元整"）
+  - `calc`：表达式计算（支持 +、-、*、/、%、括号，如 `(100+2)*3 % 7` → 5）
 
 ## 站内通知
 
 - **NotificationBell**：顶部导航铃铛图标，未读时显示红点，下拉展示通知列表
-- **轮询机制**：未读计数为 0 时暂停轮询，有未读时恢复；点击可标记已读
+- **SSE 实时推送**：通过 EventSource 连接 `/notifications/stream?token=xxx`，实时接收审批通知
+- **多标签页同步**：通过 BroadcastChannel API 实现多标签页通知同步
 - **通知内容**：审批待办/通过/拒绝/退回事件自动生成，包含应用名称、操作结果、审批意见
 
-## 接口对接约定
+## 审批工作台
+
+- **Apply.jsx**：审批申请入口，按分类展示申请项，无管理权限时隐藏空分类
+- **Todo.jsx**：我的待办，展示当前需要我审批的任务
+- **Initiated.jsx**：我的发起，展示我发起的所有审批
+- **ToMe.jsx**：我审批的 / 抄送我的，展示我处理过的审批和抄送给我的审批
+- **Drafts.jsx**：草稿箱，展示未提交的草稿，支持编辑、提交、删除
+- **DetailDrawer.jsx**：审批详情抽屉，展示完整的审批信息、业务数据、审批流程
+- **ApprovalTimeline.jsx**：审批时间线，展示每个审批节点的处理情况
+- **审批状态印章**：详情页右上角显示旋转 45 度的审批状态印章（审批中/已通过/已拒绝等）
+
+## 低代码应用配置
+
+- **应用管理**：应用列表、新增、编辑、删除
+- **数据表管理**：数据表字段配置，支持多种字段类型（文本、数字、日期、下拉等）
+- **表单元素管理**：表单元素配置，支持多种元素类型，配置数据源、事件联动、校验规则等
+- **布局管理**：可视化拖拽布局设计，支持表单页和详情页两种模式
+- **审批流配置**：可视化审批流编排，支持条件分支、多种审批人类型、依次/会签/或签审批方式
 
 - 后端统一前缀 `/api/v1`，统一返回 `{ code, msg, data, timestamp }`，`code=0` 成功
 - 开发环境由 Vite 代理转发：`/api` → `http://localhost:8180/api`，`/health` → 后端根路径健康检查
@@ -201,23 +227,4 @@ server {
 
 > 后端服务部署与配置说明见同级目录 `back-end/README.md`。
 
-**公共计算/转换接口**：`POST /api/v1/utils/calculate`
 
-**支持的计算类型**：
-| 类型 | 说明 | 示例 |
-|------|------|------|
-| `number_to_upper` | 数字转大写金额 | 100 → 壹佰元整 |
-| `number_to_lower` | 数字转小写 | 100.00 → 100 |
-| `add` | 加法 | 100 + 200 = 300 |
-| `subtract` | 减法 | 200 - 100 = 100 |
-| `multiply` | 乘法 | 100 * 2 = 200 |
-| `divide` | 除法 | 200 / 2 = 100 |
-
-**在表单元素管理中的使用方式**：
-
-在元素的事件驱动与联动中，添加 on_blur 动作：
-- **动作类型**：`fetch_and_fill`
-- **请求地址**：`/api/v1/utils/calculate`
-- **请求方法**：`POST`
-- **请求参数**：`{"type": "number_to_upper", "value": "${form.project_amount}"}`
-- **结果映射**：`result → amount_upper`

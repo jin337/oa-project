@@ -237,6 +237,15 @@ task clean          # 清理编译产物、bin/ 与 logs/
 | GET | /notifications/unread-count | 当前用户未读通知数 |
 | PUT | /notifications/read-all | 全部标记为已读 |
 | PUT | /notifications/:id/read | 单条标记为已读 |
+| GET | /notifications/stream?token=xxx | SSE 实时推送通知流（服务器发送事件） |
+
+### 工具接口（/api/v1/utils）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | /utils/calculate | 公共计算/转换接口 |
+| | | - `type: "number_to_upper"`：数字转大写金额（如 100000 → "壹拾万元整"） |
+| | | - `type: "calc"`：表达式计算（支持 +、-、*、/、%、括号，如 "(100+2)*3 % 7" → 5） |
 
 ### 低代码应用（/api/v1/application）
 
@@ -253,6 +262,27 @@ task clean          # 清理编译产物、bin/ 与 logs/
 | GET/PUT/DELETE | /application/:id/data/:dataId | 业务数据详情 / 修改 / 删除 |
 
 ## 核心机制
+
+### 实时通知（SSE）
+
+- **SSE 推送**：通过 `GET /notifications/stream?token=xxx` 建立服务器发送事件连接
+- **实时性**：审批待办/通过/拒绝/退回事件实时推送到前端，无需轮询
+- **连接管理**：每个用户维护独立的 SSE 连接，断开自动重连
+- **多标签页同步**：前端通过 BroadcastChannel 实现多标签页通知同步
+
+### 上传组件
+
+- **文件存储**：按 `app_code` 分目录存储，路径格式 `/uploads/{app_code}/{yyyyMMddHHmmss}_{filename}`
+- **数据格式**：业务字段存储 JSON 数组，每个元素包含 `{uid, url, name, size}`
+- **支持格式**：通用文件上传，支持图片、文档、压缩包等
+- **静态访问**：上传文件通过 `/uploads/*` 直接访问，无需鉴权
+
+### 表单引擎
+
+- **动态表单**：支持文本、数字、日期、下拉、单选、多选、上传等多种组件
+- **事件联动**：支持 `on_change`、`on_blur` 事件，实现字段间联动
+- **数据校验**：支持必填、正则、表达式等多种校验规则
+- **布局配置**：支持表单页（form）、详情页（detail）、设计器表单页（move-form）、设计器详情页（move-detail）四种模式
 
 ### 数据权限（DataScope）
 
