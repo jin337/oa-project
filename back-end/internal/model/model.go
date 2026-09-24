@@ -399,71 +399,71 @@ type TableFieldDeleteReq struct {
 // FormElement 表单元素配置：绑定页面配置（Application）对应的物理表字段，用于低代码表单渲染
 type FormElement struct {
 	BaseModel
-	AppID          uint                   `gorm:"column:app_id;index;not null;comment:所属页面配置ID" json:"app_id"`
-	Label          string                 `gorm:"size:64;not null;comment:字段标签" json:"label"`
-	FieldKey       string                 `gorm:"size:64;not null;comment:关联物理表列名" json:"field_key"`
-	TableKey       string                 `gorm:"size:64;not null;comment:关联物理表" json:"table_key"`
-	ElementType    string                 `gorm:"size:32;not null;comment:元素类型" json:"element_type"`
-	Placeholder    string                 `gorm:"size:255;comment:占位提示" json:"placeholder"`
-	Required       int                    `gorm:"default:0;comment:是否必填 1是 0否" json:"required"`
-	DefaultValue   string                 `gorm:"size:255;comment:默认值" json:"default_value"`
-	ValidationRule string                 `gorm:"size:255;comment:校验规则" json:"validation_rule"`
-	ValidationMessage string               `gorm:"size:255;comment:错误提示" json:"validation_message"`
-	Visibility     map[string]interface{} `gorm:"serializer:json;type:json;comment:列表与搜索行为" json:"visibility"`
-	DynamicStates  map[string]interface{} `gorm:"serializer:json;type:json;comment:动态状态控制" json:"dynamic_states"`
-	DataSource     map[string]interface{} `gorm:"serializer:json;type:json;comment:数据源配置" json:"data_source"`
-	Actions        map[string]interface{} `gorm:"serializer:json;type:json;comment:事件驱动配置" json:"actions"`
+	AppID             uint                   `gorm:"column:app_id;index;not null;comment:所属页面配置ID" json:"app_id"`
+	Label             string                 `gorm:"size:64;not null;comment:字段标签" json:"label"`
+	FieldKey          string                 `gorm:"size:64;not null;comment:关联物理表列名" json:"field_key"`
+	TableKey          string                 `gorm:"size:64;not null;comment:关联物理表" json:"table_key"`
+	ElementType       string                 `gorm:"size:32;not null;comment:元素类型" json:"element_type"`
+	Placeholder       string                 `gorm:"size:255;comment:占位提示" json:"placeholder"`
+	Required          int                    `gorm:"default:0;comment:是否必填 1是 0否" json:"required"`
+	DefaultValue      string                 `gorm:"size:255;comment:默认值" json:"default_value"`
+	ValidationRule    string                 `gorm:"size:255;comment:校验规则" json:"validation_rule"`
+	ValidationMessage string                 `gorm:"size:255;comment:错误提示" json:"validation_message"`
+	Visibility        map[string]interface{} `gorm:"serializer:json;type:json;comment:列表与搜索行为" json:"visibility"`
+	DynamicStates     map[string]interface{} `gorm:"serializer:json;type:json;comment:动态状态控制" json:"dynamic_states"`
+	DataSource        map[string]interface{} `gorm:"serializer:json;type:json;comment:数据源配置" json:"data_source"`
+	Actions           map[string]interface{} `gorm:"serializer:json;type:json;comment:事件驱动配置" json:"actions"`
 }
 
 // FormElementListItem 表单元素列表项（listFormElements 接口返回，不含 created_at/created_by/updated_at/updated_by 审计字段）
 type FormElementListItem struct {
-	ID             uint                   `json:"id"`
-	AppID          uint                   `json:"app_id"`
-	Label          string                 `json:"label"`
-	FieldKey       string                 `json:"field_key"`
-	TableKey       string                 `json:"table_key"`
-	ElementType    string                 `json:"element_type"`
-	Placeholder    string                 `json:"placeholder"`
-	Required       int                    `json:"required"`
-	DefaultValue   string                 `json:"default_value"`
-	ValidationRule string                 `json:"validation_rule"`
-	ValidationMessage string               `json:"validation_message"`
-	Visibility     map[string]interface{} `json:"visibility"`
-	DynamicStates  map[string]interface{} `json:"dynamic_states"`
-	DataSource     map[string]interface{} `json:"data_source"`
-	Actions        map[string]interface{} `json:"actions"`
+	ID                uint                   `json:"id"`
+	AppID             uint                   `json:"app_id"`
+	Label             string                 `json:"label"`
+	FieldKey          string                 `json:"field_key"`
+	TableKey          string                 `json:"table_key"`
+	ElementType       string                 `json:"element_type"`
+	Placeholder       string                 `json:"placeholder"`
+	Required          int                    `json:"required"`
+	DefaultValue      string                 `json:"default_value"`
+	ValidationRule    string                 `json:"validation_rule"`
+	ValidationMessage string                 `json:"validation_message"`
+	Visibility        map[string]interface{} `json:"visibility"`
+	DynamicStates     map[string]interface{} `json:"dynamic_states"`
+	DataSource        map[string]interface{} `json:"data_source"`
+	Actions           map[string]interface{} `json:"actions"`
 }
 
 type FormElementCreateReq struct {
-	Label          string                 `json:"label" validate:"required,min=1,max=64" label:"名称"`
-	FieldKey       string                 `json:"field_key" validate:"required,min=1,max=64" label:"对应字段"`
-	TableKey       string                 `json:"table_key" validate:"required,min=1,max=64" label:"分类表"`
-	ElementType    string                 `json:"element_type" validate:"required" label:"元素类型"`
-	Placeholder    string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
-	Required       int                    `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"`
-	DefaultValue   string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
-	ValidationRule string                 `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
-	ValidationMessage string               `json:"validation_message" validate:"omitempty,max=255" label:"错误提示"`
-	Visibility     map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
-	DynamicStates  map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
-	DataSource     map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
-	Actions        map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
+	Label             string                 `json:"label" validate:"required,min=1,max=64" label:"名称"`
+	FieldKey          string                 `json:"field_key" validate:"required,min=1,max=64" label:"对应字段"`
+	TableKey          string                 `json:"table_key" validate:"required,min=1,max=64" label:"分类表"`
+	ElementType       string                 `json:"element_type" validate:"required" label:"元素类型"`
+	Placeholder       string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
+	Required          int                    `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"`
+	DefaultValue      string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
+	ValidationRule    string                 `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
+	ValidationMessage string                 `json:"validation_message" validate:"omitempty,max=255" label:"错误提示"`
+	Visibility        map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
+	DynamicStates     map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
+	DataSource        map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
+	Actions           map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
 }
 
 type FormElementUpdateReq struct {
-	Label          string                 `json:"label" validate:"omitempty,min=1,max=64" label:"名称"`
-	FieldKey       string                 `json:"field_key" validate:"omitempty,min=1,max=64" label:"对应字段"`
-	TableKey       string                 `json:"table_key" validate:"omitempty,min=1,max=64" label:"分类表"`
-	ElementType    string                 `json:"element_type" validate:"omitempty" label:"元素类型"`
-	Placeholder    string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
-	Required       *int                   `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"` // 指针区分未传与 0
-	DefaultValue   string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
-	ValidationRule string                 `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
-	ValidationMessage string               `json:"validation_message" validate:"omitempty,max=255" label:"错误提示"`
-	Visibility     map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
-	DynamicStates  map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
-	DataSource     map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
-	Actions        map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
+	Label             string                 `json:"label" validate:"omitempty,min=1,max=64" label:"名称"`
+	FieldKey          string                 `json:"field_key" validate:"omitempty,min=1,max=64" label:"对应字段"`
+	TableKey          string                 `json:"table_key" validate:"omitempty,min=1,max=64" label:"分类表"`
+	ElementType       string                 `json:"element_type" validate:"omitempty" label:"元素类型"`
+	Placeholder       string                 `json:"placeholder" validate:"omitempty,max=255" label:"占位提示"`
+	Required          *int                   `json:"required" validate:"omitempty,oneof=0 1" label:"是否必填"` // 指针区分未传与 0
+	DefaultValue      string                 `json:"default_value" validate:"omitempty,max=255" label:"默认值"`
+	ValidationRule    string                 `json:"validation_rule" validate:"omitempty,max=255" label:"校验规则"`
+	ValidationMessage string                 `json:"validation_message" validate:"omitempty,max=255" label:"错误提示"`
+	Visibility        map[string]interface{} `json:"visibility" validate:"omitempty" label:"可见性"`
+	DynamicStates     map[string]interface{} `json:"dynamic_states" validate:"omitempty" label:"动态状态"`
+	DataSource        map[string]interface{} `json:"data_source" validate:"omitempty" label:"数据源"`
+	Actions           map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
 }
 
 type FormElementListReq struct {

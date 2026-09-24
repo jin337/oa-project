@@ -578,6 +578,8 @@ func buildDataPermissionConds(userID uint, colSet map[string]bool) ([]string, []
 //  1. 根据应用配置的主表 table_name 查询 dataId 对应行（过滤软删除）
 //  2. 应用配置了子表时，按子表 parent_id 关联查询子表数据
 //  3. 子表数据以子表名（table_key）为 key 挂到返回对象顶层，前端按 detailData[table_key] 读取
+//  4. 返回前统一剥离审计字段（deleted_at/created_at/created_by/updated_at/updated_by），
+//     覆盖主表行与每一条子表行，避免内部字段传递给前端（与 ApprovalInstanceDetail 口径一致）
 func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailReq) (map[string]interface{}, error) {
 	app, err := ApplicationDetail(appID)
 	if err != nil {
@@ -603,6 +605,8 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 	if main == nil {
 		return nil, errors.New("数据不存在")
 	}
+	// 主表行剥离审计字段（main 为 nil 时 delete 为空操作）
+	stripAuditFields(main)
 
 	// 子表数据：按 parent_id 关联主表主键
 	if app.SubTableName != "" {
@@ -623,6 +627,10 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 			}
 			if rows == nil {
 				rows = []map[string]interface{}{}
+			}
+			// 子表行剥离审计字段
+			for _, row := range rows {
+				stripAuditFields(row)
 			}
 			main[sub] = rows
 		}

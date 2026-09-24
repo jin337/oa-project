@@ -706,10 +706,6 @@ export default function FormElementManage() {
                   placeholder="请选择字段"
                   loading={loadingFields}
                   onChange={handleFieldChange}
-                  showSearch
-                  filterOption={(inputValue, option) =>
-                    option.value.toLowerCase().includes(inputValue.toLowerCase())
-                  }
                 >
                   {fieldOptions.map((f) => (
                     <Select.Option key={f.name} value={f.name}>
@@ -749,7 +745,10 @@ export default function FormElementManage() {
             </Col>
             <Col span={12}>
               <FormItem label="占位提示" field="placeholder">
-                <Input.TextArea placeholder="如：请输入或选择" autoSize={{ minRows: 1, maxRows: 3 }} />
+                <Input.TextArea
+                  placeholder="如：请输入或选择"
+                  autoSize={{ minRows: 1, maxRows: 3 }}
+                />
               </FormItem>
             </Col>
             <Col span={24}>
@@ -960,7 +959,17 @@ export default function FormElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Input placeholder="目标，如 city_name" />
+                                            <Select
+                                              placeholder="请选择字段"
+                                              loading={loadingFields}
+                                            >
+                                              {fieldOptions.map((f) => (
+                                                <Select.Option key={f.name} value={f.name}>
+                                                  {f.name}
+                                                  {f.comment ? `（${f.comment}）` : ''}
+                                                </Select.Option>
+                                              ))}
+                                            </Select>
                                           </FormItem>
                                           <Button
                                             status="danger"
@@ -1042,7 +1051,17 @@ export default function FormElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Input placeholder="目标，如 city_name" />
+                                            <Select
+                                              placeholder="请选择字段"
+                                              loading={loadingFields}
+                                            >
+                                              {fieldOptions.map((f) => (
+                                                <Select.Option key={f.name} value={f.name}>
+                                                  {f.name}
+                                                  {f.comment ? `（${f.comment}）` : ''}
+                                                </Select.Option>
+                                              ))}
+                                            </Select>
                                           </FormItem>
                                           <Button status="danger" onClick={() => removeTm(tmIndex)}>
                                             删除

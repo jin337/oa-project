@@ -657,6 +657,18 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	// 当前执行节点的表单字段权限（审批详情页按权限隐藏/可编辑字段）
 	fieldPerms := currentNodeFieldPerms(instance)
 
+	// 任务列表剥离审计字段：deleted_at 在 BaseModel 中已是 json:"-"，此处再剥离
+	// created_at/updated_at/created_by/updated_by。经 JSON 往返转换，除被剥离字段外输出与原结构一致
+	tasksOut := make([]map[string]interface{}, 0, len(tasks))
+	for _, t := range tasks {
+		m := structToMap(t)
+		if m == nil {
+			continue // 防御：任务结构体仅含可序列化字段，正常不会发生
+		}
+		stripAuditFields(m)
+		tasksOut = append(tasksOut, m)
+	}
+
 	result := &model.ApprovalInstanceDetailResult{
 		ApprovalInstance: instance,
 		AppName:          appName,
@@ -664,7 +676,7 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 		BusinessData:     bizData,
 		DetailLayoutJSON: detailLayoutJSON,
 		FormLayoutJSON:   formLayoutJSON,
-		Tasks:            tasks,
+		Tasks:            tasksOut,
 		AssigneeNameMap:  assigneeNameMap,
 		FieldPerms:       fieldPerms,
 	}
@@ -676,7 +688,34 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	return result, nil
 }
 
+// auditFields 审计字段：由后端内部维护，不返回给前端。
+// 同时适用于业务数据（主表/子表行）与审批任务对象。
+// 注意不含 id / parent_id——主键与子表关联列前端仍需使用
+var auditFields = []string{"deleted_at", "created_at", "created_by", "updated_at", "updated_by"}
+
+// stripAuditFields 剥离 map 中的审计字段（原地修改；row 为 nil 时 delete 为空操作，安全）
+func stripAuditFields(row map[string]interface{}) {
+	for _, f := range auditFields {
+		delete(row, f)
+	}
+}
+
+// structToMap 按 JSON tag 把结构体转成 map，供响应体字段过滤使用；转换失败返回 nil
+func structToMap(v interface{}) map[string]interface{} {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil
+	}
+	return m
+}
+
 // loadBusinessData 读取实例关联的业务数据（主表 + 子表，与 ApplicationDataDetail 逻辑一致）
+// 返回前统一剥离审计字段（deleted_at/created_at/created_by/updated_at/updated_by），
+// 覆盖主表行与每一条子表行，避免内部字段传递给前端
 func loadBusinessData(instance model.ApprovalInstance) map[string]interface{} {
 	var bizData map[string]interface{}
 	real := bizTableName(instance.BusinessTable)
@@ -687,6 +726,8 @@ func loadBusinessData(instance model.ApprovalInstance) map[string]interface{} {
 		}
 		database.DB.Raw(sql, instance.BusinessDataID).Scan(&bizData)
 	}
+	// 主表行剥离审计字段（bizData 为 nil 时 delete 为空操作）
+	stripAuditFields(bizData)
 	// 子表数据：按 parent_id 关联主表
 	var app model.Application
 	if err := database.DB.First(&app, instance.AppID).Error; err == nil && app.SubTableName != "" {
@@ -704,6 +745,10 @@ func loadBusinessData(instance model.ApprovalInstance) map[string]interface{} {
 				}
 				if bizData == nil {
 					bizData = make(map[string]interface{})
+				}
+				// 子表行剥离审计字段
+				for _, row := range rows {
+					stripAuditFields(row)
 				}
 				bizData[sub] = rows
 			}
