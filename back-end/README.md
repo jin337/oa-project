@@ -2,6 +2,19 @@
 
 > OA 系统后端服务 · Go + Gin + GORM + MySQL
 
+## 目录
+
+- [项目简介](#项目简介)
+- [核心技术栈](#核心技术栈)
+- [目录结构说明](#目录结构说明)
+- [环境依赖要求](#环境依赖要求)
+- [本地开发与运行步骤](#本地开发与运行步骤)
+- [配置文件说明](#配置文件说明)
+- [构建与部署指南](#构建与部署指南)
+- [接口约定](#接口约定)
+- [接口清单](#接口清单)
+- [核心机制](#核心机制)
+
 ## 项目简介
 
 本服务是 OA 管理系统的后端，为同级目录 `front-end`（React 19 + Vite）提供统一的 RESTful API。项目内置 **RBAC 权限体系**（用户-角色-菜单-部门-数据范围）、**低代码应用引擎**（动态表单 / 数据表 / 审批流配置）与 **审批工作流引擎**（草稿、提交、审批、转交、撤回的完整状态机），可在不写代码的前提下完成「建应用 → 配字段 → 配表单 → 配布局 → 配审批流 → 发起审批」的全链路闭环。
@@ -95,6 +108,8 @@ back-end/
 | task（可选） | ≥ 3 | 使用 `task` 命令时需要；Windows 可 `winget install go-task.go-task` |
 | air（可选） | 最新 | 开发热重载：`go install github.com/air-verse/air@latest` |
 | UPX（可选） | 最新 | 发布版打包压缩时需要，未安装时自动跳过 |
+| 磁盘目录 | — | `uploads/` 需存在且进程可写（上传文件存储根目录），否则文件上传接口会失败 |
+| front-end（联调可选） | Node ≥ 20.19 | 前端开发服务固定 8181 端口，通过 Vite 代理调用本服务 8180 |
 
 ## 本地开发与运行步骤
 
@@ -141,6 +156,16 @@ $env:APP_ENV="dev"; go run ./cmd/server
 - 默认管理员账号：**`admin` / `admin123`**（首次启动 `migrate.mode=full` 时自动初始化）
 
 > 配置文件读取/解析失败时不崩服务，自动回退默认安全配置（端口 8080、迁移关闭）。
+
+**前后端联调**：另开终端启动前端（详见同级目录 `front-end/README.md`）：
+
+```bash
+cd ../front-end
+npm install
+npm run dev          # 前端 8181，/api 与 /uploads 代理到本服务 8180
+```
+
+浏览器访问 `http://localhost:8181/` 登录后即可联调；前端不再需要单独配置后端地址。
 
 ### 5. 开发热重载（可选）
 
@@ -347,8 +372,8 @@ WantedBy=multi-user.target
 | GET/PUT/DELETE | /application/:id | 应用详情 / 修改 / 删除 |
 | GET/POST | /application/:id/fields | 数据表字段列表 / 新增 |
 | PUT/DELETE | /application/:id/fields/:fieldId | 修改 / 删除数据表字段 |
-| GET/POST | /application/:id/formelement | 表单元素列表 / 新增 |
-| PUT/DELETE | /application/:id/formelement/:elementId | 修改 / 删除表单元素 |
+| GET/POST | /application/:id/element | 表单元素列表 / 新增 |
+| PUT/DELETE | /application/:id/element/:elementId | 修改 / 删除表单元素 |
 | POST | /application/:id/data | 动态业务数据新增（自动建数据行） |
 | GET/PUT/DELETE | /application/:id/data/:dataId | 业务数据详情 / 修改 / 删除 |
 

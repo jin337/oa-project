@@ -300,7 +300,7 @@ server {
   - **`item.xxx`**：引用下拉 / 树选的**当前选中项**，如 `item.profile.nickname`，用于 `target_mapping` 与显示拼接；
   - **无前缀**：直接从**接口响应数据**根节点取值，如 `profile.nickname`，用于 `target_mapping.source`；
   - **拼接字符串**：只有在字符串中插值时才用 `${}`，如 `${item.username}-${item.dept.name}`；纯取值场景直接写 `item.xxx` / `form.xxx` / 无前缀路径；
-- **事件联动**（`actions`）：支持 `on_mount` / `on_change` / `on_blur` 三种触发时机；动作类型 `set_value`（直接赋值）、`fetch_and_fill`（请求接口后按 `target_mapping` 填充）、`calculate`（调用公共计算接口）；
+- **事件联动**（`actions`）：支持 `on_mount` / `on_change` / `on_blur` 三种触发时机；动作类型有两种——`set_value`（直接赋值）、`fetch_and_fill`（请求接口后按 `target_mapping` 填充）。公共计算接口 `/utils/calculate` 即通过 `fetch_and_fill` 调用：把表达式或金额放进 `params`，再将返回的 `result` 映射到目标字段（如金额 → 大写金额）；
 - **动态显隐 / 禁用**（`dynamic_states`）：`visible_if` / `disabled_if` 支持表达式（如 `${form.dept_id === '1'}`），通过 Arco Form `shouldUpdate` 实时重渲染；
 - **校验规则**（`validation_rule`）：透传 Arco Form rules，支持 `required` / `pattern` / `min` / `max` 等，`validation_message` 自定义错误提示；
 - **子表**：columns 配置渲染为表格，支持行内编辑、联动、隐藏列（值仍保留提交）；
