@@ -160,10 +160,10 @@ func Setup() *gin.Engine {
 		applications.PUT("/:id/fields/:fieldId", handler.TableFieldUpdate)
 		applications.DELETE("/:id/fields/:fieldId", handler.TableFieldDelete)
 		// 表单元素管理
-		applications.GET("/:id/formelement", handler.FormElementList)
-		applications.POST("/:id/formelement", handler.FormElementCreate)
-		applications.PUT("/:id/formelement/:elementId", handler.FormElementUpdate)
-		applications.DELETE("/:id/formelement/:elementId", handler.FormElementDelete)
+		applications.GET("/:id/element", handler.FormElementList)
+		applications.POST("/:id/element", handler.FormElementCreate)
+		applications.PUT("/:id/element/:elementId", handler.FormElementUpdate)
+		applications.DELETE("/:id/element/:elementId", handler.FormElementDelete)
 		// 动态页面数据
 		applications.POST("/:id/data", handler.ApplicationDataCreate)
 		applications.GET("/:id/data/:dataId", handler.ApplicationDataDetail)

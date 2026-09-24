@@ -75,7 +75,7 @@ const PAGE_MAP = [
   // 应用配置
   { pattern: '/application', component: ApplicationManage },
   { pattern: '/application/:id/tables', component: TableManage },
-  { pattern: '/application/:id/form-elements', component: FormElementManage },
+  { pattern: '/application/:id/elements', component: FormElementManage },
   { pattern: '/application/:id/layout', component: LayoutManage },
   { pattern: '/application/:id/examine', component: ExamineManage },
   // 审批管理

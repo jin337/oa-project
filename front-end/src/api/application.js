@@ -66,26 +66,26 @@ export function deleteTableField(appId, fieldId, tableName) {
   })
 }
 
-// ========== 表单元素管理（/application/:appId/formelement） ==========
+// ========== 表单元素管理（/application/:appId/element） ==========
 
-// GET /application/:appId/formelement 表单元素列表
+// GET /application/:appId/element 表单元素列表
 export function listFormElements(appId, params) {
-  return request.get(`/application/${appId}/formelement`, { params })
+  return request.get(`/application/${appId}/element`, { params })
 }
 
-// POST /application/:appId/formelement 新增表单元素
+// POST /application/:appId/element 新增表单元素
 export function createFormElement(appId, data) {
-  return request.post(`/application/${appId}/formelement`, data)
+  return request.post(`/application/${appId}/element`, data)
 }
 
-// PUT /application/:appId/formelement/:id 修改表单元素
+// PUT /application/:appId/element/:id 修改表单元素
 export function updateFormElement(appId, elementId, data) {
-  return request.put(`/application/${appId}/formelement/${elementId}`, data)
+  return request.put(`/application/${appId}/element/${elementId}`, data)
 }
 
-// DELETE /application/:appId/formelement/:id 删除表单元素
+// DELETE /application/:appId/element/:id 删除表单元素
 export function deleteFormElement(appId, elementId) {
-  return request.delete(`/application/${appId}/formelement/${elementId}`)
+  return request.delete(`/application/${appId}/element/${elementId}`)
 }
 
 // ========== 动态业务数据（/application/:id/data） ==========
