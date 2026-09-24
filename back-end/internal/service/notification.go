@@ -12,32 +12,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// NotificationCreate 写入站内通知（幂等：同实例同类型同接收人不重复写）
-func NotificationCreate(userID uint, nType int, title string, instanceID uint) error {
-	if userID == 0 {
-		return nil
-	}
-	var cnt int64
-	database.DB.Model(&model.Notification{}).
-		Where("user_id = ? AND type = ? AND instance_id = ?", userID, nType, instanceID).
-		Count(&cnt)
-	if cnt > 0 {
-		return nil
-	}
-	n := model.Notification{
-		UserID:     userID,
-		Type:       nType,
-		Title:      title,
-		InstanceID: instanceID,
-	}
-	if err := database.DB.Create(&n).Error; err != nil {
-		return err
-	}
-	// 实时推送给在线用户
-	PushNotification(userID, &n)
-	return nil
-}
-
 // NotificationList 我的通知列表
 func NotificationList(userID uint, page, size int) ([]model.Notification, int64, error) {
 	if page <= 0 {
