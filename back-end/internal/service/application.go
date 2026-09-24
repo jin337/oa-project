@@ -499,9 +499,9 @@ func ApplicationDataList(appID uint, curUserID uint, req *model.ApplicationDataL
 	if list == nil {
 		list = []map[string]interface{}{}
 	}
-	// 过滤掉 deleted_at 字段，不返回给前端
+	// 剥离审计字段，不返回给前端（与详情接口保持一致）
 	for i := range list {
-		delete(list[i], "deleted_at")
+		stripAuditFields(list[i])
 	}
 	return list, total, nil
 }
