@@ -136,7 +136,10 @@ func NumberToUpper(value interface{}) (string, error) {
 			intResult += "零"
 		}
 
-		// 添加大级单位
+		// 添加大级单位（超出“亿”级直接返回错误，避免数组越界）
+		if i >= len(bigUnits) {
+			return "", fmt.Errorf("数值过大，暂不支持万亿及以上金额")
+		}
 		intResult += groupResult + bigUnits[i]
 		firstGroup = false
 	}
@@ -153,6 +156,10 @@ func NumberToUpper(value interface{}) (string, error) {
 		decStr := strconv.FormatInt(decPart, 10)
 		if len(decStr) == 1 {
 			decStr = "0" + decStr
+		}
+		// 有分无角（如 1.05）时，角位为零需补“零”
+		if decPart < 10 {
+			decResult += "零"
 		}
 		for i, ch := range decStr {
 			digit := int(ch - '0')
@@ -292,12 +299,24 @@ func (p *exprParser) parseFactor() (float64, error) {
 		return result, nil
 	}
 
-	// 处理数字
+	// 处理数字（支持前置正负号，以及 -(表达式) 形式的负号）
 	if ch == '-' || ch == '+' || (ch >= '0' && ch <= '9') || ch == '.' {
-		start := p.pos
+		sign := 1.0
 		if ch == '-' || ch == '+' {
+			if ch == '-' {
+				sign = -1
+			}
 			p.pos++
+			// 正负号后紧跟括号：-(1+2) / +(1+2)
+			if p.pos < len(p.input) && p.input[p.pos] == '(' {
+				inner, err := p.parseFactor()
+				if err != nil {
+					return 0, err
+				}
+				return sign * inner, nil
+			}
 		}
+		start := p.pos
 		for p.pos < len(p.input) {
 			c := p.input[p.pos]
 			if (c >= '0' && c <= '9') || c == '.' {
@@ -307,11 +326,14 @@ func (p *exprParser) parseFactor() (float64, error) {
 			}
 		}
 		numStr := p.input[start:p.pos]
+		if numStr == "" {
+			return 0, fmt.Errorf("无效的数字")
+		}
 		num, err := strconv.ParseFloat(numStr, 64)
 		if err != nil {
 			return 0, fmt.Errorf("无效的数字: %s", numStr)
 		}
-		return num, nil
+		return sign * num, nil
 	}
 
 	return 0, fmt.Errorf("意外的字符: %c", ch)

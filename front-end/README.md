@@ -47,6 +47,8 @@ OA 管理系统前端，承接同级目录 `back-end`（Go + Gin 服务，默认
 | 构建插件   | @vitejs/plugin-react                     | ^6.1.1   | React 快速刷新与 JSX 转换                                       |
 | 构建插件   | vite-plugin-compression2                 | ^2.5.3   | 构建时生成 `.gz` / `.br` 预压缩产物                             |
 | 代码规范   | Prettier + prettier-plugin-tailwindcss   | ^3.9.6 / ^0.8.1 | 无分号、单引号、行宽 100、类名自动排序                    |
+| 代码检查   | ESLint + eslint-plugin-react(-hooks)     | ^9.39.4 / ^7.37.5 | 扁平配置 `eslint.config.js`，含 react / react-hooks 规则 |
+| 单元测试   | Vitest                                   | ^5.0.1   | `npm test`，Node 环境直接运行纯逻辑用例                        |
 
 ## 目录结构说明
 
@@ -58,6 +60,7 @@ front-end/
 ├── .prettierrc                   # Prettier 规范（无分号 / 单引号 / 行宽 100 / LF）
 ├── .prettierignore / .gitignore  # 格式化与版本控制忽略清单
 ├── package.json                  # 依赖与 npm scripts
+├── eslint.config.js              # ESLint 扁平配置（react / react-hooks 规则）
 ├── public/
 │   └── favicon.svg               # 站点图标
 └── src/
@@ -68,6 +71,7 @@ front-end/
     │   └── app.js                # 全局配置：系统名称、登录页文案、表单元素类型选项、SIZE_OPTIONS
     ├── api/                      # 接口封装（统一走 request 拦截器）
     │   ├── request.js            #   axios 实例：baseURL=/api/v1，统一错误提示 / 401 登出
+    │   ├── fetchAll.js           #   全量取数：逐页拉全（列表接口一律用它，不要再用 size:9999）
     │   ├── auth.js / user.js / role.js / menu.js / dept.js    # RBAC 模块
     │   ├── application.js        #   低代码应用 / 数据表字段 / 表单元素 / 业务数据
     │   ├── approval.js           #   审批分类、申请项、列表、实例、任务
@@ -88,6 +92,8 @@ front-end/
     ├── utils/
     │   ├── auth.js               # token 存取（localStorage）
     │   └── format.js             # 通用格式化（formatTime）
+    ├── test/
+    │   └── evalExpression.test.js  # 表达式求值单元测试（Vitest，前端测试统一放这里）
     └── pages/
         ├── Login.jsx             # 登录（默认账号 admin / admin123）
         ├── Dashboard.jsx         # 工作台（后端健康检查 + 当前账号）
@@ -102,17 +108,18 @@ front-end/
         │   ├── ExamineManage.jsx       # 审批管理（发起人 / 审批流 / 抄送配置）
         │   ├── constants.js            # 应用配置公共常量
         │   ├── dynamic/                # 动态页面运行时
-        │   │   ├── DynamicForm.jsx         # 动态表单引擎（渲染配置中心 + 运行时 + 公共工具）
+        │   │   ├── DynamicForm.jsx         # 动态表单引擎（分发器 + 渲染配置中心 + 运行时）
         │   │   ├── DynamicList.jsx         # 动态列表页
         │   │   ├── DynamicPage.jsx         # 动态页面入口（按 code/state 分发）
         │   │   ├── DynamicFlowView.jsx     # 审批流只读视图
         │   │   ├── useApplicationData.js        # 应用数据获取 Hook
         │   │   ├── useApplicationDetailData.js  # 详情数据获取 Hook
         │   │   ├── elements/UploadElement.jsx   # 文件上传自定义元素
+        │   │   ├── utils/evalExpression.js      # 表达式求值（自建词法/语法分析，不执行宿主 JS）
+        │   │   ├── utils/formUtils.js           # 纯函数：布局解析 / 取值 / 表达式 / 校验 / 时间序列化
         │   │   └── modes/                  # 四种页面模式实现（详见「动态表单引擎」）
         │   │       ├── FormMode.jsx / DetailMode.jsx
         │   │       └── MoveFormMode.jsx / MoveDetailMode.jsx
-        │   ├── dynamic-backup/         # 引擎改造前的历史备份（8 个文件，保留对照，未被引用）
         │   └── examine/                # 审批流可视化编排
         │       ├── FlowCanvas.jsx / FlowNodeCard.jsx / flowModel.js
         │       ├── ApproverEditDrawer.jsx / CcEditDrawer.jsx / ConditionEditDrawer.jsx
@@ -132,7 +139,7 @@ front-end/
             └── useApprovalList.jsx        # 审批列表数据 Hook
 ```
 
-> `dynamic/modes/` 与 `dynamic-backup/` 均未被主链路 import，不进入构建产物；前者是页面模式拆分的预留实现，后者是改造前的历史备份。
+> `dynamic/modes/` 的四个模式组件由 `DynamicForm.jsx` 按 `pageType` 分发（`form` / `detail` / `move-form` / `move-detail`），属主链路的一部分；改造前的历史备份目录 `dynamic-backup/` 已删除。
 
 ## 环境依赖要求
 
@@ -180,6 +187,10 @@ Vite 固定监听 **8181** 端口（`strictPort: true`，端口被占用会直�
 | `npm run build`   | 生产构建，产物输出 `dist/`                  |
 | `npm run preview` | 本地预览构建产物                            |
 | `npm run format`  | Prettier 格式化 `src` 下全部 js / jsx / css |
+| `npm run lint`    | ESLint 静态检查（扁平配置 `eslint.config.js`） |
+| `npm test`        | Vitest 单元测试（`vitest run`，执行一次后退出） |
+
+> **测试基线**：前端测试统一放在 `src/test/`，目前为动态表单引擎的表达式求值（`src/test/evalExpression.test.js`，共 54 个用例），覆盖字面量与边界、取值与类型语义、常用表达式，以及「不执行宿主 JS」的安全回归；`npm run lint` 当前为 0 error。
 
 ### 6. 代理说明
 
@@ -219,11 +230,11 @@ npm run build        # 产物输出到 dist/
 
 ### 构建产物优化
 
-- **依赖分包**（`manualChunks`）：`vendor-arco`（Arco Design）、`vendor-react`（react / react-dom / react-router-dom / scheduler）、`vendor-axios` 各自独立成包，依赖不变时可长期缓存，业务代码更新不牵连；
+- **依赖分包**（`manualChunks`）：`vendor-arco`（Arco 组件，约 1.0MB / gzip 293KB）、`vendor-arco-icon`（Arco 图标，约 32KB，与组件库更新频率不同，单独成包便于各自长期缓存）、`vendor-react`（react / react-dom / react-router-dom / scheduler）、`vendor-axios` 各自独立成包，依赖不变时可长期缓存，业务代码更新不牵连；
 - **路由级懒加载**：每个页面通过 `lazy()` 单独分包，访问时按需下载；
 - **产物命名**：入口 `assets/js/[name]-[hash].js`、分包 `assets/js/chunks/[name]-[hash].js`、静态资源 `assets/[ext]/[name]-[hash].[ext]`；
 - **预压缩**（vite-plugin-compression2）：≥ 10KB 的资源额外生成 `.gz`（gzip）与 `.br`（brotli），Nginx 开启 `gzip_static on; brotli_static on;` 即可直接下发；
-- **体积告警阈值**：`chunkSizeWarningLimit: 700`（Arco 组件库本体约 640KB，提高阈值避免噪音告警）。
+- **体积告警阈值**：`chunkSizeWarningLimit: 1100`（实测 `vendor-arco` 约 1.0MB / gzip 293KB，Arco 全量样式约 555KB / gzip 62KB，两者均已单独分包，提高阈值避免每次构建产生噪音告警）；
 
 ### Nginx 部署示例
 

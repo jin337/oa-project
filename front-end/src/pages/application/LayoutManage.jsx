@@ -12,6 +12,7 @@ import { IconDelete, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
+import { fetchAll } from 'src/api/fetchAll'
 import DynamicForm, {
     BASE_LAYOUT_ELEMENTS,
     DEFAULT_FORM_CONFIG,
@@ -124,8 +125,7 @@ export default function LayoutManage() {
   useEffect(() => {
     let cancelled = false
     setLibraryLoading(true)
-    applicationApi
-      .listApplicationElements(id, { page: 1, size: 9999 })
+    fetchAll((p) => applicationApi.listApplicationElements(id, p))
       .then((res) => {
         if (cancelled) return
         const list = res.data?.list || []
@@ -307,11 +307,7 @@ export default function LayoutManage() {
     if (!tableKey) return
     setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: true }))
     try {
-      const res = await applicationApi.listApplicationElements(id, {
-        page: 1,
-        size: 9999,
-        table_key: tableKey,
-      })
+      const res = await fetchAll((p) => applicationApi.listApplicationElements(id, { ...p, table_key: tableKey }))
       const list = (res.data?.list || []).filter((f) => !tableKey || f.table_key === tableKey)
       setTableFieldsMap((prev) => ({ ...prev, [tableKey]: list }))
     } catch (e) {

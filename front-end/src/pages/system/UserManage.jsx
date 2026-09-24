@@ -29,6 +29,7 @@ import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-
 import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import * as roleApi from 'src/api/role'
+import { fetchAll } from 'src/api/fetchAll'
 import * as userApi from 'src/api/user'
 import { usePermission } from 'src/hooks/usePermission'
 
@@ -158,7 +159,7 @@ export default function UserManage() {
     try {
       const [deptRes, roleRes] = await Promise.all([
         deptApi.getDeptTree(),
-        roleApi.listRoles({ page: 1, size: 200 }),
+        fetchAll(roleApi.listRoles),
       ])
       setDeptTree(deptRes.data || [])
       setAllRoles(roleRes.data.list || [])

@@ -51,8 +51,9 @@ export default defineConfig({
     },
   },
   build: {
-    // arco 组件库本身体积较大（约 640KB），单独分包后已可长期缓存，提高警告阈值避免噪音
-    chunkSizeWarningLimit: 700,
+    // arco 组件库本体约 1MB（gzip 约 290KB）、全量样式约 555KB（gzip 约 62KB），
+    // 均已单独分包可长期缓存，提高阈值避免每次构建都产生噪音告警
+    chunkSizeWarningLimit: 1100,
     // 分包策略：大型依赖独立成包，浏览器可长期缓存，业务代码更新不牵连
     rollupOptions: {
       output: {
@@ -61,6 +62,11 @@ export default defineConfig({
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
         manualChunks(id) {
           if (!id.includes('node_modules')) return
+
+          // 图标单独成包：与组件库更新频率不同，拆开后各自长期缓存，且可并行下载
+          if (id.includes('node_modules/@arco-design/web-react/icon')) {
+            return 'vendor-arco-icon'
+          }
 
           const chunkMap = {
             'vendor-arco': ['@arco-design/web-react'],

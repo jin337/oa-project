@@ -28,6 +28,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
+import { fetchAll } from 'src/api/fetchAll'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 import { useTabs } from 'src/store/tab-context'
@@ -480,7 +481,7 @@ export default function ElementManage() {
       }
       setLoadingFields(true)
       try {
-        const res = await applicationApi.listTableFields(id, { page: 1, size: 9999 }, tableName)
+        const res = await fetchAll((p) => applicationApi.listTableFields(id, p, tableName))
         setFieldOptions(res.data.list || [])
       } catch (e) {
         setFieldOptions([])

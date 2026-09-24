@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import * as roleApi from 'src/api/role'
+import { fetchAll } from 'src/api/fetchAll'
 import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
 import {
   buildOrgItemMap,
@@ -27,7 +28,7 @@ export default function PersonSelectorProvider({ children }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    Promise.all([deptApi.getDeptUsersTree(), roleApi.listRoles({ page: 1, size: 999 })])
+    Promise.all([deptApi.getDeptUsersTree(), fetchAll(roleApi.listRoles)])
       .then(([deptRes, roleRes]) => {
         if (cancelled) return
         setOrgTree(transformDeptTree(deptRes.data?.list || deptRes.data || []))

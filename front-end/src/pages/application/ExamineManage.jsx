@@ -4,6 +4,7 @@ import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import * as deptApi from 'src/api/dept'
 import * as roleApi from 'src/api/role'
+import { fetchAll } from 'src/api/fetchAll'
 import { ADDABLE_NODE_TYPES, MODULE_LABEL, NODE_TYPE_META } from 'src/pages/application/constants'
 import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
 import { CcEditDrawer } from 'src/pages/application/examine/CcEditDrawer'
@@ -69,8 +70,7 @@ export default function ExamineManage() {
     if (!id) return
     let cancelled = false
     setFieldsLoading(true)
-    applicationApi
-      .listApplicationElements(id, { page: 1, size: 999 })
+    fetchAll((p) => applicationApi.listApplicationElements(id, p))
       .then((res) => {
         if (!cancelled) setFormFields(res.data.list || [])
       })
@@ -93,7 +93,7 @@ export default function ExamineManage() {
   useEffect(() => {
     let cancelled = false
     setSelectorLoading(true)
-    Promise.all([deptApi.getDeptUsersTree(), roleApi.listRoles({ page: 1, size: 999 })])
+    Promise.all([deptApi.getDeptUsersTree(), fetchAll(roleApi.listRoles)])
       .then(([deptRes, roleRes]) => {
         if (cancelled) return
         setOrgTree(transformDeptTree(deptRes.data?.list || deptRes.data || []))

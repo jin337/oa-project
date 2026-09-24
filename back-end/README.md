@@ -191,6 +191,20 @@ task package        # 发布版打包（-s -w + UPX，产物输出 bin/）
 task clean          # 清理编译产物、bin/ 与 logs/
 ```
 
+### 7. 测试覆盖
+
+测试集中在**纯逻辑**上（不依赖 DB / 网络，可离线运行），入口：`go test ./...` 或 `task test`。
+
+| 测试文件 | 覆盖内容 |
+| --- | --- |
+| `internal/handler/utils_test.go` | 数字转大写金额（万/亿分级、节间与节内零、角分、负数、非法输入）与表达式计算（优先级、括号、取模、负数、除零等错误分支） |
+| `internal/pkg/idgen/idgen_test.go` | 实体编码：段2 毫秒的 Crockford base32 定长编码、字典序与时间序一致、段3 长度与字符集 |
+| `internal/service/helper_test.go` | 审计字段剥离（业务字段与 `id`/`parent_id` 保留、nil map 安全）与系统列集合派生 |
+| `internal/service/dept_test.go` | 部门树构建：数据权限过滤后只剩子部门时各自成为根节点、正常层级嵌套、空列表、环状数据不死循环 |
+
+当前基线：`go test ./... -count=1` 共 **66 个断言全部通过**，`go vet ./...` 无输出。
+> **测试文件为什么留在各包目录**：Go 的 `go test` 以「目录 = 包」组织，`*_test.go` 只有与被测代码同目录同包时才能访问**未导出**标识符。上表被测的 `numberToUpper` / `parseFactor`、`encodeMillis`、`stripAuditFields`、`systemCols`、`buildDeptTree` 都是未导出函数，因此测试文件必须与实现同目录；把它们集中到 `internal/test/` 会在编译期直接报 `undefined: xxx`。若确实要集中，只有两条路：把被测函数改为导出（污染生产 API，且 `encodeMillis` 属实现细节），或在各包内加 `export_test.go` 做别名桥（等于没搬）。当前选择就近放置。
+
 ## 配置文件说明
 
 配置按环境拆分：`configs/config-{dev,test,prod}.yaml`，通过环境变量 `APP_ENV` 选择，默认 `dev`。**项目不使用 `.env` 文件**，全部配置集中在 YAML 中。文件只分两大块：`server`（服务）与 `mysql`（数据库 + 迁移）。

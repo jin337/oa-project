@@ -10,6 +10,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import * as roleApi from 'src/api/role'
+import { fetchAll } from 'src/api/fetchAll'
 import { OPERATOR_OPTIONS } from 'src/pages/application/constants'
 import {
   buildOrgItemMap,
@@ -380,7 +381,7 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
     if (!selectorNode) return
     let cancelled = false
     setSelectorData((d) => ({ ...d, loading: true }))
-    Promise.all([deptApi.getDeptUsersTree(), roleApi.listRoles({ page: 1, size: 999 })])
+    Promise.all([deptApi.getDeptUsersTree(), fetchAll(roleApi.listRoles)])
       .then(([deptRes, roleRes]) => {
         if (cancelled) return
         const orgTree = transformDeptTree(deptRes.data?.list || deptRes.data || [])

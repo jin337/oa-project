@@ -18,6 +18,7 @@ import { IconDelete, IconEdit, IconPlus, IconSettings } from '@arco-design/web-r
 import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 import * as approvalApi from 'src/api/approval'
+import { fetchAll } from 'src/api/fetchAll'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView.jsx'
 import DynamicForm, {
   parseLayoutJson,
@@ -78,7 +79,7 @@ export default function Apply() {
   // 加载分类列表
   const fetchCategories = useCallback(async () => {
     try {
-      const res = await approvalApi.listApprovalCategories({ page: 1, size: 9999 })
+      const res = await fetchAll(approvalApi.listApprovalCategories)
       setCategories(res.data?.list || [])
     } catch (e) {
       // 错误已在请求层提示
@@ -88,7 +89,7 @@ export default function Apply() {
   // 加载申请项列表
   const fetchItems = useCallback(async () => {
     try {
-      const res = await approvalApi.listApprovalItems({ page: 1, size: 9999 })
+      const res = await fetchAll(approvalApi.listApprovalItems)
       setItems(res.data?.list || [])
     } catch (e) {
       // 错误已在请求层提示
