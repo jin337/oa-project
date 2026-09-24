@@ -48,7 +48,6 @@ func createPendingTask(tx *gorm.DB, instance *model.ApprovalInstance, nodeID, no
 		Type:       1,
 		Title:      appName,
 		Msg:        "您有新的审批待办",
-		Content:    "",
 		InstanceID: instance.ID,
 	}
 	notifyCreate(tx, n)
@@ -205,7 +204,6 @@ func rejectToInitiator(tx *gorm.DB, instance *model.ApprovalInstance, result str
 		Type:       2,
 		Title:      appName,
 		Msg:        "审批被退回",
-		Content:    result,
 		InstanceID: instance.ID,
 	}
 	notifyCreate(tx, n)
@@ -253,7 +251,6 @@ func finishInstance(tx *gorm.DB, instance *model.ApprovalInstance, status int, r
 		Type:       4,
 		Title:      appName,
 		Msg:        resultTitle,
-		Content:    result,
 		InstanceID: instance.ID,
 	}
 	notifyCreate(tx, n)
@@ -461,26 +458,65 @@ func handleNodeApproval(tx *gorm.DB, instance *model.ApprovalInstance, task *mod
 	// 原审批人（非加签任务）通过：激活本节点处于等待态的后加签任务（waiting → pending），
 	// 使其进入加签人待办；加签人通过后再按节点策略推进。
 	if task.AddSignFrom == 0 {
-		if err := tx.Model(&model.ApprovalInstanceTask{}).
-			Where("instance_id = ? AND node_id = ? AND add_sign_type = 2 AND status = ?",
-				instance.ID, task.NodeID, model.TaskStatusWaiting).
-			Updates(map[string]interface{}{
-				"status":     model.TaskStatusPending,
-				"updated_at": time.Now(),
-				"updated_by": curUserID,
-			}).Error; err != nil {
+		// 先查出将被激活的后加签任务，更新后逐个推送待办通知
+		var waiting []model.ApprovalInstanceTask
+		if err := tx.Where("instance_id = ? AND node_id = ? AND add_sign_type = 2 AND status = ?",
+			instance.ID, task.NodeID, model.TaskStatusWaiting).Find(&waiting).Error; err != nil {
 			return err
+		}
+		if len(waiting) > 0 {
+			ids := make([]uint, 0, len(waiting))
+			for _, w := range waiting {
+				ids = append(ids, w.ID)
+			}
+			if err := tx.Model(&model.ApprovalInstanceTask{}).
+				Where("id IN ?", ids).
+				Updates(map[string]interface{}{
+					"status":     model.TaskStatusPending,
+					"updated_at": time.Now(),
+					"updated_by": curUserID,
+				}).Error; err != nil {
+				return err
+			}
+			// 后加签任务由等待态激活进入待办 → 待办通知（类型1）
+			// 注意：或签节点（strategy=3）在本节点任一审批人通过后即节点通过，
+			// 刚被激活的后加签任务会在同事务内被置为已取消，因此不推送，
+			// 避免产生“推送了但任务已取消”的幽灵待办通知
+			if node.Strategy != 3 {
+				appName := getInstanceAppName(instance)
+				for _, w := range waiting {
+					notifyCreate(tx, model.Notification{
+						UserID:     w.AssigneeID,
+						Type:       1,
+						Title:      appName,
+						Msg:        "您有新的审批待办",
+						InstanceID: instance.ID,
+					})
+				}
+			}
 		}
 	}
 
 	// 加签任务完成：前加签恢复原审批人任务待处理；后加签继续走节点策略逻辑
 	//（依次=轮后续审批人 / 会签=统计剩余审批人 / 或签=直接推进）
 	if task.AddSignFrom > 0 && task.AddSignType == 1 {
+		// 前加签通过，原审批人任务由等待态恢复待处理 → 重新进入其待办并推送通知
+		var origin model.ApprovalInstanceTask
+		if err := tx.First(&origin, task.AddSignFrom).Error; err != nil {
+			return err
+		}
 		if err := tx.Model(&model.ApprovalInstanceTask{}).
 			Where("id = ?", task.AddSignFrom).
 			Update("status", model.TaskStatusPending).Error; err != nil {
 			return err
 		}
+		notifyCreate(tx, model.Notification{
+			UserID:     origin.AssigneeID,
+			Type:       1,
+			Title:      getInstanceAppName(instance),
+			Msg:        "您有新的审批待办",
+			InstanceID: instance.ID,
+		})
 		return nil
 	}
 
@@ -567,7 +603,7 @@ func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *f
 //  2. 校验目标用户存在
 //  3. 事务内原任务标记为已转交，并新建转交任务
 func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.ApprovalInstanceTaskDelegateReq) error {
-	return database.DB.Transaction(func(tx *gorm.DB) error {
+	return withNotify(func(tx *gorm.DB) error {
 		// 校验任务（存在/归属/待处理/当前用户持有）
 		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
 		if err != nil {
@@ -601,7 +637,22 @@ func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.Ap
 			DelegatedFrom: task.ID,
 		}
 		newTask.CreatedBy, newTask.UpdatedBy = curUserID, curUserID
-		return tx.Create(&newTask).Error
+		if err := tx.Create(&newTask).Error; err != nil {
+			return err
+		}
+
+		// 待办通知（类型1）：转交后新任务进入目标用户待办
+		var instance model.ApprovalInstance
+		if err := tx.First(&instance, instanceID).Error; err == nil {
+			notifyCreate(tx, model.Notification{
+				UserID:     req.ToUserID,
+				Type:       1,
+				Title:      getInstanceAppName(&instance),
+				Msg:        "您有新的审批待办",
+				InstanceID: instance.ID,
+			})
+		}
+		return nil
 	})
 }
 
@@ -611,7 +662,7 @@ func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.Ap
 //  3. 前加签（type=1）：原任务置为加签等待（TaskStatusWaiting），加签人先审，通过后原任务恢复待处理
 //  4. 后加签（type=2）：加签人任务置为待处理，原审批人通过后由加签人继续审批
 func ApprovalTaskAddSign(curUserID uint, instanceID, taskID uint, req *model.ApprovalInstanceTaskAddSignReq) error {
-	return database.DB.Transaction(func(tx *gorm.DB) error {
+	return withNotify(func(tx *gorm.DB) error {
 		// 1. 校验任务（存在/归属/待处理/当前用户持有）
 		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
 		if err != nil {
@@ -683,6 +734,21 @@ func ApprovalTaskAddSign(curUserID uint, instanceID, taskID uint, req *model.App
 			AddSignType: req.Type,
 		}
 		addTask.CreatedBy, addTask.UpdatedBy = curUserID, curUserID
-		return tx.Create(&addTask).Error
+		if err := tx.Create(&addTask).Error; err != nil {
+			return err
+		}
+
+		// 待办通知（类型1）：前加签任务创建即为待处理，立即通知加签人；
+		// 后加签任务为等待态、不进待办，故此处不推送——待原审批人通过、任务激活时再推送
+		if addTaskStatus == model.TaskStatusPending {
+			notifyCreate(tx, model.Notification{
+				UserID:     req.UserID,
+				Type:       1,
+				Title:      getInstanceAppName(&instance),
+				Msg:        "您有新的审批待办",
+				InstanceID: instance.ID,
+			})
+		}
+		return nil
 	})
 }

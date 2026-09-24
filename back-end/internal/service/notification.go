@@ -13,7 +13,7 @@ import (
 )
 
 // NotificationCreate 写入站内通知（幂等：同实例同类型同接收人不重复写）
-func NotificationCreate(userID uint, nType int, title, content string, instanceID uint) error {
+func NotificationCreate(userID uint, nType int, title string, instanceID uint) error {
 	if userID == 0 {
 		return nil
 	}
@@ -28,7 +28,6 @@ func NotificationCreate(userID uint, nType int, title, content string, instanceI
 		UserID:     userID,
 		Type:       nType,
 		Title:      title,
-		Content:    content,
 		InstanceID: instanceID,
 	}
 	if err := database.DB.Create(&n).Error; err != nil {

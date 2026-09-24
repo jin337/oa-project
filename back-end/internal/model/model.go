@@ -713,7 +713,6 @@ type Notification struct {
 	Type       int        `json:"type" gorm:"not null;comment:通知类型 1待办 2退回 3抄送 4结果"`
 	Title      string     `json:"title" gorm:"size:200;comment:标题（应用名）"`
 	Msg        string     `json:"msg" gorm:"size:200;comment:消息描述"`
-	Content    string     `json:"content" gorm:"size:500;comment:内容（审批意见）"`
 	InstanceID uint       `json:"instance_id" gorm:"index;comment:关联审批实例ID"`
 	ReadAt     *time.Time `json:"read_at" gorm:"comment:阅读时间"`
 	CreatedAt  time.Time  `json:"created_at"`
