@@ -166,7 +166,7 @@ function buildActionsFromValues(actions) {
   return result
 }
 
-export default function FormElementManage() {
+export default function ElementManage() {
   const location = useLocation()
   const { id } = useParams()
   const { tabs, activeTab, addTab, updateTab } = useTabs()
@@ -241,7 +241,7 @@ export default function FormElementManage() {
       try {
         const params = { page: p, size: s }
         if (appliedKeyword) params.keyword = appliedKeyword
-        const res = await applicationApi.listFormElements(id, params)
+        const res = await applicationApi.listApplicationElements(id, params)
         setList(res.data.list || [])
         setTotal(res.data.total || 0)
       } catch (e) {
@@ -454,10 +454,10 @@ export default function FormElementManage() {
     setSaving(true)
     try {
       if (editing) {
-        await applicationApi.updateFormElement(id, editing.id, payload)
+        await applicationApi.updateApplicationElement(id, editing.id, payload)
         Message.success('保存成功')
       } else {
-        await applicationApi.createFormElement(id, payload)
+        await applicationApi.createApplicationElement(id, payload)
         Message.success('创建成功')
       }
       setDrawerVisible(false)
@@ -471,7 +471,7 @@ export default function FormElementManage() {
 
   const handleDelete = async (record) => {
     try {
-      await applicationApi.deleteFormElement(id, record.id)
+      await applicationApi.deleteApplicationElement(id, record.id)
       Message.success('删除成功')
       fetchList()
     } catch (e) {

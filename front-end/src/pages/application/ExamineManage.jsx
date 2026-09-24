@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, Spin } from '@arco-design/web-react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import * as deptApi from 'src/api/dept'
 import * as roleApi from 'src/api/role'
-import { useTabs } from 'src/store/tab-context'
 import { ADDABLE_NODE_TYPES, MODULE_LABEL, NODE_TYPE_META } from 'src/pages/application/constants'
+import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
+import { CcEditDrawer } from 'src/pages/application/examine/CcEditDrawer'
+import { ConditionEditDrawer } from 'src/pages/application/examine/ConditionEditDrawer'
+import { FlowNode } from 'src/pages/application/examine/FlowCanvas'
 import {
   buildDeptDescMap,
   buildOrgItemMap,
@@ -15,13 +18,10 @@ import {
   transformDeptTree,
   transformRoleList,
 } from 'src/pages/application/examine/flowModel'
-import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
-import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
-import { CcEditDrawer } from 'src/pages/application/examine/CcEditDrawer'
-import { ConditionEditDrawer } from 'src/pages/application/examine/ConditionEditDrawer'
-import { FlowNode } from 'src/pages/application/examine/FlowCanvas'
 import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
+import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
 import { useApprovalFlow } from 'src/pages/application/examine/useApprovalFlow'
+import { useTabs } from 'src/store/tab-context'
 
 /**
  * 审批流程配置管理页（/examine/:id？）：流程画布设计器。
@@ -70,7 +70,7 @@ export default function ExamineManage() {
     let cancelled = false
     setFieldsLoading(true)
     applicationApi
-      .listFormElements(id, { page: 1, size: 999 })
+      .listApplicationElements(id, { page: 1, size: 999 })
       .then((res) => {
         if (!cancelled) setFormFields(res.data.list || [])
       })

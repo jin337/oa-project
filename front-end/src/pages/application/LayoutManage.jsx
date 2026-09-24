@@ -1,22 +1,22 @@
 import {
-  Button,
-  Empty,
-  InputNumber,
-  Message,
-  Popconfirm,
-  Radio,
-  Tabs,
-  Tooltip,
+    Button,
+    Empty,
+    InputNumber,
+    Message,
+    Popconfirm,
+    Radio,
+    Tabs,
+    Tooltip,
 } from '@arco-design/web-react'
 import { IconDelete, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import DynamicForm, {
-  BASE_LAYOUT_ELEMENTS,
-  DEFAULT_FORM_CONFIG,
-  parseLayoutJson,
-  renderElementSettings,
+    BASE_LAYOUT_ELEMENTS,
+    DEFAULT_FORM_CONFIG,
+    parseLayoutJson,
+    renderElementSettings,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { useTabs } from 'src/store/tab-context'
 
@@ -125,7 +125,7 @@ export default function LayoutManage() {
     let cancelled = false
     setLibraryLoading(true)
     applicationApi
-      .listFormElements(id, { page: 1, size: 9999 })
+      .listApplicationElements(id, { page: 1, size: 9999 })
       .then((res) => {
         if (cancelled) return
         const list = res.data?.list || []
@@ -307,7 +307,7 @@ export default function LayoutManage() {
     if (!tableKey) return
     setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: true }))
     try {
-      const res = await applicationApi.listFormElements(id, {
+      const res = await applicationApi.listApplicationElements(id, {
         page: 1,
         size: 9999,
         table_key: tableKey,

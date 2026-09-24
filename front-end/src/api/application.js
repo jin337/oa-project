@@ -69,22 +69,22 @@ export function deleteTableField(appId, fieldId, tableName) {
 // ========== 表单元素管理（/application/:appId/element） ==========
 
 // GET /application/:appId/element 表单元素列表
-export function listFormElements(appId, params) {
+export function listApplicationElements(appId, params) {
   return request.get(`/application/${appId}/element`, { params })
 }
 
 // POST /application/:appId/element 新增表单元素
-export function createFormElement(appId, data) {
+export function createApplicationElement(appId, data) {
   return request.post(`/application/${appId}/element`, data)
 }
 
 // PUT /application/:appId/element/:id 修改表单元素
-export function updateFormElement(appId, elementId, data) {
+export function updateApplicationElement(appId, elementId, data) {
   return request.put(`/application/${appId}/element/${elementId}`, data)
 }
 
 // DELETE /application/:appId/element/:id 删除表单元素
-export function deleteFormElement(appId, elementId) {
+export function deleteApplicationElement(appId, elementId) {
   return request.delete(`/application/${appId}/element/${elementId}`)
 }
 

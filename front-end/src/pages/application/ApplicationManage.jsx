@@ -1,4 +1,3 @@
-import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -28,6 +27,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
+import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 import { useTabs } from 'src/store/tab-context'
 
@@ -181,8 +181,8 @@ export default function ApplicationManage() {
   const handleActionMenu = (key, record) => {
     if (key === 'tables') {
       openSubPage(record, 'tables', '表管理')
-    } else if (key === 'form-elements') {
-      openSubPage(record, 'form-elements', '表单元素')
+    } else if (key === 'elements') {
+      openSubPage(record, 'elements', '表单元素')
     } else if (key === 'layout') {
       openSubPage(record, 'layout', '布局管理')
     } else if (key === 'examine') {
@@ -248,7 +248,7 @@ export default function ApplicationManage() {
         const actionMenu = (
           <Menu onClickMenuItem={(key) => handleActionMenu(key, record)}>
             <MenuItem key="tables">表管理</MenuItem>
-            <MenuItem key="form-elements">表单元素管理</MenuItem>
+            <MenuItem key="elements">表单元素管理</MenuItem>
             <MenuItem key="layout">布局管理</MenuItem>
             <MenuItem key="examine">审批管理</MenuItem>
           </Menu>

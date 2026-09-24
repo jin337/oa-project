@@ -97,7 +97,7 @@ front-end/
         ├── application/          # 应用配置
         │   ├── ApplicationManage.jsx   # 应用管理
         │   ├── TableManage.jsx         # 表管理（字段定义）
-        │   ├── FormElementManage.jsx   # 表单元素管理（数据源 / 事件联动 / 校验）
+        │   ├── ElementManage.jsx   # 表单元素管理（数据源 / 事件联动 / 校验）
         │   ├── LayoutManage.jsx        # 布局管理（表单页 + 详情页可视化拖拽）
         │   ├── ExamineManage.jsx       # 审批管理（发起人 / 审批流 / 抄送配置）
         │   ├── constants.js            # 应用配置公共常量

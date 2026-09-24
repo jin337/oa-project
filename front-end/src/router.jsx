@@ -26,7 +26,7 @@ const Profile = lazy(() => import('src/pages/profile/Profile.jsx'))
 // 应用管理
 const ApplicationManage = lazy(() => import('src/pages/application/ApplicationManage.jsx'))
 const TableManage = lazy(() => import('src/pages/application/TableManage.jsx'))
-const FormElementManage = lazy(() => import('src/pages/application/FormElementManage.jsx'))
+const ElementManage = lazy(() => import('src/pages/application/ElementManage.jsx'))
 const LayoutManage = lazy(() => import('src/pages/application/LayoutManage.jsx'))
 const ExamineManage = lazy(() => import('src/pages/application/ExamineManage.jsx'))
 const DynamicPage = lazy(() => import('src/pages/application/dynamic/DynamicPage.jsx'))
@@ -75,7 +75,7 @@ const PAGE_MAP = [
   // 应用配置
   { pattern: '/application', component: ApplicationManage },
   { pattern: '/application/:id/tables', component: TableManage },
-  { pattern: '/application/:id/elements', component: FormElementManage },
+  { pattern: '/application/:id/elements', component: ElementManage },
   { pattern: '/application/:id/layout', component: LayoutManage },
   { pattern: '/application/:id/examine', component: ExamineManage },
   // 审批管理
