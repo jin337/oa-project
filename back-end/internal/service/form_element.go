@@ -8,15 +8,15 @@ import (
 	"back-end/internal/model"
 )
 
-// validElementTypes 允许的表单元素类型白名单（与前端 FormElementManage.jsx ELEMENT_TYPES 一致）
+// validElementTypes 允许的表单元素类型白名单（与前端 ApplicationElementManage.jsx ELEMENT_TYPES 一致）
 var validElementTypes = map[string]bool{
 	"input": true, "textarea": true, "number": true, "select": true, "treeselect": true,
 	"radio": true, "checkbox": true, "datepicker": true, "timepicker": true,
 	"switch": true, "upload": true,
 }
 
-// checkFormElementTableKey 校验 table_key 属于该页面配置（主表或子表）
-func checkFormElementTableKey(appID uint, tableKey string) error {
+// checkApplicationElementTableKey 校验 table_key 属于该页面配置（主表或子表）
+func checkApplicationElementTableKey(appID uint, tableKey string) error {
 	app, err := ApplicationDetail(appID)
 	if err != nil {
 		return err
@@ -27,14 +27,14 @@ func checkFormElementTableKey(appID uint, tableKey string) error {
 	return nil
 }
 
-// FormElementList 表单元素分页列表：keyword 模糊匹配 label 或 field_key
-// 返回 FormElementListItem（不含 created_at/created_by/updated_at/updated_by 审计字段）
-func FormElementList(appID uint, req *model.FormElementListReq) ([]model.FormElementListItem, int64, error) {
+// ApplicationElementList 表单元素分页列表：keyword 模糊匹配 label 或 field_key
+// 返回 ApplicationElementListItem（不含 created_at/created_by/updated_at/updated_by 审计字段）
+func ApplicationElementList(appID uint, req *model.ApplicationElementListReq) ([]model.ApplicationElementListItem, int64, error) {
 	app, err := ApplicationDetail(appID)
 	if err != nil {
 		return nil, 0, err
 	}
-	db := database.DB.Model(&model.FormElement{}).Where("app_id = ?", appID)
+	db := database.DB.Model(&model.ApplicationElement{}).Where("app_id = ?", appID)
 	if req.Keyword != "" {
 		kw := "%" + req.Keyword + "%"
 		db = db.Where("(label LIKE ? OR field_key LIKE ?)", kw, kw)
@@ -46,17 +46,17 @@ func FormElementList(appID uint, req *model.FormElementListReq) ([]model.FormEle
 
 	// SQL 层表级排序：主表元素优先，各子表元素随后，未匹配业务表的记录排最后；表内按 id ASC
 	// 仅影响 Find 的 ORDER BY，Count 总数统计不受影响，Offset/Limit 分页照常生效
-	var list []model.FormElement
-	err = db.Order(buildFormElementTableOrder(app.TableName, app.SubTableName)).
+	var list []model.ApplicationElement
+	err = db.Order(buildApplicationElementTableOrder(app.TableName, app.SubTableName)).
 		Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
 	// 转换为列表 DTO，去除审计字段
-	items := make([]model.FormElementListItem, 0, len(list))
+	items := make([]model.ApplicationElementListItem, 0, len(list))
 	for _, el := range list {
-		items = append(items, model.FormElementListItem{
+		items = append(items, model.ApplicationElementListItem{
 			ID:             el.ID,
 			AppID:          el.AppID,
 			Label:          el.Label,
@@ -76,10 +76,10 @@ func FormElementList(appID uint, req *model.FormElementListReq) ([]model.FormEle
 	return items, total, nil
 }
 
-// buildFormElementTableOrder 生成表单元素列表的表级排序表达式：
+// buildApplicationElementTableOrder 生成表单元素列表的表级排序表达式：
 // ORDER BY FIELD(table_key, 主表名, 子表名1, 子表名2, ...) ASC, id ASC
 // FIELD 未命中的 table_key 返回 0，因此主表(1)最前、子表(2..n)随后、其余排最后
-func buildFormElementTableOrder(tableName, subTableName string) string {
+func buildApplicationElementTableOrder(tableName, subTableName string) string {
 	keys := make([]string, 0, 4)
 	seen := map[string]bool{}
 	add := func(name string) {
@@ -102,15 +102,15 @@ func buildFormElementTableOrder(tableName, subTableName string) string {
 	return "FIELD(table_key, '" + strings.Join(keys, "', '") + "') ASC, id ASC"
 }
 
-// FormElementCreate 新增表单元素
-func FormElementCreate(curUserID, appID uint, req *model.FormElementCreateReq) (*model.FormElement, error) {
-	if err := checkFormElementTableKey(appID, req.TableKey); err != nil {
+// ApplicationElementCreate 新增表单元素
+func ApplicationElementCreate(curUserID, appID uint, req *model.ApplicationElementCreateReq) (*model.ApplicationElement, error) {
+	if err := checkApplicationElementTableKey(appID, req.TableKey); err != nil {
 		return nil, err
 	}
 	if !validElementTypes[req.ElementType] {
 		return nil, errors.New("不支持的字段类型: " + req.ElementType)
 	}
-	el := model.FormElement{
+	el := model.ApplicationElement{
 		AppID:          appID,
 		Label:          req.Label,
 		FieldKey:       req.FieldKey,
@@ -132,9 +132,9 @@ func FormElementCreate(curUserID, appID uint, req *model.FormElementCreateReq) (
 	return &el, nil
 }
 
-// FormElementUpdate 修改表单元素
-func FormElementUpdate(curUserID, appID, id uint, req *model.FormElementUpdateReq) (*model.FormElement, error) {
-	var el model.FormElement
+// ApplicationElementUpdate 修改表单元素
+func ApplicationElementUpdate(curUserID, appID, id uint, req *model.ApplicationElementUpdateReq) (*model.ApplicationElement, error) {
+	var el model.ApplicationElement
 	if err := database.DB.Where("id = ? AND app_id = ?", id, appID).First(&el).Error; err != nil {
 		return nil, errors.New("表单元素不存在")
 	}
@@ -145,7 +145,7 @@ func FormElementUpdate(curUserID, appID, id uint, req *model.FormElementUpdateRe
 		el.FieldKey = req.FieldKey
 	}
 	if req.TableKey != "" {
-		if err := checkFormElementTableKey(appID, req.TableKey); err != nil {
+		if err := checkApplicationElementTableKey(appID, req.TableKey); err != nil {
 			return nil, err
 		}
 		el.TableKey = req.TableKey
@@ -182,9 +182,9 @@ func FormElementUpdate(curUserID, appID, id uint, req *model.FormElementUpdateRe
 	return &el, nil
 }
 
-// FormElementDelete 删除表单元素（软删除）
-func FormElementDelete(appID, id uint) error {
-	var el model.FormElement
+// ApplicationElementDelete 删除表单元素（软删除）
+func ApplicationElementDelete(appID, id uint) error {
+	var el model.ApplicationElement
 	if err := database.DB.Where("id = ? AND app_id = ?", id, appID).First(&el).Error; err != nil {
 		return errors.New("表单元素不存在")
 	}

@@ -346,8 +346,8 @@ type ApplicationDataDetailReq struct {
 // state=list 时额外附带 search_fields（搜索项）、columns（表格表头）与主表数据列表
 type ApplicationByCodeResult struct {
 	Application
-	SearchFields []FormElement            `json:"search_fields,omitempty"`
-	Columns      []FormElement            `json:"columns,omitempty"`
+	SearchFields []ApplicationElement     `json:"search_fields,omitempty"`
+	Columns      []ApplicationElement     `json:"columns,omitempty"`
 	List         []map[string]interface{} `json:"list,omitempty"`
 	Total        int64                    `json:"total,omitempty"`
 	Page         int                      `json:"page,omitempty"`
@@ -396,8 +396,8 @@ type TableFieldDeleteReq struct {
 	TableName string `json:"table_name" form:"table_name" validate:"required" label:"表名"` // 主表或子表
 }
 
-// FormElement 表单元素配置：绑定页面配置（Application）对应的物理表字段，用于低代码表单渲染
-type FormElement struct {
+// ApplicationElement 表单元素配置：绑定页面配置（Application）对应的物理表字段，用于低代码表单渲染
+type ApplicationElement struct {
 	BaseModel
 	AppID             uint                   `gorm:"column:app_id;index;not null;comment:所属页面配置ID" json:"app_id"`
 	Label             string                 `gorm:"size:64;not null;comment:字段标签" json:"label"`
@@ -415,8 +415,8 @@ type FormElement struct {
 	Actions           map[string]interface{} `gorm:"serializer:json;type:json;comment:事件驱动配置" json:"actions"`
 }
 
-// FormElementListItem 表单元素列表项（listFormElements 接口返回，不含 created_at/created_by/updated_at/updated_by 审计字段）
-type FormElementListItem struct {
+// ApplicationElementListItem 表单元素列表项
+type ApplicationElementListItem struct {
 	ID                uint                   `json:"id"`
 	AppID             uint                   `json:"app_id"`
 	Label             string                 `json:"label"`
@@ -434,7 +434,7 @@ type FormElementListItem struct {
 	Actions           map[string]interface{} `json:"actions"`
 }
 
-type FormElementCreateReq struct {
+type ApplicationElementCreateReq struct {
 	Label             string                 `json:"label" validate:"required,min=1,max=64" label:"名称"`
 	FieldKey          string                 `json:"field_key" validate:"required,min=1,max=64" label:"对应字段"`
 	TableKey          string                 `json:"table_key" validate:"required,min=1,max=64" label:"分类表"`
@@ -450,7 +450,7 @@ type FormElementCreateReq struct {
 	Actions           map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
 }
 
-type FormElementUpdateReq struct {
+type ApplicationElementUpdateReq struct {
 	Label             string                 `json:"label" validate:"omitempty,min=1,max=64" label:"名称"`
 	FieldKey          string                 `json:"field_key" validate:"omitempty,min=1,max=64" label:"对应字段"`
 	TableKey          string                 `json:"table_key" validate:"omitempty,min=1,max=64" label:"分类表"`
@@ -466,7 +466,7 @@ type FormElementUpdateReq struct {
 	Actions           map[string]interface{} `json:"actions" validate:"omitempty" label:"事件"`
 }
 
-type FormElementListReq struct {
+type ApplicationElementListReq struct {
 	BaseListReq
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
 }

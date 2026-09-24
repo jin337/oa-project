@@ -1,13 +1,13 @@
-﻿package service
+package service
 
 import (
-	"gorm.io/gorm"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"reflect"
 	"regexp"
 	"strings"
-	"encoding/json"
 	"time"
 
 	"back-end/internal/config"
@@ -58,7 +58,7 @@ func ApplicationDetail(id uint) (*model.Application, error) {
 	return &app, nil
 }
 
-// visibilityFlag 判断 FormElement.Visibility 中指定开关是否为真（list/search），兼容 JSON 反序列化后的数字类型
+// visibilityFlag 判断 ApplicationElement.Visibility 中指定开关是否为真（list/search），兼容 JSON 反序列化后的数字类型
 func visibilityFlag(vis map[string]interface{}, key string) bool {
 	if vis == nil {
 		return false
@@ -86,8 +86,8 @@ var layoutOwnFields = map[string]bool{
 	"dataIndex":  true, // 列特有：绑定列名
 }
 
-// formElementToLayoutMap 表单元素模型 → 布局元素底数据（属性键与前端布局元素一致）
-func formElementToLayoutMap(el *model.FormElement) map[string]interface{} {
+// applicationElementToLayoutMap 表单元素模型 → 布局元素底数据（属性键与前端布局元素一致）
+func applicationElementToLayoutMap(el *model.ApplicationElement) map[string]interface{} {
 	required := 0
 	if el.Required == 1 {
 		required = 1
@@ -109,11 +109,11 @@ func formElementToLayoutMap(el *model.FormElement) map[string]interface{} {
 	}
 }
 
-// loadFormElementIndexes 加载应用全部表单元素，建立 id 与 (table_key, field_key) 索引
-func loadFormElementIndexes(appID uint) (map[uint]*model.FormElement, map[string]*model.FormElement) {
-	byID := map[uint]*model.FormElement{}
-	byKey := map[string]*model.FormElement{}
-	var elements []model.FormElement
+// loadApplicationElementIndexes 加载应用全部表单元素，建立 id 与 (table_key, field_key) 索引
+func loadApplicationElementIndexes(appID uint) (map[uint]*model.ApplicationElement, map[string]*model.ApplicationElement) {
+	byID := map[uint]*model.ApplicationElement{}
+	byKey := map[string]*model.ApplicationElement{}
+	var elements []model.ApplicationElement
 	if err := database.DB.Where("app_id = ?", appID).Find(&elements).Error; err != nil {
 		return byID, byKey
 	}
@@ -148,8 +148,8 @@ func sameValue(a, b interface{}) bool {
 	return aok && bok && af == bf
 }
 
-// matchFormElement 布局元素匹配表单元素：优先 element_id，其次 (table_key, field_key)
-func matchFormElement(m map[string]interface{}, byID map[uint]*model.FormElement, byKey map[string]*model.FormElement) *model.FormElement {
+// matchApplicationElement 布局元素匹配表单元素：优先 element_id，其次 (table_key, field_key)
+func matchApplicationElement(m map[string]interface{}, byID map[uint]*model.ApplicationElement, byKey map[string]*model.ApplicationElement) *model.ApplicationElement {
 	if id, ok := numericVal(m["element_id"]); ok && id > 0 {
 		if el := byID[uint(id)]; el != nil {
 			return el
@@ -181,8 +181,8 @@ func isFullSnapshot(m map[string]interface{}) bool {
 // mergeLayoutElement 读取合并：表单元素底数据 + 布局覆盖。
 //   - 紧凑布局（compact 后）：布局自身字段无条件并入；其他字段与底不同才覆盖（布局设置的属性优先）
 //   - 全量快照（历史布局）：以表单元素管理为唯一数据源，布局仅保留布局自身字段，避免旧快照遮蔽元素新设置
-func mergeLayoutElement(m map[string]interface{}, base *model.FormElement) map[string]interface{} {
-	merged := formElementToLayoutMap(base)
+func mergeLayoutElement(m map[string]interface{}, base *model.ApplicationElement) map[string]interface{} {
+	merged := applicationElementToLayoutMap(base)
 	full := isFullSnapshot(m)
 	for k, v := range m {
 		if layoutOwnFields[k] {
@@ -201,7 +201,7 @@ func mergeLayoutElement(m map[string]interface{}, base *model.FormElement) map[s
 }
 
 // mergeLayoutColumns 读取合并：子表列底数据（子表字段表单元素）+ 列覆盖，title 为空时用底 label 兜底
-func mergeLayoutColumns(cols []interface{}, byKey map[string]*model.FormElement) []interface{} {
+func mergeLayoutColumns(cols []interface{}, byKey map[string]*model.ApplicationElement) []interface{} {
 	out := make([]interface{}, 0, len(cols))
 	for _, item := range cols {
 		c, ok := item.(map[string]interface{})
@@ -211,7 +211,7 @@ func mergeLayoutColumns(cols []interface{}, byKey map[string]*model.FormElement)
 		}
 		fk, _ := c["field_key"].(string)
 		tk, _ := c["table_key"].(string)
-		var base *model.FormElement
+		var base *model.ApplicationElement
 		if fk != "" && tk != "" {
 			base = byKey[tk+"\x00"+fk]
 		}
@@ -237,7 +237,7 @@ func mergeLayoutJSON(layout map[string]interface{}, appID uint) map[string]inter
 	if !ok {
 		return layout
 	}
-	byID, byKey := loadFormElementIndexes(appID)
+	byID, byKey := loadApplicationElementIndexes(appID)
 	out := make([]interface{}, 0, len(els))
 	for _, item := range els {
 		m, ok := item.(map[string]interface{})
@@ -245,7 +245,7 @@ func mergeLayoutJSON(layout map[string]interface{}, appID uint) map[string]inter
 			out = append(out, item)
 			continue
 		}
-		base := matchFormElement(m, byID, byKey)
+		base := matchApplicationElement(m, byID, byKey)
 		if base == nil {
 			// 无匹配（基础/表格组件）：表格元素含 columns 时仍做列级合并
 			if cols, ok := m["columns"].([]interface{}); ok && len(cols) > 0 {
@@ -275,7 +275,7 @@ func mergeLayoutJSON(layout map[string]interface{}, appID uint) map[string]inter
 }
 
 // compactLayoutColumns 保存裁剪：列仅保留布局自身字段 + 与底不同的覆盖项，title 空时兜底为底 label
-func compactLayoutColumns(cols []interface{}, byKey map[string]*model.FormElement) []interface{} {
+func compactLayoutColumns(cols []interface{}, byKey map[string]*model.ApplicationElement) []interface{} {
 	out := make([]interface{}, 0, len(cols))
 	for _, item := range cols {
 		c, ok := item.(map[string]interface{})
@@ -285,7 +285,7 @@ func compactLayoutColumns(cols []interface{}, byKey map[string]*model.FormElemen
 		}
 		fk, _ := c["field_key"].(string)
 		tk, _ := c["table_key"].(string)
-		var base *model.FormElement
+		var base *model.ApplicationElement
 		if fk != "" && tk != "" {
 			base = byKey[tk+"\x00"+fk]
 		}
@@ -301,7 +301,7 @@ func compactLayoutColumns(cols []interface{}, byKey map[string]*model.FormElemen
 		if tk, ok := c["table_key"]; ok {
 			compacted["table_key"] = tk
 		}
-		baseMap := formElementToLayoutMap(base)
+		baseMap := applicationElementToLayoutMap(base)
 		for k, v := range c {
 			if layoutOwnFields[k] {
 				compacted[k] = v
@@ -329,7 +329,7 @@ func compactLayoutJSON(layout map[string]interface{}, appID uint) map[string]int
 	if !ok {
 		return layout
 	}
-	byID, byKey := loadFormElementIndexes(appID)
+	byID, byKey := loadApplicationElementIndexes(appID)
 	out := make([]interface{}, 0, len(els))
 	for _, item := range els {
 		m, ok := item.(map[string]interface{})
@@ -337,7 +337,7 @@ func compactLayoutJSON(layout map[string]interface{}, appID uint) map[string]int
 			out = append(out, item)
 			continue
 		}
-		base := matchFormElement(m, byID, byKey)
+		base := matchApplicationElement(m, byID, byKey)
 		if base == nil {
 			// 无匹配（基础/表格组件）：表格元素含 columns 时仍做列级裁剪
 			if cols, ok := m["columns"].([]interface{}); ok && len(cols) > 0 {
@@ -360,7 +360,7 @@ func compactLayoutJSON(layout map[string]interface{}, appID uint) map[string]int
 		if tk, ok := m["table_key"]; ok {
 			compacted["table_key"] = tk
 		}
-		baseMap := formElementToLayoutMap(base)
+		baseMap := applicationElementToLayoutMap(base)
 		for k, v := range m {
 			if layoutOwnFields[k] {
 				compacted[k] = v
@@ -405,7 +405,7 @@ func ApplicationByCode(code, state string, page, size int, filters map[string]st
 		result.DetailLayoutJSON = nil
 		result.ApprovalFlowJSON = nil
 		// 搜索项与表格表头取自该应用的表单元素（visibility.search / visibility.list）
-		var elements []model.FormElement
+		var elements []model.ApplicationElement
 		if err := database.DB.Where("app_id = ?", app.ID).Order("id ASC").Find(&elements).Error; err != nil {
 			return nil, err
 		}
@@ -572,7 +572,6 @@ func buildDataPermissionConds(userID uint, colSet map[string]bool) ([]string, []
 
 	return []string{"`created_by` IN ?"}, []interface{}{userIDs}
 }
-
 
 // ApplicationDataDetail 动态数据详情：
 //  1. 根据应用配置的主表 table_name 查询 dataId 对应行（过滤软删除）
@@ -853,6 +852,7 @@ func deleteBusinessData(db *gorm.DB, appID, dataID uint) error {
 	}
 	return nil
 }
+
 // ApplicationDataUpdate 动态业务数据更新（编辑表单提交）：
 //  1. 根据应用配置获取主表真实物理表名，校验目标记录存在（过滤软删除）
 //  2. 区分主表字段与子表数据：key 匹配子表名且值为数组时视为子表行数据，不作为主表字段校验
@@ -1358,4 +1358,3 @@ func ApplicationDelete(id uint) error {
 	// 物理表全部删除成功后，再软删除配置记录
 	return database.DB.Delete(&model.Application{}, id).Error
 }
-

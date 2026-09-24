@@ -22,18 +22,18 @@ func parseElementID(c *gin.Context) (uint, bool) {
 	return uint(id), true
 }
 
-// FormElementList GET /api/v1/application/:id/formelement 表单元素分页列表
-func FormElementList(c *gin.Context) {
+// ApplicationElementList GET /api/v1/application/:id/element 表单元素分页列表
+func ApplicationElementList(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
 		return
 	}
-	var req model.FormElementListReq
+	var req model.ApplicationElementListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	list, total, err := service.FormElementList(id, &req)
+	list, total, err := service.ApplicationElementList(id, &req)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
@@ -41,18 +41,18 @@ func FormElementList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// FormElementCreate POST /api/v1/application/:id/formelement 新增表单元素
-func FormElementCreate(c *gin.Context) {
+// ApplicationElementCreate POST /api/v1/application/:id/element 新增表单元素
+func ApplicationElementCreate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
 		return
 	}
-	var req model.FormElementCreateReq
+	var req model.ApplicationElementCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	el, err := service.FormElementCreate(middleware.CurrentUserID(c), id, &req)
+	el, err := service.ApplicationElementCreate(middleware.CurrentUserID(c), id, &req)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
@@ -60,8 +60,8 @@ func FormElementCreate(c *gin.Context) {
 	response.OK(c, el)
 }
 
-// FormElementUpdate PUT /api/v1/application/:id/formelement/:elementId 修改表单元素
-func FormElementUpdate(c *gin.Context) {
+// ApplicationElementUpdate PUT /api/v1/application/:id/element/:elementId 修改表单元素
+func ApplicationElementUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
 		return
@@ -70,12 +70,12 @@ func FormElementUpdate(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req model.FormElementUpdateReq
+	var req model.ApplicationElementUpdateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	el, err := service.FormElementUpdate(middleware.CurrentUserID(c), id, elementID, &req)
+	el, err := service.ApplicationElementUpdate(middleware.CurrentUserID(c), id, elementID, &req)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
@@ -83,8 +83,8 @@ func FormElementUpdate(c *gin.Context) {
 	response.OK(c, el)
 }
 
-// FormElementDelete DELETE /api/v1/application/:id/formelement/:elementId 删除表单元素
-func FormElementDelete(c *gin.Context) {
+// ApplicationElementDelete DELETE /api/v1/application/:id/element/:elementId 删除表单元素
+func ApplicationElementDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
 		return
@@ -93,7 +93,7 @@ func FormElementDelete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := service.FormElementDelete(id, elementID); err != nil {
+	if err := service.ApplicationElementDelete(id, elementID); err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}

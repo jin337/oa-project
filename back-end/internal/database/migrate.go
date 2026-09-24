@@ -55,20 +55,14 @@ var migrations = []migration{
 		Up: func(db *gorm.DB) error {
 			return db.AutoMigrate(
 				&model.Application{},
-				&model.FormElement{},
+				&model.ApplicationElement{},
 				&model.ApprovalCategory{},
 				&model.ApprovalCategoryItem{},
 				&model.ApprovalInstance{},
 				&model.ApprovalInstanceTask{},
 				&model.ApprovalCCRecord{},
+				&model.Notification{},
 			)
-		},
-	},
-	{
-		Version: 3,
-		Name:    "add_notification",
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(&model.Notification{})
 		},
 	},
 }
