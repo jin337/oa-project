@@ -70,7 +70,5 @@ func write(lvl int, format string, args ...any) {
 	log.Printf("%s %s", prefix[lvl], fmt.Sprintf(format, args...))
 }
 
-func Debugf(format string, args ...any) { write(levelDebug, format, args...) }
 func Infof(format string, args ...any)  { write(levelInfo, format, args...) }
-func Warnf(format string, args ...any)  { write(levelWarn, format, args...) }
 func Errorf(format string, args ...any) { write(levelError, format, args...) }

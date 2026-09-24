@@ -62,9 +62,3 @@ func Validate(c *gin.Context, req any) string {
 	}
 	return ""
 }
-
-// Validator 暴露校验器实例，便于注册自定义规则
-func Validator() *validator.Validate {
-	initValidator()
-	return v
-}

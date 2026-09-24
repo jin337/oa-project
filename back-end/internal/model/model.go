@@ -646,21 +646,22 @@ type ApprovalCCRecord struct {
 	NotifiedAt *time.Time `gorm:"comment:抄送时间" json:"notified_at"`
 }
 
-// ApprovalInstanceTaskResult 审批任务响应 DTO：剥离 BaseModel 中的审计字段（created_at/updated_at/created_by/updated_by/deleted_at），前端无需感知
+// ApprovalInstanceTaskResult 审批任务响应 DTO：剥离 BaseModel 中的审计字段（created_at/updated_at/created_by/updated_by/deleted_at），前端无需感知。
+// 注意：不输出 ApprovalInstanceTask.Instance 关联对象——该对象内嵌 BaseModel，
+// 一旦任务查询加上 Preload("Instance") 就会把审计字段重新带回响应；前端亦无消费。
 type ApprovalInstanceTaskResult struct {
-	ID            uint              `json:"id"`
-	InstanceID    uint              `json:"instance_id"`
-	NodeID        string            `json:"node_id"`
-	NodeName      string            `json:"node_name"`
-	Sort          int               `json:"sort"`
-	AssigneeID    uint              `json:"assignee_id"`
-	Status        int               `json:"status"`
-	Comment       string            `json:"comment"`
-	OperatedAt    *time.Time        `json:"operated_at"`
-	DelegatedFrom uint              `json:"delegated_from"`
-	AddSignFrom   uint              `json:"add_sign_from"`
-	AddSignType   int               `json:"add_sign_type"`
-	Instance      *ApprovalInstance `json:"instance,omitempty"`
+	ID            uint       `json:"id"`
+	InstanceID    uint       `json:"instance_id"`
+	NodeID        string     `json:"node_id"`
+	NodeName      string     `json:"node_name"`
+	Sort          int        `json:"sort"`
+	AssigneeID    uint       `json:"assignee_id"`
+	Status        int        `json:"status"`
+	Comment       string     `json:"comment"`
+	OperatedAt    *time.Time `json:"operated_at"`
+	DelegatedFrom uint       `json:"delegated_from"`
+	AddSignFrom   uint       `json:"add_sign_from"`
+	AddSignType   int        `json:"add_sign_type"`
 }
 
 // ApprovalInstanceDetailResult 实例详情响应（含任务列表+审批记录）
@@ -719,8 +720,3 @@ type Notification struct {
 }
 
 func (Notification) TableName() string { return "oa_notifications" }
-
-// NotificationListReq 通知列表请求
-type NotificationListReq struct {
-	BaseListReq
-}

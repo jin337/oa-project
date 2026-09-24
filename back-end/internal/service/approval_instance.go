@@ -256,7 +256,7 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 
 	// 3. 创建流程实例（事务）：状态=进行中，生成首个审批节点任务
 	var instance model.ApprovalInstance
-	err = database.DB.Transaction(func(tx *gorm.DB) error {
+	err = withNotify(func(tx *gorm.DB) error {
 		// 查发起人当前部门，记录快照
 		var creator model.User
 		database.DB.Select("dept_id").First(&creator, curUserID)
@@ -442,7 +442,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 	execPathBytes, _ := json.Marshal(ctx.execPath)
 
 	// 6. 事务：原子状态流转（草稿→进行中）+ 更新快照/路径 + 生成首个任务
-	err = database.DB.Transaction(func(tx *gorm.DB) error {
+	err = withNotify(func(tx *gorm.DB) error {
 		// 原子守卫：仅当实例仍为草稿时才更新，防止并发重复提交
 		res := tx.Model(&model.ApprovalInstance{}).
 			Where("id = ? AND status = ?", instanceID, model.InstanceStatusDraft).
@@ -490,7 +490,7 @@ func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.Approv
 	}
 	instance = *owned
 
-	err = database.DB.Transaction(func(tx *gorm.DB) error {
+	err = withNotify(func(tx *gorm.DB) error {
 		// 1. 更新业务表单数据（发起人修改，可选）
 		if req != nil && len(req.BusinessData) > 0 {
 			if err := ApplicationDataUpdateWithDB(tx, instance.AppID, instance.BusinessDataID, curUserID, req.BusinessData); err != nil {
@@ -693,7 +693,6 @@ func toTaskResults(tasks []model.ApprovalInstanceTask) []model.ApprovalInstanceT
 			DelegatedFrom: t.DelegatedFrom,
 			AddSignFrom:   t.AddSignFrom,
 			AddSignType:   t.AddSignType,
-			Instance:      t.Instance,
 		}
 	}
 	return results

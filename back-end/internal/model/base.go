@@ -7,12 +7,16 @@ import (
 )
 
 // BaseModel 公共字段
+//
+// 审计字段对外口径（字段清单见 service/helper.go 的 auditFields）：
+//   - deleted_at / updated_at / updated_by：后端内部维护字段，统一 json:"-"，不对外输出
+//   - created_at / created_by：前端有真实消费（列表创建时间、审批时间线），保留输出
 type BaseModel struct {
 	ID        uint           `gorm:"primarykey;comment:主键ID" json:"id"`
 	CreatedAt time.Time      `gorm:"comment:创建时间" json:"created_at"`
-	UpdatedAt time.Time      `gorm:"comment:更新时间" json:"updated_at"`
+	UpdatedAt time.Time      `gorm:"comment:更新时间" json:"-"`
 	CreatedBy uint           `gorm:"comment:创建人" json:"created_by"`
-	UpdatedBy uint           `gorm:"comment:更新人" json:"updated_by"`
+	UpdatedBy uint           `gorm:"comment:更新人" json:"-"`
 	DeletedAt gorm.DeletedAt `gorm:"index;comment:删除时间(软删除)" json:"-"`
 }
 

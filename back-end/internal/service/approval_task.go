@@ -51,7 +51,7 @@ func createPendingTask(tx *gorm.DB, instance *model.ApprovalInstance, nodeID, no
 		Content:    "",
 		InstanceID: instance.ID,
 	}
-	tx.Create(&n)
+	notifyCreate(tx, n)
 	return nil
 }
 
@@ -208,7 +208,7 @@ func rejectToInitiator(tx *gorm.DB, instance *model.ApprovalInstance, result str
 		Content:    result,
 		InstanceID: instance.ID,
 	}
-	tx.Create(&n)
+	notifyCreate(tx, n)
 	return nil
 }
 
@@ -256,7 +256,7 @@ func finishInstance(tx *gorm.DB, instance *model.ApprovalInstance, status int, r
 		Content:    result,
 		InstanceID: instance.ID,
 	}
-	tx.Create(&n)
+	notifyCreate(tx, n)
 
 	return nil
 }
@@ -293,7 +293,7 @@ func writeCCRecordsOnFinish(tx *gorm.DB, instance *model.ApprovalInstance, curUs
 			tx.Create(&rec)
 			// 抄送通知（类型3）
 			appName := getInstanceAppName(instance)
-			tx.Create(&model.Notification{
+			notifyCreate(tx, model.Notification{
 				UserID:     uid,
 				Type:       3,
 				Title:      appName,
@@ -338,7 +338,7 @@ func writeCCRecords(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []fl
 		}
 		// 抄送通知（类型3）
 		appName := getInstanceAppName(instance)
-		tx.Create(&model.Notification{
+		notifyCreate(tx, model.Notification{
 			UserID:     uid,
 			Type:       3,
 			Title:      appName,
@@ -376,7 +376,7 @@ func loadOwnedPendingTask(tx *gorm.DB, instanceID, taskID, curUserID uint) (*mod
 //  2. 校验实例存在、状态=进行中
 //  3. 事务内更新任务状态并按操作类型流转
 func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.ApprovalInstanceTaskApproveReq) error {
-	return database.DB.Transaction(func(tx *gorm.DB) error {
+	return withNotify(func(tx *gorm.DB) error {
 		// 1. 校验任务（存在/归属/待处理/当前用户持有）
 		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
 		if err != nil {

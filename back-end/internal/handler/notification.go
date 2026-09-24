@@ -6,7 +6,6 @@ import (
 	"back-end/internal/service"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 	"time"
 
@@ -108,6 +107,3 @@ func NotificationStream(c *gin.Context) {
 		}
 	}
 }
-
-var _ = io.EOF
-

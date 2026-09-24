@@ -639,10 +639,8 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 }
 
 // appSystemCols 动态业务数据系统字段：由后端自动管理，不接受前端写入（Create/Update 共用）
-var appSystemCols = map[string]bool{
-	"id": true, "created_at": true, "updated_at": true,
-	"deleted_at": true, "created_by": true, "updated_by": true,
-}
+// 字段集合由 systemCols 派生（审计字段 + 主键），定义见 helper.go
+var appSystemCols = systemCols("id")
 
 // ApplicationDataCreate 动态业务数据新增（支持主表 + 子表）：
 //  1. 根据应用配置获取主表名，拼接前缀得到真实物理表

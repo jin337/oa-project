@@ -784,68 +784,6 @@ func fillApprovalUserInfo(records []model.ApprovalRecord) {
 	}
 }
 
-// rowUint 从动态数据行中提取 uint 字段（tinyint/int/float 等类型兼容）
-func rowUint(row map[string]interface{}, key string) uint {
-	switch v := row[key].(type) {
-	case int8:
-		return uint(v)
-	case int16:
-		return uint(v)
-	case int32:
-		return uint(v)
-	case int64:
-		return uint(v)
-	case int:
-		return uint(v)
-	case uint8:
-		return uint(v)
-	case uint16:
-		return uint(v)
-	case uint32:
-		return uint(v)
-	case uint64:
-		return uint(v)
-	case uint:
-		return v
-	case float64:
-		return uint(v)
-	case nil:
-		return 0
-	default:
-		return 0
-	}
-}
-
-// rowTime 从动态数据行中提取时间字段
-func rowTime(row map[string]interface{}, key string) *time.Time {
-	switch v := row[key].(type) {
-	case time.Time:
-		t := v
-		return &t
-	case *time.Time:
-		return v
-	default:
-		return nil
-	}
-}
-
-// rowBizData 从动态数据行中剥离系统列与审核状态，仅保留业务字段作为列表摘要
-func rowBizData(row map[string]interface{}) map[string]interface{} {
-	biz := make(map[string]interface{}, len(row))
-	for k, v := range row {
-		switch k {
-		case "id", "created_at", "updated_at", "created_by", "updated_by", "deleted_at", "parent_id":
-			continue
-		}
-		biz[k] = v
-	}
-	if len(biz) == 0 {
-		return nil
-	}
-	return biz
-}
-
-
 // getUserIDsByDataScope 根据当前用户数据范围获取可见的用户 ID 列表
 // 部门主管能看本部门所有人，普通用户只能看自己
 func getUserIDsByDataScope(curUserID uint) []uint {

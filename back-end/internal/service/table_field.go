@@ -43,13 +43,9 @@ func columnTypeSQL(typ string, length int) string {
 	}
 }
 
-// appFieldSystemCols 物理业务表系统列：禁止通过字段管理接口增删改
-// （id/审计字段/软删除/审核状态/子表关联列）
-var appFieldSystemCols = map[string]bool{
-	"id": true, "created_at": true, "updated_at": true,
-	"deleted_at": true, "created_by": true, "updated_by": true,
-	"parent_id": true,
-}
+// appFieldSystemCols 物理业务表系统列：禁止通过字段管理接口增删改，也不作为业务字段对外展示
+// 字段集合由 systemCols 派生（审计字段 + 主键 + 子表关联列），定义见 helper.go
+var appFieldSystemCols = systemCols("id", "parent_id")
 
 // isValidFieldName 字段名校验（复用表名规则：字母/数字/下划线，首字符字母或下划线，限长 64）
 func isValidFieldName(name string) bool {
