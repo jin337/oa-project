@@ -14,6 +14,7 @@ import (
 	"back-end/internal/database"
 	"back-end/internal/middleware"
 	"back-end/internal/model"
+	"back-end/internal/pkg/idgen"
 )
 
 // bizTablePrefix 读取配置表前缀并规范化（确保以 _ 结尾，与系统表 oa_ 风格一致）
@@ -1113,7 +1114,7 @@ func createBizTables(tableName, subTableName, pageName string) error {
 
 // ApplicationCreate 新增页面配置：
 //  1. 根据 TableName/SubTableName（逗号分隔）动态创建业务数据表
-//  2. 自动生成 code（app- + Unix 时间戳），忽略前端传入值
+//  2. 自动生成 code（app_<40bit 时间戳>_<40bit 随机>，见 internal/pkg/idgen），忽略前端传入值
 //  3. 持久化配置（含布局 JSON）
 func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.Application, error) {
 	if err := createBizTables(req.TableName, req.SubTableName, req.Name); err != nil {
@@ -1125,7 +1126,7 @@ func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.
 	}
 	app := model.Application{
 		Name:             req.Name,
-		Code:             fmt.Sprintf("app_%d", time.Now().Unix()), // 自动生成，忽略前端传入
+		Code:             idgen.New("app"), // 自动生成，忽略前端传入
 		TableName:        req.TableName,
 		SubTableName:     req.SubTableName,
 		Status:           status,
