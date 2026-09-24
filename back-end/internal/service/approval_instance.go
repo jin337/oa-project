@@ -664,7 +664,7 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 		BusinessData:     bizData,
 		DetailLayoutJSON: detailLayoutJSON,
 		FormLayoutJSON:   formLayoutJSON,
-		Tasks:            tasks,
+		Tasks:            toTaskResults(tasks),
 		AssigneeNameMap:  assigneeNameMap,
 		FieldPerms:       fieldPerms,
 	}
@@ -685,6 +685,29 @@ func stripAuditFields(row map[string]interface{}) {
 	for _, f := range auditFields {
 		delete(row, f)
 	}
+}
+
+// toTaskResults 将 ApprovalInstanceTask 列表转为响应 DTO 列表，剥离审计字段（created_at/updated_at/created_by/updated_by/deleted_at）
+func toTaskResults(tasks []model.ApprovalInstanceTask) []model.ApprovalInstanceTaskResult {
+	results := make([]model.ApprovalInstanceTaskResult, len(tasks))
+	for i, t := range tasks {
+		results[i] = model.ApprovalInstanceTaskResult{
+			ID:            t.ID,
+			InstanceID:    t.InstanceID,
+			NodeID:        t.NodeID,
+			NodeName:      t.NodeName,
+			Sort:          t.Sort,
+			AssigneeID:    t.AssigneeID,
+			Status:        t.Status,
+			Comment:       t.Comment,
+			OperatedAt:    t.OperatedAt,
+			DelegatedFrom: t.DelegatedFrom,
+			AddSignFrom:   t.AddSignFrom,
+			AddSignType:   t.AddSignType,
+			Instance:      t.Instance,
+		}
+	}
+	return results
 }
 
 // loadBusinessData 读取实例关联的业务数据（主表 + 子表，与 ApplicationDataDetail 逻辑一致）

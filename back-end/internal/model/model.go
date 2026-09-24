@@ -646,17 +646,34 @@ type ApprovalCCRecord struct {
 	NotifiedAt *time.Time `gorm:"comment:抄送时间" json:"notified_at"`
 }
 
+// ApprovalInstanceTaskResult 审批任务响应 DTO：剥离 BaseModel 中的审计字段（created_at/updated_at/created_by/updated_by/deleted_at），前端无需感知
+type ApprovalInstanceTaskResult struct {
+	ID            uint              `json:"id"`
+	InstanceID    uint              `json:"instance_id"`
+	NodeID        string            `json:"node_id"`
+	NodeName      string            `json:"node_name"`
+	Sort          int               `json:"sort"`
+	AssigneeID    uint              `json:"assignee_id"`
+	Status        int               `json:"status"`
+	Comment       string            `json:"comment"`
+	OperatedAt    *time.Time        `json:"operated_at"`
+	DelegatedFrom uint              `json:"delegated_from"`
+	AddSignFrom   uint              `json:"add_sign_from"`
+	AddSignType   int               `json:"add_sign_type"`
+	Instance      *ApprovalInstance `json:"instance,omitempty"`
+}
+
 // ApprovalInstanceDetailResult 实例详情响应（含任务列表+审批记录）
 type ApprovalInstanceDetailResult struct {
 	ApprovalInstance
-	AppName          string                 `json:"app_name"`
-	CreatedByName    string                 `json:"created_by_name"`              // 发起人姓名
-	BusinessData     map[string]interface{} `json:"business_data,omitempty"`      // 业务数据（含子表）
-	DetailLayoutJSON any                    `json:"detail_layout_json,omitempty"` // 详情页布局快照（只读展示）
-	FormLayoutJSON   any                    `json:"form_layout_json,omitempty"`   // 表单页布局（草稿/退回编辑用，可交互）
-	Tasks            []ApprovalInstanceTask `json:"approval_flow_tasks,omitempty"`
-	AssigneeNameMap  map[string]string      `json:"assignee_name_map,omitempty"` // 用户ID -> 姓名
-	FieldPerms       []interface{}          `json:"field_perms,omitempty"`       // 当前执行节点的表单字段权限 [{field, perm}]
+	AppName          string                       `json:"app_name"`
+	CreatedByName    string                       `json:"created_by_name"`              // 发起人姓名
+	BusinessData     map[string]interface{}       `json:"business_data,omitempty"`      // 业务数据（含子表）
+	DetailLayoutJSON any                          `json:"detail_layout_json,omitempty"` // 详情页布局快照（只读展示）
+	FormLayoutJSON   any                          `json:"form_layout_json,omitempty"`   // 表单页布局（草稿/退回编辑用，可交互）
+	Tasks            []ApprovalInstanceTaskResult `json:"approval_flow_tasks,omitempty"`
+	AssigneeNameMap  map[string]string            `json:"assignee_name_map,omitempty"` // 用户ID -> 姓名
+	FieldPerms       []interface{}                `json:"field_perms,omitempty"`       // 当前执行节点的表单字段权限 [{field, perm}]
 }
 
 // ApprovalRecord 审批列表聚合记录（跨应用汇总动态业务数据，供我的发起/待办/已办/抄送/草稿箱使用）
