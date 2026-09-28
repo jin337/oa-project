@@ -88,11 +88,13 @@ export function ApproverEditDrawer({
   }
 
   // 展示步骤二「审批方式」的条件：
-  // 3-发起人自选 + 2-多选；或 1-指定人员 / 2-指定角色 实际选择数量 > 1（事实多选）
-  // 4-审核人员组为单选（弹窗单选），始终不展示审批方式
+  // 2-指定角色 / 4-审核人员组 天然为多人审批（角色、组背后是一批人），无论选择数量多少始终展示；
+  // 1-指定人员 实际选择数量 > 1 时展示（事实多选）；3-发起人自选 选择多选时展示
   const showStrategy =
-    (approverType !== 3 && approverType !== 4 && members.length > 1) ||
-    (approverType === 3 && selfSelect === 2)
+    approverType === 2 || // 指定角色：角色天然多人，始终展示审批方式
+    approverType === 4 || // 审核人员组：组内天然多人，始终展示审批方式
+    (approverType === 1 && members.length > 1) || // 指定人员：实际选择多人时展示
+    (approverType === 3 && selfSelect === 2) // 发起人自选：多选时展示
   return (
     <Drawer
       width={560}
@@ -182,7 +184,7 @@ export function ApproverEditDrawer({
             )}
           </div>
         </div>
-        {/* 步骤二：审批方式（仅发起人自选 + 多选 / 事实多选时展示） */}
+        {/* 步骤二：审批方式（指定角色 / 审核人员组始终展示；指定人员多选、发起人自选多选时展示） */}
         {showStrategy && (
           <div>
             <div className="mb-2 font-medium">审批方式</div>
