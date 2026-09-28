@@ -64,7 +64,7 @@ export default function ExamineGroupManage() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
 
-  // 审核人下拉选项：全量用户（name 优先展示姓名，回退用户名）
+  // 审核人下拉选项：全量用户（展示优先 nickname，回退 username；searchText 同时保留 nickname+username 供搜索匹配）
   const [userOptions, setUserOptions] = useState([])
 
   const fetchList = useCallback(
@@ -96,10 +96,14 @@ export default function ExamineGroupManage() {
       const res = await fetchAll(userApi.listUsers)
       const users = res?.data?.list || res?.data || []
       setUserOptions(
-        users.map((u) => ({
-          label: u.profile?.nickname ? `${u.profile.nickname}（${u.username}）` : u.username,
-          value: u.id,
-        })),
+        users.map((u) => {
+          const nickname = u.profile?.nickname
+          return {
+            label: nickname || u.username, // 展示：优先 nickname，无 nickname 时回退 username
+            value: u.id,
+            searchText: `${nickname || ''} ${u.username || ''}`.toLowerCase(), // 搜索：nickname + username 均可命中
+          }
+        }),
       )
     } catch (e) {
       // 错误已在请求层提示
@@ -198,8 +202,8 @@ export default function ExamineGroupManage() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { key: 'name', title: '组名称', dataIndex: 'name' },
-    { key: 'code', title: '编号', dataIndex: 'code' },
+    { key: 'name', title: '组名称', dataIndex: 'name', width: 200 },
+    { key: 'code', title: '编号', dataIndex: 'code', width: 150 },
     {
       key: 'approvers',
       title: '审核人',
@@ -376,19 +380,22 @@ export default function ExamineGroupManage() {
             label="审核人"
             field="approver_ids"
             triggerPropName="value"
-            rules={[{ required: true, type: 'array', minLength: 1, message: '请至少选择一名审核人' }]}
+            rules={[
+              { required: true, type: 'array', minLength: 1, message: '请至少选择一名审核人' },
+            ]}
           >
             <Select
               allowClear
-              mode='multiple'
+              mode="multiple"
               placeholder="请选择审核人（可多选）"
               maxTagCount={5}
               options={userOptions}
-              filterOption={(input, option) =>
-                String(option.props?.children ?? option.props?.label ?? '')
-                  .toLowerCase()
-                  .includes(input.toLowerCase())
-              }
+              filterOption={(input, option) => {
+                const q = input.toLowerCase()
+                const label = String(option.props?.children ?? option.props?.label ?? '')
+                const searchText = String(option.props?.searchText ?? '')
+                return label.toLowerCase().includes(q) || searchText.includes(q)
+              }}
             />
           </FormItem>
           <Row gutter={20}>

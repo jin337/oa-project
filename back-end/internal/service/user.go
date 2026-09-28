@@ -27,7 +27,9 @@ func UserList(curUserID uint, req *model.UserListReq) ([]model.User, int64, erro
 		return nil, 0, err
 	}
 	var list []model.User
-	err := db.Preload("Roles").Preload("Dept").Preload("DeptIDs").
+	// Preload Profile：账号详情表（oa_user_profiles）的 nickname 等员工档案信息随列表返回，
+	// 供前端选择器（如审核人员组-审核人下拉）展示昵称，避免列表接口缺 profile 导致回退 username
+	err := db.Preload("Roles").Preload("Dept").Preload("DeptIDs").Preload("Profile").
 		Order("id ASC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
 	return list, total, err
 }
