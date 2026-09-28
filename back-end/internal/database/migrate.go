@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -71,6 +72,14 @@ var migrations = []migration{
 		Up: func(db *gorm.DB) error {
 			return db.AutoMigrate(&model.ExamineGroup{})
 		},
+	},
+	{
+		Version: 4,
+		Name:    "add_api_definition",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.ApiDefinition{})
+		},
+		Seed: seedApiDefinitionMenu,
 	},
 }
 
@@ -267,4 +276,36 @@ func menuPtrs(db *gorm.DB, ids []uint) []*model.Menu {
 	var menus []*model.Menu
 	db.Where("id IN ?", ids).Find(&menus)
 	return menus
+}
+
+// seedApiDefinitionMenu 接口管理菜单：页面菜单(/interface) + 按钮权限(system:interface:edit) + 绑定超级管理员（幂等）
+func seedApiDefinitionMenu(db *gorm.DB) error {
+	// 页面菜单：path=/interface（已存在则复用其 ID）
+	var menu model.Menu
+	err := db.Where("path = ?", "/interface").First(&menu).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		menu = model.Menu{Name: "接口管理", Type: model.MenuTypeMenu, Path: "/interface", Perm: "interface", Sort: 4, Status: 1, Hidden: 0}
+		if err := db.Create(&menu).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	// 按钮权限：不存在才创建并绑定超级管理员
+	var btnCount int64
+	if err := db.Model(&model.Menu{}).Where("perm = ?", "system:interface:edit").Count(&btnCount).Error; err != nil {
+		return err
+	}
+	if btnCount > 0 {
+		return nil
+	}
+	btn := model.Menu{ParentID: menu.ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:interface:edit", Sort: 1, Status: 1, Hidden: 0}
+	if err := db.Create(&btn).Error; err != nil {
+		return err
+	}
+	var adminRole model.Role
+	if err := db.Where("code = ?", model.RoleCodeAdmin).First(&adminRole).Error; err != nil {
+		return err
+	}
+	return db.Model(&adminRole).Association("Menus").Append(&btn)
 }

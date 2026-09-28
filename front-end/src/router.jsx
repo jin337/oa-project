@@ -20,6 +20,8 @@ const RoleManage = lazy(() => import('src/pages/system/RoleManage.jsx'))
 const MenuManage = lazy(() => import('src/pages/system/MenuManage.jsx'))
 const DeptManage = lazy(() => import('src/pages/system/DeptManage.jsx'))
 const ExamineGroupManage = lazy(() => import('src/pages/system/ExamineGroupManage.jsx'))
+// 接口管理
+const InterfaceManage = lazy(() => import('src/pages/interface/InterfaceManage.jsx'))
 
 // 个人中心
 const Profile = lazy(() => import('src/pages/profile/Profile.jsx'))
@@ -72,6 +74,8 @@ const PAGE_MAP = [
   { pattern: '/system/menu', component: MenuManage },
   { pattern: '/system/dept', component: DeptManage },
   { pattern: '/system/examine', component: ExamineGroupManage },
+  // 接口管理
+  { pattern: '/interface', component: InterfaceManage },
   // 个人中心
   { pattern: '/profile', component: Profile },
   // 应用配置
