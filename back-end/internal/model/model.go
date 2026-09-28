@@ -54,6 +54,25 @@ type Role struct {
 	Depts []*Dept `gorm:"many2many:sys_role_dept;" json:"depts,omitempty"` // 自定义数据范围绑定的部门
 }
 
+// ExamineGroupApprover 审核人信息（由 ApproverIDs 翻译而来，不落库）
+type ExamineGroupApprover struct {
+	ID       uint   `json:"id"`
+	Name     string `json:"name"`
+	Username string `json:"username"`
+}
+
+// ExamineGroup 审核人员组：配置审批流程时可按组选择审核人，审核人为用户ID列表
+type ExamineGroup struct {
+	BaseModel
+	Name        string `gorm:"size:64;uniqueIndex;not null;comment:审核人员组名称" json:"name"`
+	Code        string `gorm:"size:64;uniqueIndex;not null;comment:编号" json:"code"`
+	ApproverIDs []uint `gorm:"serializer:json;type:json;comment:审核人用户ID列表" json:"approver_ids"`
+	Sort        int    `gorm:"default:0;comment:排序" json:"sort"`
+	Status      int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
+
+	Approvers []ExamineGroupApprover `gorm:"-" json:"approvers,omitempty"` // 审核人信息（服务层翻译填充）
+}
+
 // 角色编码常量
 const (
 	RoleCodeAdmin = "admin" // 超级管理员角色编码
@@ -226,6 +245,27 @@ type AssignMenusReq struct {
 
 type AssignDeptsReq struct {
 	DeptIDs []uint `json:"dept_ids" validate:"omitempty" label:"部门ID列表"`
+}
+
+type ExamineGroupCreateReq struct {
+	Name        string `json:"name" validate:"required,min=1,max=64" label:"审核人员组名称"`
+	Code        string `json:"code" validate:"required,min=1,max=64" label:"编号"`
+	ApproverIDs []uint `json:"approver_ids" validate:"omitempty,dive,gt=0" label:"审核人"`
+	Sort        int    `json:"sort" validate:"omitempty" label:"排序"`
+	Status      int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+}
+
+type ExamineGroupUpdateReq struct {
+	Name        string `json:"name" validate:"omitempty,min=1,max=64" label:"审核人员组名称"`
+	Code        string `json:"code" validate:"omitempty,min=1,max=64" label:"编号"`
+	ApproverIDs []uint `json:"approver_ids" validate:"omitempty,dive,gt=0" label:"审核人"`
+	Sort        int    `json:"sort" validate:"omitempty" label:"排序"`
+	Status      int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+}
+
+type ExamineGroupListReq struct {
+	BaseListReq
+	Name string `json:"name" form:"name" validate:"omitempty" label:"审核人员组名称"`
 }
 
 type MenuCreateReq struct {

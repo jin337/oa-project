@@ -65,6 +65,13 @@ var migrations = []migration{
 			)
 		},
 	},
+	{
+		Version: 3,
+		Name:    "add_examine_group",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.ExamineGroup{})
+		},
+	},
 }
 
 // migrateLogger 迁移日志（可开关、可自定义路径）
@@ -185,16 +192,17 @@ func seedInitData(db *gorm.DB) error {
 	collectMenuIDs(userProfile, approvalDir, applicationPage, systemDir)
 
 	// 页面菜单：系统管理 / 应用配置 / 审批管理 三组合并为一个切片一次创建
-	// 索引顺序：0-3 系统管理、4-8 应用配置、9-14 审批管理（按钮引用依赖此顺序）
+	// 索引顺序：0-4 系统管理、5-9 应用配置、10-15 审批管理（按钮引用依赖此顺序）
 	pageMenus := []model.Menu{
 		// 系统管理
 		{ParentID: systemDir.ID, Name: "用户管理", Type: model.MenuTypeMenu, Path: "/system/user", Perm: "system:user", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: systemDir.ID, Name: "角色管理", Type: model.MenuTypeMenu, Path: "/system/role", Perm: "system:role", Sort: 2, Status: 1, Hidden: 0},
 		{ParentID: systemDir.ID, Name: "菜单管理", Type: model.MenuTypeMenu, Path: "/system/menu", Perm: "system:menu", Sort: 3, Status: 1, Hidden: 0},
 		{ParentID: systemDir.ID, Name: "部门管理", Type: model.MenuTypeMenu, Path: "/system/dept", Perm: "system:dept", Sort: 4, Status: 1, Hidden: 0},
+		{ParentID: systemDir.ID, Name: "审核人员组", Type: model.MenuTypeMenu, Path: "/system/examine", Perm: "system:examine", Sort: 5, Status: 1, Hidden: 0},
 		// 应用配置
 		{ParentID: applicationPage.ID, Name: "表管理", Type: model.MenuTypeMenu, Path: "/application/:id/tables", Perm: "application:tables", Sort: 1, Status: 1, Hidden: 1},
-		{ParentID: applicationPage.ID, Name: "表单元素管理", Type: model.MenuTypeMenu, Path: "/application/:id/form-elements", Perm: "application:form-elements", Sort: 2, Status: 1, Hidden: 1},
+		{ParentID: applicationPage.ID, Name: "表单元素管理", Type: model.MenuTypeMenu, Path: "/application/:id/elements", Perm: "application:elements", Sort: 2, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "布局管理", Type: model.MenuTypeMenu, Path: "/application/:id/layout", Perm: "application:layout", Sort: 3, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "审批管理", Type: model.MenuTypeMenu, Path: "/application/:id/examine", Perm: "application:examine", Sort: 4, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "列表页", Type: model.MenuTypeMenu, Path: "/application/list", Perm: "application:list", Sort: 5, Status: 1, Hidden: 1},
@@ -213,7 +221,7 @@ func seedInitData(db *gorm.DB) error {
 
 	// 按钮/权限标识：挂在所属页面菜单下（type=3 不参与路由，仅用于按钮级权限判断）
 	buttons := []model.Menu{
-		// 系统管理（pageMenus: 0 用户管理 / 1 角色管理 / 2 菜单管理 / 3 部门管理）
+		// 系统管理（pageMenus: 0 用户管理 / 1 角色管理 / 2 菜单管理 / 3 部门管理 / 4 审核人员组）
 		{ParentID: pageMenus[0].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:user:edit", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[0].ID, Name: "详情", Type: model.MenuTypeButton, Perm: "system:user:detail", Sort: 2, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[0].ID, Name: "重置密码", Type: model.MenuTypeButton, Perm: "system:user:resetPwd", Sort: 3, Status: 1, Hidden: 0},
@@ -221,10 +229,11 @@ func seedInitData(db *gorm.DB) error {
 		{ParentID: pageMenus[1].ID, Name: "分配菜单", Type: model.MenuTypeButton, Perm: "system:role:assignMenu", Sort: 2, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[2].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:menu:edit", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[3].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:dept:edit", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[4].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:examine:edit", Sort: 1, Status: 1, Hidden: 0},
 		// 应用配置页：管理按钮
 		{ParentID: applicationPage.ID, Name: "管理", Type: model.MenuTypeButton, Perm: "application:edit", Sort: 1, Status: 1, Hidden: 0},
-		// 审批-申请页：管理按钮（pageMenus[9] 申请）
-		{ParentID: pageMenus[9].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "approval:edit", Sort: 1, Status: 1, Hidden: 0},
+		// 审批-申请页：管理按钮（pageMenus[10] 申请）
+		{ParentID: pageMenus[10].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "approval:edit", Sort: 1, Status: 1, Hidden: 0},
 	}
 	if err := db.Create(&buttons).Error; err != nil {
 		return err

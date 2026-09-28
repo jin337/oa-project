@@ -61,6 +61,17 @@ func Setup() *gin.Engine {
 		roles.PUT("/:id/depts", handler.RoleAssignDepts)
 	}
 
+	// 审核人员组管理
+	examineGroups := v1.Group("/examine-groups")
+	examineGroups.Use(middleware.JWTAuth())
+	{
+		examineGroups.GET("", handler.ExamineGroupList)
+		examineGroups.POST("", handler.ExamineGroupCreate)
+		examineGroups.GET("/:id", handler.ExamineGroupDetail)
+		examineGroups.PUT("/:id", handler.ExamineGroupUpdate)
+		examineGroups.DELETE("/:id", handler.ExamineGroupDelete)
+	}
+
 	// 导航/菜单管理
 	menus := v1.Group("/menus")
 	menus.Use(middleware.JWTAuth())
