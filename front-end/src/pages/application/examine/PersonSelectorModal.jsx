@@ -6,15 +6,14 @@ import { useSelectorData } from 'src/pages/application/examine/selector-context'
 
 /**
  * 通用对象选择器弹层（左右布局 Modal），参照钉钉审批的成员选择语义：
- * - modes: 数据源维度数组（数字枚举：1-组织架构 / 2-角色），如 [1, 2]；单项时自动隐藏 Tab 切换栏
- * - checkTarget: org 树可勾选类型（数字枚举：1-仅人员 / 2-仅部门），默认 1-人员
+ * - modes: 数据源维度数组（数字枚举：1-组织架构 / 2-角色 / 4-审核人员组），如 [1, 2]；单项时自动隐藏 Tab 切换栏
  * - selectMode: 选择模式（数字枚举：1-单选 / 2-多选），默认 2-多选；单选时 selected 最多保留一项
- * - 组织架构维度：checkTarget=1（仅人员）时保留部门+人员父子层级，勾选部门联动选中其下所有人员，
- *   已选面板仅展示具体人员（「部门：姓名」）；checkTarget=2（仅部门）时人员节点禁用，仅勾选部门，
- *   已选面板仅展示部门名称
+ * - 组织架构维度（仅人员）：保留部门+人员父子层级，勾选部门联动选中其下所有人员，
+ *   已选面板仅展示具体人员（「部门：姓名」）
  * - 角色维度：勾选「角色」节点本身（type=3），选角色 = 其下所有成员作为审批/抄送对象，
  *   角色下属用户节点不可勾选（人员由角色带出，不在选择器内展开）
- * 确认后通过 onChange 统一回传 { key, type, label } 结构的条目数组，type 为数字枚举（1-人员 / 2-部门 / 3-角色）
+ * - 审核人员组维度：勾选「审核人员组」本身（type=4），数据来自 Context 的 groupList（{ key, type, label } 条目数组）
+ * 确认后通过 onChange 统一回传 { key, type, label } 结构的条目数组，type 为数字枚举（1-人员 / 2-部门 / 3-角色 / 4-审核人员组）
  */
 export function PersonSelectorModal({
   title = '选择人员',
@@ -22,13 +21,13 @@ export function PersonSelectorModal({
   onChange,
   onCancel,
   modes = [1, 2], // 默认全部数据源维度：1-组织架构 / 2-角色
-  checkTarget = 1, // 默认 1-人员
   selectMode = 2, // 选择模式：1-单选 / 2-多选（默认多选）
   extra = null, // 额外内容插槽（渲染在弹层内容顶部，如加签类型选择）
 }) {
   const {
     orgTree = [],
     roleList = [],
+    groupList = [],
     orgItemMap = {},
     roleItemMap = {},
     userDeptMap = {},
@@ -47,20 +46,15 @@ export function PersonSelectorModal({
   const orgCheckedKeys = selected.filter((s) => orgItemMap[s.key]).map((s) => s.key)
 
 
-  // Arco Tree 的 disableCheckbox 仅支持节点数据字段（不支持函数 prop），
-  // 故按 checkTarget 派生带禁用标记的树数据：
-  // - 组织树：1-仅人员 → 保留部门+人员父子层级，部门节点可勾选（父子联动，勾选部门=批量选中其下所有人员）；
-  //   2-仅部门 → 人员节点（!isDept）禁用，仅部门可勾选
+  // 组织架构树数据：保留部门+人员父子层级，全节点可勾选（父子联动，勾选部门=批量选中其下所有人员）
   const orgTreeData = useMemo(() => {
     const apply = (nodes) =>
       nodes.map((n) => ({
         ...n,
-        // 2-仅部门 → 人员禁用；1-仅人员 → 全不禁用（保留完整树结构，部门可勾选联动选人）
-        disableCheckbox: checkTarget === 2 ? !n.isDept : false,
         children: n.children ? apply(n.children) : undefined,
       }))
     return apply(orgTree)
-  }, [orgTree, checkTarget])
+  }, [orgTree])
 
 
   // 已选去重：同一 key（同一用户/部门/角色，如 user_5）可能同时被组织树与角色树选中，
@@ -78,14 +72,13 @@ export function PersonSelectorModal({
     return Array.from(map.values())
   }
 
-  // 组织树勾选：1-仅人员 时 Tree 父子联动（checkStrictly=false），勾选部门会同时勾选其下所有人员，
-  // 此处仅保留人员节点（部门节点过滤掉，右侧已选只展示具体人员）；
-  // 2-仅部门 时仅保留部门节点
+  // 组织树勾选：Tree 父子联动（checkStrictly=false），勾选部门会同时勾选其下所有人员，
+  // 此处仅保留人员节点（部门节点过滤掉，右侧已选只展示具体人员）
   const handleTreeCheck = (keys) => {
     const checked = Array.isArray(keys) ? keys : keys?.checked || []
     let orgItems = checked.map((k) => orgItemMap[k]).filter(Boolean)
-    // 按 checkTarget 过滤：1-仅人员 → 只保留人员；2-仅部门 → 只保留部门
-    orgItems = orgItems.filter((s) => s.type === checkTarget)
+    // 仅保留人员节点（组织架构维度对象始终是具体人员）
+    orgItems = orgItems.filter((s) => s.type === 1)
     // 单选模式（selectMode===1）：只保留最后勾选的一项，自动清除之前已选项
     if (selectMode === 1 && orgItems.length > 1) orgItems = orgItems.slice(-1)
     const roleItems = selected.filter((s) => roleItemMap[s.key])
@@ -95,9 +88,8 @@ export function PersonSelectorModal({
   }
 
   // 角色维度勾选切换（钉钉模式：勾选「角色」本身，type=3；取消勾选则移除该角色）。
-  // 保留组织架构维度的已选项（人员/部门），仅增删角色条目；checkTarget=2（仅部门）时角色维度无意义
+  // 保留组织架构维度的已选项（人员），仅增删角色条目
   const handleRoleToggle = (role, checked) => {
-    if (checkTarget === 2) return
     if (selectMode === 1) {
       // 单选模式：勾选新角色即替换旧选项（selected 最多一个元素）；取消勾选则清空
       if (!checked) {
@@ -111,6 +103,26 @@ export function PersonSelectorModal({
     const roleItems = selected.filter((s) => roleItemMap[s.key] && s.key !== role.key)
     if (checked) roleItems.push(roleItemMap[role.key])
     setSelected(dedupe([...others, ...roleItems]))
+  }
+
+  // 审核人员组维度勾选切换（勾选「审核人员组」本身，type=4；取消勾选则移除该组）。
+  // 保留其他维度的已选项，仅增删审核组条目；单选/多选语义与角色维度一致
+  const handleGroupToggle = (group, checked) => {
+    if (selectMode === 1) {
+      // 单选模式：勾选新组即替换旧选项（selected 最多一个元素）；取消勾选则清空
+      if (!checked) {
+        setSelected(selected.filter((s) => s.key !== group.key))
+        return
+      }
+      setSelected([group])
+      return
+    }
+    const others = selected.filter((s) => !groupList.some((g) => g.key === s.key)) // 保留非审核组条目
+    const groupItems = selected.filter(
+      (s) => groupList.some((g) => g.key === s.key) && s.key !== group.key,
+    )
+    if (checked) groupItems.push(group)
+    setSelected(dedupe([...others, ...groupItems]))
   }
 
   // 删除已选项：checkStrictly 下父子独立，直接移除该项即可
@@ -168,13 +180,40 @@ export function PersonSelectorModal({
                 <Tree
                   key="org-tree"
                   checkable
-                  checkStrictly={checkTarget === 2}
                   checkedKeys={orgCheckedKeys}
                   onCheck={handleTreeCheck}
                   treeData={orgTreeData}
                 />
               ) : (
                 <div className="py-8 text-center text-xs text-gray-400">暂无组织架构数据</div>
+              )
+            ) : tab === 4 ? ( // 4-审核人员组：直接渲染审核组列表（勾选「组」本身，与角色维度一致）
+              groupList.length ? (
+                <div className="space-y-1">
+                  {groupList.map((g) =>
+                    selectMode === 1 ? (
+                      <div key={g.key} className="flex items-center gap-2">
+                        <Radio
+                          checked={selected.some((s) => s.key === g.key)}
+                          onChange={(checked) => handleGroupToggle(g, checked)}
+                        >
+                          {g.label}
+                        </Radio>
+                      </div>
+                    ) : (
+                      <div key={g.key} className="flex items-center gap-2">
+                        <Checkbox
+                          checked={selected.some((s) => s.key === g.key)}
+                          onChange={(checked) => handleGroupToggle(g, checked)}
+                        >
+                          {g.label}
+                        </Checkbox>
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : (
+                <div className="py-8 text-center text-xs text-gray-400">暂无审核人员组数据</div>
               )
             ) : roleList.length ? (
               // 2-角色：直接渲染角色列表（钉钉模式：勾选「角色」本身，无需角色下属用户树）。
@@ -185,7 +224,6 @@ export function PersonSelectorModal({
                   selectMode === 1 ? (
                     <div key={r.key} className="flex items-center gap-2">
                       <Radio
-                        disabled={checkTarget === 2}
                         checked={selected.some((s) => s.key === r.key)}
                         onChange={(checked) => handleRoleToggle(r, checked)}
                       >
@@ -195,7 +233,6 @@ export function PersonSelectorModal({
                   ) : (
                     <div key={r.key} className="flex items-center gap-2">
                       <Checkbox
-                        disabled={checkTarget === 2}
                         checked={selected.some((s) => s.key === r.key)}
                         onChange={(checked) => handleRoleToggle(r, checked)}
                       >
@@ -235,26 +272,18 @@ export function PersonSelectorModal({
 }
 
 /**
- * 人员/部门/角色选择器公共组件：展示已选条目 + 「选择」按钮，唤起 PersonSelectorModal
- * - modes: 数据源维度数组（数字枚举：1-组织架构 / 2-角色），如 [1, 2]（默认）、[2]、[1]
- * - checkTarget: org 树勾选目标（数字枚举：1-仅人员 / 2-仅部门），默认 1-人员
+ * 人员/部门/角色/审核人员组选择器公共组件：展示已选条目 + 「选择」按钮，唤起 PersonSelectorModal
+ * - modes: 数据源维度数组（数字枚举：1-组织架构 / 2-角色 / 4-审核人员组），如 [1, 2]（默认）、[4]
  */
 export function PersonPicker({
   value = [],
   onChange,
   placeholder,
   modes = [1, 2], // 默认全部数据源维度：1-组织架构 / 2-角色
-  checkTarget = 1, // 默认 1-人员
   selectMode = 2, // 选择模式：1-单选 / 2-多选（默认多选）
 }) {
-  const {
-    orgTree = [],
-    roleList = [],
-    orgItemMap = {},
-    roleItemMap = {},
-    userDeptMap = {},
-    loading = false,
-  } = useSelectorData()
+  // 仅需 userDeptMap 用于已选 Tag 展示「部门：姓名」；组织树/角色/审核组数据由弹窗（PersonSelectorModal）消费
+  const { userDeptMap = {} } = useSelectorData()
   const [visible, setVisible] = useState(false)
   const remove = (index) => onChange(value.filter((_, i) => i !== index))
 
@@ -288,7 +317,6 @@ export function PersonPicker({
         <PersonSelectorModal
           title={placeholder || '选择人员'}
           modes={modes}
-          checkTarget={checkTarget}
           selectMode={selectMode}
           value={value}
           onChange={(items) => {

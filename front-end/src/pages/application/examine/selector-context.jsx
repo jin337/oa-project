@@ -1,11 +1,12 @@
 import { createContext, useContext } from 'react'
 
 /**
- * 对象选择器数据上下文：组织架构树 / 角色-用户树 / 派生映射 / 加载态，
+ * 对象选择器数据上下文：组织架构树 / 角色-用户树 / 审核人员组列表 / 派生映射 / 加载态，
  * 由主组件请求后注入，各弹层（PersonSelectorModal / PersonPicker / 各编辑抽屉）统一从 Context 读取，避免多层 props 透传。
  * @type {React.Context<{
  *   orgTree: Object[],
  *   roleList: Object[],
+ *   groupList: Object[],
  *   orgItemMap: Record<string, Object>,
  *   roleItemMap: Record<string, Object>,
  *   userDeptMap: Record<string, string>,

@@ -454,7 +454,6 @@ export default function DetailDrawer({
         <PersonSelectorModal
           title="转交审批"
           modes={[1]}
-          checkTarget={1}
           selectMode={1}
           onChange={(items) => {
             const uid = userIdFromKey(items[0]?.key)
@@ -469,7 +468,6 @@ export default function DetailDrawer({
         <PersonSelectorModal
           title="加签"
           modes={[1]}
-          checkTarget={1}
           selectMode={1}
           extra={
             <>

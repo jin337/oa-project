@@ -25,7 +25,7 @@ type flowNode struct {
 	Type         int           `json:"type"` // 1-发起人 2-审批人 3-抄送人 4-条件分支
 	Label        string        `json:"label"`
 	Members      []flowMember  `json:"members"`
-	ApproverType int           `json:"approverType"` // 1-指定人员 2-指定角色 3-发起人自选
+	ApproverType int           `json:"approverType"` // 1-指定人员 2-指定角色 3-发起人自选 4-审核人员组
 	SelfSelect   int           `json:"selfSelect"`   // 1-单选 2-多选
 	Strategy     int           `json:"strategy"`     // 1-依次审批 2-会签 3-或签
 	EmptyHandler int           `json:"emptyHandler"` // 审批人为空处理
@@ -39,8 +39,8 @@ type flowNode struct {
 
 // flowMember 审批成员
 type flowMember struct {
-	Type  int    `json:"type"` // 1-人员 2-部门 3-角色
-	Key   string `json:"key"`  // 如 user_1 / dept_2 / role_3
+	Type  int    `json:"type"` // 1-人员 2-部门 3-角色 4-审核人员组
+	Key   string `json:"key"`  // 如 user_1 / dept_2 / role_3 / group_4
 	Label string `json:"label"`
 }
 

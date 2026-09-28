@@ -5,7 +5,8 @@ import { normalizeMembers } from 'src/pages/application/examine/flowModel'
 import { PersonPicker } from 'src/pages/application/examine/PersonSelectorModal'
 
 /**
- * 抄送人节点设置抽屉：配置抄送对象（指定人员 / 指定角色 / 发起人自选）与抄送时机。
+ * 抄送人节点设置抽屉：配置抄送对象（指定人员 / 指定角色 / 发起人自选 / 审核人员组）与抄送时机。
+ * 审核人员组数据源由页面级 SelectorDataContext 提供（ExamineManage 统一加载）。
  * @param {{
  *   node: Object,
  *   onCancel: () => void,
@@ -13,7 +14,7 @@ import { PersonPicker } from 'src/pages/application/examine/PersonSelectorModal'
  * }} props
  */
 export function CcEditDrawer({ node, onCancel, onSave }) {
-  // 抄送对象：1-指定人员 / 2-指定角色 / 3-发起人自选
+  // 抄送对象：1-指定人员 / 2-指定角色 / 3-发起人自选 / 4-审核人员组
   const [approverType, setApproverType] = useState(node.approverType || 1)
   const [members, setMembers] = useState(normalizeMembers(node.members))
   // 发起人自选类型：1-单选 / 2-多选
@@ -39,7 +40,7 @@ export function CcEditDrawer({ node, onCancel, onSave }) {
       }
     >
       <div className="space-y-6">
-        {/* 抄送对象：1-指定人员 / 2-指定角色 / 3-发起人自选 */}
+        {/* 抄送对象：1-指定人员 / 2-指定角色 / 3-发起人自选 / 4-审核人员组 */}
         <div>
           <div className="mb-2 font-medium">抄送对象</div>
           <Radio.Group
@@ -55,28 +56,47 @@ export function CcEditDrawer({ node, onCancel, onSave }) {
               </Radio>
             ))}
           </Radio.Group>
-          {approverType !== 3 ? ( // 3-发起人自选：自选时不展示成员选择器，改为选择类型
-            <div className="mt-3">
+          <div className="mt-3">
+            {approverType === 1 && ( // 1-指定人员
               <PersonPicker
-                modes={approverType === 2 ? [2] : [1]} // 2-指定角色：仅角色维度（2-角色 / 1-组织架构）
-                checkTarget={1} // 1-人员
+                modes={[1]} // 1-组织架构
+                selectMode={2} // 2-多选（与审批人一致）
                 value={members}
                 onChange={setMembers}
                 placeholder="请选择"
               />
-            </div>
-          ) : (
-            <div className="mt-3">
-              <div className="mb-1 text-sm text-gray-500">选择类型</div>
-              <Radio.Group type="button" value={selfSelect} onChange={setSelfSelect}>
-                {SELF_SELECT_OPTIONS.map((o) => (
-                  <Radio key={o.value} value={o.value}>
-                    {o.label}
-                  </Radio>
-                ))}
-              </Radio.Group>
-            </div>
-          )}
+            )}
+            {approverType === 2 && ( // 2-指定角色
+              <PersonPicker
+                modes={[2]} // 2-角色
+                selectMode={1} // 1-单选（与审批人一致）
+                value={members}
+                onChange={setMembers}
+                placeholder="请选择"
+              />
+            )}
+            {approverType === 3 && ( // 3-发起人自选：自选时不展示成员选择器，改为选择类型
+              <>
+                <div className="mb-1 text-sm text-gray-500">选择类型</div>
+                <Radio.Group type="button" value={selfSelect} onChange={setSelfSelect}>
+                  {SELF_SELECT_OPTIONS.map((o) => (
+                    <Radio key={o.value} value={o.value}>
+                      {o.label}
+                    </Radio>
+                  ))}
+                </Radio.Group>
+              </>
+            )}
+            {approverType === 4 && ( // 4-审核人员组：复用 PersonPicker（单选，数据源来自页面级 Context，与审批人一致）
+              <PersonPicker
+                modes={[4]} // 4-审核人员组：仅审核人员组维度
+                selectMode={1} // 1-单选（与审批人一致）
+                value={members}
+                onChange={setMembers}
+                placeholder="选择审核人员组"
+              />
+            )}
+          </div>
         </div>
         {/* 抄送时机：1-审批通过后抄送 / 2-流程结束时统一抄送 */}
         <div>

@@ -7,14 +7,18 @@ package service
 //   - approverType=3（发起人自选）：优先读取已注入流程快照的 node.Members
 //     （injectSelfSelectIntoNodes 在提交时把自选成员写入快照），其次回退调用方
 //     显式传入的 selfSelectUserIDs，两者皆空时按 emptyHandler 处理；
-//   - approverType=1/2（指定人员/角色）：从 node.Members 解析用户 ID。
+//   - approverType=1/2/4（指定人员/角色/审核人员组）：从 node.Members 解析用户 ID。
 // ============================================================
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
 	"back-end/internal/database"
+	"back-end/internal/model"
+
+	"gorm.io/gorm"
 )
 
 // resolveApproverUserIDs 将节点的成员配置解析为实际用户 ID 列表
@@ -46,7 +50,7 @@ func resolveApproverUserIDs(node flowNode, selfSelectUserIDs []uint) ([]uint, er
 	return ids, nil
 }
 
-// resolveMembersUserIDs 从节点成员列表解析用户 ID（人员 user_x / 角色 role_x 展开为角色下所有用户）
+// resolveMembersUserIDs 从节点成员列表解析用户 ID（人员 user_x / 角色 role_x / 审核人员组 group_x 分别展开）
 func resolveMembersUserIDs(members []flowMember) ([]uint, error) {
 	var userIDs []uint
 	for _, m := range members {
@@ -69,6 +73,15 @@ func resolveMembersUserIDs(members []flowMember) ([]uint, error) {
 			rid := parseMemberID(m.Key)
 			if rid > 0 {
 				ids, err := getUserIDsByRole(rid)
+				if err != nil {
+					return nil, err
+				}
+				userIDs = append(userIDs, ids...)
+			}
+		case 4: // 审核人员组：展开为该组配置的审核人用户ID列表
+			gid := parseMemberID(m.Key)
+			if gid > 0 {
+				ids, err := getUserIDsByExamineGroup(gid)
 				if err != nil {
 					return nil, err
 				}
@@ -130,6 +143,19 @@ func getUserIDsByDept(deptID uint) ([]uint, error) {
 		Where("dept_id = ?", deptID).
 		Pluck("user_id", &userIDs).Error
 	return userIDs, err
+}
+
+// getUserIDsByExamineGroup 查询审核人员组配置的审核人用户 ID 列表（approver_ids JSON 列）。
+// GORM 自动过滤软删除组；组不存在或未配置审核人时返回空列表。
+func getUserIDsByExamineGroup(groupID uint) ([]uint, error) {
+	var eg model.ExamineGroup
+	if err := database.DB.First(&eg, groupID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return eg.ApproverIDs, nil
 }
 
 // resolveFlowAdminUserIDs 流程管理员：拥有「审批配置管理」权限（application:examine-btn）的用户

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import * as deptApi from 'src/api/dept'
+import { listExamineGroups } from 'src/api/examineGroup'
 import * as roleApi from 'src/api/role'
 import { fetchAll } from 'src/api/fetchAll'
 import { ADDABLE_NODE_TYPES, MODULE_LABEL, NODE_TYPE_META } from 'src/pages/application/constants'
@@ -85,19 +86,22 @@ export default function ExamineManage() {
     }
   }, [id])
 
-  // 对象选择器数据源：组织架构树（部门+员工）/ 角色分页列表，挂载即请求一次
+  // 对象选择器数据源：组织架构树（部门+员工）/ 角色分页列表 / 审核人员组列表，挂载即请求一次
   const [orgTree, setOrgTree] = useState([])
   const [roleList, setRoleList] = useState([])
+  const [examineGroups, setExamineGroups] = useState([])
   const [selectorLoading, setSelectorLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setSelectorLoading(true)
-    Promise.all([deptApi.getDeptUsersTree(), fetchAll(roleApi.listRoles)])
-      .then(([deptRes, roleRes]) => {
+    Promise.all([deptApi.getDeptUsersTree(), fetchAll(roleApi.listRoles), fetchAll(listExamineGroups)])
+      .then(([deptRes, roleRes, groupRes]) => {
         if (cancelled) return
         setOrgTree(transformDeptTree(deptRes.data?.list || deptRes.data || []))
         setRoleList(transformRoleList(roleRes.data?.list || roleRes.data || []))
+        const groupList = groupRes.data?.list || groupRes.data || []
+        setExamineGroups(Array.isArray(groupList) ? groupList : [])
       })
       .catch(() => {
         // 错误已在请求层提示
@@ -155,8 +159,16 @@ export default function ExamineManage() {
 
   // 注入 Context：各弹层统一读取，避免多层 props 透传
   const selectorData = useMemo(
-    () => ({ orgTree, roleList, orgItemMap, roleItemMap, userDeptMap, loading: selectorLoading }),
-    [orgTree, roleList, orgItemMap, roleItemMap, userDeptMap, selectorLoading],
+    () => ({
+      orgTree,
+      roleList,
+      groupList: examineGroups.map((g) => ({ key: `group_${g.id}`, type: 4, label: g.name })),
+      orgItemMap,
+      roleItemMap,
+      userDeptMap,
+      loading: selectorLoading,
+    }),
+    [orgTree, roleList, examineGroups, orgItemMap, roleItemMap, userDeptMap, selectorLoading],
   )
 
   // 节点点击编辑：1-发起人 跳过中间弹窗直接唤起人员选择器（确认即保存 members），其余进入节点编辑
@@ -229,7 +241,6 @@ export default function ExamineManage() {
           <PersonSelectorModal
             title="选择可发起人"
             modes={[1, 2]} // 1-组织架构 / 2-角色
-            checkTarget={1} // 1-仅人员：勾选部门联动选中其下所有人员，已选仅保留具体人员
             selectMode={2} // 可发起人员支持多人，保持多选
             value={normalizeMembers(editing.node.members)}
             onChange={(items) => saveNode({ ...editing.node, members: items })}

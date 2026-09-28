@@ -8,8 +8,8 @@ import { NODE_TYPE_META } from 'src/pages/application/constants'
 
 /**
  * @typedef {Object} ApprovalMember 审批成员条目
- * @property {1|2|3} type 成员类型（数字枚举：1-人员 / 2-部门 / 3-角色）
- * @property {string} key 唯一标识（如 user_1 / dept_2 / role_3）
+ * @property {1|2|3|4} type 成员类型（数字枚举：1-人员 / 2-部门 / 3-角色 / 4-审核人员组）
+ * @property {string} key 唯一标识（如 user_1 / dept_2 / role_3 / group_4）
  * @property {string} label 展示名称
  */
 
@@ -41,7 +41,7 @@ import { NODE_TYPE_META } from 'src/pages/application/constants'
  * @property {1|2|3|4} type 节点类型（1-发起人 / 2-审批人 / 3-抄送人 / 4-条件分支）
  * @property {string} label 节点名称
  * @property {ApprovalMember[]} [members] 成员（发起人 / 审批人 / 抄送人）
- * @property {number} [approverType] 审批对象（1-指定人员 / 2-指定角色 / 3-发起人自选）
+ * @property {number} [approverType] 审批对象（1-指定人员 / 2-指定角色 / 3-发起人自选 / 4-审核人员组）
  * @property {number} [selfSelect] 发起人自选类型（1-单选 / 2-多选）
  * @property {number} [strategy] 审批方式（1-依次审批 / 2-会签 / 3-或签）
  * @property {number} [emptyHandler] 审批人为空处理（1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员）
@@ -82,7 +82,7 @@ export const createNode = (type) => {
   if (type === 2)
     return {
       ...base,
-      approverType: 1, // 审批对象：1-指定人员 / 2-指定角色 / 3-发起人自选
+      approverType: 1, // 审批对象：1-指定人员 / 2-指定角色 / 3-发起人自选 / 4-审核人员组
       members: [],
       selfSelect: 1, // 发起人自选类型：1-单选 / 2-多选
       strategy: 1, // 审批方式：1-依次审批 / 2-会签 / 3-或签

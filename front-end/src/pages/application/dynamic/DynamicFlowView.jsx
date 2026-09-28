@@ -185,7 +185,16 @@ const buildNodeSummary = (node) => {
       return `${n}人${STRATEGY_MAP[node.strategy] || '审批'}`
     }
     const n = (node.members || []).length
-    const parts = [n ? `${n}人审批` : '请选择审批人']
+    // 4-审核人员组：按组数展示（如「2个审核组审批」）；其余按人数展示
+    const parts = [
+      n
+        ? node.approverType === 4
+          ? `${n}个审核组审批`
+          : `${n}人审批`
+        : node.approverType === 4
+          ? '请选择审核人员组'
+          : '请选择审批人',
+    ]
     // 审批人为空处理：3-转交流程管理员 / 4-指定人员（附兜底成员）
     if (node.emptyHandler === 3) parts.push('找不到主管，将自动转交给管理员')
     else if (node.emptyHandler === 4) {
@@ -202,6 +211,10 @@ const buildNodeSummary = (node) => {
       return n ? `抄送${n}人` : '请选择抄送人'
     }
     const n = (node.members || []).length
+    // 4-审核人员组：按组数展示（如「抄送2个审核组」）；其余按人数展示
+    if (node.approverType === 4) {
+      return n ? `抄送${n}个审核组` : '请选择审核人员组'
+    }
     return n ? `抄送${n}人` : '请选择抄送人'
   }
   if (node.type === 4) {
@@ -468,7 +481,6 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
             title={`选择${selectorNode.type === 2 ? '审批人' : '抄送人'}`}
             value={selectorNode.members || []}
             modes={[1, 2]} // 1-组织架构 / 2-角色
-            checkTarget={1} // 1-人员
             selectMode={selectorNode.selfSelect || 2} // 发起人自选：1-单选 / 2-多选（默认多选）
             onChange={handleMembersChange}
             onCancel={() => setSelectorNode(null)}

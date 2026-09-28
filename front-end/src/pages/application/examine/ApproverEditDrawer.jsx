@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
 import { Button, Checkbox, Drawer, Radio, Select } from '@arco-design/web-react'
 import { IconClose, IconPlus } from '@arco-design/web-react/icon'
+import { useMemo, useState } from 'react'
 import {
   APPROVER_TYPE_OPTIONS,
   EMPTY_HANDLER_OPTIONS,
@@ -30,7 +30,7 @@ export function ApproverEditDrawer({
   onCancel,
   onSave,
 }) {
-  // 审批对象：1-指定人员 / 2-指定角色 / 3-发起人自选
+  // 审批对象：1-指定人员 / 2-指定角色 / 3-发起人自选 / 4-审核人员组（弹窗单选）
   const [approverType, setApproverType] = useState(node.approverType || 1)
   const [members, setMembers] = useState(normalizeMembers(node.members))
   // 发起人自选类型：1-单选 / 2-多选
@@ -46,8 +46,7 @@ export function ApproverEditDrawer({
   const [fieldPerms, setFieldPerms] = useState(
     (node.fieldPerms || []).map((fp) => ({
       ...fp,
-      table_key:
-        fp.table_key || formFields.find((f) => f.field_key === fp.field)?.table_key || '',
+      table_key: fp.table_key || formFields.find((f) => f.field_key === fp.field)?.table_key || '',
     })),
   )
 
@@ -90,9 +89,10 @@ export function ApproverEditDrawer({
 
   // 展示步骤二「审批方式」的条件：
   // 3-发起人自选 + 2-多选；或 1-指定人员 / 2-指定角色 实际选择数量 > 1（事实多选）
+  // 4-审核人员组为单选（弹窗单选），始终不展示审批方式
   const showStrategy =
-    (approverType !== 3 && members.length > 1) || (approverType === 3 && selfSelect === 2)
-
+    (approverType !== 3 && approverType !== 4 && members.length > 1) ||
+    (approverType === 3 && selfSelect === 2)
   return (
     <Drawer
       width={560}
@@ -140,28 +140,47 @@ export function ApproverEditDrawer({
               </Radio>
             ))}
           </Radio.Group>
-          {approverType !== 3 ? ( // 3-发起人自选：自选时不展示成员选择器，改为选择类型
-            <div className="mt-3">
+          <div className="mt-3">
+            {approverType === 1 && ( // 1-指定人员
               <PersonPicker
-                modes={approverType === 2 ? [2] : [1]} // 2-指定角色：仅角色维度（2-角色 / 1-组织架构）
-                checkTarget={1} // 1-人员
+                modes={[1]} // 1-组织架构
+                selectMode={2} // 2-多选
                 value={members}
                 onChange={setMembers}
-                placeholder="请选择"
+                placeholder="请选择人员"
               />
-            </div>
-          ) : (
-            <div className="mt-3">
-              <div className="mb-1 text-sm text-gray-500">选择类型</div>
-              <Radio.Group type="button" value={selfSelect} onChange={setSelfSelect}>
-                {SELF_SELECT_OPTIONS.map((o) => (
-                  <Radio key={o.value} value={o.value}>
-                    {o.label}
-                  </Radio>
-                ))}
-              </Radio.Group>
-            </div>
-          )}
+            )}
+            {approverType === 2 && ( // 2-指定角色
+              <PersonPicker
+                modes={[2]} // 2-角色
+                selectMode={1} // 1-单选
+                value={members}
+                onChange={setMembers}
+                placeholder="请选择角色"
+              />
+            )}
+            {approverType === 3 && ( // 3-发起人自选：自选时不展示成员选择器，改为选择类型
+              <>
+                <div className="mb-1 text-sm text-gray-500">选择类型</div>
+                <Radio.Group type="button" value={selfSelect} onChange={setSelfSelect}>
+                  {SELF_SELECT_OPTIONS.map((o) => (
+                    <Radio key={o.value} value={o.value}>
+                      {o.label}
+                    </Radio>
+                  ))}
+                </Radio.Group>
+              </>
+            )}
+            {approverType === 4 && ( // 4-审核人员组：复用 PersonPicker（弹窗单选审核人员组，数据源来自页面级 Context），与指定角色交互一致
+              <PersonPicker
+                modes={[4]} // 4-审核人员组：仅审核人员组维度
+                selectMode={1} // 1-单选
+                value={members}
+                onChange={setMembers}
+                placeholder="选择审核人员组"
+              />
+            )}
+          </div>
         </div>
         {/* 步骤二：审批方式（仅发起人自选 + 多选 / 事实多选时展示） */}
         {showStrategy && (

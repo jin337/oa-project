@@ -32,11 +32,11 @@ export const OPERATOR_OPTIONS = [
   { value: 6, label: '不包含' },
 ]
 
-/** 选择器数据源维度标签（key 为数字枚举：1-组织架构 / 2-角色） */
-export const MODE_LABELS = { 1: '按组织架构选择', 2: '按角色选择' }
+/** 选择器数据源维度标签（key 为数字枚举：1-组织架构 / 2-角色 / 4-审核人员组） */
+export const MODE_LABELS = { 1: '按组织架构选择', 2: '按角色选择', 4: '按审核人员组选择' }
 
 /**
- * 成员类型（数字枚举：1-人员 / 2-部门 / 3-角色）
+ * 成员类型（数字枚举：1-人员 / 2-部门 / 3-角色 / 4-审核人员组）
  * 成员条目结构 { key, type, label }，type 使用该数字枚举（不再使用 'user'/'dept'/'role' 字符串）
  * @type {{ value: number, label: string }[]}
  */
@@ -44,13 +44,15 @@ export const MEMBER_TYPE_OPTIONS = [
   { value: 1, label: '人员' }, // 1-人员（对应接口 user）
   { value: 2, label: '部门' }, // 2-部门（对应接口 dept）
   { value: 3, label: '角色' }, // 3-角色（对应接口 role）
+  { value: 4, label: '审核人员组' }, // 4-审核人员组（对应接口 examine-group）
 ]
 
-/** 审批对象（1-指定人员 / 2-指定角色 / 3-发起人自选） */
+/** 审批对象（1-指定人员 / 2-指定角色 / 3-发起人自选 / 4-审核人员组）——审批人 / 抄送人节点共用 */
 export const APPROVER_TYPE_OPTIONS = [
   { value: 1, label: '指定人员' },
   { value: 2, label: '指定角色' },
   { value: 3, label: '发起人自选' },
+  { value: 4, label: '审核人员组' },
 ]
 
 /** 发起人自选类型（1-单选 / 2-多选） */
