@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// registerApiDefinitionRoutes 接口定义管理路由（/interface 接口管理页面）
+// registerApiDefinitionRoutes 接口定义管理路由（/interface 接口管理页面）+ 统一分发端点
 func registerApiDefinitionRoutes(v1 *gin.RouterGroup) {
 	apiDefinitions := v1.Group("/api-definitions")
 	apiDefinitions.Use(middleware.JWTAuth())
@@ -18,5 +18,12 @@ func registerApiDefinitionRoutes(v1 *gin.RouterGroup) {
 		apiDefinitions.GET("/:id", handler.ApiDefinitionDetail)
 		apiDefinitions.PUT("/:id", handler.ApiDefinitionUpdate)
 		apiDefinitions.DELETE("/:id", handler.ApiDefinitionDelete)
+	}
+
+	// 统一分发：对外以 method+path 暴露接口（GET/POST/PUT/DELETE /interfaces/*path）
+	interfaces := v1.Group("/interfaces")
+	interfaces.Use(middleware.JWTAuth())
+	{
+		interfaces.Any("/*path", handler.ApiDefinitionDispatch)
 	}
 }

@@ -218,14 +218,16 @@ export default function Drafts() {
       title: '创建时间',
       key: 'created_at',
       dataIndex: 'created_at',
-      width: 170,
+      width: 180,
+      align: 'center',
       render: formatTime,
     },
     {
       title: '状态',
       key: 'approval_status',
       dataIndex: 'approval_status',
-      width: 110,
+      width: 90,
+      align: 'center',
       render: (v) => <ApprovalStatusTag status={v} />,
     },
     {

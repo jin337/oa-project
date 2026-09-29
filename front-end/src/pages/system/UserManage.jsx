@@ -1,4 +1,3 @@
-import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -28,9 +27,10 @@ import {
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from 'src/api/dept'
-import * as roleApi from 'src/api/role'
 import { fetchAll } from 'src/api/fetchAll'
+import * as roleApi from 'src/api/role'
 import * as userApi from 'src/api/user'
+import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
@@ -348,6 +348,7 @@ export default function UserManage() {
     {
       key: 'dept',
       title: '部门',
+      align: 'center',
       dataIndex: 'dept_ids',
       render: (deptIds) =>
         (deptIds || []).length
@@ -361,6 +362,7 @@ export default function UserManage() {
     {
       key: 'roles',
       title: '角色',
+      align: 'center',
       dataIndex: 'roles',
       render: (roles) =>
         (roles || []).map((r) => (
@@ -376,6 +378,7 @@ export default function UserManage() {
       title: '状态',
       dataIndex: 'status',
       width: 80,
+      align: 'center',
       render: (status) =>
         status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },
@@ -383,6 +386,7 @@ export default function UserManage() {
       key: 'created_at',
       title: '创建时间',
       dataIndex: 'created_at',
+      width: 180,
       render: (v) => v?.slice(0, 19).replace('T', ' '),
     },
     {

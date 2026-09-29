@@ -57,27 +57,31 @@ export default function Workplace() {
       title: '申请时间',
       key: 'created_at',
       dataIndex: 'created_at',
-      width: 170,
+      width: 180,
+      align: 'center',
       render: formatTime,
     },
     {
       title: '完成时间',
       key: 'finished_at',
       dataIndex: 'finished_at',
-      width: 170,
+      width: 180,
+      align: 'center',
       render: formatTime,
     },
     {
       title: '状态',
       key: 'approval_status',
       dataIndex: 'approval_status',
-      width: 110,
+      width: 90,
+      align: 'center',
       render: (v) => <ApprovalStatusTag status={v} />,
     },
     {
       title: '操作',
       key: 'action',
-      width: 110,
+      width: 90,
+      align: 'center',
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => openDetail(r)}>

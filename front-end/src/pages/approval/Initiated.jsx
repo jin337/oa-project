@@ -32,7 +32,14 @@ const DELETABLE_STATUSES = [4, 5]
 const REJECTED_STATUS = 5
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'item_name', 'dept_name', 'created_at', 'finished_at', 'approval_status']
+const ALL_COL_KEYS = [
+  'index',
+  'item_name',
+  'dept_name',
+  'created_at',
+  'finished_at',
+  'approval_status',
+]
 
 /** 我的发起：展示当前用户发起的所有审批记录（排除草稿），支持查看详情、撤回、删除、已驳回重新提交 */
 export default function Initiated() {
@@ -149,13 +156,28 @@ export default function Initiated() {
     },
     { title: '模块', key: 'item_name', dataIndex: 'item_name', render: (v) => v || '-' },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
-    { title: '申请时间', key: 'created_at', dataIndex: 'created_at', width: 170, render: formatTime },
-    { title: '完成时间', key: 'finished_at', dataIndex: 'finished_at', width: 170, render: formatTime },
+    {
+      title: '申请时间',
+      key: 'created_at',
+      dataIndex: 'created_at',
+      width: 180,
+      align: 'center',
+      render: formatTime,
+    },
+    {
+      title: '完成时间',
+      key: 'finished_at',
+      dataIndex: 'finished_at',
+      width: 180,
+      align: 'center',
+      render: formatTime,
+    },
     {
       title: '状态',
       key: 'approval_status',
       dataIndex: 'approval_status',
-      width: 110,
+      width: 90,
+      align: 'center',
       render: (v) => <ApprovalStatusTag status={v} />,
     },
     {
@@ -174,7 +196,11 @@ export default function Initiated() {
             </Button>
           )}
           {WITHDRAWABLE_STATUSES.includes(r.approval_status) && (
-            <Popconfirm position="lb" title="撤回后该申请将转为草稿，确定撤回？" onOk={() => handleWithdraw(r)}>
+            <Popconfirm
+              position="lb"
+              title="撤回后该申请将转为草稿，确定撤回？"
+              onOk={() => handleWithdraw(r)}
+            >
               <Button type="text" size="small" status="warning">
                 撤回
               </Button>
@@ -257,12 +283,14 @@ export default function Initiated() {
           </div>
         ) : editApp ? (
           <>
-            <DynamicForm app={editApp} form={editForm} pageType="form" onValuesChange={setFormValues} />
-            {/* 审批流只读还原 */}
-            <DynamicFlowView
-              raw={editApp?.approval_flow_json}
-              formData={formValues}
+            <DynamicForm
+              app={editApp}
+              form={editForm}
+              pageType="form"
+              onValuesChange={setFormValues}
             />
+            {/* 审批流只读还原 */}
+            <DynamicFlowView raw={editApp?.approval_flow_json} formData={formValues} />
           </>
         ) : null}
       </Drawer>

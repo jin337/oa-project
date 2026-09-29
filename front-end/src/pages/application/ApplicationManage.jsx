@@ -236,6 +236,7 @@ export default function ApplicationManage() {
       title: '状态',
       dataIndex: 'status',
       width: 80,
+      align: 'center',
       render: (status) =>
         status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },

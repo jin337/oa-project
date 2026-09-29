@@ -222,12 +222,13 @@ export default function ExamineGroupManage() {
         )
       },
     },
-    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80, align: 'center' },
     {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 80,
+      align: 'center',
       render: (status) =>
         status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },

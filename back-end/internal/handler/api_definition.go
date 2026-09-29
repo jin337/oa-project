@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
+	"time"
 
 	"back-end/internal/middleware"
 	"back-end/internal/model"
@@ -89,7 +93,7 @@ func ApiDefinitionDelete(c *gin.Context) {
 }
 
 // ApiDefinitionDebug POST /api/v1/api-definitions/debug
-// 以当前登录用户身份回环请求目标内部接口，返回原始响应 + 映射后的选项列表
+// 按接口 ID 加载定义执行（SQL 直查 / HTTP 转发），透传当前用户 token 与数据权限
 func ApiDefinitionDebug(c *gin.Context) {
 	var req model.ApiDefinitionDebugReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -98,10 +102,50 @@ func ApiDefinitionDebug(c *gin.Context) {
 	}
 	// 透传当前用户 token（Authorization: Bearer xxx），保证试调走当前用户数据权限
 	bearer := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
-	result, err := service.ApiDefinitionDebug(bearer, &req)
+	result, err := service.ApiDefinitionDebug(middleware.CurrentUserID(c), bearer, &req)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
 	response.OK(c, result)
+}
+
+// ApiDefinitionDispatch GET/POST/PUT/DELETE /api/v1/interfaces/*path
+// 统一分发：按 method+path 查表执行（type=sql 直查数据库 / type=http 转发内部接口）。
+// 未命中或停用返回 404，转发目标返回非 2xx 时返回 502。
+func ApiDefinitionDispatch(c *gin.Context) {
+	path := c.Param("path")
+	if path == "" {
+		c.JSON(http.StatusNotFound, gin.H{"code": response.CodeNotFound, "msg": "接口不存在或已停用", "data": nil, "timestamp": time.Now().Unix()})
+		return
+	}
+	method := strings.ToUpper(c.Request.Method)
+	var params map[string]interface{}
+	if method == http.MethodGet {
+		params = map[string]interface{}{}
+		for k, vs := range c.Request.URL.Query() {
+			if len(vs) > 0 {
+				params[k] = vs[0]
+			}
+		}
+	} else if c.Request.Body != nil {
+		body, _ := io.ReadAll(io.LimitReader(c.Request.Body, 1<<20))
+		if len(body) > 0 {
+			_ = json.Unmarshal(body, &params)
+		}
+	}
+	if params == nil {
+		params = map[string]interface{}{}
+	}
+	bearer := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+	result, status, err := service.ApiDefinitionExecute(middleware.CurrentUserID(c), bearer, method, path, params)
+	if err != nil {
+		c.JSON(status, gin.H{"code": response.CodeNotFound, "msg": err.Error(), "data": nil, "timestamp": time.Now().Unix()})
+		return
+	}
+	if result.Error != "" {
+		c.JSON(http.StatusBadGateway, gin.H{"code": response.CodeServerError, "msg": result.Error, "data": nil, "timestamp": time.Now().Unix()})
+		return
+	}
+	response.OK(c, result.Raw)
 }

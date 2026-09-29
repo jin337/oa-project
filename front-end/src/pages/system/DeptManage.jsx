@@ -1,4 +1,3 @@
-import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -23,6 +22,7 @@ import {
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from 'src/api/dept'
+import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
@@ -148,12 +148,13 @@ export default function DeptManage() {
   const columns = [
     { key: 'name', title: '部门名称', dataIndex: 'name' },
     { key: 'leader', title: '负责人', dataIndex: 'leader', render: (v) => v || '-' },
-    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80,align: 'center', },
     {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 80,
+      align: 'center',
       render: (status) =>
         status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },
@@ -161,6 +162,7 @@ export default function DeptManage() {
       key: 'created_at',
       title: '创建时间',
       dataIndex: 'created_at',
+      width: 180,
       render: (v) => v?.slice(0, 19).replace('T', ' '),
     },
     {

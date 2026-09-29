@@ -12,7 +12,6 @@ import {
   InputNumber,
   Menu,
   Message,
-  Modal,
   Popconfirm,
   Popover,
   Select,
@@ -30,7 +29,7 @@ import { usePermission } from 'src/hooks/usePermission'
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'name', 'code', 'method', 'path', 'sort', 'status', 'remark']
+const ALL_COL_KEYS = ['index', 'name', 'method', 'path', 'type', 'sort', 'status', 'remark']
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -44,6 +43,12 @@ const METHOD_OPTIONS = [
   { label: 'DELETE', value: 'DELETE' },
 ]
 const METHOD_COLOR = { GET: 'arcoblue', POST: 'green', PUT: 'orangered', DELETE: 'red' }
+
+// 定义方式枚举
+const TYPE_OPTIONS = [
+  { label: 'SQL 直查', value: 'sql' },
+  { label: 'HTTP 转发', value: 'http' },
+]
 
 // JSON 字符串 <-> 对象 转换：空串视为空对象；解析失败返回 undefined（由调用方提示）
 function jsonToObj(str) {
@@ -65,20 +70,15 @@ function objToJson(obj) {
   }
 }
 
-// 递归统计选项总数（含 children 子节点）
-function countOptions(options) {
-  if (!Array.isArray(options)) return 0
-  return options.reduce((sum, opt) => sum + 1 + countOptions(opt.children), 0)
-}
-
 const EMPTY_FORM = {
   name: '',
-  code: '',
   method: 'GET',
   path: '',
+  type: 'sql',
+  sql_template: '',
+  target_method: 'GET',
+  target_path: '',
   params_json: '',
-  label: '',
-  value_field: '',
   status: 1,
   sort: 1,
   remark: '',
@@ -93,47 +93,46 @@ export default function InterfaceManage() {
   const [size, setSize] = useState(10)
   const [loading, setLoading] = useState(false)
 
-  // 搜索条件：关键字 + 请求方法（应用后才触发查询）
+  // 搜索条件：关键字（名称/路径）+ 请求方法 + 定义方式（应用后才触发查询）
   const [keyword, setKeyword] = useState('')
   const [keywordMethod, setKeywordMethod] = useState('')
+  const [keywordType, setKeywordType] = useState('')
   const [appliedKeyword, setAppliedKeyword] = useState('')
   const [appliedMethod, setAppliedMethod] = useState('')
+  const [appliedType, setAppliedType] = useState('')
 
   // 表格密度 & 列可见性
   const [tableSize, setTableSize] = useState('default')
   const [visibleCols, setVisibleCols] = useState(ALL_COL_KEYS)
 
-  // 高级设置抽屉（请求方法 / 路径 / 参数 / 映射配置）
-  const [settingsVisible, setSettingsVisible] = useState(false)
-
-  const [modalVisible, setModalVisible] = useState(false)
+  // 新增 / 编辑抽屉
+  const [drawerVisible, setDrawerVisible] = useState(false)
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
+  const defType = Form.useWatch('type', form) || 'sql'
 
-  // 抽屉内嵌试调（不另开弹窗）
+  // 抽屉内嵌试调
   const [debugParams, setDebugParams] = useState('')
   const [debugging, setDebugging] = useState(false)
-  const [debugResult, setDebugResult] = useState(null) // { raw, options, error }
+  const [debugResult, setDebugResult] = useState(null) // { raw, error }
 
-  const fetchList = useCallback(
-    async () => {
-      setLoading(true)
-      try {
-        const params = { page, size }
-        if (appliedKeyword) params.keyword = appliedKeyword
-        if (appliedMethod) params.method = appliedMethod
-        const res = await apiDefinitionApi.listApiDefinitions(params)
-        setList(res.data.list || [])
-        setTotal(res.data.total || 0)
-      } catch (e) {
-        // 错误已在请求层提示
-      } finally {
-        setLoading(false)
-      }
-    },
-    [page, size, appliedKeyword, appliedMethod],
-  )
+  const fetchList = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = { page, size }
+      if (appliedKeyword) params.keyword = appliedKeyword
+      if (appliedMethod) params.method = appliedMethod
+      if (appliedType) params.type = appliedType
+      const res = await apiDefinitionApi.listApiDefinitions(params)
+      setList(res.data.list || [])
+      setTotal(res.data.total || 0)
+    } catch (e) {
+      // 错误已在请求层提示
+    } finally {
+      setLoading(false)
+    }
+  }, [page, size, appliedKeyword, appliedMethod, appliedType])
 
   useEffect(() => {
     fetchList()
@@ -142,110 +141,92 @@ export default function InterfaceManage() {
   const handleSearch = () => {
     setAppliedKeyword(keyword)
     setAppliedMethod(keywordMethod)
+    setAppliedType(keywordType)
     setPage(1)
   }
 
   const handleReset = () => {
     setKeyword('')
     setKeywordMethod('')
+    setKeywordType('')
     setAppliedKeyword('')
     setAppliedMethod('')
+    setAppliedType('')
     setPage(1)
   }
 
-  const openCreate = () => {
-    setEditing(null)
-    form.setFieldsValue(EMPTY_FORM)
-    setModalVisible(true)
-  }
-
-  // 回填表单全量字段（弹窗与抽屉共用，确保保存时 status 等不被零值覆盖）
+  // 回填表单全量字段（新增/编辑共用）
   const fillForm = (record) => {
     form.setFieldsValue({
-      name: record.name,
-      code: record.code,
+      name: record.name || '',
       method: record.method || 'GET',
-      path: record.path,
+      path: record.path || '',
+      type: record.type || 'sql',
+      sql_template: record.sql_template || '',
+      target_method: record.target_method || 'GET',
+      target_path: record.target_path || '',
       params_json: objToJson(record.params),
-      label: record.label || '',
-      value_field: record.value_field || '',
-      status: record.status,
-      sort: record.sort,
+      status: record.status ?? 1,
+      sort: record.sort ?? 1,
       remark: record.remark || '',
     })
   }
 
-  // 打开高级设置抽屉（表格操作列「设置」）
-  const openSettings = (record) => {
-    setEditing(record)
-    fillForm(record)
-    setDebugParams(objToJson(record.params))
+  const openCreate = () => {
+    setEditing(null)
+    form.resetFields()
+    form.setFieldsValue(EMPTY_FORM)
+    setDebugParams('')
     setDebugResult(null)
-    setSettingsVisible(true)
-  }
-
-  // 抽屉内发起试调：请求参数取抽屉内试调输入框的值，其余配置取抽屉表单当前值
-  const handleDebugFromDrawer = async () => {
-    if (!editing) return
-    const params = jsonToObj(debugParams)
-    if (params === undefined) {
-      Message.error('请求参数不是合法的 JSON')
-      return
-    }
-    setDebugging(true)
-    setDebugResult(null)
-    try {
-      const res = await apiDefinitionApi.debugApiDefinition({
-        code: editing.code,
-        params,
-      })
-      setDebugResult(res.data)
-    } catch (e) {
-      // 错误已在请求层提示
-    } finally {
-      setDebugging(false)
-    }
+    setDrawerVisible(true)
   }
 
   const openEdit = (record) => {
     setEditing(record)
     fillForm(record)
-    setModalVisible(true)
+    setDebugParams('')
+    setDebugResult(null)
+    setDrawerVisible(true)
   }
 
-  // 组装设置抽屉保存 payload：高级字段的 FormItem 位于设置抽屉，
-  // 未打开过时字段未注册到表单 store，getFieldsValue 取不到；
-  // 此处用默认值 / editing（数据库当前值）兜底，避免缺失字段被后端零值覆盖
-  const buildPayload = (values, editing) => {
-    const hasParamsJson =
-      values.params_json !== undefined && String(values.params_json).trim() !== ''
-    const params = hasParamsJson ? jsonToObj(values.params_json) : (editing?.params ?? {})
+  // 组装保存 payload：params_json -> params 对象；解析失败返回 undefined
+  const buildPayload = (values) => {
+    const pj = values.params_json
+    let params = {}
+    if (pj && String(pj).trim()) {
+      const parsed = jsonToObj(pj)
+      if (parsed === undefined) return undefined
+      params = parsed
+    }
     return {
-      name: values.name ?? editing?.name,
-      code: editing?.code ?? values.code,
-      method: values.method || editing?.method || 'GET',
-      path: values.path || editing?.path || '',
+      name: values.name,
+      method: values.method || 'GET',
+      path: values.path || '',
+      type: values.type || 'sql',
+      sql_template: values.sql_template || '',
+      target_method: values.target_method || '',
+      target_path: values.target_path || '',
       params,
-      label: values.label ?? editing?.label ?? '',
-      value_field: values.value_field ?? editing?.value_field ?? '',
-      status: values.status ?? editing?.status ?? 1,
-      sort: values.sort ?? editing?.sort ?? 1,
-      remark: values.remark ?? editing?.remark ?? '',
+      status: values.status ?? 1,
+      sort: values.sort ?? 1,
+      remark: values.remark || '',
     }
   }
 
   const handleSave = async () => {
-    await form.validate(['name', 'code', 'sort', 'status', 'remark'])
-    // 弹窗仅编辑基础字段；method/path/params/label/value_field 等高级字段由设置抽屉维护，
-    // 新增时后端对其提供默认值（method=GET、path 空、params={}），编辑时后端对空值字段保留原值，
-    // 因此弹窗提交无需携带这些字段
     const values = form.getFieldsValue()
-    const payload = {
-      name: values.name,
-      code: values.code,
-      status: values.status ?? 1,
-      sort: values.sort ?? 1,
-      remark: values.remark ?? '',
+    if (values.type === 'sql' && !String(values.sql_template || '').trim()) {
+      Message.error('定义方式为 SQL 时，SQL 模板不能为空')
+      return
+    }
+    if (values.type === 'http' && !String(values.target_path || '').trim()) {
+      Message.error('定义方式为 HTTP 时，转发目标路径不能为空')
+      return
+    }
+    const payload = buildPayload(values)
+    if (payload === undefined) {
+      Message.error('转发参数模板不是合法的 JSON')
+      return
     }
     setSaving(true)
     try {
@@ -256,7 +237,7 @@ export default function InterfaceManage() {
         await apiDefinitionApi.createApiDefinition(payload)
         Message.success('创建成功')
       }
-      setModalVisible(false)
+      setDrawerVisible(false)
       fetchList()
     } catch (e) {
       // 错误已在请求层提示
@@ -265,25 +246,26 @@ export default function InterfaceManage() {
     }
   }
 
-  // 抽屉保存：全量提交（含 status/sort/remark 等），避免部分字段缺失被零值覆盖
-  const handleSaveSettings = async () => {
+  // 抽屉内发起试调：params 作为 ${form.xxx} 求值的上下文
+  const handleDebug = async () => {
     if (!editing) return
-    await form.validate(['path'])
-    const payload = buildPayload(form.getFieldsValue(), editing)
-    if (payload.params === undefined) {
-      Message.error('请求参数模板不是合法的 JSON')
+    const params = jsonToObj(debugParams)
+    if (params === undefined) {
+      Message.error('试调参数不是合法的 JSON')
       return
     }
-    setSaving(true)
+    setDebugging(true)
+    setDebugResult(null)
     try {
-      await apiDefinitionApi.updateApiDefinition(editing.id, payload)
-      Message.success('保存成功')
-      setSettingsVisible(false)
-      fetchList()
+      const res = await apiDefinitionApi.debugApiDefinition({
+        id: editing.id,
+        params,
+      })
+      setDebugResult(res.data)
     } catch (e) {
       // 错误已在请求层提示
     } finally {
-      setSaving(false)
+      setDebugging(false)
     }
   }
 
@@ -306,18 +288,25 @@ export default function InterfaceManage() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { key: 'name', title: '接口名称', dataIndex: 'name', width: 150 },
-    { key: 'code', title: '接口标识', dataIndex: 'code', width: 150 },
+    { key: 'name', title: '接口名称', dataIndex: 'name', width: 160 },
     {
       key: 'method',
       title: '方法',
       dataIndex: 'method',
-      width: 90,
+      width: 70,
       render: (m) => <Tag color={METHOD_COLOR[m] || 'gray'}>{m || 'GET'}</Tag>,
+    },
+        {
+      key: 'type',
+      title: '定义方式',
+      dataIndex: 'type',
+      width: 100,
+      render: (t) =>
+        t === 'http' ? <Tag color="purple">HTTP 转发</Tag> : <Tag color="arcoblue">SQL 直查</Tag>,
     },
     {
       key: 'path',
-      title: '内部路径',
+      title: '对外路径',
       dataIndex: 'path',
       render: (v) =>
         v ? (
@@ -338,32 +327,30 @@ export default function InterfaceManage() {
         </Typography.Text>
       ),
     },
-    { key: 'sort', title: '排序', dataIndex: 'sort', width: 70 },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 70, align: 'center' },
     {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 80,
+      align: 'center',
       render: (status) =>
         status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },
     {
       key: 'action',
       title: '操作',
-      width: 210,
+      width: 150,
       render: (_, record) =>
         canEdit ? (
           <Space>
-            <Button size="mini" onClick={() => openSettings(record)}>
-              设置
-            </Button>
             <Button size="mini" onClick={() => openEdit(record)}>
               编辑
             </Button>
             <Popconfirm
               position="lb"
               focusLock
-              title="确认删除该接口？引用它的表单将无法加载选项"
+              title="确认删除该接口？"
               onOk={() => handleDelete(record)}
             >
               <Button size="mini" status="danger">
@@ -409,26 +396,36 @@ export default function InterfaceManage() {
 
   const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
 
+  const isNew = !editing
+
   return (
     <Card title="接口管理">
-      {/* 搜索区域 */}
+      {/* 搜索区域：关键字（接口名称 / 对外路径）+ 方法 + 定义方式 */}
       <div className="mb-3">
         <Space wrap>
           <Input
             className="w-60!"
-            placeholder="按接口名称 / 接口标识搜索"
+            placeholder="按接口名称 / 对外路径搜索"
             allowClear
             value={keyword}
             onChange={setKeyword}
             onPressEnter={handleSearch}
           />
           <Select
-            className="w-32!"
+            className="w-28!"
             placeholder="请求方法"
             allowClear
             value={keywordMethod || undefined}
             onChange={(v) => setKeywordMethod(v || '')}
             options={METHOD_OPTIONS}
+          />
+          <Select
+            className="w-32!"
+            placeholder="定义方式"
+            allowClear
+            value={keywordType || undefined}
+            onChange={(v) => setKeywordType(v || '')}
+            options={TYPE_OPTIONS}
           />
           <Button type="primary" onClick={handleSearch}>
             搜索
@@ -480,18 +477,24 @@ export default function InterfaceManage() {
         }}
       />
 
-      {/* 新增 / 编辑弹窗 */}
-      <Modal
+      {/* 新增 / 编辑抽屉：50% 宽，全字段分区一次提交 */}
+      <Drawer
         title={editing ? '编辑接口' : '新增接口'}
-        visible={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={handleSave}
-        unmountOnExit
-        className="w-110! max-w-[90vw]"
+        visible={drawerVisible}
+        onCancel={() => setDrawerVisible(false)}
+        width={'50%'}
+        footer={
+          <Space>
+            <Button type="primary" loading={saving} onClick={handleSave}>
+              保存
+            </Button>
+            <Button onClick={() => setDrawerVisible(false)}>取消</Button>
+          </Space>
+        }
       >
         <Form form={form} layout="vertical" autoComplete="off">
           <Row gutter={20}>
-            <Col span={12}>
+            <Col span={16}>
               <FormItem
                 label="接口名称"
                 field="name"
@@ -503,23 +506,52 @@ export default function InterfaceManage() {
                 <Input placeholder="如：部门列表" />
               </FormItem>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <FormItem
-                label="接口标识"
-                field="code"
-                rules={[
-                  { required: true, message: '请输入接口标识' },
-                  { minLength: 1, maxLength: 64, message: '长度 1-64 个字符' },
-                ]}
+                label="请求方法"
+                field="method"
+                triggerPropName="value"
+                rules={[{ required: true, message: '请选择请求方法' }]}
               >
-                <Input placeholder="如：dept_list" disabled={Boolean(editing)} />
+                <Select>
+                  {METHOD_OPTIONS.map((o) => (
+                    <Select.Option key={o.value} value={o.value}>
+                      {o.label}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </FormItem>
+            </Col>
+          </Row>
+          <Row gutter={20}>
+            <Col span={16}>
+              <FormItem
+                label="对外路径"
+                field="path"
+                rules={[
+                  { required: true, message: '请输入对外路径' },
+                  { minLength: 1, maxLength: 255, message: '长度 1-255 个字符' },
+                ]}
+                extra="统一分发端点：/api/v1/interfaces + 该路径（仅内部相对路径，禁止绝对 URL）"
+              >
+                <Input placeholder="如：/depts" />
+              </FormItem>
+            </Col>
+            <Col span={8}>
+              <FormItem
+                label="定义方式"
+                field="type"
+                triggerPropName="value"
+                rules={[{ required: true, message: '请选择定义方式' }]}
+              >
+                <Select options={TYPE_OPTIONS} />
               </FormItem>
             </Col>
           </Row>
           <Row gutter={20}>
             <Col span={12}>
               <FormItem label="排序" field="sort" triggerPropName="value">
-                <InputNumber min={1} placeholder="数字越小越靠前" />
+                <InputNumber min={1} placeholder="数字越小越靠前" className="w-full!" />
               </FormItem>
             </Col>
             <Col span={12}>
@@ -533,118 +565,121 @@ export default function InterfaceManage() {
           </Row>
           <FormItem label="备注" field="remark">
             <Input.TextArea
-              autoSize={{ minRows: 1, maxRows: 5 }}
+              autoSize={{ minRows: 1, maxRows: 4 }}
               maxLength={255}
               placeholder="选填"
             />
           </FormItem>
-        </Form>
-      </Modal>
 
-      {/* 接口设置抽屉：高级配置 + 内嵌试调 */}
-      <Drawer
-        title="接口设置"
-        visible={settingsVisible}
-        onCancel={() => setSettingsVisible(false)}
-        width={'50%'}
-        footer={
-          <Space>
-            <Button type="primary" loading={saving} onClick={handleSaveSettings}>
-              保存
-            </Button>
-            <Button onClick={() => setSettingsVisible(false)}>取消</Button>
-          </Space>
-        }
-      >
-        <Form form={form} layout="vertical" autoComplete="off">
-          <Row gutter={20}>
-            <Col span={6}>
-              <FormItem label="请求方法" field="method" triggerPropName="value">
-                <Select>
-                  {METHOD_OPTIONS.map((o) => (
-                    <Select.Option key={o.value} value={o.value}>
-                      {o.label}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FormItem>
-            </Col>
-            <Col span={18}>
+          {defType === 'sql' && (
+            <>
+              <Divider orientation="left">SQL 数据源</Divider>
               <FormItem
-                label="内部相对路径"
-                field="path"
-                rules={[
-                  { required: true, message: '请输入内部相对路径' },
-                  { minLength: 1, maxLength: 255, message: '长度 1-255 个字符' },
-                ]}
+                label="SQL 模板"
+                field="sql_template"
+                rules={[{ required: true, message: '请输入 SQL 模板' }]}
+                extra={
+                  <span>
+                    占位符仅支持 {'${form.xxx}'}（如 {'${form.keyword}'}）；仅允许
+                    SELECT/INSERT/UPDATE/DELETE，禁止分号、注释与危险函数，写操作必须带 WHERE
+                  </span>
+                }
               >
-                <Input placeholder="如：/depts（仅内部相对路径，禁止绝对 URL）" />
+                <Input.TextArea
+                  autoSize={{ minRows: 4, maxRows: 10 }}
+                  maxLength={8000}
+                  placeholder={
+                    'SELECT * FROM oa_depts WHERE name LIKE ? /* 不要写注释 */\n示例：SELECT id, name FROM oa_depts WHERE name LIKE ${form.keyword}'
+                  }
+                  style={{ fontFamily: 'monospace' }}
+                />
               </FormItem>
-            </Col>
-          </Row>
-          <FormItem
-            label="请求参数模板"
-            field="params_json"
-            extra="JSON 对象，值支持 ${form.xxx} 占位表达式；留空表示无参数"
-          >
-            <Input.TextArea
-              autoSize={{ minRows: 1, maxRows: 5 }}
-              maxLength={2000}
-              placeholder={'{"keyword": "${form.keyword}"}'}
-              style={{ fontFamily: 'monospace' }}
-            />
-          </FormItem>
-          <Row gutter={20}>
-            <Col span={14}>
+            </>
+          )}
+
+          {defType === 'http' && (
+            <>
+              <Divider orientation="left">HTTP 数据源</Divider>
+              <Row gutter={20}>
+                <Col span={6}>
+                  <FormItem
+                    label="转发目标方法"
+                    field="target_method"
+                    triggerPropName="value"
+                    rules={[{ required: true, message: '请选择转发目标方法' }]}
+                  >
+                    <Select>
+                      {METHOD_OPTIONS.map((o) => (
+                        <Select.Option key={o.value} value={o.value}>
+                          {o.label}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </FormItem>
+                </Col>
+                <Col span={18}>
+                  <FormItem
+                    label="转发目标路径"
+                    field="target_path"
+                    rules={[
+                      { required: true, message: '请输入转发目标路径' },
+                      { minLength: 1, maxLength: 255, message: '长度 1-255 个字符' },
+                    ]}
+                    extra="本服务内部接口相对路径（如 /depts），请求会以当前账号身份转发"
+                  >
+                    <Input placeholder="如：/depts" />
+                  </FormItem>
+                </Col>
+              </Row>
               <FormItem
-                label="显示标签表达式"
-                field="label"
-                extra="响应列表项的显示文本，如 ${item.name}"
+                label="转发参数模板"
+                field="params_json"
+                extra={
+                  <span>
+                    JSON 对象，值支持 {'${form.xxx}'} 占位（如 {'{"keyword": "${form.keyword}"}'}
+                    ）；留空表示无参数
+                  </span>
+                }
               >
-                <Input placeholder="如：${item.name}" />
+                <Input.TextArea
+                  autoSize={{ minRows: 1, maxRows: 5 }}
+                  maxLength={2000}
+                  placeholder={'{"keyword": "${form.keyword}"}'}
+                  style={{ fontFamily: 'monospace' }}
+                />
               </FormItem>
-            </Col>
-            <Col span={10}>
-              <FormItem
-                label="选项值字段"
-                field="value_field"
-                extra="选项提交值取自响应项的哪个字段，如 id"
-              >
-                <Input placeholder="如：id" />
-              </FormItem>
-            </Col>
-          </Row>
+            </>
+          )}
         </Form>
 
-        {/* 内嵌试调：不再单独弹窗 */}
-        {editing && (
+        {/* 内嵌试调：仅编辑已保存的接口可用 */}
+        {!isNew && (
           <div className="mt-2">
             <Divider orientation="left">试调</Divider>
             <Alert
               className="mb-3"
               type="warning"
-              title="试调将以当前账号身份真实发起请求"
+              title="试调将以当前账号身份真实执行（SQL 直查 / HTTP 转发），并应用当前账号的数据权限"
               content={
-                form.getFieldValue('method') && form.getFieldValue('method') !== 'GET'
-                  ? 'POST / PUT / DELETE 会产生真实副作用（新增、修改、删除数据），请谨慎操作'
-                  : '仅发起一次只读请求，不会修改数据'
+                defType === 'http' && form.getFieldValue('target_method') !== 'GET'
+                  ? 'HTTP 转发为非 GET 方法，会产生真实副作用（新增、修改、删除数据），请谨慎操作'
+                  : defType === 'sql'
+                    ? 'SQL 模板为 INSERT/UPDATE/DELETE 时会真实写入数据库，请谨慎操作'
+                    : '仅发起一次只读请求，不会修改数据'
               }
             />
-            <div className="mb-1 text-sm font-medium">请求参数（JSON，覆盖注册表模板）</div>
+            <div className="mb-1 text-sm font-medium">
+              试调参数（JSON，作为 ${form.xxx} 求值上下文）
+            </div>
             <Input.TextArea
               autoSize={{ minRows: 1, maxRows: 5 }}
               value={debugParams}
               onChange={setDebugParams}
-              placeholder='{"keyword": "测试"}'
+              placeholder='{"keyword": "研发"}'
               style={{ fontFamily: 'monospace' }}
             />
             <div className="my-2">
-              <Button
-                type="primary"
-                status="warning"
-                onClick={handleDebugFromDrawer}
-                loading={debugging}
-              >
+              <Button type="primary" status="warning" onClick={handleDebug} loading={debugging}>
                 发起试调
               </Button>
             </div>
@@ -653,22 +688,7 @@ export default function InterfaceManage() {
                 {debugResult.error ? (
                   <Alert type="error" title={debugResult.error} className="mb-3" />
                 ) : (
-                  <div className="mb-3 text-sm">
-                    试调成功，映射出 {countOptions(debugResult.options)} 个选项
-                  </div>
-                )}
-                {Array.isArray(debugResult.options) && debugResult.options.length > 0 && (
-                  <Table
-                    className="mb-3"
-                    size="small"
-                    rowKey={(record) => `${record.label}_${String(record.value)}`}
-                    pagination={false}
-                    data={debugResult.options}
-                    columns={[
-                      { title: 'label（显示）', dataIndex: 'label' },
-                      { title: 'value（提交值）', dataIndex: 'value' },
-                    ]}
-                  />
+                  <div className="mb-3 text-sm">试调成功</div>
                 )}
                 <div className="mb-1 text-sm font-medium">原始响应</div>
                 <pre className="max-h-60 overflow-auto rounded bg-gray-50 p-3 text-xs">
@@ -680,6 +700,7 @@ export default function InterfaceManage() {
             )}
           </div>
         )}
+        {isNew && <Alert className="mt-4" type="info" title="保存后即可在抽屉内发起试调" />}
       </Drawer>
     </Card>
   )

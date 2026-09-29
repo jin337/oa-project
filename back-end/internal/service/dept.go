@@ -15,7 +15,7 @@ func DeptTree(curUserID uint, req *model.DeptListReq) ([]*model.Dept, error) {
 		db = db.Where("name LIKE ?", "%"+req.Name+"%")
 	}
 	// 数据权限过滤：只显示有权限的部门
-	db = middleware.ApplyDataScope(db, curUserID, "id")
+	db = middleware.ApplyDataScope(db, curUserID, "id", "created_by")
 	var list []*model.Dept
 	if err := db.Order("sort ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err

@@ -47,7 +47,7 @@ type Role struct {
 	Code      string `gorm:"size:64;uniqueIndex;not null;comment:角色编码" json:"code"`
 	Sort      int    `gorm:"default:0;comment:排序" json:"sort"`
 	Status    int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
-	DataScope int    `gorm:"default:3;comment:数据范围 1全部 2自定义 3仅本部门 4本部门及下级" json:"data_scope"`
+	DataScope int    `gorm:"default:3;comment:数据范围 1全部 2自定义 3仅本部门 4本部门及下级 5仅本人" json:"data_scope"`
 	Remark    string `gorm:"size:255;comment:备注" json:"remark"`
 
 	Menus []*Menu `gorm:"many2many:sys_role_menu;" json:"menus,omitempty"`
@@ -73,71 +73,70 @@ type ExamineGroup struct {
 	Approvers []ExamineGroupApprover `gorm:"-" json:"approvers,omitempty"` // 审核人信息（服务层翻译填充）
 }
 
-// ApiDefinition 接口定义：集中注册动态表单数据源可引用的内部接口（引用式 data_source={type:'api',api_code}）
+// ApiDefinition 接口定义：配置即用的数据库接口管理
+// 对外以 method+path 暴露统一 HTTP 端点；定义方式二选一：
+//   - type=sql：SQL 模板直查数据库（${form.xxx} 占位参数化），沿用数据权限注入（部门固定按 dept_id、仅本人固定按 created_by 过滤）
+//   - type=http：转发内部接口（target_method + target_path + params 模板）
 type ApiDefinition struct {
 	BaseModel
-	Name       string                 `gorm:"size:64;uniqueIndex;not null;comment:接口名称" json:"name"`
-	Code       string                 `gorm:"size:64;uniqueIndex;not null;comment:接口标识(表单引用 api_code)" json:"code"`
-	Method     string                 `gorm:"size:10;not null;default:GET;comment:请求方法" json:"method"`
-	Path       string                 `gorm:"size:255;not null;comment:内部相对路径" json:"path"`
-	Params     map[string]interface{} `gorm:"serializer:json;type:json;comment:请求参数模板" json:"params"`
-	Label      string                 `gorm:"size:255;comment:响应映射-显示标签表达式" json:"label"`
-	ValueField string                 `gorm:"size:64;comment:响应映射-选项值字段" json:"value_field"`
-	Status     int                    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
-	Sort       int                    `gorm:"default:0;comment:排序" json:"sort"`
-	Remark     string                 `gorm:"size:255;comment:备注" json:"remark"`
+	Name         string                 `gorm:"size:64;uniqueIndex;not null;comment:接口名称" json:"name"`
+	Method       string                 `gorm:"size:10;not null;default:GET;uniqueIndex:uk_api_def_method_path;comment:对外请求方法" json:"method"`
+	Path         string                 `gorm:"size:255;not null;uniqueIndex:uk_api_def_method_path;comment:对外路径" json:"path"`
+	Type         string                 `gorm:"size:10;not null;default:sql;comment:定义方式 sql|http" json:"type"`
+	SQLTemplate  string                 `gorm:"type:text;comment:SQL 模板(${form.xxx} 占位)" json:"sql_template"`
+	TargetMethod string                 `gorm:"size:10;comment:转发目标方法" json:"target_method"`
+	TargetPath   string                 `gorm:"size:255;comment:转发目标路径" json:"target_path"`
+	Params       map[string]interface{} `gorm:"serializer:json;type:json;comment:转发参数模板" json:"params"`
+	Status       int                    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
+	Sort         int                    `gorm:"default:0;comment:排序" json:"sort"`
+	Remark       string                 `gorm:"size:255;comment:备注" json:"remark"`
 }
 
 type ApiDefinitionCreateReq struct {
-	Name       string                 `json:"name" validate:"required,min=1,max=64" label:"接口名称"`
-	Code       string                 `json:"code" validate:"required,min=1,max=64" label:"接口标识"`
-	Method     string                 `json:"method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"请求方法"`
-	Path       string                 `json:"path" validate:"omitempty,min=1,max=255" label:"内部相对路径"`
-	Params     map[string]interface{} `json:"params" validate:"omitempty" label:"请求参数模板"`
-	Label      string                 `json:"label" validate:"omitempty,max=255" label:"显示标签表达式"`
-	ValueField string                 `json:"value_field" validate:"omitempty,max=64" label:"选项值字段"`
-	Status     int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
-	Sort       int                    `json:"sort" validate:"omitempty" label:"排序"`
-	Remark     string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
+	Name         string                 `json:"name" validate:"required,min=1,max=64" label:"接口名称"`
+	Method       string                 `json:"method" validate:"required,oneof=GET POST PUT DELETE" label:"请求方法"`
+	Path         string                 `json:"path" validate:"required,min=1,max=255" label:"对外路径"`
+	Type         string                 `json:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
+	SQLTemplate  string                 `json:"sql_template" validate:"omitempty,max=8000" label:"SQL 模板"`
+	TargetMethod string                 `json:"target_method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"转发目标方法"`
+	TargetPath   string                 `json:"target_path" validate:"omitempty,min=1,max=255" label:"转发目标路径"`
+	Params       map[string]interface{} `json:"params" validate:"omitempty" label:"转发参数模板"`
+	Status       int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Sort         int                    `json:"sort" validate:"omitempty" label:"排序"`
+	Remark       string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
 }
 
 type ApiDefinitionUpdateReq struct {
-	Name       string                 `json:"name" validate:"omitempty,min=1,max=64" label:"接口名称"`
-	Method     string                 `json:"method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"请求方法"`
-	Path       string                 `json:"path" validate:"omitempty,min=1,max=255" label:"内部相对路径"`
-	Params     map[string]interface{} `json:"params" validate:"omitempty" label:"请求参数模板"`
-	Label      string                 `json:"label" validate:"omitempty,max=255" label:"显示标签表达式"`
-	ValueField string                 `json:"value_field" validate:"omitempty,max=64" label:"选项值字段"`
-	Status     int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
-	Sort       int                    `json:"sort" validate:"omitempty" label:"排序"`
-	Remark     string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
+	Name         string                 `json:"name" validate:"omitempty,min=1,max=64" label:"接口名称"`
+	Method       string                 `json:"method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"请求方法"`
+	Path         string                 `json:"path" validate:"omitempty,min=1,max=255" label:"对外路径"`
+	Type         string                 `json:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
+	SQLTemplate  string                 `json:"sql_template" validate:"omitempty,max=8000" label:"SQL 模板"`
+	TargetMethod string                 `json:"target_method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"转发目标方法"`
+	TargetPath   string                 `json:"target_path" validate:"omitempty,min=1,max=255" label:"转发目标路径"`
+	Params       map[string]interface{} `json:"params" validate:"omitempty" label:"转发参数模板"`
+	Status       int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Sort         int                    `json:"sort" validate:"omitempty" label:"排序"`
+	Remark       string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
 }
 
 type ApiDefinitionListReq struct {
 	BaseListReq
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键字"`
 	Method  string `json:"method" form:"method" validate:"omitempty" label:"请求方法"`
+	Type    string `json:"type" form:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
 }
 
-// ApiDefinitionDebugReq 接口试调请求：api_code（引用注册表）或 method/path（临时配置）二选一
+// ApiDefinitionDebugReq 接口试调：按接口 ID 加载定义执行，params 作为 ${form.xxx} 求值的上下文
 type ApiDefinitionDebugReq struct {
-	Code   string                 `json:"code" validate:"omitempty,max=64" label:"接口标识"`
-	Method string                 `json:"method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"请求方法"`
-	Path   string                 `json:"path" validate:"omitempty,min=1,max=255" label:"内部相对路径"`
-	Params map[string]interface{} `json:"params" validate:"omitempty" label:"请求参数"`
+	ID     uint                   `json:"id" validate:"required" label:"接口ID"`
+	Params map[string]interface{} `json:"params" validate:"omitempty" label:"试调参数(form上下文)"`
 }
 
-// ApiDefinitionDebugResult 试调结果：原始响应 + 映射后的选项列表
+// ApiDefinitionDebugResult 试调/分发结果：原始响应 + 错误信息
 type ApiDefinitionDebugResult struct {
-	Raw     interface{}   `json:"raw"`
-	Options []DebugOption `json:"options,omitempty"`
-	Error   string        `json:"error,omitempty"`
-}
-
-type DebugOption struct {
-	Label    string        `json:"label"`
-	Value    interface{}   `json:"value"`
-	Children []DebugOption `json:"children,omitempty"`
+	Raw   interface{} `json:"raw"`
+	Error string      `json:"error,omitempty"`
 }
 
 // 角色编码常量
@@ -151,6 +150,7 @@ const (
 	DataScopeCustom       = 2 // 自定义部门
 	DataScopeDept         = 3 // 仅本部门
 	DataScopeDeptAndBelow = 4 // 本部门及下级
+	DataScopeSelf          = 5 // 仅本人
 )
 
 // Menu 导航/菜单：目录、页面菜单、按钮/权限标识，parent_id 自关联成树
@@ -288,7 +288,7 @@ type RoleCreateReq struct {
 	Code      string `json:"code" validate:"required,min=2,max=64" label:"角色编码"`
 	Sort      int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status    int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
-	DataScope int    `json:"data_scope" validate:"omitempty,oneof=1 2 3 4" label:"数据范围"`
+	DataScope int    `json:"data_scope" validate:"omitempty,oneof=1 2 3 4 5" label:"数据范围"`
 	Remark    string `json:"remark" validate:"omitempty,max=255" label:"备注"`
 }
 
@@ -297,7 +297,7 @@ type RoleUpdateReq struct {
 	Code      string `json:"code" validate:"omitempty,min=2,max=64" label:"角色编码"`
 	Sort      int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status    int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
-	DataScope int    `json:"data_scope" validate:"omitempty,oneof=1 2 3 4" label:"数据范围"`
+	DataScope int    `json:"data_scope" validate:"omitempty,oneof=1 2 3 4 5" label:"数据范围"`
 	Remark    string `json:"remark" validate:"omitempty,max=255" label:"备注"`
 }
 

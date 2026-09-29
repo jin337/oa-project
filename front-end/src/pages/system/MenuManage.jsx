@@ -1,4 +1,3 @@
-import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -24,6 +23,7 @@ import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-
 import { useCallback, useEffect, useState } from 'react'
 import * as menuApi from 'src/api/menu'
 import IconSelect, { MenuIcon } from 'src/components/icon-select'
+import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 
 const FormItem = Form.Item
@@ -178,6 +178,7 @@ export default function MenuManage() {
       title: '类型',
       dataIndex: 'type',
       width: 80,
+      align: 'center',
       render: (type) => {
         const color = type === 1 ? 'orangered' : type === 2 ? 'arcoblue' : 'gray'
         return <Tag color={color}>{TYPE_MAP[type] || type}</Tag>
@@ -191,13 +192,15 @@ export default function MenuManage() {
       title: '图标',
       dataIndex: 'icon',
       width: 80,
+      align: 'center',
       render: (v) => (v ? <MenuIcon name={v} className="text-lg" /> : '-'),
     },
-    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80, align: 'center' },
     {
       key: 'hidden',
       title: '是否隐藏',
       dataIndex: 'hidden',
+      align: 'center',
       width: 90,
       render: (hidden) => (hidden === 1 ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag>),
     },
@@ -205,6 +208,7 @@ export default function MenuManage() {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
+      align: 'center',
       width: 80,
       render: (status) =>
         status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,

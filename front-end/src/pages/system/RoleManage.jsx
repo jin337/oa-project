@@ -43,6 +43,7 @@ const DATA_SCOPE_OPTIONS = [
   { label: '仅本部门', value: 3 },
   { label: '本部门及下级', value: 4 },
   { label: '自定义部门', value: 2 },
+  { label: '仅本人', value: 5 },
 ]
 
 const DATA_SCOPE_MAP = Object.fromEntries(DATA_SCOPE_OPTIONS.map((o) => [o.value, o.label]))
@@ -113,7 +114,6 @@ export default function RoleManage() {
   const [menuTree, setMenuTree] = useState([])
   const [checkedMenus, setCheckedMenus] = useState([])
 
-
   // 编辑弹窗内的部门选择（自定义部门时显示）
   const [editDeptTree, setEditDeptTree] = useState([])
   const [editCheckedDepts, setEditCheckedDepts] = useState([])
@@ -181,8 +181,7 @@ export default function RoleManage() {
         ])
         setEditDeptTree(treeRes.data || [])
         setEditCheckedDepts((detailRes.data.depts || []).map((d) => String(d.id)))
-      } catch (e) {
-      }
+      } catch (e) {}
     }
     setModalVisible(true)
   }
@@ -290,12 +289,13 @@ export default function RoleManage() {
       dataIndex: 'data_scope',
       render: (v) => DATA_SCOPE_MAP[v] || v,
     },
-    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80 },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80, align: 'center' },
     {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
       width: 80,
+      align: 'center',
       render: (status) =>
         status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
     },
@@ -326,8 +326,8 @@ export default function RoleManage() {
               编辑
             </Button>
           )}
-          {hasPerm('system:role:edit') && (
-            record.code === 'admin' ? (
+          {hasPerm('system:role:edit') &&
+            (record.code === 'admin' ? (
               <Tooltip content="超级管理员角色不可删除">
                 <Button size="mini" status="danger" disabled>
                   删除
@@ -344,8 +344,7 @@ export default function RoleManage() {
                   删除
                 </Button>
               </Popconfirm>
-            )
-          )}
+            ))}
         </Space>
       ),
     },
@@ -450,9 +449,12 @@ export default function RoleManage() {
               setDataScope(changed.data_scope)
               // 如果切换到自定义部门，加载部门树
               if (changed.data_scope === 2 && editDeptTree.length === 0) {
-                deptApi.getDeptTree().then((res) => {
-                  setEditDeptTree(res.data || [])
-                }).catch(() => {})
+                deptApi
+                  .getDeptTree()
+                  .then((res) => {
+                    setEditDeptTree(res.data || [])
+                  })
+                  .catch(() => {})
               }
             }
           }}
