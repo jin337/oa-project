@@ -70,6 +70,14 @@ function objToJson(obj) {
   }
 }
 
+// 格式化试调结果：错误信息优先，其次字符串 raw，最后 JSON 美化输出
+function formatDebugResult(debugResult) {
+  if (debugResult.error) return debugResult.error
+  const raw = debugResult.raw
+  if (typeof raw === 'string') return raw
+  return JSON.stringify(raw, null, 2)
+}
+
 const EMPTY_FORM = {
   name: '',
   method: 'GET',
@@ -111,6 +119,7 @@ export default function InterfaceManage() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
   const defType = Form.useWatch('type', form) || 'sql'
+  const targetMethod = Form.useWatch('target_method', form) || 'GET'
 
   // 抽屉内嵌试调
   const [debugParams, setDebugParams] = useState('')
@@ -237,7 +246,6 @@ export default function InterfaceManage() {
         await apiDefinitionApi.createApiDefinition(payload)
         Message.success('创建成功')
       }
-      setDrawerVisible(false)
       fetchList()
     } catch (e) {
       // 错误已在请求层提示
@@ -251,7 +259,7 @@ export default function InterfaceManage() {
     if (!editing) return
     const params = jsonToObj(debugParams)
     if (params === undefined) {
-      Message.error('试调参数不是合法的 JSON')
+      setDebugResult({ error: '试调参数不是合法的 JSON' })
       return
     }
     setDebugging(true)
@@ -261,9 +269,15 @@ export default function InterfaceManage() {
         id: editing.id,
         params,
       })
+      if (res.code !== 0) {
+        // 业务结果型错误（code=1）：静默放行后由页面展示，不弹全局 Message
+        setDebugResult({ error: res.msg || '试调失败' })
+        return
+      }
       setDebugResult(res.data)
     } catch (e) {
-      // 错误已在请求层提示
+      // 网络异常等非业务错误兜底
+      setDebugResult({ error: e?.message || '试调失败' })
     } finally {
       setDebugging(false)
     }
@@ -296,7 +310,7 @@ export default function InterfaceManage() {
       width: 70,
       render: (m) => <Tag color={METHOD_COLOR[m] || 'gray'}>{m || 'GET'}</Tag>,
     },
-        {
+    {
       key: 'type',
       title: '定义方式',
       dataIndex: 'type',
@@ -310,7 +324,7 @@ export default function InterfaceManage() {
       dataIndex: 'path',
       render: (v) =>
         v ? (
-          <Typography.Text className="mb-0!" code>
+          <Typography.Text className="mb-0!" code copyable>
             {v}
           </Typography.Text>
         ) : (
@@ -581,7 +595,8 @@ export default function InterfaceManage() {
                 extra={
                   <span>
                     占位符仅支持 {'${form.xxx}'}（如 {'${form.keyword}'}）；仅允许
-                    SELECT/INSERT/UPDATE/DELETE，禁止分号、注释与危险函数，写操作必须带 WHERE
+                    SELECT/INSERT/UPDATE/DELETE，禁止分号、注释与危险函数，写操作必须带 WHERE；
+                    数据权限条件（如 dept_id / created_by 过滤）请在模板内静态写死
                   </span>
                 }
               >
@@ -651,7 +666,7 @@ export default function InterfaceManage() {
             </>
           )}
         </Form>
-
+        <Alert className="mt-4" type="info" title="保存后即可在抽屉内发起试调" />
         {/* 内嵌试调：仅编辑已保存的接口可用 */}
         {!isNew && (
           <div className="mt-2">
@@ -659,17 +674,22 @@ export default function InterfaceManage() {
             <Alert
               className="mb-3"
               type="warning"
-              title="试调将以当前账号身份真实执行（SQL 直查 / HTTP 转发），并应用当前账号的数据权限"
-              content={
-                defType === 'http' && form.getFieldValue('target_method') !== 'GET'
+              title={
+                defType === 'http' && targetMethod !== 'GET'
                   ? 'HTTP 转发为非 GET 方法，会产生真实副作用（新增、修改、删除数据），请谨慎操作'
                   : defType === 'sql'
                     ? 'SQL 模板为 INSERT/UPDATE/DELETE 时会真实写入数据库，请谨慎操作'
                     : '仅发起一次只读请求，不会修改数据'
               }
+              content={
+                <>
+                  <div>HTTP 转发：试调以当前账号身份真实执行；</div>
+                  <div>SQL 直查：调试的数据权限由模板内静态条件决定（如 WHERE dept_id = 2），所有账号看到同一份数据；模板内未写过滤条件即不过滤</div>
+                </>
+              }
             />
             <div className="mb-1 text-sm font-medium">
-              试调参数（JSON，作为 ${form.xxx} 求值上下文）
+              试调参数（JSON，作为 {'${form.xxx}'} 求值上下文）
             </div>
             <Input.TextArea
               autoSize={{ minRows: 1, maxRows: 5 }}
@@ -678,29 +698,40 @@ export default function InterfaceManage() {
               placeholder='{"keyword": "研发"}'
               style={{ fontFamily: 'monospace' }}
             />
-            <div className="my-2">
-              <Button type="primary" status="warning" onClick={handleDebug} loading={debugging}>
+            <div className="my-2 flex items-center justify-between gap-2">
+              <Button
+                size="small"
+                type="primary"
+                status="warning"
+                onClick={handleDebug}
+                loading={debugging}
+              >
                 发起试调
               </Button>
+              {debugResult && (
+                <Tag color={debugResult.error ? 'red' : 'green'} className="mx-0!">
+                  {debugResult.error ? '试调失败' : '试调成功'}
+                </Tag>
+              )}
             </div>
-            {debugResult && (
-              <>
-                {debugResult.error ? (
-                  <Alert type="error" title={debugResult.error} className="mb-3" />
-                ) : (
-                  <div className="mb-3 text-sm">试调成功</div>
-                )}
-                <div className="mb-1 text-sm font-medium">原始响应</div>
-                <pre className="max-h-60 overflow-auto rounded bg-gray-50 p-3 text-xs">
-                  {typeof debugResult.raw === 'string'
-                    ? debugResult.raw
-                    : JSON.stringify(debugResult.raw, null, 2)}
+            <div>
+              <div className="mb-2 text-sm font-medium text-gray-500">试调结果</div>
+              {debugResult ? (
+                <pre
+                  className={`max-h-60 overflow-auto rounded p-3 text-xs ${
+                    debugResult.error ? 'bg-red-50 text-red-600' : 'bg-gray-50'
+                  }`}
+                >
+                  {formatDebugResult(debugResult)}
                 </pre>
-              </>
-            )}
+              ) : (
+                <div className="rounded bg-gray-50 p-3 text-xs text-gray-400">
+                  填写试调参数后点击「发起试调」查看结果
+                </div>
+              )}
+            </div>
           </div>
         )}
-        {isNew && <Alert className="mt-4" type="info" title="保存后即可在抽屉内发起试调" />}
       </Drawer>
     </Card>
   )

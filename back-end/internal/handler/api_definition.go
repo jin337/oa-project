@@ -93,18 +93,19 @@ func ApiDefinitionDelete(c *gin.Context) {
 }
 
 // ApiDefinitionDebug POST /api/v1/api-definitions/debug
-// 按接口 ID 加载定义执行（SQL 直查 / HTTP 转发），透传当前用户 token 与数据权限
+// 按接口 ID 加载定义执行（SQL 直查 / HTTP 转发），透传当前用户 token
 func ApiDefinitionDebug(c *gin.Context) {
 	var req model.ApiDefinitionDebugReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	// 透传当前用户 token（Authorization: Bearer xxx），保证试调走当前用户数据权限
+	// 透传当前用户 token（Authorization: Bearer xxx）
 	bearer := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
-	result, err := service.ApiDefinitionDebug(middleware.CurrentUserID(c), bearer, &req)
+	result, err := service.ApiDefinitionDebug(bearer, &req)
 	if err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
+		// 试调失败属业务结果型错误：返回 code=1，前端拦截器静默放行，由页面展示
+		response.Fail(c, response.CodeBusinessError, err.Error())
 		return
 	}
 	response.OK(c, result)
@@ -138,7 +139,7 @@ func ApiDefinitionDispatch(c *gin.Context) {
 		params = map[string]interface{}{}
 	}
 	bearer := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
-	result, status, err := service.ApiDefinitionExecute(middleware.CurrentUserID(c), bearer, method, path, params)
+	result, status, err := service.ApiDefinitionExecute(bearer, method, path, params)
 	if err != nil {
 		c.JSON(status, gin.H{"code": response.CodeNotFound, "msg": err.Error(), "data": nil, "timestamp": time.Now().Unix()})
 		return

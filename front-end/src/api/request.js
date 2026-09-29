@@ -30,6 +30,10 @@ request.interceptors.response.use(
       if (res.code === 0) {
         return res
       }
+      if (res.code === 1) {
+        // 业务结果型错误（如接口试调失败）：不弹全局提示，交由调用方展示
+        return res
+      }
       if (res.code === 401) {
         handleUnauthorized()
         return Promise.reject(new Error(res.msg || '未登录或登录已过期'))

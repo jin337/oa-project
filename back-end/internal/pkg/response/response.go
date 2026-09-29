@@ -9,7 +9,8 @@ import (
 
 // 业务错误码
 const (
-	CodeOK          = 0    // 成功
+	CodeOK            = 0 // 成功
+	CodeBusinessError = 1 // 业务结果型错误（如接口试调失败）：前端拦截器静默放行，由调用方展示
 	CodeParamError  = 400  // 参数校验失败
 	CodeUnauthorized = 401 // 未登录或 token 失效
 	CodeForbidden   = 403  // 无权限

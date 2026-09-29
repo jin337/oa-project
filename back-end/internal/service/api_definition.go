@@ -15,7 +15,6 @@ import (
 
 	"back-end/internal/config"
 	"back-end/internal/database"
-	"back-end/internal/middleware"
 	"back-end/internal/model"
 )
 
@@ -258,8 +257,8 @@ func ApiDefinitionDelete(id uint) error {
 // formExprRe 占位符表达式语法：仅允许 form.xxx 点路径（强约束，禁止任意表达式注入）
 var formExprRe = regexp.MustCompile(`^form(\.[A-Za-z0-9_]+)+$`)
 
-// formPlaceholderRe 匹配 ${form.xxx} 占位符
-var formPlaceholderRe = regexp.MustCompile(`\$\{form\.[^}]+\}`)
+// placeholderExprRe 占位符白名单：仅允许 ${form.xxx}（数据权限条件由作者在模板内静态写死）
+var placeholderExprRe = regexp.MustCompile(`^form(\.[A-Za-z0-9_]+)+$`)
 
 // sqlFirstWordRe SQL 首关键字
 var sqlFirstWordRe = regexp.MustCompile(`(?i)^\s*(SELECT|INSERT|UPDATE|DELETE)\b`)
@@ -296,10 +295,10 @@ func validateSQLTemplate(tpl string) error {
 			return errors.New("SQL 模板包含危险函数/关键字：" + kw)
 		}
 	}
-	// 占位符语法强约束：只允许 ${form.xxx}
+	// 占位符语法强约束：仅允许 ${form.xxx}
 	anyPhRe := regexp.MustCompile(`\$\{[^}]+\}`)
 	for _, ph := range anyPhRe.FindAllString(tpl, -1) {
-		if !formExprRe.MatchString(ph[2:len(ph)-1]) {
+		if !placeholderExprRe.MatchString(ph[2:len(ph)-1]) {
 			return errors.New("占位符仅支持 ${form.xxx} 形式：" + ph)
 		}
 	}
@@ -309,15 +308,28 @@ func validateSQLTemplate(tpl string) error {
 	return nil
 }
 
-// parseSQLTemplate 拆分 SQL 模板：占位符替换为 ?，返回表达式列表（保序）
-func parseSQLTemplate(tpl string) (string, []string, error) {
-	matches := formPlaceholderRe.FindAllString(tpl, -1)
-	exprs := make([]string, 0, len(matches))
-	for _, m := range matches {
-		exprs = append(exprs, m[2:len(m)-1]) // 去掉 ${ }
+// resolveSQLPlaceholders 统一替换模板占位符，返回参数化骨架与参数（按占位符出现顺序）：
+// - ${form.xxx}：求值 form 上下文，参数化（? + 值）
+// 数据权限由作者在 SQL 模板内静态写死（静态权限为主），引擎不做任何动态注入
+func resolveSQLPlaceholders(tpl string, vars map[string]interface{}) (string, []interface{}, error) {
+	var sb strings.Builder
+	args := make([]interface{}, 0, 4)
+	anyPhRe := regexp.MustCompile(`\$\{[^}]+\}`)
+	last := 0
+	for _, loc := range anyPhRe.FindAllStringIndex(tpl, -1) {
+		sb.WriteString(tpl[last:loc[0]])
+		ph := tpl[loc[0]:loc[1]]
+		inner := ph[2 : len(ph)-1]
+		v, err := evalFormExpr(inner, vars)
+		if err != nil {
+			return "", nil, err
+		}
+		sb.WriteString("?")
+		args = append(args, v)
+		last = loc[1]
 	}
-	skeleton := formPlaceholderRe.ReplaceAllString(tpl, "?")
-	return skeleton, exprs, nil
+	sb.WriteString(tpl[last:])
+	return sb.String(), args, nil
 }
 
 // evalFormExpr 求值 form 上下文点路径表达式（form.xxx.yyy），vars 形如 {"form": {...}}
@@ -347,73 +359,16 @@ func evalFormExpr(expr string, vars map[string]interface{}) (interface{}, error)
 }
 
 // ============================================================
-// 数据权限注入（沿用 ResolveDataScope 闭环）
-// ============================================================
-
-// sqlCondRe 定位 SQL 中需要插入 WHERE 的位置
-var sqlCondRe = regexp.MustCompile(`(?i)\b(WHERE|ORDER BY|GROUP BY|LIMIT)\b`)
-
-// injectWhere 把过滤条件注入骨架：
-// - 已有 WHERE → 追加 AND (cond)
-// - 无 WHERE → 在 ORDER BY/GROUP BY/LIMIT 之前插入 WHERE cond（若无则追加到末尾）
-func injectWhere(sql, cond string) string {
-	loc := sqlCondRe.FindStringIndex(sql)
-	if loc == nil {
-		return sql + " WHERE " + cond
-	}
-	kw := strings.ToUpper(strings.TrimSpace(sql[loc[0]:loc[1]]))
-	if kw == "WHERE" {
-		return sql[:loc[1]] + " (" + cond + ") AND" + sql[loc[1]:]
-	}
-	return sql[:loc[0]] + " WHERE " + cond + " " + sql[loc[0]:]
-}
-
-// applySQLDataScope 按当前用户数据范围给 SQL 骨架追加过滤条件，并返回注入条件对应的参数（与骨架参数顺序衔接）：
-// 部门维度（2/3/4）固定按 dept_id 过滤；仅本人（5）固定按 created_by 过滤（全项目统一列名，无需配置）
-func applySQLDataScope(userID uint, sql string) (string, []interface{}, error) {
-	scope := middleware.ResolveDataScope(userID)
-	if scope.All {
-		return sql, nil, nil
-	}
-	conds := make([]string, 0, 2)
-	args := make([]interface{}, 0, 2)
-	if len(scope.DeptIDs) > 0 {
-		conds = append(conds, "dept_id IN ?")
-		args = append(args, scope.DeptIDs)
-	}
-	if scope.Self {
-		conds = append(conds, "created_by = ?")
-		args = append(args, userID)
-	}
-	if len(conds) == 0 {
-		return "", nil, errors.New("当前用户无任何数据范围（未分配角色或角色未配置数据范围）")
-	}
-	return injectWhere(sql, strings.Join(conds, " OR ")), args, nil
-}
-
-// ============================================================
 // SQL 执行引擎
 // ============================================================
 
-// executeSQL 执行 SQL 接口：占位符求值 → 数据权限注入 → 参数化执行（8s 超时）
-func executeSQL(userID uint, def *model.ApiDefinition, vars map[string]interface{}) (*model.ApiDefinitionDebugResult, error) {
-	skeleton, exprs, err := parseSQLTemplate(def.SQLTemplate)
+// executeSQL 执行 SQL 接口：占位符求值（${form.xxx}）→ 参数化执行（8s 超时）；
+// 数据权限由模板内静态条件决定（静态权限为主，引擎不做动态注入）
+func executeSQL(def *model.ApiDefinition, vars map[string]interface{}) (*model.ApiDefinitionDebugResult, error) {
+	finalSQL, args, err := resolveSQLPlaceholders(def.SQLTemplate, vars)
 	if err != nil {
 		return nil, err
 	}
-	args := make([]interface{}, 0, len(exprs))
-	for _, expr := range exprs {
-		v, err := evalFormExpr(expr, vars)
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, v)
-	}
-	finalSQL, condArgs, err := applySQLDataScope(userID, skeleton)
-	if err != nil {
-		return nil, err
-	}
-	args = append(args, condArgs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	first := strings.ToUpper(strings.Fields(finalSQL)[0])
@@ -541,8 +496,8 @@ func forwardHTTP(bearerToken string, def *model.ApiDefinition, vars map[string]i
 // 试调与统一分发
 // ============================================================
 
-// ApiDefinitionDebug 接口试调：按接口 ID 加载定义执行（试调同样应用当前用户数据权限）
-func ApiDefinitionDebug(curUserID uint, bearerToken string, req *model.ApiDefinitionDebugReq) (*model.ApiDefinitionDebugResult, error) {
+// ApiDefinitionDebug 接口试调：按接口 ID 加载定义执行
+func ApiDefinitionDebug(bearerToken string, req *model.ApiDefinitionDebugReq) (*model.ApiDefinitionDebugResult, error) {
 	var def model.ApiDefinition
 	if err := database.DB.First(&def, req.ID).Error; err != nil {
 		return nil, errors.New("接口不存在")
@@ -557,11 +512,11 @@ func ApiDefinitionDebug(curUserID uint, bearerToken string, req *model.ApiDefini
 	if def.Type == "http" {
 		return forwardHTTP(bearerToken, &def, vars)
 	}
-	return executeSQL(curUserID, &def, vars)
+	return executeSQL(&def, vars)
 }
 
 // ApiDefinitionExecute 统一分发：按 method+path 查表（status=1），命中执行 SQL / 转发
-func ApiDefinitionExecute(curUserID uint, bearerToken, method, path string, params map[string]interface{}) (*model.ApiDefinitionDebugResult, int, error) {
+func ApiDefinitionExecute(bearerToken, method, path string, params map[string]interface{}) (*model.ApiDefinitionDebugResult, int, error) {
 	var def model.ApiDefinition
 	if err := database.DB.Where("method = ? AND path = ? AND status = 1", strings.ToUpper(method), path).First(&def).Error; err != nil {
 		return nil, http.StatusNotFound, errors.New("接口不存在或已停用")
@@ -574,6 +529,6 @@ func ApiDefinitionExecute(curUserID uint, bearerToken, method, path string, para
 		result, err := forwardHTTP(bearerToken, &def, vars)
 		return result, http.StatusOK, err
 	}
-	result, err := executeSQL(curUserID, &def, vars)
+	result, err := executeSQL(&def, vars)
 	return result, http.StatusOK, err
 }

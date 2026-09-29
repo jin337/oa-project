@@ -157,7 +157,7 @@ func RoleUpdate(curUserID, id uint, req *model.RoleUpdateReq) (*model.Role, erro
 	if req.Status == 0 || req.Status == 1 {
 		role.Status = req.Status
 	}
-	if req.DataScope >= 1 && req.DataScope <= 4 {
+	if req.DataScope >= 1 && req.DataScope <= model.DataScopeSelf {
 		role.DataScope = req.DataScope
 	}
 	role.Remark = req.Remark
