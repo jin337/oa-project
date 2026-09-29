@@ -76,7 +76,7 @@ type ExamineGroup struct {
 // ApiDefinition 接口定义：配置即用的数据库接口管理
 // 对外以 method+path 暴露统一 HTTP 端点；定义方式二选一：
 //   - type=sql：SQL 模板直查数据库（${form.xxx} 占位参数化），沿用数据权限注入（部门固定按 dept_id、仅本人固定按 created_by 过滤）
-//   - type=http：转发内部接口（target_method + target_path + params 模板）
+//   - type=http：转发内部接口（method + target_path + params 模板，转发方法与对外方法一致）
 type ApiDefinition struct {
 	BaseModel
 	Name         string                 `gorm:"size:64;uniqueIndex;not null;comment:接口名称" json:"name"`
@@ -84,7 +84,6 @@ type ApiDefinition struct {
 	Path         string                 `gorm:"size:255;not null;uniqueIndex:uk_api_def_method_path;comment:对外路径" json:"path"`
 	Type         string                 `gorm:"size:10;not null;default:sql;comment:定义方式 sql|http" json:"type"`
 	SQLTemplate  string                 `gorm:"type:text;comment:SQL 模板(${form.xxx} 占位)" json:"sql_template"`
-	TargetMethod string                 `gorm:"size:10;comment:转发目标方法" json:"target_method"`
 	TargetPath   string                 `gorm:"size:255;comment:转发目标路径" json:"target_path"`
 	Params       map[string]interface{} `gorm:"serializer:json;type:json;comment:转发参数模板" json:"params"`
 	Status       int                    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
@@ -98,7 +97,6 @@ type ApiDefinitionCreateReq struct {
 	Path         string                 `json:"path" validate:"required,min=1,max=255" label:"对外路径"`
 	Type         string                 `json:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
 	SQLTemplate  string                 `json:"sql_template" validate:"omitempty,max=8000" label:"SQL 模板"`
-	TargetMethod string                 `json:"target_method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"转发目标方法"`
 	TargetPath   string                 `json:"target_path" validate:"omitempty,min=1,max=255" label:"转发目标路径"`
 	Params       map[string]interface{} `json:"params" validate:"omitempty" label:"转发参数模板"`
 	Status       int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
@@ -112,7 +110,6 @@ type ApiDefinitionUpdateReq struct {
 	Path         string                 `json:"path" validate:"omitempty,min=1,max=255" label:"对外路径"`
 	Type         string                 `json:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
 	SQLTemplate  string                 `json:"sql_template" validate:"omitempty,max=8000" label:"SQL 模板"`
-	TargetMethod string                 `json:"target_method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"转发目标方法"`
 	TargetPath   string                 `json:"target_path" validate:"omitempty,min=1,max=255" label:"转发目标路径"`
 	Params       map[string]interface{} `json:"params" validate:"omitempty" label:"转发参数模板"`
 	Status       int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`

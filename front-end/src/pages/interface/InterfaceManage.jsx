@@ -12,6 +12,7 @@ import {
   InputNumber,
   Menu,
   Message,
+  Modal,
   Popconfirm,
   Popover,
   Select,
@@ -20,7 +21,7 @@ import {
   Tag,
   Typography,
 } from '@arco-design/web-react'
-import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
+import { IconList, IconRefresh, IconSettings, IconSync } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as apiDefinitionApi from 'src/api/apiDefinition'
 import { SIZE_OPTIONS } from 'src/config/app'
@@ -84,7 +85,6 @@ const EMPTY_FORM = {
   path: '',
   type: 'sql',
   sql_template: '',
-  target_method: 'GET',
   target_path: '',
   params_json: '',
   status: 1,
@@ -119,7 +119,7 @@ export default function InterfaceManage() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
   const defType = Form.useWatch('type', form) || 'sql'
-  const targetMethod = Form.useWatch('target_method', form) || 'GET'
+  const targetMethod = Form.useWatch('method', form) || 'GET' // 转发方法与对外方法一致
 
   // 抽屉内嵌试调
   const [debugParams, setDebugParams] = useState('')
@@ -147,6 +147,22 @@ export default function InterfaceManage() {
     fetchList()
   }, [page, size, fetchList])
 
+  // 一键导入后端全部业务路由为 HTTP 转发定义
+  const handleImportRoutes = () => {
+    Modal.confirm({
+      title: '导入后端路由',
+      content:
+        '将后端全部业务路由（排除接口管理自身、登录、SSE 推送）导入为 HTTP 转发定义，已存在的接口自动跳过。确定导入？',
+      okText: '导入',
+      cancelText: '取消',
+      onOk: async () => {
+        const res = await apiDefinitionApi.importBackendRoutes()
+        Message.success(`已导入 ${res.data?.imported ?? 0} 条后端路由`)
+        fetchList()
+      },
+    })
+  }
+
   const handleSearch = () => {
     setAppliedKeyword(keyword)
     setAppliedMethod(keywordMethod)
@@ -172,7 +188,6 @@ export default function InterfaceManage() {
       path: record.path || '',
       type: record.type || 'sql',
       sql_template: record.sql_template || '',
-      target_method: record.target_method || 'GET',
       target_path: record.target_path || '',
       params_json: objToJson(record.params),
       status: record.status ?? 1,
@@ -213,7 +228,6 @@ export default function InterfaceManage() {
       path: values.path || '',
       type: values.type || 'sql',
       sql_template: values.sql_template || '',
-      target_method: values.target_method || '',
       target_path: values.target_path || '',
       params,
       status: values.status ?? 1,
@@ -413,7 +427,16 @@ export default function InterfaceManage() {
   const isNew = !editing
 
   return (
-    <Card title="接口管理">
+    <Card
+      title="接口管理"
+      extra={
+        canEdit && (
+          <Button icon={<IconSync />} onClick={handleImportRoutes}>
+            导入后端路由
+          </Button>
+        )
+      }
+    >
       {/* 搜索区域：关键字（接口名称 / 对外路径）+ 方法 + 定义方式 */}
       <div className="mb-3">
         <Space wrap>
@@ -508,6 +531,16 @@ export default function InterfaceManage() {
       >
         <Form form={form} layout="vertical" autoComplete="off">
           <Row gutter={20}>
+            <Col span={8}>
+              <FormItem
+                label="定义方式"
+                field="type"
+                triggerPropName="value"
+                rules={[{ required: true, message: '请选择定义方式' }]}
+              >
+                <Select options={TYPE_OPTIONS} />
+              </FormItem>
+            </Col>
             <Col span={16}>
               <FormItem
                 label="接口名称"
@@ -520,6 +553,8 @@ export default function InterfaceManage() {
                 <Input placeholder="如：部门列表" />
               </FormItem>
             </Col>
+          </Row>
+          <Row gutter={20}>
             <Col span={8}>
               <FormItem
                 label="请求方法"
@@ -536,8 +571,6 @@ export default function InterfaceManage() {
                 </Select>
               </FormItem>
             </Col>
-          </Row>
-          <Row gutter={20}>
             <Col span={16}>
               <FormItem
                 label="对外路径"
@@ -549,16 +582,6 @@ export default function InterfaceManage() {
                 extra="统一分发端点：/api/v1/interfaces + 该路径（仅内部相对路径，禁止绝对 URL）"
               >
                 <Input placeholder="如：/depts" />
-              </FormItem>
-            </Col>
-            <Col span={8}>
-              <FormItem
-                label="定义方式"
-                field="type"
-                triggerPropName="value"
-                rules={[{ required: true, message: '请选择定义方式' }]}
-              >
-                <Select options={TYPE_OPTIONS} />
               </FormItem>
             </Col>
           </Row>
@@ -615,37 +638,17 @@ export default function InterfaceManage() {
           {defType === 'http' && (
             <>
               <Divider orientation="left">HTTP 数据源</Divider>
-              <Row gutter={20}>
-                <Col span={6}>
-                  <FormItem
-                    label="转发目标方法"
-                    field="target_method"
-                    triggerPropName="value"
-                    rules={[{ required: true, message: '请选择转发目标方法' }]}
-                  >
-                    <Select>
-                      {METHOD_OPTIONS.map((o) => (
-                        <Select.Option key={o.value} value={o.value}>
-                          {o.label}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </FormItem>
-                </Col>
-                <Col span={18}>
-                  <FormItem
-                    label="转发目标路径"
-                    field="target_path"
-                    rules={[
-                      { required: true, message: '请输入转发目标路径' },
-                      { minLength: 1, maxLength: 255, message: '长度 1-255 个字符' },
-                    ]}
-                    extra="本服务内部接口相对路径（如 /depts），请求会以当前账号身份转发"
-                  >
-                    <Input placeholder="如：/depts" />
-                  </FormItem>
-                </Col>
-              </Row>
+              <FormItem
+                label="转发目标路径"
+                field="target_path"
+                rules={[
+                  { required: true, message: '请输入转发目标路径' },
+                  { minLength: 1, maxLength: 255, message: '长度 1-255 个字符' },
+                ]}
+                extra="本服务内部接口相对路径（如 /depts），请求会以当前账号身份转发"
+              >
+                <Input placeholder="如：/depts" />
+              </FormItem>
               <FormItem
                 label="转发参数模板"
                 field="params_json"
@@ -666,7 +669,7 @@ export default function InterfaceManage() {
             </>
           )}
         </Form>
-        <Alert className="mt-4" type="info" title="保存后即可在抽屉内发起试调" />
+        <Alert className="mt-4" type="info" title="保存后即可发起试调" />
         {/* 内嵌试调：仅编辑已保存的接口可用 */}
         {!isNew && (
           <div className="mt-2">
@@ -684,7 +687,10 @@ export default function InterfaceManage() {
               content={
                 <>
                   <div>HTTP 转发：试调以当前账号身份真实执行；</div>
-                  <div>SQL 直查：调试的数据权限由模板内静态条件决定（如 WHERE dept_id = 2），所有账号看到同一份数据；模板内未写过滤条件即不过滤</div>
+                  <div>
+                    SQL 直查：调试的数据权限由模板内静态条件决定（如 WHERE dept_id =
+                    2），所有账号看到同一份数据；模板内未写过滤条件即不过滤
+                  </div>
                 </>
               }
             />

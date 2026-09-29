@@ -37,5 +37,8 @@ func Setup() *gin.Engine {
 	registerUtilRoutes(v1)
 	registerNotificationRoutes(v1)
 
+	// 注入运行时路由快照（供接口管理一键导入后端路由）
+	middleware.SetRouteSnapshot(r.Routes())
+
 	return r
 }

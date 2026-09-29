@@ -29,3 +29,13 @@ export function deleteApiDefinition(id) {
 export function debugApiDefinition(data) {
   return request.post('/api-definitions/debug', data)
 }
+
+// GET /api-definitions/backend/routes 枚举后端全部业务路由
+export function listBackendRoutes() {
+  return request.get('/api-definitions/backend/routes')
+}
+
+// POST /api-definitions/backend/import 一键导入后端路由为 HTTP 转发定义
+export function importBackendRoutes() {
+  return request.post('/api-definitions/backend/import')
+}

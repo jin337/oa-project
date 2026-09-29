@@ -15,6 +15,8 @@ func registerApiDefinitionRoutes(v1 *gin.RouterGroup) {
 		apiDefinitions.GET("", handler.ApiDefinitionList)
 		apiDefinitions.POST("", handler.ApiDefinitionCreate)
 		apiDefinitions.POST("/debug", handler.ApiDefinitionDebug)
+		apiDefinitions.GET("/backend/routes", handler.ApiDefinitionListRoutes)
+		apiDefinitions.POST("/backend/import", handler.ApiDefinitionImportRoutes)
 		apiDefinitions.GET("/:id", handler.ApiDefinitionDetail)
 		apiDefinitions.PUT("/:id", handler.ApiDefinitionUpdate)
 		apiDefinitions.DELETE("/:id", handler.ApiDefinitionDelete)

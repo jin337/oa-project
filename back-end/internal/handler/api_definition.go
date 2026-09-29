@@ -150,3 +150,48 @@ func ApiDefinitionDispatch(c *gin.Context) {
 	}
 	response.OK(c, result.Raw)
 }
+
+// ApiDefinitionListRoutes GET /api/v1/api-definitions/backend/routes
+// 返回后端全部业务路由（method + path + handler），供前端预览 / 一键导入
+func ApiDefinitionListRoutes(c *gin.Context) {
+	response.OK(c, filterBackendRoutes())
+}
+
+// ApiDefinitionImportRoutes POST /api/v1/api-definitions/backend/import
+// 一键导入后端全部业务路由为 HTTP 转发定义，返回本次导入数量
+func ApiDefinitionImportRoutes(c *gin.Context) {
+	dtos := filterBackendRoutes()
+	defs := make([]service.RouteDef, 0, len(dtos))
+	for _, d := range dtos {
+		defs = append(defs, service.RouteDef{Method: d.Method, Path: d.Path})
+	}
+	count, err := service.ImportBackendRoutes(middleware.CurrentUserID(c), defs)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"imported": count})
+}
+
+// BackendRouteDTO 后端路由 DTO：gin.RouteInfo 含 HandlerFunc 无法 JSON 序列化，仅暴露可序列化字段
+type BackendRouteDTO struct {
+	Method  string `json:"method"`
+	Path    string `json:"path"`
+	Handler string `json:"handler"`
+}
+
+// filterBackendRoutes 枚举运行时路由表并过滤出可导入的业务路由
+func filterBackendRoutes() []BackendRouteDTO {
+	routes := middleware.RouteSnapshot()
+	out := make([]BackendRouteDTO, 0, len(routes))
+	for _, r := range routes {
+		if !strings.HasPrefix(r.Path, "/api/v1") {
+			continue
+		}
+		if service.IsExcludedBackendRoute(r.Method, r.Path) {
+			continue
+		}
+		out = append(out, BackendRouteDTO{Method: r.Method, Path: r.Path, Handler: r.Handler})
+	}
+	return out
+}

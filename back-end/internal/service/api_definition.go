@@ -16,6 +16,7 @@ import (
 	"back-end/internal/config"
 	"back-end/internal/database"
 	"back-end/internal/model"
+
 )
 
 // ============================================================
@@ -94,7 +95,7 @@ func ApiDefinitionDetail(id uint) (*model.ApiDefinition, error) {
 }
 
 // validateDefinitionPayload 按定义方式做字段级强约束校验
-func validateDefinitionPayload(method, path, defType, sqlTemplate, targetMethod, targetPath string) error {
+func validateDefinitionPayload(method, path, defType, sqlTemplate, targetPath string) error {
 	if err := validateInternalPath(path); err != nil {
 		return err
 	}
@@ -107,9 +108,6 @@ func validateDefinitionPayload(method, path, defType, sqlTemplate, targetMethod,
 			return err
 		}
 	case "http":
-		if strings.TrimSpace(targetMethod) == "" {
-			return errors.New("定义方式为 HTTP 时，转发目标方法不能为空")
-		}
 		if strings.TrimSpace(targetPath) == "" {
 			return errors.New("定义方式为 HTTP 时，转发目标路径不能为空")
 		}
@@ -132,7 +130,7 @@ func ApiDefinitionCreate(curUserID uint, req *model.ApiDefinitionCreateReq) (*mo
 	if defType == "" {
 		defType = "sql"
 	}
-	if err := validateDefinitionPayload(method, req.Path, defType, req.SQLTemplate, req.TargetMethod, req.TargetPath); err != nil {
+	if err := validateDefinitionPayload(method, req.Path, defType, req.SQLTemplate, req.TargetPath); err != nil {
 		return nil, err
 	}
 	nameExists, pathExists := checkApiDefNamePathExists(req.Name, method, req.Path, 0)
@@ -153,7 +151,6 @@ func ApiDefinitionCreate(curUserID uint, req *model.ApiDefinitionCreateReq) (*mo
 		Path:         req.Path,
 		Type:         defType,
 		SQLTemplate:  req.SQLTemplate,
-		TargetMethod: strings.ToUpper(req.TargetMethod),
 		TargetPath:   req.TargetPath,
 		Params:       params,
 		Status:       status,
@@ -190,15 +187,11 @@ func ApiDefinitionUpdate(curUserID, id uint, req *model.ApiDefinitionUpdateReq) 
 	if sqlTemplate == "" {
 		sqlTemplate = def.SQLTemplate
 	}
-	targetMethod := strings.ToUpper(req.TargetMethod)
-	if targetMethod == "" {
-		targetMethod = def.TargetMethod
-	}
 	targetPath := req.TargetPath
 	if targetPath == "" {
 		targetPath = def.TargetPath
 	}
-	if err := validateDefinitionPayload(method, path, defType, sqlTemplate, targetMethod, targetPath); err != nil {
+	if err := validateDefinitionPayload(method, path, defType, sqlTemplate, targetPath); err != nil {
 		return nil, err
 	}
 	// 名称/端点变更时查重
@@ -223,7 +216,6 @@ func ApiDefinitionUpdate(curUserID, id uint, req *model.ApiDefinitionUpdateReq) 
 	def.Path = path
 	def.Type = defType
 	def.SQLTemplate = req.SQLTemplate
-	def.TargetMethod = targetMethod
 	def.TargetPath = req.TargetPath
 	if req.Params != nil {
 		def.Params = req.Params
@@ -421,9 +413,9 @@ func evalParamsTemplate(params map[string]interface{}, vars map[string]interface
 	return out
 }
 
-// forwardHTTP 转发内部接口：target_method + target_path + params 模板（独立 context 8s 超时）
+// forwardHTTP 转发内部接口：method（与对外方法一致）+ target_path + params 模板（独立 context 8s 超时）
 func forwardHTTP(bearerToken string, def *model.ApiDefinition, vars map[string]interface{}) (*model.ApiDefinitionDebugResult, error) {
-	method := strings.ToUpper(def.TargetMethod)
+	method := strings.ToUpper(def.Method)
 	if method == "" {
 		method = http.MethodGet
 	}
@@ -431,6 +423,12 @@ func forwardHTTP(bearerToken string, def *model.ApiDefinition, vars map[string]i
 		return nil, err
 	}
 	params := evalParamsTemplate(def.Params, vars)
+	if len(params) == 0 && len(def.Params) == 0 {
+		// 未配置参数模板：原样透传外部请求参数
+		if form, ok := vars["form"].(map[string]interface{}); ok {
+			params = form
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
@@ -517,9 +515,27 @@ func ApiDefinitionDebug(bearerToken string, req *model.ApiDefinitionDebugReq) (*
 
 // ApiDefinitionExecute 统一分发：按 method+path 查表（status=1），命中执行 SQL / 转发
 func ApiDefinitionExecute(bearerToken, method, path string, params map[string]interface{}) (*model.ApiDefinitionDebugResult, int, error) {
+	method = strings.ToUpper(method)
 	var def model.ApiDefinition
-	if err := database.DB.Where("method = ? AND path = ? AND status = 1", strings.ToUpper(method), path).First(&def).Error; err != nil {
-		return nil, http.StatusNotFound, errors.New("接口不存在或已停用")
+	if err := database.DB.Where("method = ? AND path = ? AND status = 1", method, path).First(&def).Error; err != nil {
+		// 未精确命中：尝试段模板匹配（支持 /system/user/:id 等动态路径）
+		var candidates []model.ApiDefinition
+		if database.DB.Where("method = ? AND status = 1 AND path LIKE ?", method, "%:%").Find(&candidates).Error == nil {
+			for _, d := range candidates {
+				if pathParams, ok := matchTemplatePath(d.Path, path); ok {
+					def = d
+					// 用提取的路径参数渲染目标路径（:id → 实际值）
+					def.TargetPath = renderPathTemplate(def.TargetPath, pathParams)
+					for k, v := range pathParams {
+						params[k] = v
+					}
+					break
+				}
+			}
+		}
+		if def.ID == 0 {
+			return nil, http.StatusNotFound, errors.New("接口不存在或已停用")
+		}
 	}
 	vars := map[string]interface{}{"form": params}
 	if vars["form"] == nil {
@@ -531,4 +547,104 @@ func ApiDefinitionExecute(bearerToken, method, path string, params map[string]in
 	}
 	result, err := executeSQL(&def, vars)
 	return result, http.StatusOK, err
+}
+
+// ============================================================
+// 后端路由一键导入
+// ============================================================
+
+// IsExcludedBackendRoute 导入时排除的路由：接口管理自身、分发端点、登录、SSE 长连接
+func IsExcludedBackendRoute(method, path string) bool {
+	if strings.HasPrefix(path, "/api/v1/api-definitions") {
+		return true
+	}
+	if strings.HasPrefix(path, "/api/v1/interfaces") {
+		return true
+	}
+	if path == "/api/v1/auth/login" {
+		return true
+	}
+	if path == "/api/v1/notifications/stream" {
+		return true
+	}
+	return false
+}
+
+// RouteDef 后端路由导入输入（method + path，由 handler 从运行时路由表转换而来）
+type RouteDef struct {
+	Method string
+	Path   string
+}
+
+// ImportBackendRoutes 批量把后端业务路由导入为 HTTP 转发定义：
+// name=method+path，target 指向内部同路径接口，已存在的 method+path 跳过
+func ImportBackendRoutes(curUserID uint, routes []RouteDef) (int, error) {
+	imported := 0
+	for _, r := range routes {
+		if !strings.HasPrefix(r.Path, "/api/v1") {
+			continue
+		}
+		if IsExcludedBackendRoute(r.Method, r.Path) {
+			continue
+		}
+		method := strings.ToUpper(r.Method)
+		path := "/" + strings.Trim(strings.TrimPrefix(r.Path, "/api/v1"), "/")
+		var cnt int64
+		if err := database.DB.Model(&model.ApiDefinition{}).Where("method = ? AND path = ?", method, path).Count(&cnt).Error; err != nil {
+			return imported, err
+		}
+		if cnt > 0 {
+			continue
+		}
+		def := model.ApiDefinition{
+			Name:         method + " " + path,
+			Method:       method,
+			Path:         path,
+			Type:         "http",
+			TargetPath:   path,
+			Status:       1,
+			Sort:         0,
+			Remark:       "后端路由自动导入",
+		}
+		def.CreatedBy = curUserID
+		if err := database.DB.Create(&def).Error; err != nil {
+			return imported, err
+		}
+		imported++
+	}
+	return imported, nil
+}
+
+// renderPathTemplate 将目标路径模板中的 :x 段替换为实际路径参数值
+func renderPathTemplate(tpl string, params map[string]interface{}) string {
+	parts := strings.Split(strings.Trim(tpl, "/"), "/")
+	for i, p := range parts {
+		if strings.HasPrefix(p, ":") {
+			if v, ok := params[strings.TrimPrefix(p, ":")]; ok {
+				parts[i] = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+	return "/" + strings.Join(parts, "/")
+}
+
+// matchTemplatePath 段模板匹配：模板 :x 段匹配实际路径任意单段，返回路径参数
+func matchTemplatePath(tpl, actual string) (map[string]interface{}, bool) {
+	if !strings.Contains(tpl, ":") {
+		return nil, false
+	}
+	tParts := strings.Split(strings.Trim(tpl, "/"), "/")
+	aParts := strings.Split(strings.Trim(actual, "/"), "/")
+	if len(tParts) != len(aParts) {
+		return nil, false
+	}
+	params := map[string]interface{}{}
+	for i := range tParts {
+		if strings.HasPrefix(tParts[i], ":") {
+			params[strings.TrimPrefix(tParts[i], ":")] = aParts[i]
+		} else if tParts[i] != aParts[i] {
+			return nil, false
+		}
+	}
+	return params, true
 }
