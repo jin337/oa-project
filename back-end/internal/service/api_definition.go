@@ -80,7 +80,7 @@ func ApiDefinitionList(req *model.ApiDefinitionListReq) ([]model.ApiDefinition, 
 		return nil, 0, err
 	}
 	var list []model.ApiDefinition
-	err := db.Order("sort ASC, id ASC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
+	err := db.Order("created_at DESC, id DESC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -105,36 +105,42 @@ func apiRefKey(method, path string) string {
 func countElementApiRefs() map[string]int {
 	counts := make(map[string]int)
 	var elems []struct {
-		DataSource map[string]interface{} `json:"data_source"`
-		Actions    map[string]interface{} `json:"actions"`
+		DataSource string `json:"data_source"`
+		Actions    string `json:"actions"`
 	}
 	if err := database.DB.Model(&model.ApplicationElement{}).
 		Select("data_source, actions").Scan(&elems).Error; err != nil {
 		return counts
 	}
 	for _, e := range elems {
-		if ds, ok := e.DataSource["type"].(string); ok && ds == "api" && isRefOne(e.DataSource["api_ref"]) {
-			key := apiRefKey(fmt.Sprintf("%v", e.DataSource["method"]), fmt.Sprintf("%v", e.DataSource["url"]))
-			if strings.TrimSpace(key) != " /" {
-				counts[key]++
-			}
-		}
-		for _, list := range e.Actions {
-			arr, ok := list.([]interface{})
-			if !ok {
-				continue
-			}
-			for _, item := range arr {
-				act, ok := item.(map[string]interface{})
-				if !ok || fmt.Sprintf("%v", act["action_type"]) != "fetch_and_fill" {
-					continue
-				}
-				if !isRefOne(act["api_ref"]) {
-					continue
-				}
-				key := apiRefKey(fmt.Sprintf("%v", act["method"]), fmt.Sprintf("%v", act["api_url"]))
+		var ds map[string]interface{}
+		if err := json.Unmarshal([]byte(e.DataSource), &ds); err == nil && ds != nil {
+			if t, ok := ds["type"].(string); ok && t == "api" && isRefOne(ds["api_ref"]) {
+				key := apiRefKey(fmt.Sprintf("%v", ds["method"]), fmt.Sprintf("%v", ds["url"]))
 				if strings.TrimSpace(key) != " /" {
 					counts[key]++
+				}
+			}
+		}
+		var acts map[string]interface{}
+		if err := json.Unmarshal([]byte(e.Actions), &acts); err == nil && acts != nil {
+			for _, list := range acts {
+				arr, ok := list.([]interface{})
+				if !ok {
+					continue
+				}
+				for _, item := range arr {
+					act, ok := item.(map[string]interface{})
+					if !ok || fmt.Sprintf("%v", act["action_type"]) != "fetch_and_fill" {
+						continue
+					}
+					if !isRefOne(act["api_ref"]) {
+						continue
+					}
+					key := apiRefKey(fmt.Sprintf("%v", act["method"]), fmt.Sprintf("%v", act["api_url"]))
+					if strings.TrimSpace(key) != " /" {
+						counts[key]++
+					}
 				}
 			}
 		}

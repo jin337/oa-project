@@ -30,7 +30,17 @@ import { usePermission } from 'src/hooks/usePermission'
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'name', 'method', 'path', 'type', 'sort', 'status', 'remark']
+const ALL_COL_KEYS = [
+  'index',
+  'name',
+  'method',
+  'path',
+  'type',
+  'sort',
+  'status',
+  'remark',
+  'referenced',
+]
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -349,16 +359,17 @@ export default function InterfaceManage() {
       key: 'remark',
       title: '备注',
       dataIndex: 'remark',
+      width: 220,
       render: (v) => (
-        <Typography.Text className="mb-0!" ellipsis={{ showTooltip: true }}>
-          {v || '-'}
-        </Typography.Text>
+        <div style={{ maxWidth: 220, overflow: 'hidden' }}>
+          <Typography.Ellipsis showTooltip>{v || '-'}</Typography.Ellipsis>
+        </div>
       ),
     },
     { key: 'sort', title: '排序', dataIndex: 'sort', width: 70, align: 'center' },
     {
       key: 'referenced',
-      title: '被引用',
+      title: '引用',
       dataIndex: 'referenced',
       width: 100,
       align: 'center',
