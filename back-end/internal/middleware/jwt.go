@@ -70,7 +70,7 @@ func JWTAuth() gin.HandlerFunc {
 func ParseToken(tokenStr string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (any, error) {
 		return []byte(config.Cfg.Server.JWT.Secret), nil
-	})
+	}, jwt.WithValidMethods([]string{"HS256"})) // 锁定签名算法，防算法混淆攻击
 	if err != nil {
 		return nil, err
 	}

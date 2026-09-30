@@ -28,25 +28,26 @@ export default function Login() {
   const navigate = useNavigate()
   const { login } = useAuth()
 
-  // 初始化时读取缓存的账号密码并自动回填
+  // 初始化时读取缓存的账号密码并自动回填（密码为转译存储，异步解密）
   useEffect(() => {
-    const credentials = getCredentials()
-    if (credentials) {
-      form.setFieldsValue({
-        username: credentials.username || '',
-        password: credentials.password || '',
-      })
-      setRemember(true)
-    }
+    getCredentials().then((credentials) => {
+      if (credentials) {
+        form.setFieldsValue({
+          username: credentials.username || '',
+          password: credentials.password || '',
+        })
+        setRemember(true)
+      }
+    })
   }, [form])
 
   const handleSubmit = async (values) => {
     setLoading(true)
     try {
       await login(values)
-      // 根据勾选状态决定保存或清除缓存凭证
+      // 根据勾选状态决定保存或清除缓存凭证（密码转译后存储）
       if (remember) {
-        saveCredentials(values.username, values.password)
+        await saveCredentials(values.username, values.password)
       } else {
         clearCredentials()
       }

@@ -674,8 +674,8 @@ export default function InterfaceManage() {
               </FormItem>
               <FormItem
                 label={
-                  <span className="inline-flex items-center gap-1">
-                    转发参数模板
+                  <span className="flex w-full items-center justify-between">
+                    <span>转发参数模板</span>
                     <Button
                       type="text"
                       size="mini"

@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { Message } from '@arco-design/web-react'
 import { getToken, clearToken } from 'src/utils/auth'
-import { API_PREFIX } from 'src/utils/constants'
+import { API_PREFIX, BASE_PATH } from 'src/utils/constants'
 
 // 后端统一返回：{ code, msg, data, timestamp }，code=0 为成功
 // baseURL 取 API_PREFIX（唯一真值在 .env 的 VITE_API_PREFIX，版本号变更只改 .env）
@@ -22,7 +22,8 @@ request.interceptors.request.use((config) => {
 function handleUnauthorized() {
   clearToken()
   Message.error('登录已过期，请重新登录')
-  window.location.href = '/login'
+  // 使用部署子路径（VITE_BASE_PATH）拼跳转目标，避免子路径部署（如 /v1）时 401 跳 /login 404
+  window.location.href = `${BASE_PATH}/login`
 }
 
 request.interceptors.response.use(

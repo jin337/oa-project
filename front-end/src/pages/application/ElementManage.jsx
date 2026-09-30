@@ -1168,8 +1168,8 @@ export default function ElementManage() {
                   <Col span={24}>
                     <FormItem
                       label={
-                        <span className="inline-flex items-center gap-1">
-                          请求参数
+                        <span className="flex w-full items-center justify-between">
+                          <span>请求参数</span>
                           <Button
                             type="text"
                             size="mini"
@@ -1389,8 +1389,8 @@ export default function ElementManage() {
                                   <Col span={24}>
                                     <FormItem
                                       label={
-                                        <span className="inline-flex items-center gap-1">
-                                          请求参数
+                                        <span className="flex w-full items-center justify-between">
+                                          <span>请求参数</span>
                                           <Button
                                             type="text"
                                             size="mini"

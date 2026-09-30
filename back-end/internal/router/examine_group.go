@@ -13,9 +13,9 @@ func registerExamineGroupRoutes(api *gin.RouterGroup) {
 	examineGroups.Use(middleware.JWTAuth())
 	{
 		examineGroups.GET("", handler.ExamineGroupList)      // 审核人员组列表
-		examineGroups.POST("", handler.ExamineGroupCreate)   // 新建审核人员组
+		examineGroups.POST("", middleware.RequirePermission("system:examine:edit"), handler.ExamineGroupCreate)   // 新建审核人员组
 		examineGroups.GET("/:id", handler.ExamineGroupDetail) // 审核人员组详情
-		examineGroups.PUT("/:id", handler.ExamineGroupUpdate) // 修改审核人员组
-		examineGroups.DELETE("/:id", handler.ExamineGroupDelete) // 删除审核人员组
+		examineGroups.PUT("/:id", middleware.RequirePermission("system:examine:edit"), handler.ExamineGroupUpdate) // 修改审核人员组
+		examineGroups.DELETE("/:id", middleware.RequirePermission("system:examine:edit"), handler.ExamineGroupDelete) // 删除审核人员组
 	}
 }

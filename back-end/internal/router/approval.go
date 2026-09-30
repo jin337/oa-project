@@ -13,18 +13,18 @@ func registerApprovalRoutes(api *gin.RouterGroup) {
 	approval.Use(middleware.JWTAuth())
 	{
 		approval.GET("/list", handler.ApprovalList) // 审批列表
-		// 审批分类 & 申请项
+		// 审批分类 & 申请项（管理操作需 approval:edit）
 		category := approval.Group("/category")
 		{
 			category.GET("", handler.ApprovalCategoryList)              // 审批分类列表
-			category.POST("", handler.ApprovalCategoryCreate)           // 新建审批分类
-			category.PUT("/:id", handler.ApprovalCategoryUpdate)        // 修改审批分类
-			category.DELETE("/:id", handler.ApprovalCategoryDelete)     // 删除审批分类
+			category.POST("", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryCreate) // 新建审批分类
+			category.PUT("/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryUpdate) // 修改审批分类
+			category.DELETE("/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryDelete) // 删除审批分类
 			// 申请项
 			category.GET("/item", handler.ApprovalCategoryItemList)     // 申请项列表
-			category.POST("/item", handler.ApprovalCategoryItemCreate)  // 新建申请项
-			category.PUT("/item/:id", handler.ApprovalCategoryItemUpdate) // 修改申请项
-			category.DELETE("/item/:id", handler.ApprovalCategoryItemDelete) // 删除申请项
+			category.POST("/item", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryItemCreate) // 新建申请项
+			category.PUT("/item/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryItemUpdate) // 修改申请项
+			category.DELETE("/item/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryItemDelete) // 删除申请项
 		}
 		// 流程实例
 		instance := approval.Group("/instance")
