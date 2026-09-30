@@ -109,10 +109,11 @@ func defaultConfig() *Config {
 // APP_ENV=test      -> configs/config-test.yaml
 // APP_ENV=prod      -> configs/config-prod.yaml
 // 配置文件读取/解析失败时不退出，打印告警并使用默认安全配置。
+var DefaultEnv = "dev"
 func Load() *Config {
 	Env = os.Getenv("APP_ENV")
 	if Env == "" {
-		Env = "dev"
+		Env = DefaultEnv
 	}
 	cfg := defaultConfig()
 

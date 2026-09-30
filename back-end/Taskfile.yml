@@ -67,7 +67,7 @@ tasks:
     deps: [deps]
     cmds:
       - mkdir -p bin
-      - go build -ldflags="-s -w" -o {{.PACKAGE_BIN}} ./cmd/server
+      - go build -ldflags="-s -w -X 'back-end/internal/config.DefaultEnv=prod'" -o {{.PACKAGE_BIN}} ./cmd/server
       - '{{if eq OS "windows"}}upx.exe --best --lzma {{.PACKAGE_BIN}}{{else}}command -v upx >/dev/null 2>&1 && upx --best --lzma {{.PACKAGE_BIN}} || echo upx 未安装，已跳过压缩{{end}}'
 
   test:
