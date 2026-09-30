@@ -38,8 +38,6 @@ const APPROVAL_NODE_META = {
   3: { label: '抄送人', color: 'blue', bg: 'bg-blue-500', icon: IconSend }, // 3-抄送人
   4: { label: '条件分支', color: 'purple', bg: 'bg-purple-500', icon: IconBranch }, // 4-条件分支
 }
-// 发起人自选类型：1-单选 / 2-多选
-const SELF_SELECT_MAP = { 1: '单选', 2: '多选' }
 // 审批方式：1-依次审批 / 2-会签 / 3-或签（多选审批人摘要展示用，如「2人依次审批」）
 const STRATEGY_MAP = { 1: '依次审批', 2: '会签', 3: '或签' }
 // 审批方式连接符（渲染在右侧成员之间）：1-依次审批(>) / 2-会签(+) / 3-或签(/)
@@ -49,8 +47,6 @@ const RELATION_MAP = { 1: '且（AND）', 2: '或（OR）' }
 // 逻辑运算符 value 枚举：与 constants.js 的 OPERATOR_OPTIONS 严格一致（1-大于 / 2-小于 / 3-等于 / 4-不等于 / 5-包含 / 6-不包含）
 const [OP_GREATER, OP_LESS, OP_EQUAL, OP_NOT_EQUAL, OP_CONTAINS, OP_NOT_CONTAINS] =
   OPERATOR_OPTIONS.map((o) => o.value)
-// 运算符显示文案映射：由 OPERATOR_OPTIONS 派生，避免硬编码重复定义
-const OPERATOR_MAP = Object.fromEntries(OPERATOR_OPTIONS.map((o) => [o.value, o.label]))
 
 /* ==================== 条件评估（基于实际填报表单数据） ==================== */
 

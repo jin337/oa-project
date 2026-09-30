@@ -88,7 +88,7 @@ export default function DetailDrawer({
     return () => {
       cancelled = true
     }
-  }, [visible, record])
+  }, [visible, record, initialEditing])
 
   // 关闭时重置所有状态
   useEffect(() => {
@@ -98,7 +98,6 @@ export default function DetailDrawer({
     }
   }, [visible])
 
-  const dataId = record?.data_id ?? record?.id
   const appFromInstance = instance
     ? {
         id: instance.app_id,
@@ -154,31 +153,6 @@ export default function DetailDrawer({
   const canReturn = showApproveButtons && currentNodePerms.includes(1)
   const canDelegate = showDelegateButtons && currentNodePerms.includes(2)
   const canAddSign = showDelegateButtons && currentNodePerms.includes(3)
-
-  // 退回选择：Modal + 目标节点列表
-  const [returnModalVisible, setReturnModalVisible] = useState(false)
-  const [returnTarget, setReturnTarget] = useState('')
-  // 可退回节点：当前节点之前的审批节点（从 execution_path 定位当前节点索引，只取索引之前的节点）
-  const returnableNodes = (() => {
-    const snapshot = instance?.approval_flow_json || []
-    const path = instance?.execution_path || []
-    const curIdx = path.indexOf(currentTask?.node_id)
-    if (curIdx <= 0) return [] // 当前节点是第一个，无可退回节点
-    // 节点 ID -> 节点名 映射
-    const nodeMap = {}
-    const walk = (nodes) => {
-      ;(nodes || []).forEach((n) => {
-        if (n.id) nodeMap[n.id] = n.label || n.name || n.id
-        ;(n.branches || []).forEach((b) => walk(b && b.children))
-      })
-    }
-    walk(snapshot)
-    // 只取当前节点之前的节点
-    return path
-      .slice(0, curIdx)
-      .filter((id) => nodeMap[id])
-      .map((id) => ({ id, label: nodeMap[id] }))
-  })()
 
   // 已驳回（status=3）的发起人侧详情：表单可编辑，footer 显示"重新提交"（对齐钉钉退回语义）
   const showResubmit = !currentTask && Number(instance?.status) === 3

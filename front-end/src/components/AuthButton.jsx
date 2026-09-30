@@ -31,7 +31,7 @@ export default function AuthButton({
   placeholder = null,
   ...restProps
 }) {
-  const { hasPerm, hasAnyPerm, hasAllPerms } = usePermission()
+  const { hasAnyPerm, hasAllPerms } = usePermission()
 
   // 标准化 perm 为数组
   const permList = Array.isArray(perm) ? perm : perm ? [perm] : []

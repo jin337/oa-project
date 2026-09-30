@@ -192,7 +192,7 @@ export default function RoleManage() {
     try {
       let roleId
       if (editing) {
-        const res = await roleApi.updateRole(editing.id, values)
+        await roleApi.updateRole(editing.id, values)
         roleId = editing.id
         Message.success('保存成功')
       } else {

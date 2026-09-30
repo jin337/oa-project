@@ -53,14 +53,6 @@ const NODE_TYPE_ICONS = {
   4: IconBranch,
 }
 
-// 节点类型背景色
-const NODE_TYPE_BG = {
-  1: 'bg-emerald-500',
-  2: 'bg-amber-500',
-  3: 'bg-blue-500',
-  4: 'bg-purple-500',
-}
-
 /** 将 flow_snapshot 节点树递归展平为一维数组（跳过条件分支容器节点，保留其子节点） */
 function flattenFlowNodes(nodes, executionPathSet) {
   const result = []
@@ -223,7 +215,7 @@ export default function ApprovalTimeline({
     return () => {
       cancelled = true
     }
-  }, [visible, instanceId])
+  }, [visible, instanceId, externalNameMap, initialData])
 
   if (loading) {
     return <div className="py-4 text-center text-gray-400">加载审批流程...</div>
@@ -294,7 +286,6 @@ export default function ApprovalTimeline({
                   {nodeTasks.length > 0 ? (
                     nodeTasks.map((task) => {
                       const meta = TASK_STATUS_META[task.status] || TASK_STATUS_META[0]
-                      const Icon = meta.icon
                       const userName = userNameMap[task.assignee_id] || `用户#${task.assignee_id}`
                       return (
                         <div key={task.id} className="mt-1.5 rounded-md bg-gray-100 p-2">

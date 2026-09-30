@@ -9,7 +9,7 @@ import {
     Tooltip,
 } from '@arco-design/web-react'
 import { IconDelete, IconSave, IconSync } from '@arco-design/web-react/icon'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import { fetchAll } from 'src/api/fetchAll'
@@ -46,7 +46,7 @@ const genId = () => `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 export default function LayoutManage() {
   const location = useLocation()
   const { id } = useParams()
-  const { tabs, activeTab, addTab, updateTab } = useTabs()
+  const { addTab, updateTab } = useTabs()
 
   // 左侧组件库（来自当前流程的表单元素接口）
   const [library, setLibrary] = useState([])
@@ -119,7 +119,7 @@ export default function LayoutManage() {
     return () => {
       cancelled = true
     }
-  }, [id, location.pathname, addTab, updateTab])
+  }, [id, location.pathname, addTab, updateTab, loadTableFields])
 
   // 加载左侧组件库：获取当前流程关联的表单元素并映射为可拖拽项
   useEffect(() => {
@@ -303,19 +303,22 @@ export default function LayoutManage() {
   }
 
   // 加载指定表下的字段列表（表单元素接口，按 table_key 过滤），并缓存
-  const loadTableFields = async (tableKey) => {
-    if (!tableKey) return
-    setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: true }))
-    try {
-      const res = await fetchAll((p) => applicationApi.listApplicationElements(id, { ...p, table_key: tableKey }))
-      const list = (res.data?.list || []).filter((f) => !tableKey || f.table_key === tableKey)
-      setTableFieldsMap((prev) => ({ ...prev, [tableKey]: list }))
-    } catch (e) {
-      setTableFieldsMap((prev) => ({ ...prev, [tableKey]: [] }))
-    } finally {
-      setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: false }))
-    }
-  }
+  const loadTableFields = useCallback(
+    async (tableKey) => {
+      if (!tableKey) return
+      setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: true }))
+      try {
+        const res = await fetchAll((p) => applicationApi.listApplicationElements(id, { ...p, table_key: tableKey }))
+        const list = (res.data?.list || []).filter((f) => !tableKey || f.table_key === tableKey)
+        setTableFieldsMap((prev) => ({ ...prev, [tableKey]: list }))
+      } catch (e) {
+        setTableFieldsMap((prev) => ({ ...prev, [tableKey]: [] }))
+      } finally {
+        setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: false }))
+      }
+    },
+    [id],
+  )
 
   // 全局关联子表：保存到表格元素层级，并联动加载字段缓存
   const handleTableKeyChange = (tableKey) => {
@@ -336,7 +339,7 @@ export default function LayoutManage() {
     if (selectedElement?.element_type === 'table' && mainKey && !tableFieldsMap[mainKey]) {
       loadTableFields(mainKey)
     }
-  }, [selectedElement, tableFieldsMap, appTables?.tableName])
+  }, [selectedElement, tableFieldsMap, appTables?.tableName, loadTableFields])
 
   // 选择字段：自动将字段的 label 赋给 title、field_key 赋给 dataIndex
   const handleColumnFieldChange = (colId, tableKey, fieldKey) => {

@@ -64,7 +64,6 @@ export {
 
 const FormItem = Form.Item
 const FormList = Form.List
-const Row = Grid.Row
 const Col = Grid.Col
 // Table 合计行：summary 回调必须返回 Table.Summary.Row / Cell 组合元素
 const SummaryRow = Table.Summary.Row
@@ -188,7 +187,7 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
   // Form.List 字段名：优先关联子表名（table_key），其次元素 id 兜底
   const listField = el.table_key || el.id || 'table'
   // 按列 default_value 生成一行默认数据（列与元素同结构解析）
-  const genDefaultRow = () => {
+  const genDefaultRow = useCallback(() => {
     const row = {}
     ;(el.columns || []).forEach((col) => {
       const key = col.dataIndex || col.field_key
@@ -198,7 +197,7 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
       }
     })
     return row
-  }
+  }, [el.columns])
   // 列级 visible_if 依赖字段（全局表单值）：订阅变化重建列可见性
   const colVifDeps = useMemo(() => {
     const s = new Set()
@@ -217,7 +216,7 @@ const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
     if (!Array.isArray(val) || val.length === 0) {
       form.setFieldValue(listField, [genDefaultRow()])
     }
-  }, [isEditable, listField, form])
+  }, [isEditable, listField, form, genDefaultRow])
 
   // 订阅该字段的表单状态（含校验错误），错误变化时自动重渲染
   const formState = Form.useFormState(listField, form)
@@ -900,9 +899,6 @@ const apiOptionDeps = (el) => {
 
 
 
-/** 正则转义（列路径匹配用） */
-const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
 /**
  * 收集全部字段定义：顶层元素 + 各表（table）的列。
  * 列与元素同结构解析（element_type/data_source/actions/default_value/dynamic_states），
@@ -1295,7 +1291,7 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
         })
       }
     })
-  }, [])
+  }, [isRuntime])
 
   /** 元素失焦：执行 on_blur 动作 */
   const handleElementBlur = useCallback(
@@ -1403,7 +1399,6 @@ export const renderFormItemElement = (el, ctx) => {
     isMoveMode,
     fieldPerms,
     editable,
-    detailDynamicStates,
   } = ctx
   const noLabel = isNoLabelElement(el.element_type)
   const isTableElement = el.element_type === 'table'
@@ -1427,12 +1422,6 @@ export const renderFormItemElement = (el, ctx) => {
       wrapperCol = { style: { flexBasis: `calc(100% - ${formConfig.labelWidth}px)` } }
     }
   }
-
-  // 必填判断：画布模式下无标签元素也参与必填星号；
-  // 常规模式下无标签元素（分割线/表格）不参与必填——表格元素例外（支持整体/列必填校验）
-  const isRequired = isMoveMode
-    ? Boolean(el.required)
-    : Boolean(el.required) && (!noLabel || isTableElement)
 
   // 校验规则：表格元素校验移交给内部 Form.List；详情只读不校验；
   // 常规元素由 rules 统一承载（required 必填 + validation_rule 正则/表达式），

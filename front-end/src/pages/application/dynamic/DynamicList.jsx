@@ -66,7 +66,8 @@ function getDisplayValue(col, value) {
  */
 export default function DynamicList({ app, code }) {
   const searchFields = app?.search_fields || []
-  const columns = app?.columns || []
+  // 列定义引用稳定化：避免 `|| []` 每次渲染重建，导致下游 useMemo 依赖漂移
+  const columns = useMemo(() => app?.columns || [], [app?.columns])
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(app?.size || 10)
@@ -230,21 +231,6 @@ export default function DynamicList({ app, code }) {
       }
     },
     [code, pageSize, searchValues],
-  )
-
-  // 删除当前行数据：Popconfirm 二次确认后调用删除接口，成功后提示并刷新列表
-  const handleDelete = useCallback(
-    async (record) => {
-      if (!app?.id || !record?.id) return
-      try {
-        await applicationApi.deleteApplicationData(app.id, record.id)
-        Message.success('删除成功')
-        fetchList()
-      } catch {
-        // 错误已在请求层提示
-      }
-    },
-    [app?.id, fetchList],
   )
 
   // 搜索：生效当前草稿条件，回到第一页并请求
