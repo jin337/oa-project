@@ -26,6 +26,7 @@ import { useCallback, useEffect, useState } from 'react'
 import * as apiDefinitionApi from 'src/api/apiDefinition'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
+import { formatJsonQuotes } from 'src/utils/json'
 
 const MenuItem = Menu.Item
 
@@ -671,7 +672,22 @@ export default function InterfaceManage() {
                 <Input placeholder="如：/depts" />
               </FormItem>
               <FormItem
-                label="转发参数模板"
+                label={
+                  <span className="inline-flex items-center gap-1">
+                    转发参数模板
+                    <Button
+                      type="text"
+                      size="mini"
+                      onClick={() => {
+                        const cur = form.getFieldValue('params_json')
+                        if (cur === undefined || cur === null) return
+                        form.setFieldValue('params_json', formatJsonQuotes(cur))
+                      }}
+                    >
+                      格式化
+                    </Button>
+                  </span>
+                }
                 field="params_json"
                 extra={
                   <span>
@@ -715,8 +731,17 @@ export default function InterfaceManage() {
                 </>
               }
             />
-            <div className="mb-1 text-sm font-medium">
-              试调参数（JSON，作为 {'${form.xxx}'} 求值上下文）
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-sm font-medium">
+                试调参数（JSON，作为 {'${form.xxx}'} 求值上下文）
+              </span>
+              <Button
+                type="text"
+                size="mini"
+                onClick={() => setDebugParams(formatJsonQuotes(debugParams))}
+              >
+                格式化
+              </Button>
             </div>
             <Input.TextArea
               autoSize={{ minRows: 1, maxRows: 5 }}

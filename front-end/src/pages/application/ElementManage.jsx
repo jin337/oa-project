@@ -28,6 +28,7 @@ import {
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
+import { formatJsonQuotes } from 'src/utils/json'
 import * as apiDefinitionApi from 'src/api/apiDefinition'
 import * as applicationApi from 'src/api/application'
 import { fetchAll } from 'src/api/fetchAll'
@@ -375,6 +376,13 @@ export default function ElementManage() {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
+
+  // 请求参数格式化：读当前值 → 补全键值双引号 → 写回表单
+  const handleFormatParams = (field) => {
+    const cur = form.getFieldValue(field)
+    if (cur === undefined || cur === null) return
+    form.setFieldValue(field, formatJsonQuotes(cur))
+  }
 
   // 当前选中的元素类型（用于联动控制 placeholder / data_source 的显隐）
   const [currentElementType, setCurrentElementType] = useState()
@@ -1159,7 +1167,18 @@ export default function ElementManage() {
                   </Col>
                   <Col span={24}>
                     <FormItem
-                      label="请求参数"
+                      label={
+                        <span className="inline-flex items-center gap-1">
+                          请求参数
+                          <Button
+                            type="text"
+                            size="mini"
+                            onClick={() => handleFormatParams('data_source.params')}
+                          >
+                            格式化
+                          </Button>
+                        </span>
+                      }
                       field="data_source.params"
                       rules={[{ validator: validateJson }]}
                     >
@@ -1369,7 +1388,20 @@ export default function ElementManage() {
                                   </Col>
                                   <Col span={24}>
                                     <FormItem
-                                      label="请求参数"
+                                      label={
+                                        <span className="inline-flex items-center gap-1">
+                                          请求参数
+                                          <Button
+                                            type="text"
+                                            size="mini"
+                                            onClick={() =>
+                                              handleFormatParams(item.field + '.params')
+                                            }
+                                          >
+                                            格式化
+                                          </Button>
+                                        </span>
+                                      }
                                       field={item.field + '.params'}
                                       rules={[{ validator: validateJson }]}
                                     >
