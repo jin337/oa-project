@@ -12,10 +12,10 @@ func registerNotificationRoutes(v1 *gin.RouterGroup) {
 	notifications := v1.Group("/notifications")
 	notifications.Use(middleware.JWTAuth())
 	{
-		notifications.GET("", handler.NotificationList)
-		notifications.GET("/stream", handler.NotificationStream)
-		notifications.GET("/unread-count", handler.NotificationUnreadCount)
-		notifications.PUT("/read-all", handler.NotificationReadAll)
-		notifications.PUT("/:id/read", handler.NotificationRead)
+		notifications.GET("", handler.NotificationList)          // 通知列表
+		notifications.GET("/stream", handler.NotificationStream) // 通知实时推送(SSE)
+		notifications.GET("/unread-count", handler.NotificationUnreadCount) // 未读通知数
+		notifications.PUT("/read-all", handler.NotificationReadAll) // 全部标记已读
+		notifications.PUT("/:id/read", handler.NotificationRead) // 单条标记已读
 	}
 }

@@ -12,20 +12,19 @@ func registerApprovalRoutes(v1 *gin.RouterGroup) {
 	approval := v1.Group("/approval")
 	approval.Use(middleware.JWTAuth())
 	{
-		// 审批列表
-		approval.GET("/list", handler.ApprovalList)
+		approval.GET("/list", handler.ApprovalList) // 审批列表
 		// 审批分类 & 申请项
 		category := approval.Group("/category")
 		{
-			category.GET("", handler.ApprovalCategoryList)
-			category.POST("", handler.ApprovalCategoryCreate)
-			category.PUT("/:id", handler.ApprovalCategoryUpdate)
-			category.DELETE("/:id", handler.ApprovalCategoryDelete)
+			category.GET("", handler.ApprovalCategoryList)              // 审批分类列表
+			category.POST("", handler.ApprovalCategoryCreate)           // 新建审批分类
+			category.PUT("/:id", handler.ApprovalCategoryUpdate)        // 修改审批分类
+			category.DELETE("/:id", handler.ApprovalCategoryDelete)     // 删除审批分类
 			// 申请项
-			category.GET("/item", handler.ApprovalCategoryItemList)
-			category.POST("/item", handler.ApprovalCategoryItemCreate)
-			category.PUT("/item/:id", handler.ApprovalCategoryItemUpdate)
-			category.DELETE("/item/:id", handler.ApprovalCategoryItemDelete)
+			category.GET("/item", handler.ApprovalCategoryItemList)     // 申请项列表
+			category.POST("/item", handler.ApprovalCategoryItemCreate)  // 新建申请项
+			category.PUT("/item/:id", handler.ApprovalCategoryItemUpdate) // 修改申请项
+			category.DELETE("/item/:id", handler.ApprovalCategoryItemDelete) // 删除申请项
 		}
 		// 流程实例
 		instance := approval.Group("/instance")

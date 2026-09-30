@@ -12,10 +12,10 @@ func registerMenuRoutes(v1 *gin.RouterGroup) {
 	menus := v1.Group("/menus")
 	menus.Use(middleware.JWTAuth())
 	{
-		menus.GET("", handler.MenuTree)
-		menus.POST("", handler.MenuCreate)
-		menus.GET("/:id", handler.MenuDetail)
-		menus.PUT("/:id", handler.MenuUpdate)
-		menus.DELETE("/:id", handler.MenuDelete)
+		menus.GET("", handler.MenuTree)       // 菜单树
+		menus.POST("", handler.MenuCreate)    // 新建菜单
+		menus.GET("/:id", handler.MenuDetail) // 菜单详情
+		menus.PUT("/:id", handler.MenuUpdate) // 修改菜单
+		menus.DELETE("/:id", handler.MenuDelete) // 删除菜单
 	}
 }

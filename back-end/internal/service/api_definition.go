@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"back-end/internal/database"
 	"back-end/internal/model"
 
+	"gorm.io/gorm"
 )
 
 // ============================================================
@@ -429,10 +431,13 @@ func forwardHTTP(bearerToken string, def *model.ApiDefinition, vars map[string]i
 			params = form
 		}
 	}
+	// 渲染目标路径中的 :xxx 段（试调动态路径接口时用 params 中的路径参数替换；
+	// 统一分发路径已由 Execute 渲染过，此处幂等无副作用）
+	targetPath := renderPathTemplate(def.TargetPath, params)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	target := fmt.Sprintf("http://127.0.0.1:%d/api/v1%s", config.Cfg.Server.Port, def.TargetPath)
+	target := fmt.Sprintf("http://127.0.0.1:%d/api/v1%s", config.Cfg.Server.Port, targetPath)
 
 	var bodyReader io.Reader
 	if method == http.MethodGet {
@@ -577,40 +582,94 @@ type RouteDef struct {
 }
 
 // ImportBackendRoutes 批量把后端业务路由导入为 HTTP 转发定义：
-// name=method+path，target 指向内部同路径接口，已存在的 method+path 跳过
+// 接口名称取自 router 源码注册行行内注释（LoadRouteComments），
+// 无行内注释的路由不导入；导入顺序按 router.go 注册顺序（LoadRouteOrder），
+// target 指向内部同路径接口，已存在的 method+path 跳过
 func ImportBackendRoutes(curUserID uint, routes []RouteDef) (int, error) {
 	imported := 0
-	for _, r := range routes {
-		if !strings.HasPrefix(r.Path, "/api/v1") {
-			continue
-		}
-		if IsExcludedBackendRoute(r.Method, r.Path) {
-			continue
-		}
+	commentNames := LoadRouteComments()
+	routeOrder := LoadRouteOrder()
+	var existingNames []string
+	if err := database.DB.Model(&model.ApiDefinition{}).Pluck("name", &existingNames).Error; err != nil {
+		return imported, err
+	}
+	seenNames := map[string]bool{}
+	for _, n := range existingNames {
+		seenNames[n] = true
+	}
+	// 按 router.go 注册顺序恢复导入次序（gin.Routes() 按 HTTP 方法分组返回）
+	orderKey := func(r RouteDef) (string, bool) {
 		method := strings.ToUpper(r.Method)
+		if !strings.HasPrefix(r.Path, "/api/v1") {
+			return "", false
+		}
 		path := "/" + strings.Trim(strings.TrimPrefix(r.Path, "/api/v1"), "/")
-		var cnt int64
-		if err := database.DB.Model(&model.ApiDefinition{}).Where("method = ? AND path = ?", method, path).Count(&cnt).Error; err != nil {
-			return imported, err
+		return method + " " + path, true
+	}
+	sort.SliceStable(routes, func(i, j int) bool {
+		ki, _ := orderKey(routes[i])
+		kj, _ := orderKey(routes[j])
+		oi, oki := routeOrder[ki]
+		oj, okj := routeOrder[kj]
+		if oki && okj {
+			return oi < oj
 		}
-		if cnt > 0 {
-			continue
+		if oki {
+			return true
 		}
-		def := model.ApiDefinition{
-			Name:         method + " " + path,
-			Method:       method,
-			Path:         path,
-			Type:         "http",
-			TargetPath:   path,
-			Status:       1,
-			Sort:         0,
-			Remark:       "后端路由自动导入",
+		return false
+	})
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		for _, r := range routes {
+			if !strings.HasPrefix(r.Path, "/api/v1") {
+				continue
+			}
+			if IsExcludedBackendRoute(r.Method, r.Path) {
+				continue
+			}
+			method := strings.ToUpper(r.Method)
+			path := "/" + strings.Trim(strings.TrimPrefix(r.Path, "/api/v1"), "/")
+			displayName, ok := commentNames[method+" "+path]
+			if !ok || displayName == "" {
+				// 路由注册处未写行内注释：不作为接口导入
+				continue
+			}
+			var cnt int64
+			if err := tx.Model(&model.ApiDefinition{}).Where("method = ? AND path = ?", method, path).Count(&cnt).Error; err != nil {
+				return err
+			}
+			if cnt > 0 {
+				continue
+			}
+			if seenNames[displayName] {
+				// 名称唯一索引约束：注释名冲突时追加路径区分
+				displayName = fmt.Sprintf("%s（%s）", displayName, path)
+			}
+			// 后缀名仍可能被多方法同路径占用，追加方法区分直至唯一
+			for seenNames[displayName] {
+				displayName = fmt.Sprintf("%s（%s）", displayName, method)
+			}
+			seenNames[displayName] = true
+			def := model.ApiDefinition{
+				Name:         displayName,
+				Method:       method,
+				Path:         path,
+				Type:         "http",
+				TargetPath:   path,
+				Status:       1,
+				Sort:         1,
+				Remark:       "后端路由自动导入",
+			}
+			def.CreatedBy = curUserID
+			if err := tx.Create(&def).Error; err != nil {
+				return err
+			}
+			imported++
 		}
-		def.CreatedBy = curUserID
-		if err := database.DB.Create(&def).Error; err != nil {
-			return imported, err
-		}
-		imported++
+		return nil
+	})
+	if err != nil {
+		return imported, err
 	}
 	return imported, nil
 }

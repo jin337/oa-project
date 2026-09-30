@@ -12,6 +12,6 @@ func registerUploadRoutes(v1 *gin.RouterGroup) {
 	upload := v1.Group("/upload")
 	upload.Use(middleware.JWTAuth())
 	{
-		upload.POST("", handler.Upload)
+		upload.POST("", handler.Upload) // 上传文件
 	}
 }

@@ -669,10 +669,10 @@ export default function InterfaceManage() {
             </>
           )}
         </Form>
-        <Alert className="mt-4" type="info" title="保存后即可发起试调" />
         {/* 内嵌试调：仅编辑已保存的接口可用 */}
         {!isNew && (
           <div className="mt-2">
+            <Alert type="info" title="保存后即可发起试调" />
             <Divider orientation="left">试调</Divider>
             <Alert
               className="mb-3"

@@ -12,10 +12,10 @@ func registerExamineGroupRoutes(v1 *gin.RouterGroup) {
 	examineGroups := v1.Group("/examine-groups")
 	examineGroups.Use(middleware.JWTAuth())
 	{
-		examineGroups.GET("", handler.ExamineGroupList)
-		examineGroups.POST("", handler.ExamineGroupCreate)
-		examineGroups.GET("/:id", handler.ExamineGroupDetail)
-		examineGroups.PUT("/:id", handler.ExamineGroupUpdate)
-		examineGroups.DELETE("/:id", handler.ExamineGroupDelete)
+		examineGroups.GET("", handler.ExamineGroupList)      // 审核人员组列表
+		examineGroups.POST("", handler.ExamineGroupCreate)   // 新建审核人员组
+		examineGroups.GET("/:id", handler.ExamineGroupDetail) // 审核人员组详情
+		examineGroups.PUT("/:id", handler.ExamineGroupUpdate) // 修改审核人员组
+		examineGroups.DELETE("/:id", handler.ExamineGroupDelete) // 删除审核人员组
 	}
 }

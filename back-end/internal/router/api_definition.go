@@ -12,20 +12,20 @@ func registerApiDefinitionRoutes(v1 *gin.RouterGroup) {
 	apiDefinitions := v1.Group("/api-definitions")
 	apiDefinitions.Use(middleware.JWTAuth())
 	{
-		apiDefinitions.GET("", handler.ApiDefinitionList)
-		apiDefinitions.POST("", handler.ApiDefinitionCreate)
-		apiDefinitions.POST("/debug", handler.ApiDefinitionDebug)
-		apiDefinitions.GET("/backend/routes", handler.ApiDefinitionListRoutes)
-		apiDefinitions.POST("/backend/import", handler.ApiDefinitionImportRoutes)
-		apiDefinitions.GET("/:id", handler.ApiDefinitionDetail)
-		apiDefinitions.PUT("/:id", handler.ApiDefinitionUpdate)
-		apiDefinitions.DELETE("/:id", handler.ApiDefinitionDelete)
+		apiDefinitions.GET("", handler.ApiDefinitionList)            // 接口列表
+		apiDefinitions.POST("", handler.ApiDefinitionCreate)        // 新建接口
+		apiDefinitions.POST("/debug", handler.ApiDefinitionDebug)   // 试调接口
+		apiDefinitions.GET("/backend/routes", handler.ApiDefinitionListRoutes) // 后端路由列表
+		apiDefinitions.POST("/backend/import", handler.ApiDefinitionImportRoutes) // 导入后端路由
+		apiDefinitions.GET("/:id", handler.ApiDefinitionDetail)     // 接口详情
+		apiDefinitions.PUT("/:id", handler.ApiDefinitionUpdate)     // 修改接口
+		apiDefinitions.DELETE("/:id", handler.ApiDefinitionDelete)  // 删除接口
 	}
 
 	// 统一分发：对外以 method+path 暴露接口（GET/POST/PUT/DELETE /interfaces/*path）
 	interfaces := v1.Group("/interfaces")
 	interfaces.Use(middleware.JWTAuth())
 	{
-		interfaces.Any("/*path", handler.ApiDefinitionDispatch)
+		interfaces.Any("/*path", handler.ApiDefinitionDispatch) // 统一分发执行接口
 	}
 }
