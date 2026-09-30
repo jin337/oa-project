@@ -58,6 +58,7 @@ export default defineConfig(({ mode }) => {
     },
   },
   build: {
+    outDir: 'web',
     // arco 组件库本体约 1MB（gzip 约 290KB）、全量样式约 555KB（gzip 约 62KB），
     // 均已单独分包可长期缓存，提高阈值避免每次构建都产生噪音告警
     chunkSizeWarningLimit: 1100,

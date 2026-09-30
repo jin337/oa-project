@@ -1,17 +1,18 @@
 # ============================================================
 # 生产环境配置（APP_ENV=prod 时加载）
-# 生产环境保守安全：迁移默认关闭、日志 info、跨域收紧
+# 本地宝塔部署：oa_serve_main
+# 前端 http://192.168.31.221:8011/oa（nginx 反代 /v1/api、/uploads 到本服务）
 # ============================================================
 
 server:
-  port: 8080
+  port: 8190                  # 后端服务端口（nginx 反代目标，避开开发端口 8180）
   mode: release               # 生产使用 release 模式，关闭调试输出
   api_prefix: /v1/api         # API 统一前缀（版本号变更只改此处，需同步前端 .env 与 Nginx）
   request_timeout: 15
 
   jwt:
-    secret: "prod-secret-must-be-changed"  # 上线前必须修改！
-    expire: 2
+    secret: "9f2c4a7e1b8d3f6a0c5e2b7d9f1a3c5e7b9d2f4a6c8e0b1d3f5a7c9e2b4d6f8a0c"  # 本地部署随机密钥
+    expire: 24
     issuer: "back-end"                     # token 签发者
 
   log:
@@ -20,8 +21,8 @@ server:
 
   cors:
     enable: true
-    allow_origins:            # 生产只放行自己的前端域名
-      - "https://example.com"
+    allow_origins:            # 本地局域网部署：放行宝塔前端站点
+      - "http://192.168.31.221:8011"
     allow_methods:
       - GET
       - POST
@@ -37,8 +38,8 @@ mysql:
   host: 127.0.0.1
   port: 3306
   username: root
-  password: "CHANGE_ME"       # 上线前必须修改！
-  dbname: rbac_prod
+  password: "Kzi493399hst"     # 本机 MySQL 密码（与开发环境一致，宝塔同实例）
+  dbname: oa_main              # 沿用现有业务库（表结构已就绪）
   table_prefix: oa_
   charset: utf8mb4
   collation: utf8mb4_general_ci
@@ -51,6 +52,6 @@ mysql:
 
   migrate:
     enable: false             # 生产默认关闭自动迁移，防止误改数据
-    mode: incremental         # 如需开启，只允许安全增量更新
+    mode: incremental
     log_enable: true
     log_path: "./logs/migrate-prod.log"

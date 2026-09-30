@@ -5,8 +5,8 @@
 version: "3"
 
 vars:
-  BIN: server{{if eq OS "windows"}}.exe{{end}}
-  PACKAGE_BIN: bin/server{{if eq OS "windows"}}.exe{{end}}
+  BIN: oa_serve_main{{if eq OS "windows"}}.exe{{end}}
+  PACKAGE_BIN: bin/oa_serve_main{{if eq OS "windows"}}.exe{{end}}
 
 env:
   # 默认使用开发环境，执行时可覆盖：APP_ENV=test task run
