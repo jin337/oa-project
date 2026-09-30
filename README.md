@@ -164,7 +164,7 @@ cd front-end
 npm run build       # 产物输出 dist/（含 .gz / .br 预压缩）
 ```
 
-Nginx 托管 `dist/`：history 模式回退 `try_files ... /index.html`、`/api` 反代后端、SSE 路径关闭 `proxy_buffering`。详见 [`front-end/README.md`](front-end/README.md)。
+Nginx 托管 `dist/`：history 模式回退 `try_files ... /index.html`、`/v1/api` 反代后端、SSE 路径关闭 `proxy_buffering`。若需发布到 `/v1` 等子路径：`.env.production` 设 `VITE_BASE_PATH=/v1`（构建资源自动带前缀、路由 `basename` 自动生效），Nginx 用 `location /v1/api/`（先声明）+ `location /v1/`（`try_files ... /v1/index.html`）。详见 [`front-end/README.md`](front-end/README.md)。
 
 ## 核心机制
 

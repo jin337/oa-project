@@ -158,6 +158,8 @@ front-end/
 
 **API 前缀（版本号）**：唯一真值在 `.env.development` / `.env.production` 的 `VITE_API_PREFIX`（默认 `/v1/api`），由 `src/utils/constants.js` 的 `API_PREFIX` 统一引用（axios baseURL、SSE、上传 action、动态接口前缀剥离、接口管理文案）。变更版本号时同步后端 `config-*.yaml` 的 `server.api_prefix` 与 Nginx 反代路径即可，无需改代码。
 
+**部署子路径（base path）**：唯一真值在 `.env.production` 的 `VITE_BASE_PATH`（默认空 = 根路径部署）。若将前端发布到 `/v1` 等子目录，填 `/v1`：构建产物资源引用自动带上该前缀（`vite.config.js` 的 `base` 读取同一变量），`BrowserRouter` 的 `basename` 由 `src/utils/constants.js` 的 `BASE_PATH` 引用，路由匹配自动基于子路径。变更时同步 Nginx 的 `location /v1/` 与 SPA fallback 即可，无需改代码。
+
 ## 本地开发与运行步骤
 
 ### 1. 安装依赖
@@ -244,6 +246,8 @@ npm run build        # 产物输出到 dist/
 
 ### Nginx 部署示例
 
+**根路径部署**（`VITE_BASE_PATH` 留空）：
+
 ```nginx
 server {
     listen 80;
@@ -280,10 +284,48 @@ server {
 }
 ```
 
+**子路径部署**（`.env.production` 设 `VITE_BASE_PATH=/v1`，产物发布到 `/opt/oa/front-end/dist`，`location /v1/api/` 必须**先于** `location /v1/` 匹配）：
+
+```nginx
+server {
+    listen 80;
+    server_name oa.example.com;
+
+    root /opt/oa;
+    index index.html;
+
+    gzip_static on;
+    brotli_static on;
+
+    # 接口反向代理到后端 Go 服务（务必在 /v1/ 静态规则之前）
+    location /v1/api/ {
+        proxy_pass http://127.0.0.1:8180;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # SSE 长连接：关闭缓冲，避免通知推送被 Nginx 攒包延迟
+    location /v1/api/notifications/stream {
+        proxy_pass http://127.0.0.1:8180;
+        proxy_http_version 1.1;
+        proxy_set_header Connection '';
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+
+    # 前端静态资源 + history 模式回退（fallback 指向子路径下的 index.html）
+    location /v1/ {
+        try_files $uri $uri/ /v1/index.html;
+    }
+}
+```
+
 ### 部署检查清单
 
 - [ ] `dist/` 已生成，且包含 `.gz` / `.br` 预压缩文件；
 - [ ] Nginx 配置了 history 模式回退（`try_files ... /index.html`），否则刷新子路由会 404；
+- [ ] 子路径部署时 `.env.production` 的 `VITE_BASE_PATH` 与 Nginx `location /v1/` 一致，且 `location /v1/api/` 先于 `location /v1/` 声明；
 - [ ] `/v1/api/` 已反代到后端，且 **SSE 路径关闭了 `proxy_buffering`**，否则站内通知不实时；
 - [ ] 后端 `uploads/` 目录已配置为静态可访问（前端通过 `/uploads/...` 读取附件）。
 

@@ -10,6 +10,7 @@ import {
 import MainLayout from 'src/components/layout.jsx'
 import { useAuth } from 'src/store/auth-context'
 import { getToken } from 'src/utils/auth'
+import { BASE_PATH } from 'src/utils/constants'
 
 // 路由页面全部懒加载：每个页面单独分包，按需下载
 const Login = lazy(() => import('src/pages/Login.jsx'))
@@ -241,7 +242,7 @@ function AppRouter() {
 
 export default function AppRouterProvider() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={BASE_PATH}>
       <AppRouter />
     </BrowserRouter>
   )
