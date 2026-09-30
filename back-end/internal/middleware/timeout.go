@@ -12,7 +12,7 @@ import (
 // ssePaths 长连接/流式接口白名单：这类接口按设计长期持有连接，
 // 不能被请求超时上下文取消，否则连接会被定时切断（表现为 SSE 每隔超时时长断开重连）。
 var ssePaths = map[string]struct{}{
-	"/api/v1/notifications/stream": {},
+	"/v1/api/notifications/stream": {},
 }
 
 // Timeout 接口请求统一超时控制：超时时间取自配置 server.request_timeout。

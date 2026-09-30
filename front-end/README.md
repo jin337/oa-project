@@ -1,4 +1,4 @@
-﻿# front-end
+# front-end
 
 > OA 管理系统前端 · React 19 + Vite 8 + Arco Design + Tailwind CSS v4
 
@@ -57,7 +57,7 @@ OA 管理系统前端，承接同级目录 `back-end`（Go + Gin 服务，默认
 ```
 front-end/
 ├── index.html                    # 入口 HTML（<title> 由 vite 插件注入 src/config/app.js 的 APP_NAME）
-├── vite.config.js                # 端口 8181 + /api、/health、/uploads 代理 + 分包/预压缩构建优化
+├── vite.config.js                # 端口 8181 + /v1/api、/health、/uploads 代理 + 分包/预压缩构建优化
 ├── jsconfig.json                 # 编辑器路径解析：src/* 与 @/* 均指向 ./src/*
 ├── .prettierrc                   # Prettier 规范（无分号 / 单引号 / 行宽 100 / LF）
 ├── .prettierignore / .gitignore  # 格式化与版本控制忽略清单
@@ -72,7 +72,7 @@ front-end/
     ├── config/
     │   └── app.js                # 全局配置：系统名称、登录页文案、表单元素类型选项、SIZE_OPTIONS
     ├── api/                      # 接口封装（统一走 request 拦截器）
-    │   ├── request.js            #   axios 实例：baseURL=/api/v1，统一错误提示 / 401 登出
+    │   ├── request.js            #   axios 实例：baseURL=/v1/api，统一错误提示 / 401 登出
     │   ├── fetchAll.js           #   全量取数：逐页拉全（列表接口一律用它，不要再用 size:9999）
     │   ├── auth.js / user.js / role.js / menu.js / dept.js    # RBAC 模块
     │   ├── application.js        #   流程配置：流程 / 数据表字段 / 表单元素 / 业务数据
@@ -153,10 +153,10 @@ front-end/
 | ------------- | ------------------------ | ----------------------------------------------------------------- |
 | Node.js       | `^20.19.0 \|\| >=22.12.0` | Vite 8 的 `engines` 要求，推荐使用 22 LTS                        |
 | npm           | ≥ 10                     | 随 Node.js 一并安装                                               |
-| back-end 服务 | 运行中                   | 开发环境通过 Vite 代理转发 `/api` 到 `http://localhost:8180`      |
+| back-end 服务 | 运行中                   | 开发环境通过 Vite 代理转发 `/v1/api` 到 `http://localhost:8180`      |
 | 现代浏览器    | 支持 ES2020+             | 需支持 `EventSource`（SSE）与 `BroadcastChannel`（多标签页同步）  |
 
-项目不使用任何 `.env` 环境变量文件，全部运行期配置集中在 `src/config/app.js` 与 `vite.config.js`。
+**API 前缀（版本号）**：唯一真值在 `.env.development` / `.env.production` 的 `VITE_API_PREFIX`（默认 `/v1/api`），由 `src/utils/constants.js` 的 `API_PREFIX` 统一引用（axios baseURL、SSE、上传 action、动态接口前缀剥离、接口管理文案）。变更版本号时同步后端 `config-*.yaml` 的 `server.api_prefix` 与 Nginx 反代路径即可，无需改代码。
 
 ## 本地开发与运行步骤
 
@@ -214,14 +214,14 @@ Vite 固定监听 **8181** 端口（`strictPort: true`，端口被占用会直�
 
 | 文件                | 说明                                                                                                                                                                |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vite.config.js`    | 开发端口 8181（`host: 0.0.0.0` + `strictPort`）、`/api` `/health` `/uploads` 代理到后端 8180、路径别名 `src` → `/src`、构建分包（`manualChunks`）与 gzip/brotli 预压缩 |
+| `vite.config.js`    | 开发端口 8181（`host: 0.0.0.0` + `strictPort`）、`/v1/api` `/health` `/uploads` 代理到后端 8180、路径别名 `src` → `/src`、构建分包（`manualChunks`）与 gzip/brotli 预压缩 |
 | `src/config/app.js` | 系统名称（注入 `<title>`）、登录页文案与功能亮点、表单元素类型选项（`ELEMENT_TYPE_OPTIONS`）、字段宽度选项（`SIZE_OPTIONS`）——改系统名只需改此文件                   |
 | `jsconfig.json`     | 编辑器路径解析：`src/*` 与 `@/*` → `./src/*`（构建期实际别名由 `vite.config.js` 提供）                                                                               |
 | `.prettierrc`       | 代码风格：无分号、单引号、尾逗号 all、行宽 100、缩进 2、LF、Tailwind 类名自动排序                                                                                    |
 | `.prettierignore`   | Prettier 忽略清单（`dist`、`node_modules` 等构建产物）                                                                                                              |
 | `.gitignore`        | 版本控制忽略清单：`node_modules`、`dist`、`*.local`、`.DS_Store`                                                                                                     |
 
-> 项目**不存在** `.env` / `.env.development` 等文件，后端地址等运行期差异通过 `vite.config.js` 的代理配置与后端 `APP_ENV` 分别管理。
+> API 前缀（版本号）通过 `.env.development` / `.env.production` 的 `VITE_API_PREFIX` 管理（默认 `/v1/api`），`src/utils/constants.js` 统一引用；开发代理由 `vite.config.js` 经 `loadEnv` 读取同一变量。
 
 ## 构建与部署指南
 
@@ -262,7 +262,7 @@ server {
     }
 
     # 接口反向代理到后端 Go 服务
-    location /api/ {
+    location /v1/api/ {
         proxy_pass http://127.0.0.1:8180;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -270,7 +270,7 @@ server {
     }
 
     # SSE 长连接：关闭缓冲，避免通知推送被 Nginx 攒包延迟
-    location /api/v1/notifications/stream {
+    location /v1/api/notifications/stream {
         proxy_pass http://127.0.0.1:8180;
         proxy_http_version 1.1;
         proxy_set_header Connection '';
@@ -284,7 +284,7 @@ server {
 
 - [ ] `dist/` 已生成，且包含 `.gz` / `.br` 预压缩文件；
 - [ ] Nginx 配置了 history 模式回退（`try_files ... /index.html`），否则刷新子路由会 404；
-- [ ] `/api/` 已反代到后端，且 **SSE 路径关闭了 `proxy_buffering`**，否则站内通知不实时；
+- [ ] `/v1/api/` 已反代到后端，且 **SSE 路径关闭了 `proxy_buffering`**，否则站内通知不实时；
 - [ ] 后端 `uploads/` 目录已配置为静态可访问（前端通过 `/uploads/...` 读取附件）。
 
 ## 核心机制
@@ -311,7 +311,7 @@ server {
   - `move-form`：设计器表单页模式（拖拽设计）
   - `move-detail`：设计器详情页模式（拖拽设计只读预览）
   - `dynamic/modes/` 下已有四种模式的独立实现，当前主链路仍统一由 `DynamicForm.jsx` 渲染，该目录为后续拆分的预留；
-- **动态数据源**（`data_source`）：支持静态数据与 `type=api` 按配置 `url/method/params` 请求接口，自动解析返回数据为选项；`label` / `value_field` 支持点路径取值（如 `data.list`、`profile.nickname`）；可**引用接口管理**中的接口定义（`api_ref: 1`）——引用后 `url` / `method` 锁定禁用，`params` / `label` / `value_field` 仍可修改，运行时自动走统一分发端点 `/api/v1/interfaces`；
+- **动态数据源**（`data_source`）：支持静态数据与 `type=api` 按配置 `url/method/params` 请求接口，自动解析返回数据为选项；`label` / `value_field` 支持点路径取值（如 `data.list`、`profile.nickname`）；可**引用接口管理**中的接口定义（`api_ref: 1`）——引用后 `url` / `method` 锁定禁用，`params` / `label` / `value_field` 仍可修改，运行时自动走统一分发端点 `/v1/api/interfaces`；
 - **取值表达式约定**：
   - **`form.xxx`**：引用整个表单当前值，如 `form.dept_id`，用于参数拼接、联动目标值等；
   - **`item.xxx`**：引用下拉 / 树选的**当前选中项**，如 `item.profile.nickname`，用于 `target_mapping` 与显示拼接；
@@ -321,7 +321,7 @@ server {
 - **动态显隐 / 禁用**（`dynamic_states`）：`visible_if` / `disabled_if` 支持表达式（如 `${form.dept_id === '1'}`），通过 Arco Form `shouldUpdate` 实时重渲染；
 - **校验规则**（`validation_rule`）：透传 Arco Form rules，支持 `required` / `pattern` / `min` / `max` 等，`validation_message` 自定义错误提示；
 - **子表**：columns 配置渲染为表格，支持行内编辑、联动、隐藏列（值仍保留提交）；
-- **文件上传**：`UploadElement` 对接后端 `/api/v1/upload`，支持单 / 多选、文件类型限制（`accept`）、按钮文字与 placeholder 自定义，提交时字段值为 `[{ uid, url, name, size }]` JSON 数组；
+- **文件上传**：`UploadElement` 对接后端 `/v1/api/upload`，支持单 / 多选、文件类型限制（`accept`）、按钮文字与 placeholder 自定义，提交时字段值为 `[{ uid, url, name, size }]` JSON 数组；
 - **公共计算 / 转换接口**：`POST /utils/calculate`，支持以下类型：
   - `number_to_upper`：数字转大写金额（如 `100000` → `壹拾万元整`，支持小数与「零」补位）
   - `calc`：统一表达式计算（支持 `+`、`-`、`*`、`/`、`%` 与括号，如 `(100+2)*3 % 7` → `5`）
@@ -342,7 +342,7 @@ server {
 ### 站内通知
 
 - **NotificationBell**（`components/notification-bell.jsx`）：顶部导航铃铛图标，未读时显示红点，下拉展示通知列表；
-- **SSE 实时推送**：通过 `EventSource` 连接 `/api/v1/notifications/stream?token=xxx`，服务端推送即到即显，无需轮询；断线由 `EventSource` 原生自动重连；
+- **SSE 实时推送**：通过 `EventSource` 连接 `/v1/api/notifications/stream?token=xxx`，服务端推送即到即显，无需轮询；断线由 `EventSource` 原生自动重连；
 - **多标签页同步**：通过 `BroadcastChannel('notification-sync')` 在多个标签页之间同步已读状态与未读数；
 - **未读数**：页面初始化时调用 `/notifications/unread-count` 取一次基线，之后由 SSE 推送增量维护；
 - **通知类型**：`type=1` 待办、`type=2` 退回、`type=3` 抄送、`type=4` 审批结果，由后端在流程流转时生成（抄送按配置的抄送时机推送）。
@@ -371,9 +371,9 @@ server {
 
 ## 接口约定
 
-- 后端统一前缀 `/api/v1`，统一返回 `{ code, msg, data, timestamp }`，`code=0` 成功；
-- 接口管理定义的接口经统一分发端点暴露：`/api/v1/interfaces/*path`（按 method+path 匹配，表单元素引用的接口运行时自动走该端点）；
-- 开发环境由 Vite 代理转发：`/api` → `http://localhost:8180/api`，`/health` → 后端根路径健康检查，`/uploads` → 上传文件静态资源；
+- 后端统一前缀 `/v1/api`，统一返回 `{ code, msg, data, timestamp }`，`code=0` 成功；
+- 接口管理定义的接口经统一分发端点暴露：`/v1/api/interfaces/*path`（按 method+path 匹配，表单元素引用的接口运行时自动走该端点）；
+- 开发环境由 Vite 代理转发：`/v1/api` → `http://localhost:8180/v1/api`，`/health` → 后端根路径健康检查，`/uploads` → 上传文件静态资源；
 - 鉴权接口请求头携带 `Authorization: Bearer <token>`（登录成功后自动写入，`src/utils/auth.js` 持久化到 localStorage）；
 - `code=401` 或 HTTP 401 时自动清除本地 token 并跳回登录页；其余非 0 code 由拦截器弹出 `msg` 提示；
 - SSE 接口因浏览器 `EventSource` 无法自定义请求头，token 通过查询参数传递：`/notifications/stream?token=xxx`。

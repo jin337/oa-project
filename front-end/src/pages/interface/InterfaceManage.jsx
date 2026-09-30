@@ -26,6 +26,7 @@ import { useCallback, useEffect, useState } from 'react'
 import * as apiDefinitionApi from 'src/api/apiDefinition'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
+import { API_PREFIX } from 'src/utils/constants'
 import { formatJsonQuotes } from 'src/utils/json'
 
 const MenuItem = Menu.Item
@@ -601,7 +602,7 @@ export default function InterfaceManage() {
                   { required: true, message: '请输入对外路径' },
                   { minLength: 1, maxLength: 255, message: '长度 1-255 个字符' },
                 ]}
-                extra="统一分发端点：/api/v1/interfaces + 该路径（仅内部相对路径，禁止绝对 URL）"
+                extra={`统一分发端点：${API_PREFIX}/interfaces + 该路径（仅内部相对路径，禁止绝对 URL）`}
               >
                 <Input placeholder="如：/depts" />
               </FormItem>

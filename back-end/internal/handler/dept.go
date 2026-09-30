@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// DeptTree GET /api/v1/depts 部门树
+// DeptTree GET /v1/api/depts 部门树
 func DeptTree(c *gin.Context) {
 	var req model.DeptListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -25,7 +25,7 @@ func DeptTree(c *gin.Context) {
 	response.OK(c, tree)
 }
 
-// DeptUsers GET /api/v1/depts/users 所有部门树 + 每个部门下的用户列表
+// DeptUsers GET /v1/api/depts/users 所有部门树 + 每个部门下的用户列表
 func DeptUsers(c *gin.Context) {
 	tree, err := service.DeptUsers()
 	if err != nil {
@@ -35,7 +35,7 @@ func DeptUsers(c *gin.Context) {
 	response.OK(c, tree)
 }
 
-// DeptDetail GET /api/v1/depts/:id
+// DeptDetail GET /v1/api/depts/:id
 func DeptDetail(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -49,7 +49,7 @@ func DeptDetail(c *gin.Context) {
 	response.OK(c, dept)
 }
 
-// DeptCreate POST /api/v1/depts
+// DeptCreate POST /v1/api/depts
 func DeptCreate(c *gin.Context) {
 	var req model.DeptCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -64,7 +64,7 @@ func DeptCreate(c *gin.Context) {
 	response.OK(c, dept)
 }
 
-// DeptUpdate PUT /api/v1/depts/:id
+// DeptUpdate PUT /v1/api/depts/:id
 func DeptUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -83,7 +83,7 @@ func DeptUpdate(c *gin.Context) {
 	response.OK(c, dept)
 }
 
-// DeptDelete DELETE /api/v1/depts/:id
+// DeptDelete DELETE /v1/api/depts/:id
 func DeptDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

@@ -19,6 +19,7 @@ type Config struct {
 type ServerConfig struct {
 	Port           int         `yaml:"port"`
 	Mode           string      `yaml:"mode"`
+	APIPrefix      string      `yaml:"api_prefix"` // API 统一前缀（版本号变更只改此处，如 /v1/api → /v2/api）
 	RequestTimeout int         `yaml:"request_timeout"` // 秒
 	JWT            JWTConfig   `yaml:"jwt"`
 	Log            LogConfig   `yaml:"log"`
@@ -80,6 +81,7 @@ func defaultConfig() *Config {
 		Server: ServerConfig{
 			Port:           8080,
 			Mode:           "release",
+			APIPrefix:      "/v1/api",
 			RequestTimeout: 10,
 			JWT:            JWTConfig{Secret: "default-secret-change-me", Expire: 2, Issuer: "back-end"},
 			Log:            LogConfig{Level: "info", Path: ""},
@@ -130,6 +132,10 @@ func Load() *Config {
 	}
 	if cfg.Server.Mode != "debug" && cfg.Server.Mode != "release" && cfg.Server.Mode != "test" {
 		cfg.Server.Mode = "release"
+	}
+	// API 前缀兜底：yaml 缺失时禁止为空（否则路由注册到根路径）
+	if cfg.Server.APIPrefix == "" {
+		cfg.Server.APIPrefix = "/v1/api"
 	}
 	if cfg.Server.RequestTimeout <= 0 {
 		cfg.Server.RequestTimeout = 10

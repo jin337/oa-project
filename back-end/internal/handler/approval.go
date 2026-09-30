@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 // ============================================================
 // 审批分类、申请项、审批列表
@@ -19,7 +19,7 @@ import (
 
 // ==================== 审批分类 ====================
 
-// ApprovalCategoryList GET /api/v1/approval/category
+// ApprovalCategoryList GET /v1/api/approval/category
 func ApprovalCategoryList(c *gin.Context) {
 	var req model.ApprovalCategoryListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -34,7 +34,7 @@ func ApprovalCategoryList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// ApprovalCategoryCreate POST /api/v1/approval/category
+// ApprovalCategoryCreate POST /v1/api/approval/category
 func ApprovalCategoryCreate(c *gin.Context) {
 	var req model.ApprovalCategoryCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -49,7 +49,7 @@ func ApprovalCategoryCreate(c *gin.Context) {
 	response.OK(c, cat)
 }
 
-// ApprovalCategoryUpdate PUT /api/v1/approval/category/:id
+// ApprovalCategoryUpdate PUT /v1/api/approval/category/:id
 func ApprovalCategoryUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -68,7 +68,7 @@ func ApprovalCategoryUpdate(c *gin.Context) {
 	response.OK(c, cat)
 }
 
-// ApprovalCategoryDelete DELETE /api/v1/approval/category/:id
+// ApprovalCategoryDelete DELETE /v1/api/approval/category/:id
 func ApprovalCategoryDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -83,7 +83,7 @@ func ApprovalCategoryDelete(c *gin.Context) {
 
 // ==================== 申请项 ====================
 
-// ApprovalCategoryItemList GET /api/v1/approval/category/item
+// ApprovalCategoryItemList GET /v1/api/approval/category/item
 func ApprovalCategoryItemList(c *gin.Context) {
 	var req model.ApprovalCategoryItemListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -98,7 +98,7 @@ func ApprovalCategoryItemList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// ApprovalCategoryItemCreate POST /api/v1/approval/item
+// ApprovalCategoryItemCreate POST /v1/api/approval/item
 func ApprovalCategoryItemCreate(c *gin.Context) {
 	var req model.ApprovalCategoryItemCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -113,7 +113,7 @@ func ApprovalCategoryItemCreate(c *gin.Context) {
 	response.OK(c, item)
 }
 
-// ApprovalCategoryItemUpdate PUT /api/v1/approval/item/:id
+// ApprovalCategoryItemUpdate PUT /v1/api/approval/item/:id
 func ApprovalCategoryItemUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -132,7 +132,7 @@ func ApprovalCategoryItemUpdate(c *gin.Context) {
 	response.OK(c, item)
 }
 
-// ApprovalCategoryItemDelete DELETE /api/v1/approval/item/:id
+// ApprovalCategoryItemDelete DELETE /v1/api/approval/item/:id
 func ApprovalCategoryItemDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -147,7 +147,7 @@ func ApprovalCategoryItemDelete(c *gin.Context) {
 
 // ==================== 审批列表（跨应用聚合） ====================
 
-// ApprovalList GET /api/v1/approval/list
+// ApprovalList GET /v1/api/approval/list
 func ApprovalList(c *gin.Context) {
 	var req model.ApprovalListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {

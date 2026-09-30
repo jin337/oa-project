@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// MenuTree GET /api/v1/menus 菜单树
+// MenuTree GET /v1/api/menus 菜单树
 func MenuTree(c *gin.Context) {
 	var req model.DeptListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -25,7 +25,7 @@ func MenuTree(c *gin.Context) {
 	response.OK(c, tree)
 }
 
-// MenuDetail GET /api/v1/menus/:id
+// MenuDetail GET /v1/api/menus/:id
 func MenuDetail(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -39,7 +39,7 @@ func MenuDetail(c *gin.Context) {
 	response.OK(c, menu)
 }
 
-// MenuCreate POST /api/v1/menus
+// MenuCreate POST /v1/api/menus
 func MenuCreate(c *gin.Context) {
 	var req model.MenuCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -54,7 +54,7 @@ func MenuCreate(c *gin.Context) {
 	response.OK(c, menu)
 }
 
-// MenuUpdate PUT /api/v1/menus/:id
+// MenuUpdate PUT /v1/api/menus/:id
 func MenuUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -73,7 +73,7 @@ func MenuUpdate(c *gin.Context) {
 	response.OK(c, menu)
 }
 
-// MenuDelete DELETE /api/v1/menus/:id
+// MenuDelete DELETE /v1/api/menus/:id
 func MenuDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

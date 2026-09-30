@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Login POST /api/v1/auth/login
+// Login POST /v1/api/auth/login
 func Login(c *gin.Context) {
 	var req model.LoginReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -25,7 +25,7 @@ func Login(c *gin.Context) {
 	response.OK(c, res)
 }
 
-// Profile GET /api/v1/auth/profile 当前用户资料+菜单树+权限标识
+// Profile GET /v1/api/auth/profile 当前用户资料+菜单树+权限标识
 func Profile(c *gin.Context) {
 	res, err := service.Profile(middleware.CurrentUserID(c))
 	if err != nil {
@@ -35,7 +35,7 @@ func Profile(c *gin.Context) {
 	response.OK(c, res)
 }
 
-// UserMenus GET /api/v1/auth/menus 当前用户菜单树
+// UserMenus GET /v1/api/auth/menus 当前用户菜单树
 func UserMenus(c *gin.Context) {
 	menus, perms := service.UserMenus(middleware.CurrentUserID(c))
 	response.OK(c, gin.H{"menus": menus, "perms": perms})

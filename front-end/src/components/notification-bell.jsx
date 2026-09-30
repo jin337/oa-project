@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as notificationApi from 'src/api/notification'
 import { getToken } from 'src/utils/auth'
+import { API_PREFIX } from 'src/utils/constants'
 import { formatTime } from 'src/utils/format'
 
 // 通知类型文案
@@ -47,7 +48,7 @@ export default function NotificationBell() {
     const token = getToken()
     if (!token) return
 
-    const es = new EventSource(`/api/v1/notifications/stream?token=${token}`)
+    const es = new EventSource(`${API_PREFIX}/notifications/stream?token=${token}`)
 
     // 连接成功事件（带初始未读数）
     es.addEventListener('connected', (e) => {

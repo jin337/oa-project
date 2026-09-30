@@ -6,6 +6,7 @@
 server:
   port: 8180                  # 服务启动端口，避免冲突可自行修改
   mode: debug                 # gin 运行模式：debug / release / test
+  api_prefix: /v1/api         # API 统一前缀（版本号变更只改此处，如 /v1/api → /v2/api，需同步前端 .env 与 Nginx）
   request_timeout: 10         # 接口统一请求超时时间（秒）
 
   jwt:

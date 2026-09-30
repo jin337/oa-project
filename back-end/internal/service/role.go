@@ -7,7 +7,7 @@ import (
 	"back-end/internal/model"
 )
 
-// RoleUsers GET /api/v1/roles/users 所有角色 + 每个角色下的用户列表（参考 DeptUsers 混合树）：
+// RoleUsers GET /v1/api/roles/users 所有角色 + 每个角色下的用户列表（参考 DeptUsers 混合树）：
 // 角色节点（type=role）的 Children 为该角色下的用户节点（type=user），批量查询关联避免 N+1
 func RoleUsers() ([]*model.OrgNode, error) {
 	var roles []model.Role

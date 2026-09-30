@@ -28,6 +28,7 @@ import {
 } from 'react'
 import request from 'src/api/request'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
+import { API_PREFIX } from 'src/utils/constants'
 import {
   renderUploadPreview,
   renderUploadReadOnly,
@@ -925,17 +926,17 @@ const collectFieldDefs = (elements) => {
   return defs
 }
 
-/** 规范化动态接口地址：绝对 URL 原样保留；/api/v1 前缀去掉（request 实例 baseURL 已含）；其余作为相对路径 */
+/** 规范化动态接口地址：绝对 URL 原样保留；API_PREFIX 前缀去掉（request 实例 baseURL 已含）；其余作为相对路径 */
 const normalizeApiUrl = (url) => {
   if (!url) return ''
   if (/^https?:\/\//.test(url)) return url
-  return url.replace(/^\/api\/v1/, '')
+  return url.startsWith(API_PREFIX) ? url.slice(API_PREFIX.length) : url
 }
 
 /**
  * 动态接口请求构造：解析 url 模板（${form.xxx} / ${item.xxx}）与 params 表达式后发起请求。
  * cfg.url / cfg.api_url 均可（数据源用 url，联动动作用 api_url）。
- * api_ref=1 表示引用接口管理：改走统一分发端点 /interfaces{path}（request baseURL 已含 /api/v1）。
+ * api_ref=1 表示引用接口管理：改走统一分发端点 /interfaces{path}（request baseURL 已含 API_PREFIX）。
  */
 const requestDynamicApi = async (cfg, vars) => {
   const isRef = cfg?.api_ref === 1 || cfg?.api_ref === '1'

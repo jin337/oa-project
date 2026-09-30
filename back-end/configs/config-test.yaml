@@ -5,6 +5,7 @@
 server:
   port: 8080
   mode: debug
+  api_prefix: /v1/api         # API 统一前缀（版本号变更只改此处，需同步前端 .env 与 Nginx）
   request_timeout: 10
 
   jwt:

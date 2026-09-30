@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ExamineGroupList GET /api/v1/examine-groups
+// ExamineGroupList GET /v1/api/examine-groups
 func ExamineGroupList(c *gin.Context) {
 	var req model.ExamineGroupListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -25,7 +25,7 @@ func ExamineGroupList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// ExamineGroupDetail GET /api/v1/examine-groups/:id
+// ExamineGroupDetail GET /v1/api/examine-groups/:id
 func ExamineGroupDetail(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -39,7 +39,7 @@ func ExamineGroupDetail(c *gin.Context) {
 	response.OK(c, group)
 }
 
-// ExamineGroupCreate POST /api/v1/examine-groups
+// ExamineGroupCreate POST /v1/api/examine-groups
 func ExamineGroupCreate(c *gin.Context) {
 	var req model.ExamineGroupCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -54,7 +54,7 @@ func ExamineGroupCreate(c *gin.Context) {
 	response.OK(c, group)
 }
 
-// ExamineGroupUpdate PUT /api/v1/examine-groups/:id
+// ExamineGroupUpdate PUT /v1/api/examine-groups/:id
 func ExamineGroupUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -73,7 +73,7 @@ func ExamineGroupUpdate(c *gin.Context) {
 	response.OK(c, group)
 }
 
-// ExamineGroupDelete DELETE /api/v1/examine-groups/:id
+// ExamineGroupDelete DELETE /v1/api/examine-groups/:id
 func ExamineGroupDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

@@ -23,7 +23,7 @@ type UploadResult struct {
 }
 
 // Upload 通用文件上传接口
-// POST /api/v1/upload?app_code=xxx
+// POST /v1/api/upload?app_code=xxx
 // form-data: file=xxx
 // 返回: { url, name, size }
 func Upload(c *gin.Context) {

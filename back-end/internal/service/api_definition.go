@@ -541,7 +541,7 @@ func forwardHTTP(bearerToken string, def *model.ApiDefinition, vars map[string]i
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	target := fmt.Sprintf("http://127.0.0.1:%d/api/v1%s", config.Cfg.Server.Port, targetPath)
+	target := fmt.Sprintf("http://127.0.0.1:%d%s%s", config.Cfg.Server.Port, config.Cfg.Server.APIPrefix, targetPath)
 
 	var bodyReader io.Reader
 	if method == http.MethodGet {
@@ -664,16 +664,17 @@ func ApiDefinitionExecute(bearerToken, method, path string, params map[string]in
 
 // IsExcludedBackendRoute 导入时排除的路由：接口管理自身、分发端点、登录、SSE 长连接
 func IsExcludedBackendRoute(method, path string) bool {
-	if strings.HasPrefix(path, "/api/v1/api-definitions") {
+	prefix := config.Cfg.Server.APIPrefix
+	if strings.HasPrefix(path, prefix+"/api-definitions") {
 		return true
 	}
-	if strings.HasPrefix(path, "/api/v1/interfaces") {
+	if strings.HasPrefix(path, prefix+"/interfaces") {
 		return true
 	}
-	if path == "/api/v1/auth/login" {
+	if path == prefix+"/auth/login" {
 		return true
 	}
-	if path == "/api/v1/notifications/stream" {
+	if path == prefix+"/notifications/stream" {
 		return true
 	}
 	return false
@@ -704,10 +705,11 @@ func ImportBackendRoutes(curUserID uint, routes []RouteDef) (int, error) {
 	// 按 router.go 注册顺序恢复导入次序（gin.Routes() 按 HTTP 方法分组返回）
 	orderKey := func(r RouteDef) (string, bool) {
 		method := strings.ToUpper(r.Method)
-		if !strings.HasPrefix(r.Path, "/api/v1") {
+		prefix := config.Cfg.Server.APIPrefix
+		if !strings.HasPrefix(r.Path, prefix) {
 			return "", false
 		}
-		path := "/" + strings.Trim(strings.TrimPrefix(r.Path, "/api/v1"), "/")
+		path := "/" + strings.Trim(strings.TrimPrefix(r.Path, prefix), "/")
 		return method + " " + path, true
 	}
 	sort.SliceStable(routes, func(i, j int) bool {
@@ -725,14 +727,14 @@ func ImportBackendRoutes(curUserID uint, routes []RouteDef) (int, error) {
 	})
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		for _, r := range routes {
-			if !strings.HasPrefix(r.Path, "/api/v1") {
+			if !strings.HasPrefix(r.Path, config.Cfg.Server.APIPrefix) {
 				continue
 			}
 			if IsExcludedBackendRoute(r.Method, r.Path) {
 				continue
 			}
 			method := strings.ToUpper(r.Method)
-			path := "/" + strings.Trim(strings.TrimPrefix(r.Path, "/api/v1"), "/")
+			path := "/" + strings.Trim(strings.TrimPrefix(r.Path, config.Cfg.Server.APIPrefix), "/")
 			displayName, ok := commentNames[method+" "+path]
 			if !ok || displayName == "" {
 				// 路由注册处未写行内注释：不作为接口导入

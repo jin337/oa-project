@@ -1,10 +1,12 @@
 import axios from 'axios'
 import { Message } from '@arco-design/web-react'
 import { getToken, clearToken } from 'src/utils/auth'
+import { API_PREFIX } from 'src/utils/constants'
 
 // 后端统一返回：{ code, msg, data, timestamp }，code=0 为成功
+// baseURL 取 API_PREFIX（唯一真值在 .env 的 VITE_API_PREFIX，版本号变更只改 .env）
 const request = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_PREFIX,
   timeout: 15000,
 })
 

@@ -45,7 +45,7 @@ full-stack-project/
 │   │   ├── store/            #   AuthContext / TabContext
 │   │   ├── utils/ hooks/ test/
 │   │   └── router.jsx        #   菜单树驱动的动态路由
-│   ├── vite.config.js        #   8181 端口 + /api 代理 + 构建分包/预压缩
+│   ├── vite.config.js        #   8181 端口 + /v1/api 代理 + 构建分包/预压缩
 │   └── README.md             #   前端完整文档（核心机制 / 配置 / 部署）
 └── README.md                 # 本文件（仓库总览）
 ```
@@ -83,7 +83,7 @@ full-stack-project/
 └── 审批详情（业务表单 + 流程时间线 + 状态印章）
 
 接口管理（/interface）
-├── SQL 直查 / HTTP 转发双模式定义，统一分发端点 /api/v1/interfaces/*path 对外暴露
+├── SQL 直查 / HTTP 转发双模式定义，统一分发端点 /v1/api/interfaces/*path 对外暴露
 ├── 试调、一键导入后端路由（注释即名称）、被引用统计防误删
 ```
 
@@ -130,7 +130,9 @@ npm install
 npm run dev
 ```
 
-浏览器访问 `http://localhost:8181/` 登录即可联调；开发环境 `/api`、`/uploads` 由 Vite 代理到后端 8180。
+浏览器访问 `http://localhost:8181/` 登录即可联调；开发环境 `/v1/api`、`/uploads` 由 Vite 代理到后端 8180。
+
+> **API 前缀（版本号）**：唯一真值 = 后端 `back-end/configs/config-*.yaml` 的 `server.api_prefix` + 前端 `front-end/.env.*` 的 `VITE_API_PREFIX`（均默认 `/v1/api`）。版本号变更（如 v1 → v2）只改这两处配置 + Nginx 反代路径，代码零改动。
 
 ## 配置说明
 
@@ -215,7 +217,7 @@ Nginx 托管 `dist/`：history 模式回退 `try_files ... /index.html`、`/api`
 ### 接口管理（oa_api_definitions）
 
 - **双模式**：`type=sql` SQL 模板直查（`${form.xxx}` 占位参数化，仅 SELECT，数据权限按模板内静态写死）；`type=http` 转发到内部相对路径
-- **统一分发**：`GET/POST/PUT/DELETE /api/v1/interfaces/*path` 按 method+path（status=1）匹配执行；HTTP 转发结果原样透传
+- **统一分发**：`GET/POST/PUT/DELETE /v1/api/interfaces/*path` 按 method+path（status=1）匹配执行；HTTP 转发结果原样透传
 - **与表单元素联动**：数据源 / `fetch_and_fill` 可「引用接口」（`api_ref: 1`），运行时自动走统一分发；接口被引用时列表显示「被引用」并禁用删除
 - **导入后端路由**：解析 `internal/router/*.go` 行内注释作为接口名称，一键批量生成转发定义
 - **返回结构**：SQL 直查默认返回行数组；结果单列且列名为 `_data` 且可解析 JSON 时，自动解析为对象/数组
@@ -228,7 +230,7 @@ Nginx 托管 `dist/`：history 模式回退 `try_files ... /index.html`、`/api`
 
 ### 文件上传
 
-- `POST /api/v1/upload?app_code=xxx` 单文件上传，按应用分目录存储
+- `POST /v1/api/upload?app_code=xxx` 单文件上传，按应用分目录存储
 - 存储路径：`back-end/uploads/{app_code}/{时间戳}_{文件名}`，通过 `/uploads/*` 静态访问
 - 业务字段存储 JSON 数组：`[{ uid, url, name, size }]`
 

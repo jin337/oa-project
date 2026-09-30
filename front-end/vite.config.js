@@ -1,11 +1,14 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import { compression } from 'vite-plugin-compression2'
 import { APP_NAME } from './src/config/app.js'
 
-// 前端开发服务：固定端口 8181，/api 请求代理到后端 Go 服务（默认 8180）
-export default defineConfig({
+// 前端开发服务：固定端口 8181，API 前缀（默认 /v1/api）请求代理到后端 Go 服务（默认 8180）
+// API 前缀唯一真值来自 .env 的 VITE_API_PREFIX（与 src/utils/constants.js 保持一致），版本号变更只改 .env
+export default defineConfig(({ mode }) => {
+  const apiPrefix = loadEnv(mode, '.', '').VITE_API_PREFIX || '/v1/api'
+  return {
   plugins: [
     react(),
     tailwindcss(),
@@ -33,7 +36,7 @@ export default defineConfig({
     host: '0.0.0.0',
     strictPort: true,
     proxy: {
-      '/api': {
+      [apiPrefix]: {
         target: 'http://localhost:8180',
         changeOrigin: true,
       },
@@ -84,4 +87,5 @@ export default defineConfig({
       },
     },
   },
+  }
 })

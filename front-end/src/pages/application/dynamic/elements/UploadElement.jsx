@@ -1,5 +1,6 @@
 import { Button, Input, Radio, Tag, Upload } from '@arco-design/web-react'
 import { useContext } from 'react'
+import { API_PREFIX } from 'src/utils/constants'
 import { RuntimeFormContext } from '../DynamicForm'
 
 /**
@@ -71,7 +72,7 @@ export function UploadElement({ el, pageType, value, onChange }) {
 
   return (
     <Upload
-      action="/api/v1/upload"
+      action={`${API_PREFIX}/upload`}
       headers={{ Authorization: `Bearer ${token}` }}
       data={{ app_code: appCode }}
       tip={renderTip()}

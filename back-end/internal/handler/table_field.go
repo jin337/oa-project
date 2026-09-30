@@ -19,7 +19,7 @@ func parseFieldID(c *gin.Context) (string, bool) {
 	return name, true
 }
 
-// TableFieldList GET /api/v1/application/:id/fields 物理业务表列分页列表
+// TableFieldList GET /v1/api/application/:id/fields 物理业务表列分页列表
 func TableFieldList(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -38,7 +38,7 @@ func TableFieldList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// TableFieldCreate POST /api/v1/application/:id/fields 物理业务表新增列
+// TableFieldCreate POST /v1/api/application/:id/fields 物理业务表新增列
 func TableFieldCreate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -57,7 +57,7 @@ func TableFieldCreate(c *gin.Context) {
 	response.OK(c, col)
 }
 
-// TableFieldUpdate PUT /api/v1/application/:id/fields/:fieldId 修改物理业务表列
+// TableFieldUpdate PUT /v1/api/application/:id/fields/:fieldId 修改物理业务表列
 func TableFieldUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -80,7 +80,7 @@ func TableFieldUpdate(c *gin.Context) {
 	response.OK(c, col)
 }
 
-// TableFieldDelete DELETE /api/v1/application/:id/fields/:fieldId 删除物理业务表列
+// TableFieldDelete DELETE /v1/api/application/:id/fields/:fieldId 删除物理业务表列
 // 前端以 query 参数传递 table_name（vtrans.Validate 对 DELETE 走 JSON 绑定，此处手动绑定 query）
 func TableFieldDelete(c *gin.Context) {
 	id, ok := parseID(c)

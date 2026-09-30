@@ -1,6 +1,7 @@
 package router
 
 import (
+	"back-end/internal/config"
 	"back-end/internal/handler"
 	"back-end/internal/middleware"
 
@@ -22,7 +23,8 @@ func Setup() *gin.Engine {
 	// 上传文件静态服务：直接映射磁盘 uploads 目录
 	r.Static("/uploads", handler.UploadDir)
 
-	v1 := r.Group("/api/v1")
+	// 业务路由统一注册在配置的前缀下（config.Server.APIPrefix，默认 /v1/api）
+	v1 := r.Group(config.Cfg.Server.APIPrefix)
 
 	registerAuthRoutes(v1)
 	registerUserRoutes(v1)
