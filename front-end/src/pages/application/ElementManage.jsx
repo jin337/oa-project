@@ -11,6 +11,7 @@ import {
   Input,
   Menu,
   Message,
+  Modal,
   Popconfirm,
   Popover,
   Select,
@@ -25,8 +26,9 @@ import {
   IconRefresh,
   IconSettings,
 } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
+import * as apiDefinitionApi from 'src/api/apiDefinition'
 import * as applicationApi from 'src/api/application'
 import { fetchAll } from 'src/api/fetchAll'
 import { SIZE_OPTIONS } from 'src/config/app'
@@ -186,8 +188,8 @@ const CONFIG_HELP_CONTENT = (
         {'=== !== == != > < >= <= && || !'} 与算术 {'+ - * / %'}
       </li>
       <li>
-        可直接填 {'1'} / {'true'} 为真，{'0'} / {'false'} 为假，不必写比较表达式；也可用 {'${true}'}、
-        {'${1000}'} 这类带 {'${}'} 的字面量
+        可直接填 {'1'} / {'true'} 为真，{'0'} / {'false'} 为假，不必写比较表达式；也可用 {'${true}'}
+        、{'${1000}'} 这类带 {'${}'} 的字面量
       </li>
       <li>
         示例：
@@ -198,11 +200,13 @@ const CONFIG_HELP_CONTENT = (
         <div>{'${form.user_id} === ""'}（未选择用户时禁用）</div>
       </li>
       <li>
-        留空时：动态显隐默认显示、动态禁用默认不禁用；但表达式写错或求值失败按 false 处理，动态显隐会因此把元素隐藏
+        留空时：动态显隐默认显示、动态禁用默认不禁用；但表达式写错或求值失败按 false
+        处理，动态显隐会因此把元素隐藏
       </li>
       <li>
-        判断字段值注意类型：数字 {'0'} 直接写 {'${form.字段}'} 即为假；选项「提交值」存的是字符串，值为{' '}
-        {'"0"'} 时 {'${form.字段}'} 仍为真，需写 {'${form.字段} === "0"'}
+        判断字段值注意类型：数字 {'0'} 直接写 {'${form.字段}'}{' '}
+        即为假；选项「提交值」存的是字符串，值为 {'"0"'} 时 {'${form.字段}'} 仍为真，需写{' '}
+        {'${form.字段} === "0"'}
       </li>
     </ul>
 
@@ -325,6 +329,7 @@ function buildActionsFromValues(actions) {
         } else if (a.action_type === 'fetch_and_fill') {
           if (a.api_url) item.api_url = a.api_url
           if (a.method) item.method = a.method
+          item.api_ref = a.api_ref === 1 ? 1 : 0
           if (a.params && String(a.params).trim()) {
             try {
               item.params = JSON.parse(a.params)
@@ -375,8 +380,13 @@ export default function ElementManage() {
   const [currentElementType, setCurrentElementType] = useState()
   // 数据源类型（json / api）：使用 Form.useWatch 直接监听嵌套字段，避免 onValuesChange 扁平 key 问题
   const dataSourceType = Form.useWatch('data_source.type', form)
+  // 数据源是否引用接口管理（api_ref=1 时 url/method 由接口管理回填并禁用）
+  const dsApiRef = Form.useWatch('data_source.api_ref', form)
   // 事件驱动 actions：监听整个对象以联动渲染每条规则的 action_type 分支
   const actionsWatch = Form.useWatch('actions', form)
+
+  // 接口引用选择弹窗：null=关闭；{ target:'ds' }=数据源；{ target:'action', trigger, index }=联动动作
+  const [apiPicker, setApiPicker] = useState(null)
 
   // 事件面板默认展开：有规则的分区展开，无规则时全部展开
   const defaultActiveKey = (() => {
@@ -389,22 +399,47 @@ export default function ElementManage() {
   const [fieldOptions, setFieldOptions] = useState([])
   const [loadingFields, setLoadingFields] = useState(false)
 
-  // 挂载时确保页签存在，并通过接口获取应用名后更新标题为「应用名 - 模块名」
+  // 加载分类（表名）选项：主表 + 子表（应用表结构很少变动，结果缓存避免重复请求）
+  const tableOptionsCache = useRef(null)
+  const loadTableOptions = useCallback(async () => {
+    if (tableOptionsCache.current) return tableOptionsCache.current
+    try {
+      const res = await applicationApi.getApplication(id)
+      const app = res.data
+      const options = []
+      if (app?.table_name) {
+        options.push({ label: `${app.table_name}（主表）`, value: app.table_name })
+      }
+      if (app?.sub_table_name) {
+        app.sub_table_name
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .forEach((t) => options.push({ label: `${t}（子表）`, value: t }))
+      }
+      const cached = { app, options }
+      tableOptionsCache.current = cached
+      setTableOptions(options)
+      return cached
+    } catch (e) {
+      return null
+    }
+  }, [id])
+
+  // 挂载时确保页签存在，并复用 /application/:id 请求结果：
+  // 既更新标题为「应用名 - 模块名」，又填充表选项缓存（打开抽屉时零额外请求）
   useEffect(() => {
     addTab({ path: location.pathname, title: MODULE_LABEL })
     let cancelled = false
-    applicationApi
-      .getApplication(id)
-      .then((res) => {
-        if (!cancelled && res.data?.name) {
-          updateTab(location.pathname, { title: `${res.data.name} - ${MODULE_LABEL}` })
-        }
-      })
-      .catch(() => {})
+    loadTableOptions().then((cached) => {
+      if (!cancelled && cached?.app?.name) {
+        updateTab(location.pathname, { title: `${cached.app.name} - ${MODULE_LABEL}` })
+      }
+    })
     return () => {
       cancelled = true
     }
-  }, [id, location.pathname, addTab, updateTab])
+  }, [id, location.pathname, addTab, updateTab, loadTableOptions])
 
   // Card 标题与当前激活页签标题保持一致
   const currentTab = tabs.find((t) => t.path === activeTab)
@@ -448,29 +483,6 @@ export default function ElementManage() {
     setAppliedKeyword('')
     setPage(1)
   }
-
-  // 加载分类（表名）选项：主表 + 子表
-  const loadTableOptions = useCallback(async () => {
-    try {
-      const res = await applicationApi.getApplication(id)
-      const app = res.data
-      const options = []
-      if (app?.table_name) {
-        options.push({ label: `${app.table_name}（主表）`, value: app.table_name })
-      }
-      if (app?.sub_table_name) {
-        app.sub_table_name
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .forEach((t) => options.push({ label: `${t}（子表）`, value: t }))
-      }
-      setTableOptions(options)
-      return app
-    } catch (e) {
-      return null
-    }
-  }, [id])
 
   // 加载指定表的所有字段（取消分页限制）
   const loadFieldOptions = useCallback(
@@ -528,8 +540,56 @@ export default function ElementManage() {
           method: 'GET',
           label: '',
           params: '',
+          api_ref: 0,
         },
       })
+    }
+  }
+
+  // 接口引用弹窗确认：回填 method+path 并置 api_ref=1（数据源 / 联动动作共用）
+  const handleApiPick = (def) => {
+    if (apiPicker?.target === 'ds') {
+      form.setFieldsValue({
+        data_source: {
+          ...(form.getFieldValue('data_source') || {}),
+          url: def.path,
+          method: def.method,
+          api_ref: 1,
+        },
+      })
+    } else if (apiPicker?.target === 'action') {
+      const { trigger, index } = apiPicker
+      const cur = form.getFieldValue('actions') || {}
+      const next = JSON.parse(JSON.stringify(cur))
+      if (Array.isArray(next[trigger]) && next[trigger][index]) {
+        next[trigger][index] = {
+          ...next[trigger][index],
+          api_url: def.path,
+          method: def.method,
+          api_ref: 1,
+        }
+        form.setFieldsValue({ actions: next })
+      }
+    }
+    setApiPicker(null)
+  }
+
+  // 取消接口引用：保留已回填的 url/method 但恢复可编辑，api_ref 置 0
+  const handleApiUnref = (target, trigger, index) => {
+    if (target === 'ds') {
+      form.setFieldsValue({
+        data_source: {
+          ...(form.getFieldValue('data_source') || {}),
+          api_ref: 0,
+        },
+      })
+    } else if (target === 'action' && trigger !== undefined && index !== undefined) {
+      const cur = form.getFieldValue('actions') || {}
+      const next = JSON.parse(JSON.stringify(cur))
+      if (Array.isArray(next[trigger]) && next[trigger][index]) {
+        next[trigger][index] = { ...next[trigger][index], api_ref: 0 }
+        form.setFieldsValue({ actions: next })
+      }
     }
   }
 
@@ -538,7 +598,8 @@ export default function ElementManage() {
     setCurrentElementType(undefined)
     form.setFieldsValue(EMPTY_FORM)
     setFieldOptions([])
-    const app = await loadTableOptions()
+    const cached = await loadTableOptions()
+    const app = cached?.app || null
     if (app?.table_name) {
       form.setFieldsValue({ table_key: app.table_name })
       await loadFieldOptions(app.table_name)
@@ -623,6 +684,7 @@ export default function ElementManage() {
             method: ds.method || 'GET',
             label: ds.label || '',
             value_field: ds.value_field || '',
+            api_ref: ds.api_ref === 1 ? 1 : 0,
             params,
           }
         }
@@ -985,7 +1047,7 @@ export default function ElementManage() {
             <>
               <Divider>数据源配置</Divider>
               <Row gutter={20}>
-                <Col span={24}>
+                <Col span={dataSourceType === 'api' ? 16 : 24}>
                   <FormItem
                     label="数据类型"
                     field="data_source.type"
@@ -995,6 +1057,19 @@ export default function ElementManage() {
                       <Select.Option value="json">静态数据</Select.Option>
                       <Select.Option value="api">动态接口</Select.Option>
                     </Select>
+                  </FormItem>
+                </Col>
+                <Col span={8}>
+                  <FormItem label="引用接口" hidden={dataSourceType !== 'api'}>
+                    <Button
+                      long
+                      size="small"
+                      type="outline"
+                      className="mt-1"
+                      onClick={() => setApiPicker({ target: 'ds' })}
+                    >
+                      {dsApiRef === 1 ? '重新引用' : '引用接口'}
+                    </Button>
                   </FormItem>
                 </Col>
               </Row>
@@ -1042,18 +1117,39 @@ export default function ElementManage() {
               {/* 动态接口：url / method / params / label / value 表达式 */}
               {dataSourceType === 'api' && (
                 <Row gutter={20}>
+                  <Col span={24}>
+                    {/* 注册 api_ref 字段（hidden 隐藏但保留在表单 store，供保存归一化） */}
+                    <FormItem field="data_source.api_ref" hidden>
+                      <Input />
+                    </FormItem>
+                    {dsApiRef === 1 && (
+                      <div className="mb-2 flex items-center justify-between rounded border border-orange-200 bg-orange-50 px-2 py-1 text-xs text-orange-600">
+                        <span>
+                          已引用接口：
+                          <b>
+                            {form.getFieldValue('data_source')?.method}{' '}
+                            {form.getFieldValue('data_source')?.url}
+                          </b>
+                          ，接口地址与请求方法由接口管理维护，不可手动修改
+                        </span>
+                        <Button size="mini" type="text" onClick={() => handleApiUnref('ds')}>
+                          取消引用
+                        </Button>
+                      </div>
+                    )}
+                  </Col>
                   <Col span={16}>
                     <FormItem
                       label="接口地址"
                       field="data_source.url"
                       rules={[{ required: true, message: '请输入接口地址' }]}
                     >
-                      <Input placeholder="/user/list" />
+                      <Input placeholder="/user/list" disabled={dsApiRef === 1} />
                     </FormItem>
                   </Col>
                   <Col span={8}>
                     <FormItem label="请求方法" field="data_source.method">
-                      <Select>
+                      <Select disabled={dsApiRef === 1}>
                         <Select.Option value="GET">GET</Select.Option>
                         <Select.Option value="POST">POST</Select.Option>
                         <Select.Option value="PUT">PUT</Select.Option>
@@ -1121,13 +1217,41 @@ export default function ElementManage() {
                                 删除
                               </Button>
                             </div>
-                            <FormItem
-                              label="动作类型"
-                              field={item.field + '.action_type'}
-                              rules={[{ required: true, message: '请选择动作类型' }]}
-                            >
-                              <Select placeholder="请选择动作类型" options={ACTION_TYPE_OPTIONS} />
-                            </FormItem>
+                            <Row gutter={16}>
+                              <Col span={actionType === 'fetch_and_fill' ? 16 : 24}>
+                                <FormItem
+                                  label="动作类型"
+                                  field={item.field + '.action_type'}
+                                  rules={[{ required: true, message: '请选择动作类型' }]}
+                                >
+                                  <Select
+                                    placeholder="请选择动作类型"
+                                    options={ACTION_TYPE_OPTIONS}
+                                  />
+                                </FormItem>
+                              </Col>
+                              <Col span={8}>
+                                <FormItem label="引用接口" hidden={actionType !== 'fetch_and_fill'}>
+                                  <Button
+                                    long
+                                    size="small"
+                                    type="outline"
+                                    className="mt-1"
+                                    onClick={() =>
+                                      setApiPicker({
+                                        target: 'action',
+                                        trigger: trigger.key,
+                                        index,
+                                      })
+                                    }
+                                  >
+                                    {actionsWatch?.[trigger.key]?.[index]?.api_ref === 1
+                                      ? '重新引用'
+                                      : '引用接口'}
+                                  </Button>
+                                </FormItem>
+                              </Col>
+                            </Row>
 
                             {/* set_value：直接赋值（多字段映射） */}
                             {actionType === 'set_value' && (
@@ -1187,6 +1311,29 @@ export default function ElementManage() {
                             {/* fetch_and_fill：请求并填充 */}
                             {actionType === 'fetch_and_fill' && (
                               <>
+                                {/* 注册 api_ref 字段（hidden 隐藏但保留在表单 store，供保存归一化） */}
+                                <FormItem field={item.field + '.api_ref'} hidden>
+                                  <Input />
+                                </FormItem>
+                                {actionsWatch?.[trigger.key]?.[index]?.api_ref === 1 && (
+                                  <div className="mb-2 flex items-center justify-between rounded border border-orange-200 bg-orange-50 px-2 py-1 text-xs text-orange-600">
+                                    <span>
+                                      已引用接口：
+                                      <b>
+                                        {actionsWatch?.[trigger.key]?.[index]?.method}{' '}
+                                        {actionsWatch?.[trigger.key]?.[index]?.api_url}
+                                      </b>
+                                      ，接口地址与请求方法由接口管理维护，不可手动修改
+                                    </span>
+                                    <Button
+                                      size="mini"
+                                      type="text"
+                                      onClick={() => handleApiUnref('action', trigger.key, index)}
+                                    >
+                                      取消引用
+                                    </Button>
+                                  </div>
+                                )}
                                 <Row gutter={16}>
                                   <Col span={16}>
                                     <FormItem
@@ -1194,7 +1341,12 @@ export default function ElementManage() {
                                       field={item.field + '.api_url'}
                                       rules={[{ required: true, message: '请输入接口地址' }]}
                                     >
-                                      <Input placeholder="/user/salary-detail" />
+                                      <Input
+                                        placeholder="/user/salary-detail"
+                                        disabled={
+                                          actionsWatch?.[trigger.key]?.[index]?.api_ref === 1
+                                        }
+                                      />
                                     </FormItem>
                                   </Col>
                                   <Col span={8}>
@@ -1203,7 +1355,11 @@ export default function ElementManage() {
                                       field={item.field + '.method'}
                                       rules={[{ required: true, message: '请选择请求方法' }]}
                                     >
-                                      <Select>
+                                      <Select
+                                        disabled={
+                                          actionsWatch?.[trigger.key]?.[index]?.api_ref === 1
+                                        }
+                                      >
                                         <Select.Option value="GET">GET</Select.Option>
                                         <Select.Option value="POST">POST</Select.Option>
                                         <Select.Option value="PUT">PUT</Select.Option>
@@ -1291,6 +1447,110 @@ export default function ElementManage() {
           </Collapse>
         </Form>
       </Drawer>
+
+      {/* 接口引用选择弹窗（数据源 / 联动动作共用） */}
+      <ApiRefModal
+        visible={apiPicker !== null}
+        onCancel={() => setApiPicker(null)}
+        onSelect={handleApiPick}
+      />
     </Card>
+  )
+}
+
+// 接口引用选择弹窗：从接口管理中单选一个接口，回填 method+path
+function ApiRefModal({ visible, onCancel, onSelect }) {
+  const [defs, setDefs] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [keyword, setKeyword] = useState('')
+  const [method, setMethod] = useState('')
+  const [selected, setSelected] = useState(null)
+
+  useEffect(() => {
+    if (!visible) return
+    setLoading(true)
+    setKeyword('')
+    setMethod('')
+    setSelected(null)
+    apiDefinitionApi
+      .listApiDefinitions({ page: 1, size: 500 })
+      .then((res) => setDefs(res.data?.list || []))
+      .catch(() => setDefs([]))
+      .finally(() => setLoading(false))
+  }, [visible])
+
+  const filtered = defs.filter((d) => {
+    if (method && d.method !== method) return false
+    if (keyword) {
+      const kw = keyword.toLowerCase()
+      return (d.name || '').toLowerCase().includes(kw) || (d.path || '').toLowerCase().includes(kw)
+    }
+    return true
+  })
+
+  const columns = [
+    {
+      key: 'method',
+      title: '方法',
+      dataIndex: 'method',
+      width: 80,
+      render: (m) => <Tag color="arcoblue">{m || 'GET'}</Tag>,
+    },
+    { key: 'path', title: '对外路径', dataIndex: 'path', ellipsis: true },
+    {
+      key: 'name',
+      title: '接口名称',
+      dataIndex: 'name',
+      ellipsis: true,
+    },
+  ]
+
+  return (
+    <Modal
+      unmountOnExit
+      title="引用接口"
+      visible={visible}
+      onCancel={onCancel}
+      zIndex={2000}
+      style={{ width: 560 }}
+      footer={
+        <>
+          <Button onClick={onCancel}>取消</Button>
+          <Button type="primary" disabled={!selected} onClick={() => onSelect(selected)}>
+            确认引用
+          </Button>
+        </>
+      }
+    >
+      <div className="mb-2 flex gap-2">
+        <Input placeholder="搜索接口名称 / 路径" value={keyword} onChange={setKeyword} allowClear />
+        <Select
+          placeholder="方法"
+          value={method}
+          onChange={setMethod}
+          style={{ width: 120 }}
+          allowClear
+        >
+          <Select.Option value="GET">GET</Select.Option>
+          <Select.Option value="POST">POST</Select.Option>
+          <Select.Option value="PUT">PUT</Select.Option>
+          <Select.Option value="DELETE">DELETE</Select.Option>
+        </Select>
+      </div>
+      <Table
+        rowKey="id"
+        size="small"
+        loading={loading}
+        pagination={false}
+        data={filtered}
+        columns={columns}
+        scroll={{ y: 360 }}
+        rowSelection={{
+          type: 'radio',
+          selectedRowKeys: selected ? [selected.id] : [],
+          onChange: (keys, rows) => setSelected(rows[0]),
+        }}
+      />
+    </Modal>
   )
 }

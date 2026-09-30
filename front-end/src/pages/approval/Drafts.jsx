@@ -219,7 +219,6 @@ export default function Drafts() {
       key: 'created_at',
       dataIndex: 'created_at',
       width: 180,
-      align: 'center',
       render: formatTime,
     },
     {

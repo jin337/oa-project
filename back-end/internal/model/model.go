@@ -89,6 +89,7 @@ type ApiDefinition struct {
 	Status       int                    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	Sort         int                    `gorm:"default:0;comment:排序" json:"sort"`
 	Remark       string                 `gorm:"size:255;comment:备注" json:"remark"`
+	Referenced   int                    `gorm:"-" json:"referenced"` // 被表单元素引用次数（运行时统计，不入库）
 }
 
 type ApiDefinitionCreateReq struct {
@@ -132,8 +133,9 @@ type ApiDefinitionDebugReq struct {
 
 // ApiDefinitionDebugResult 试调/分发结果：原始响应 + 错误信息
 type ApiDefinitionDebugResult struct {
-	Raw   interface{} `json:"raw"`
-	Error string      `json:"error,omitempty"`
+	Raw       interface{} `json:"raw"`
+	Error     string      `json:"error,omitempty"`
+	Forwarded bool        `json:"-"` // HTTP 转发结果标记：统一分发时原样透传目标响应体，避免双重包裹
 }
 
 // 角色编码常量

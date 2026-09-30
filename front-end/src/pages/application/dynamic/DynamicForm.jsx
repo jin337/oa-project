@@ -935,9 +935,13 @@ const normalizeApiUrl = (url) => {
 /**
  * 动态接口请求构造：解析 url 模板（${form.xxx} / ${item.xxx}）与 params 表达式后发起请求。
  * cfg.url / cfg.api_url 均可（数据源用 url，联动动作用 api_url）。
+ * api_ref=1 表示引用接口管理：改走统一分发端点 /interfaces{path}（request baseURL 已含 /api/v1）。
  */
 const requestDynamicApi = async (cfg, vars) => {
-  const url = normalizeApiUrl(resolveExpr(cfg?.url || cfg?.api_url, vars))
+  const isRef = cfg?.api_ref === 1 || cfg?.api_ref === '1'
+  let rawUrl = resolveExpr(cfg?.url || cfg?.api_url, vars)
+  if (isRef) rawUrl = '/interfaces' + rawUrl
+  const url = normalizeApiUrl(rawUrl)
   const params = resolveParams(cfg?.params, vars)
   const method = (cfg?.method || 'GET').toUpperCase()
   return request({

@@ -84,7 +84,76 @@ func ApiDefinitionList(req *model.ApiDefinitionListReq) ([]model.ApiDefinition, 
 	if err != nil {
 		return nil, 0, err
 	}
+	// 统计被表单元素引用次数（data_source / actions 中 api_ref=1 且 method+path 命中）
+	if len(list) > 0 {
+		refCounts := countElementApiRefs()
+		for i := range list {
+			list[i].Referenced = refCounts[apiRefKey(list[i].Method, list[i].Path)]
+		}
+	}
 	return list, total, nil
+}
+
+// apiRefKey 规范化 method+path 作为引用统计键（路径忽略首尾 / 与大小写）
+func apiRefKey(method, path string) string {
+	return strings.ToUpper(strings.TrimSpace(method)) + " /" + strings.Trim(strings.TrimSpace(path), "/")
+}
+
+// countElementApiRefs 扫描所有表单元素，统计各接口被引用次数：
+// - data_source：type=api 且 api_ref=1，取 method + url
+// - actions.*.fetch_and_fill：api_ref=1，取 method + api_url
+func countElementApiRefs() map[string]int {
+	counts := make(map[string]int)
+	var elems []struct {
+		DataSource map[string]interface{} `json:"data_source"`
+		Actions    map[string]interface{} `json:"actions"`
+	}
+	if err := database.DB.Model(&model.ApplicationElement{}).
+		Select("data_source, actions").Scan(&elems).Error; err != nil {
+		return counts
+	}
+	for _, e := range elems {
+		if ds, ok := e.DataSource["type"].(string); ok && ds == "api" && isRefOne(e.DataSource["api_ref"]) {
+			key := apiRefKey(fmt.Sprintf("%v", e.DataSource["method"]), fmt.Sprintf("%v", e.DataSource["url"]))
+			if strings.TrimSpace(key) != " /" {
+				counts[key]++
+			}
+		}
+		for _, list := range e.Actions {
+			arr, ok := list.([]interface{})
+			if !ok {
+				continue
+			}
+			for _, item := range arr {
+				act, ok := item.(map[string]interface{})
+				if !ok || fmt.Sprintf("%v", act["action_type"]) != "fetch_and_fill" {
+					continue
+				}
+				if !isRefOne(act["api_ref"]) {
+					continue
+				}
+				key := apiRefKey(fmt.Sprintf("%v", act["method"]), fmt.Sprintf("%v", act["api_url"]))
+				if strings.TrimSpace(key) != " /" {
+					counts[key]++
+				}
+			}
+		}
+	}
+	return counts
+}
+
+// isRefOne 判断 api_ref 是否为 1（前端存数字，兼容字符串 "1"）
+func isRefOne(v interface{}) bool {
+	switch t := v.(type) {
+	case float64:
+		return t == 1
+	case int:
+		return t == 1
+	case string:
+		return strings.TrimSpace(t) == "1"
+	default:
+		return false
+	}
 }
 
 // ApiDefinitionDetail 接口定义详情
@@ -356,6 +425,19 @@ func evalFormExpr(expr string, vars map[string]interface{}) (interface{}, error)
 // SQL 执行引擎
 // ============================================================
 
+// parseJSONResult 尝试将单元格文本解析为 JSON 对象/数组；仅接受 { / [ 开头的完整 JSON，标量不解析
+func parseJSONResult(s string) (interface{}, bool) {
+	s = strings.TrimSpace(s)
+	if len(s) == 0 || (s[0] != '{' && s[0] != '[') {
+		return nil, false
+	}
+	var v interface{}
+	if err := json.Unmarshal([]byte(s), &v); err != nil {
+		return nil, false
+	}
+	return v, true
+}
+
 // executeSQL 执行 SQL 接口：占位符求值（${form.xxx}）→ 参数化执行（8s 超时）；
 // 数据权限由模板内静态条件决定（静态权限为主，引擎不做动态注入）
 func executeSQL(def *model.ApiDefinition, vars map[string]interface{}) (*model.ApiDefinitionDebugResult, error) {
@@ -370,6 +452,22 @@ func executeSQL(def *model.ApiDefinition, vars map[string]interface{}) (*model.A
 		rows := []map[string]interface{}{}
 		if err := database.DB.WithContext(ctx).Raw(finalSQL, args...).Scan(&rows).Error; err != nil {
 			return nil, errors.New("SQL 执行失败: " + err.Error())
+		}
+		// 返回结构由 SQL 模板自身声明：结果单列且列名约定为 _data（JSON_OBJECT(...) AS _data）时，
+		// 解析为对象/数组返回；其余情况按行数组返回（列表/选项语义）。
+		if len(rows) > 0 && len(rows[0]) == 1 {
+			if v, ok := rows[0]["_data"]; ok {
+				switch cell := v.(type) {
+				case string:
+					if parsed, ok := parseJSONResult(cell); ok {
+						return &model.ApiDefinitionDebugResult{Raw: parsed}, nil
+					}
+				case []byte:
+					if parsed, ok := parseJSONResult(string(cell)); ok {
+						return &model.ApiDefinitionDebugResult{Raw: parsed}, nil
+					}
+				}
+			}
 		}
 		return &model.ApiDefinitionDebugResult{Raw: rows}, nil
 	}
@@ -488,7 +586,7 @@ func forwardHTTP(bearerToken string, def *model.ApiDefinition, vars map[string]i
 	} else {
 		raw = ""
 	}
-	result := &model.ApiDefinitionDebugResult{Raw: raw}
+	result := &model.ApiDefinitionDebugResult{Raw: raw, Forwarded: true}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		result.Error = fmt.Sprintf("目标接口返回 HTTP %d", resp.StatusCode)
 	}

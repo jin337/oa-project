@@ -148,6 +148,11 @@ func ApiDefinitionDispatch(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"code": response.CodeServerError, "msg": result.Error, "data": nil, "timestamp": time.Now().Unix()})
 		return
 	}
+	// HTTP 转发：原样透传目标接口响应体（与直连结构一致，调用方无需额外剥壳）
+	if result.Forwarded {
+		c.JSON(status, result.Raw)
+		return
+	}
 	response.OK(c, result.Raw)
 }
 

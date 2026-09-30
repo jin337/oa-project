@@ -58,7 +58,6 @@ export default function ToMe() {
       key: 'created_at',
       dataIndex: 'created_at',
       width: 180,
-      align: 'center',
       render: formatTime,
     },
     {
@@ -66,7 +65,6 @@ export default function ToMe() {
       key: 'finished_at',
       dataIndex: 'finished_at',
       width: 180,
-      align: 'center',
       render: formatTime,
     },
     {

@@ -357,6 +357,15 @@ export default function InterfaceManage() {
     },
     { key: 'sort', title: '排序', dataIndex: 'sort', width: 70, align: 'center' },
     {
+      key: 'referenced',
+      title: '被引用',
+      dataIndex: 'referenced',
+      width: 100,
+      align: 'center',
+      render: (n) =>
+        n > 0 ? <Tag color="orange">{`被引用 ${n} 次`}</Tag> : <Tag color="gray">未引用</Tag>,
+    },
+    {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
@@ -378,7 +387,11 @@ export default function InterfaceManage() {
             <Popconfirm
               position="lb"
               focusLock
-              title="确认删除该接口？"
+              title={
+                record.referenced > 0
+                  ? `该接口被 ${record.referenced} 个表单元素引用，删除后引用将失效，确认删除？`
+                  : '确认删除该接口？'
+              }
               onOk={() => handleDelete(record)}
             >
               <Button size="mini" status="danger">
