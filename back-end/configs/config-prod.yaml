@@ -51,7 +51,7 @@ mysql:
   connect_timeout: 3
 
   migrate:
-    enable: false             # 生产默认关闭自动迁移，防止误改数据
-    mode: incremental
+    enable: true             # oa_main 全新库：启动时自动建表 + 初始化数据（就绪后可改回 false 保守运行）
+    mode: full               # 全新环境全量建表 + 种子数据（admin 账号/菜单/角色等）
     log_enable: true
     log_path: "./logs/migrate-prod.log"

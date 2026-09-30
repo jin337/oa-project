@@ -37,7 +37,7 @@ type migration struct {
 var migrations = []migration{
 	{
 		Version: 1,
-		Name:    "init_rbac_tables",
+		Name:    "init_main",
 		Up: func(db *gorm.DB) error {
 			return db.AutoMigrate(
 				&model.User{},
@@ -46,15 +46,6 @@ var migrations = []migration{
 				&model.Menu{},
 				&model.Dept{},
 				&MigrateVersion{},
-			)
-		},
-		Seed: seedInitData,
-	},
-	{
-		Version: 2,
-		Name:    "add_application",
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(
 				&model.Application{},
 				&model.ApplicationElement{},
 				&model.ApprovalCategory{},
@@ -63,23 +54,11 @@ var migrations = []migration{
 				&model.ApprovalInstanceTask{},
 				&model.ApprovalCCRecord{},
 				&model.Notification{},
+				&model.ExamineGroup{},
+				&model.ApiDefinition{},
 			)
 		},
-	},
-	{
-		Version: 3,
-		Name:    "add_examine_group",
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(&model.ExamineGroup{})
-		},
-	},
-	{
-		Version: 4,
-		Name:    "add_api_definition",
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(&model.ApiDefinition{})
-		},
-		Seed: seedApiDefinitionMenu,
+		Seed: seedInitData,
 	},
 }
 
