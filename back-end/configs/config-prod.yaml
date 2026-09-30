@@ -21,7 +21,7 @@ server:
 
   cors:
     enable: true
-    allow_origins:            # 本地局域网部署：放行宝塔前端站点
+    allow_origins:            # 本地局域网部署：放行前端站点
       - "http://192.168.31.221:8011"
     allow_methods:
       - GET
@@ -38,8 +38,8 @@ mysql:
   host: 127.0.0.1
   port: 3306
   username: root
-  password: "Kzi493399hst"     # 本机 MySQL 密码（与开发环境一致，宝塔同实例）
-  dbname: oa_main              # 沿用现有业务库（表结构已就绪）
+  password: "Kzi493399hst"
+  dbname: oa_main
   table_prefix: oa_
   charset: utf8mb4
   collation: utf8mb4_general_ci
