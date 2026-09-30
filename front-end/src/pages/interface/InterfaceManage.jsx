@@ -398,14 +398,11 @@ export default function InterfaceManage() {
             <Popconfirm
               position="lb"
               focusLock
-              title={
-                record.referenced > 0
-                  ? `该接口被 ${record.referenced} 个表单元素引用，删除后引用将失效，确认删除？`
-                  : '确认删除该接口？'
-              }
+              disabled={record.referenced > 0}
+              title="确认删除该接口？"
               onOk={() => handleDelete(record)}
             >
-              <Button size="mini" status="danger">
+              <Button size="mini" status="danger" disabled={record.referenced > 0}>
                 删除
               </Button>
             </Popconfirm>
