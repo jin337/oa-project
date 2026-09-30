@@ -1,19 +1,17 @@
 # ============================================================
 # 生产环境配置（APP_ENV=prod 时加载）
-# 本地宝塔部署：oa_serve_main
-# 前端 http://192.168.31.221:8011/oa（nginx 反代 /v1/api、/uploads 到本服务）
 # ============================================================
 
 server:
-  port: 8190                  # 后端服务端口（nginx 反代目标，避开开发端口 8180）
+  port: 8190                  # 后端服务端口
   mode: release               # 生产使用 release 模式，关闭调试输出
-  api_prefix: /v1/api         # API 统一前缀（版本号变更只改此处，需同步前端 .env 与 Nginx）
+  api_prefix: /v1/api         # API 统一前缀
   request_timeout: 15
 
   jwt:
     secret: "9f2c4a7e1b8d3f6a0c5e2b7d9f1a3c5e7b9d2f4a6c8e0b1d3f5a7c9e2b4d6f8a0c"  # 本地部署随机密钥
     expire: 24
-    issuer: "back-end"                     # token 签发者
+    issuer: "oa_main"                     # token 签发者
 
   log:
     level: info
@@ -21,8 +19,8 @@ server:
 
   cors:
     enable: true
-    allow_origins:            # 本地局域网部署：放行前端站点
-      - "http://192.168.31.221:8011"
+    allow_origins:
+      - "*"
     allow_methods:
       - GET
       - POST
@@ -51,7 +49,7 @@ mysql:
   connect_timeout: 3
 
   migrate:
-    enable: true             # oa_main 全新库：启动时自动建表 + 初始化数据（就绪后可改回 false 保守运行）
+    enable: true             # oa_main 全新库：启动时自动建表 + 初始化数据
     mode: full               # 全新环境全量建表 + 种子数据（admin 账号/菜单/角色等）
     log_enable: true
     log_path: "./logs/migrate-prod.log"
