@@ -8,8 +8,8 @@ import (
 )
 
 // registerRoleRoutes 角色管理路由
-func registerRoleRoutes(v1 *gin.RouterGroup) {
-	roles := v1.Group("/roles")
+func registerRoleRoutes(api *gin.RouterGroup) {
+	roles := api.Group("/roles")
 	roles.Use(middleware.JWTAuth())
 	{
 		roles.GET("", handler.RoleList)           // 角色列表

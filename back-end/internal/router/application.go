@@ -8,8 +8,8 @@ import (
 )
 
 // registerApplicationRoutes 页面配置管理路由
-func registerApplicationRoutes(v1 *gin.RouterGroup) {
-	applications := v1.Group("/application")
+func registerApplicationRoutes(api *gin.RouterGroup) {
+	applications := api.Group("/application")
 	applications.Use(middleware.JWTAuth())
 	{
 		applications.GET("", handler.ApplicationList)                                // 流程列表

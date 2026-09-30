@@ -19,7 +19,7 @@ type CalculateRequest struct {
 }
 
 // Calculate 公共计算/转换接口
-// POST /v1/api/utils/calculate
+// POST /{APIPrefix}/utils/calculate
 // 支持类型：
 //   - number_to_upper: 数字转大写金额
 //   - calc: 表达式计算（支持加减乘除和括号）

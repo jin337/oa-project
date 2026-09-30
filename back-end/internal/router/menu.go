@@ -8,8 +8,8 @@ import (
 )
 
 // registerMenuRoutes 导航/菜单管理路由
-func registerMenuRoutes(v1 *gin.RouterGroup) {
-	menus := v1.Group("/menus")
+func registerMenuRoutes(api *gin.RouterGroup) {
+	menus := api.Group("/menus")
 	menus.Use(middleware.JWTAuth())
 	{
 		menus.GET("", handler.MenuTree)       // 菜单树

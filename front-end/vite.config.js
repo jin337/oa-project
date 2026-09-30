@@ -4,9 +4,9 @@ import { defineConfig, loadEnv } from 'vite'
 import { compression } from 'vite-plugin-compression2'
 import { APP_NAME } from './src/config/app.js'
 
-// 前端开发服务：固定端口 8181，API 前缀（默认 /v1/api）请求代理到后端 Go 服务（默认 8180）
+// 前端开发服务：固定端口 8181，API 前缀（唯一真值来自 .env 的 VITE_API_PREFIX）请求代理到后端 Go 服务（默认 8180）
 // API 前缀唯一真值来自 .env 的 VITE_API_PREFIX（与 src/utils/constants.js 保持一致），版本号变更只改 .env
-// base 唯一真值来自 .env 的 VITE_BASE_PATH：空 = 根路径部署；填 /v1 等子路径时构建产物资源引用自动带上该前缀
+// base 唯一真值来自 .env 的 VITE_BASE_PATH：空 = 根路径部署；填子路径时构建产物资源引用自动带上该前缀
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '')
   const apiPrefix = env.VITE_API_PREFIX || '/v1/api'

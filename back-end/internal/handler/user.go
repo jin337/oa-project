@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UserList GET /v1/api/users 分页列表（数据范围过滤）
+// UserList GET /{APIPrefix}/users 分页列表（数据范围过滤）
 func UserList(c *gin.Context) {
 	var req model.UserListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -25,7 +25,7 @@ func UserList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// UserDetail GET /v1/api/users/:id
+// UserDetail GET /{APIPrefix}/users/:id
 func UserDetail(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -39,7 +39,7 @@ func UserDetail(c *gin.Context) {
 	response.OK(c, user)
 }
 
-// UserCreate POST /v1/api/users
+// UserCreate POST /{APIPrefix}/users
 func UserCreate(c *gin.Context) {
 	var req model.UserCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -54,7 +54,7 @@ func UserCreate(c *gin.Context) {
 	response.OK(c, user)
 }
 
-// UserUpdate PUT /v1/api/users/:id
+// UserUpdate PUT /{APIPrefix}/users/:id
 func UserUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -73,7 +73,7 @@ func UserUpdate(c *gin.Context) {
 	response.OK(c, user)
 }
 
-// UserDelete DELETE /v1/api/users/:id
+// UserDelete DELETE /{APIPrefix}/users/:id
 func UserDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -86,7 +86,7 @@ func UserDelete(c *gin.Context) {
 	response.OKMsg(c, "删除成功")
 }
 
-// UserAssignRoles PUT /v1/api/users/:id/roles
+// UserAssignRoles PUT /{APIPrefix}/users/:id/roles
 func UserAssignRoles(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -104,7 +104,7 @@ func UserAssignRoles(c *gin.Context) {
 	response.OKMsg(c, "分配角色成功")
 }
 
-// UserUpdatePassword PUT /v1/api/users/:id/password 修改密码（仅限本人）
+// UserUpdatePassword PUT /{APIPrefix}/users/:id/password 修改密码（仅限本人）
 func UserUpdatePassword(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -132,7 +132,7 @@ func UserUpdatePassword(c *gin.Context) {
 	response.OKMsg(c, "修改密码成功")
 }
 
-// UserProfileGet GET /v1/api/users/:id/profile 获取员工档案
+// UserProfileGet GET /{APIPrefix}/users/:id/profile 获取员工档案
 func UserProfileGet(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -146,7 +146,7 @@ func UserProfileGet(c *gin.Context) {
 	response.OK(c, profile)
 }
 
-// UserProfileUpdate PUT /v1/api/users/:id/profile 更新员工档案（仅本人或管理员）
+// UserProfileUpdate PUT /{APIPrefix}/users/:id/profile 更新员工档案（仅本人或管理员）
 func UserProfileUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -172,7 +172,7 @@ func UserProfileUpdate(c *gin.Context) {
 	response.OK(c, profile)
 }
 
-// UserSwitchDept PUT /v1/api/users/switch-dept 切换当前部门（目标必须属于多部门归属列表）
+// UserSwitchDept PUT /{APIPrefix}/users/switch-dept 切换当前部门（目标必须属于多部门归属列表）
 func UserSwitchDept(c *gin.Context) {
 	var req model.SwitchDeptReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -193,7 +193,7 @@ func UserSwitchDept(c *gin.Context) {
 	response.OKMsg(c, "切换部门成功")
 }
 
-// UserResetPassword PUT /v1/api/users/:id/reset-password 重置密码（管理员操作）
+// UserResetPassword PUT /{APIPrefix}/users/:id/reset-password 重置密码（管理员操作）
 func UserResetPassword(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

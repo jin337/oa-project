@@ -9,10 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ssePaths 长连接/流式接口白名单：这类接口按设计长期持有连接，
+// isSSEPath 判断是否为长连接/流式接口白名单路径：这类接口按设计长期持有连接，
 // 不能被请求超时上下文取消，否则连接会被定时切断（表现为 SSE 每隔超时时长断开重连）。
-var ssePaths = map[string]struct{}{
-	"/v1/api/notifications/stream": {},
+// 路径随配置前缀动态拼接（config.Server.APIPrefix，由 main 加载），版本号变更无需改代码。
+func isSSEPath(p string) bool {
+	return p == config.Cfg.Server.APIPrefix+"/notifications/stream"
 }
 
 // Timeout 接口请求统一超时控制：超时时间取自配置 server.request_timeout。
@@ -21,7 +22,7 @@ var ssePaths = map[string]struct{}{
 func Timeout() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 长连接（SSE）直接放行，不注入超时上下文
-		if _, ok := ssePaths[c.FullPath()]; ok {
+		if isSSEPath(c.FullPath()) {
 			c.Next()
 			return
 		}

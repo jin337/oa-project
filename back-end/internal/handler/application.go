@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ApplicationList GET /v1/api/application 分页列表
+// ApplicationList GET /{APIPrefix}/application 分页列表
 func ApplicationList(c *gin.Context) {
 	var req model.ApplicationListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -28,7 +28,7 @@ func ApplicationList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// ApplicationDetail GET /v1/api/application/:id
+// ApplicationDetail GET /{APIPrefix}/application/:id
 func ApplicationDetail(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -42,7 +42,7 @@ func ApplicationDetail(c *gin.Context) {
 	response.OK(c, app)
 }
 
-// ApplicationByCode GET /v1/api/application/by-code/:code 按页面编码查询详情
+// ApplicationByCode GET /{APIPrefix}/application/by-code/:code 按页面编码查询详情
 // Query 参数 state 控制返回内容：list / form / detail；不传或未知时返回完整配置
 func ApplicationByCode(c *gin.Context) {
 	code := strings.TrimSpace(c.Param("code"))
@@ -75,7 +75,7 @@ func ApplicationByCode(c *gin.Context) {
 	response.OK(c, result)
 }
 
-// ApplicationDataDetail GET /v1/api/application/:id/data/:dataId 动态数据详情（含子表数据）
+// ApplicationDataDetail GET /{APIPrefix}/application/:id/data/:dataId 动态数据详情（含子表数据）
 func ApplicationDataDetail(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -99,7 +99,7 @@ func ApplicationDataDetail(c *gin.Context) {
 	response.OK(c, data)
 }
 
-// ApplicationDataCreate POST /v1/api/application/:id/data 动态业务数据新增（提交申请表单）
+// ApplicationDataCreate POST /{APIPrefix}/application/:id/data 动态业务数据新增（提交申请表单）
 func ApplicationDataCreate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -118,7 +118,7 @@ func ApplicationDataCreate(c *gin.Context) {
 	response.OK(c, gin.H{"id": newID})
 }
 
-// ApplicationDataDelete DELETE /v1/api/application/:id/data/:dataId 动态业务数据删除（列表页删除行）
+// ApplicationDataDelete DELETE /{APIPrefix}/application/:id/data/:dataId 动态业务数据删除（列表页删除行）
 func ApplicationDataDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -136,7 +136,7 @@ func ApplicationDataDelete(c *gin.Context) {
 	response.OKMsg(c, "删除成功")
 }
 
-// ApplicationDataUpdate PUT /v1/api/application/:id/data/:dataId 动态业务数据更新（编辑表单提交）
+// ApplicationDataUpdate PUT /{APIPrefix}/application/:id/data/:dataId 动态业务数据更新（编辑表单提交）
 func ApplicationDataUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -159,7 +159,7 @@ func ApplicationDataUpdate(c *gin.Context) {
 	response.OKMsg(c, "更新成功")
 }
 
-// ApplicationCreate POST /v1/api/application
+// ApplicationCreate POST /{APIPrefix}/application
 func ApplicationCreate(c *gin.Context) {
 	var req model.ApplicationCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -174,7 +174,7 @@ func ApplicationCreate(c *gin.Context) {
 	response.OK(c, app)
 }
 
-// ApplicationUpdate PUT /v1/api/application/:id
+// ApplicationUpdate PUT /{APIPrefix}/application/:id
 func ApplicationUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -193,7 +193,7 @@ func ApplicationUpdate(c *gin.Context) {
 	response.OK(c, app)
 }
 
-// ApplicationDelete DELETE /v1/api/application/:id
+// ApplicationDelete DELETE /{APIPrefix}/application/:id
 func ApplicationDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

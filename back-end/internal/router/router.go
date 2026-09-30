@@ -12,7 +12,7 @@ import (
 // GET 查询 / POST 新增 / PUT 修改 / DELETE 删除
 //
 // 各业务模块的路由按 Group 拆分在 router 包内对应文件（见 registerXxxRoutes），
-// 本文件仅负责装配：全局中间件、健康检查、静态资源与 v1 分组。
+// 本文件仅负责装配：全局中间件、健康检查、静态资源与 API 分组。
 func Setup() *gin.Engine {
 	r := gin.New()
 	r.Use(middleware.Recovery(), middleware.Cors(), middleware.Timeout(), gin.Logger())
@@ -23,21 +23,21 @@ func Setup() *gin.Engine {
 	// 上传文件静态服务：直接映射磁盘 uploads 目录
 	r.Static("/uploads", handler.UploadDir)
 
-	// 业务路由统一注册在配置的前缀下（config.Server.APIPrefix，默认 /v1/api）
-	v1 := r.Group(config.Cfg.Server.APIPrefix)
+	// 业务路由统一注册在配置的前缀下（config.Server.APIPrefix，唯一真值见 config-*.yaml 的 server.api_prefix）
+	api := r.Group(config.Cfg.Server.APIPrefix)
 
-	registerAuthRoutes(v1)
-	registerUserRoutes(v1)
-	registerRoleRoutes(v1)
-	registerMenuRoutes(v1)
-	registerDeptRoutes(v1)
-	registerExamineGroupRoutes(v1)
-	registerApiDefinitionRoutes(v1)
-	registerApplicationRoutes(v1)
-	registerApprovalRoutes(v1)
-	registerUploadRoutes(v1)
-	registerUtilRoutes(v1)
-	registerNotificationRoutes(v1)
+	registerAuthRoutes(api)
+	registerUserRoutes(api)
+	registerRoleRoutes(api)
+	registerMenuRoutes(api)
+	registerDeptRoutes(api)
+	registerExamineGroupRoutes(api)
+	registerApiDefinitionRoutes(api)
+	registerApplicationRoutes(api)
+	registerApprovalRoutes(api)
+	registerUploadRoutes(api)
+	registerUtilRoutes(api)
+	registerNotificationRoutes(api)
 
 	// 注入运行时路由快照（供接口管理一键导入后端路由）
 	middleware.SetRouteSnapshot(r.Routes())

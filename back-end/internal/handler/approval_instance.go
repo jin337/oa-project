@@ -1,22 +1,5 @@
 package handler
 
-// ============================================================
-// 流程实例 handler
-// ============================================================
-// 路由（router.go）与前端契约（front-end/src/api/approval.js）：
-//
-//	POST   /v1/api/approval/instance          发起审批
-//	POST   /v1/api/approval/instance/draft    保存草稿
-//	PUT    /v1/api/approval/instance/:id/submit     从草稿提交
-//	GET    /v1/api/approval/instance/:id      实例详情
-//	PUT    /v1/api/approval/instance/:id/withdraw   撤回
-//	DELETE /v1/api/approval/instance/:id      删除已终结实例
-//	PUT    /v1/api/approval/instance/:id/task/:taskId/approve   审批操作
-//	PUT    /v1/api/approval/instance/:id/task/:taskId/delegate  转交
-//
-// 错误响应统一为 { code, msg, data, timestamp }，code!=0 时前端弹出 msg。
-// ============================================================
-
 import (
 	"strconv"
 
@@ -34,7 +17,7 @@ func respondServiceError(c *gin.Context, err error) {
 	response.Fail(c, response.CodeServerError, err.Error())
 }
 
-// ApprovalInstanceCreate POST /v1/api/approval/instance 发起审批
+// ApprovalInstanceCreate POST /{APIPrefix}/approval/instance 发起审批
 func ApprovalInstanceCreate(c *gin.Context) {
 	var req model.ApprovalInstanceCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -49,7 +32,7 @@ func ApprovalInstanceCreate(c *gin.Context) {
 	response.OK(c, instance)
 }
 
-// ApprovalInstanceSaveDraft POST /v1/api/approval/instance/draft 保存审批草稿
+// ApprovalInstanceSaveDraft POST /{APIPrefix}/approval/instance/draft 保存审批草稿
 func ApprovalInstanceSaveDraft(c *gin.Context) {
 	var req model.ApprovalInstanceCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -64,7 +47,7 @@ func ApprovalInstanceSaveDraft(c *gin.Context) {
 	response.OK(c, instance)
 }
 
-// ApprovalInstanceSubmitDraft PUT /v1/api/approval/instance/:id/submit 从草稿提交发起审批
+// ApprovalInstanceSubmitDraft PUT /{APIPrefix}/approval/instance/:id/submit 从草稿提交发起审批
 func ApprovalInstanceSubmitDraft(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -83,7 +66,7 @@ func ApprovalInstanceSubmitDraft(c *gin.Context) {
 	response.OK(c, instance)
 }
 
-// ApprovalInstanceDetail GET /v1/api/approval/instance/:id 实例详情
+// ApprovalInstanceDetail GET /{APIPrefix}/approval/instance/:id 实例详情
 func ApprovalInstanceDetail(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -97,7 +80,7 @@ func ApprovalInstanceDetail(c *gin.Context) {
 	response.OK(c, result)
 }
 
-// ApprovalInstanceWithdraw PUT /v1/api/approval/instance/:id/withdraw 撤回
+// ApprovalInstanceWithdraw PUT /{APIPrefix}/approval/instance/:id/withdraw 撤回
 func ApprovalInstanceWithdraw(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -110,7 +93,7 @@ func ApprovalInstanceWithdraw(c *gin.Context) {
 	response.OKMsg(c, "撤回成功")
 }
 
-// ApprovalInstanceResubmit PUT /v1/api/approval/instance/:id/resubmit 已驳回实例重新提交
+// ApprovalInstanceResubmit PUT /{APIPrefix}/approval/instance/:id/resubmit 已驳回实例重新提交
 func ApprovalInstanceResubmit(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -128,7 +111,7 @@ func ApprovalInstanceResubmit(c *gin.Context) {
 	response.OKMsg(c, "已重新提交")
 }
 
-// ApprovalInstanceDelete DELETE /v1/api/approval/instance/:id 删除已终结实例
+// ApprovalInstanceDelete DELETE /{APIPrefix}/approval/instance/:id 删除已终结实例
 func ApprovalInstanceDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -151,7 +134,7 @@ func parseTaskID(c *gin.Context) (uint, bool) {
 	return uint(id), true
 }
 
-// ApprovalInstanceTaskApprove PUT /v1/api/approval/instance/:id/task/:taskId/approve 审批操作（通过/拒绝/驳回）
+// ApprovalInstanceTaskApprove PUT /{APIPrefix}/approval/instance/:id/task/:taskId/approve 审批操作（通过/拒绝/驳回）
 func ApprovalInstanceTaskApprove(c *gin.Context) {
 	instanceID, ok := parseID(c)
 	if !ok {
@@ -173,7 +156,7 @@ func ApprovalInstanceTaskApprove(c *gin.Context) {
 	response.OKMsg(c, "操作成功")
 }
 
-// ApprovalInstanceTaskAddSign PUT /v1/api/approval/instance/:id/task/:taskId/add-sign 加签（前加签/后加签）
+// ApprovalInstanceTaskAddSign PUT /{APIPrefix}/approval/instance/:id/task/:taskId/add-sign 加签（前加签/后加签）
 func ApprovalInstanceTaskAddSign(c *gin.Context) {
 	instanceID, ok := parseID(c)
 	if !ok {
@@ -195,7 +178,7 @@ func ApprovalInstanceTaskAddSign(c *gin.Context) {
 	response.OKMsg(c, "加签成功")
 }
 
-// ApprovalInstanceTaskDelegate PUT /v1/api/approval/instance/:id/task/:taskId/delegate 转交
+// ApprovalInstanceTaskDelegate PUT /{APIPrefix}/approval/instance/:id/task/:taskId/delegate 转交
 func ApprovalInstanceTaskDelegate(c *gin.Context) {
 	instanceID, ok := parseID(c)
 	if !ok {

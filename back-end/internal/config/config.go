@@ -19,7 +19,7 @@ type Config struct {
 type ServerConfig struct {
 	Port           int         `yaml:"port"`
 	Mode           string      `yaml:"mode"`
-	APIPrefix      string      `yaml:"api_prefix"` // API 统一前缀（版本号变更只改此处，如 /v1/api → /v2/api）
+	APIPrefix      string      `yaml:"api_prefix"` // API 统一前缀（版本号变更只改此处，需同步前端 .env 与 Nginx）
 	RequestTimeout int         `yaml:"request_timeout"` // 秒
 	JWT            JWTConfig   `yaml:"jwt"`
 	Log            LogConfig   `yaml:"log"`

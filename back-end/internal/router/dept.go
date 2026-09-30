@@ -8,8 +8,8 @@ import (
 )
 
 // registerDeptRoutes 公司/部门管理路由
-func registerDeptRoutes(v1 *gin.RouterGroup) {
-	depts := v1.Group("/depts")
+func registerDeptRoutes(api *gin.RouterGroup) {
+	depts := api.Group("/depts")
 	depts.Use(middleware.JWTAuth())
 	{
 		depts.GET("", handler.DeptTree)       // 部门树

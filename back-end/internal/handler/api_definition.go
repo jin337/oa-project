@@ -17,7 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ApiDefinitionList GET /v1/api/api-definitions
+// ApiDefinitionList GET /{APIPrefix}/api-definitions
 func ApiDefinitionList(c *gin.Context) {
 	var req model.ApiDefinitionListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -32,7 +32,7 @@ func ApiDefinitionList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// ApiDefinitionDetail GET /v1/api/api-definitions/:id
+// ApiDefinitionDetail GET /{APIPrefix}/api-definitions/:id
 func ApiDefinitionDetail(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -46,7 +46,7 @@ func ApiDefinitionDetail(c *gin.Context) {
 	response.OK(c, def)
 }
 
-// ApiDefinitionCreate POST /v1/api/api-definitions
+// ApiDefinitionCreate POST /{APIPrefix}/api-definitions
 func ApiDefinitionCreate(c *gin.Context) {
 	var req model.ApiDefinitionCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -61,7 +61,7 @@ func ApiDefinitionCreate(c *gin.Context) {
 	response.OK(c, def)
 }
 
-// ApiDefinitionUpdate PUT /v1/api/api-definitions/:id
+// ApiDefinitionUpdate PUT /{APIPrefix}/api-definitions/:id
 func ApiDefinitionUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -80,7 +80,7 @@ func ApiDefinitionUpdate(c *gin.Context) {
 	response.OK(c, def)
 }
 
-// ApiDefinitionDelete DELETE /v1/api/api-definitions/:id
+// ApiDefinitionDelete DELETE /{APIPrefix}/api-definitions/:id
 func ApiDefinitionDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -93,7 +93,7 @@ func ApiDefinitionDelete(c *gin.Context) {
 	response.OKMsg(c, "删除成功")
 }
 
-// ApiDefinitionDebug POST /v1/api/api-definitions/debug
+// ApiDefinitionDebug POST /{APIPrefix}/api-definitions/debug
 // 按接口 ID 加载定义执行（SQL 直查 / HTTP 转发），透传当前用户 token
 func ApiDefinitionDebug(c *gin.Context) {
 	var req model.ApiDefinitionDebugReq
@@ -112,7 +112,7 @@ func ApiDefinitionDebug(c *gin.Context) {
 	response.OK(c, result)
 }
 
-// ApiDefinitionDispatch GET/POST/PUT/DELETE /v1/api/interfaces/*path
+// ApiDefinitionDispatch GET/POST/PUT/DELETE /{APIPrefix}/interfaces/*path
 // 统一分发：按 method+path 查表执行（type=sql 直查数据库 / type=http 转发内部接口）。
 // 未命中或停用返回 404，转发目标返回非 2xx 时返回 502。
 func ApiDefinitionDispatch(c *gin.Context) {
@@ -157,13 +157,13 @@ func ApiDefinitionDispatch(c *gin.Context) {
 	response.OK(c, result.Raw)
 }
 
-// ApiDefinitionListRoutes GET /v1/api/api-definitions/backend/routes
+// ApiDefinitionListRoutes GET /{APIPrefix}/api-definitions/backend/routes
 // 返回后端全部业务路由（method + path + handler），供前端预览 / 一键导入
 func ApiDefinitionListRoutes(c *gin.Context) {
 	response.OK(c, filterBackendRoutes())
 }
 
-// ApiDefinitionImportRoutes POST /v1/api/api-definitions/backend/import
+// ApiDefinitionImportRoutes POST /{APIPrefix}/api-definitions/backend/import
 // 一键导入后端全部业务路由为 HTTP 转发定义，返回本次导入数量
 func ApiDefinitionImportRoutes(c *gin.Context) {
 	dtos := filterBackendRoutes()

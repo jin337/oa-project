@@ -8,8 +8,8 @@ import (
 )
 
 // registerNotificationRoutes 站内通知路由
-func registerNotificationRoutes(v1 *gin.RouterGroup) {
-	notifications := v1.Group("/notifications")
+func registerNotificationRoutes(api *gin.RouterGroup) {
+	notifications := api.Group("/notifications")
 	notifications.Use(middleware.JWTAuth())
 	{
 		notifications.GET("", handler.NotificationList)          // 通知列表

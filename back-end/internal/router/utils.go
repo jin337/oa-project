@@ -8,8 +8,8 @@ import (
 )
 
 // registerUtilRoutes 工具接口路由（需要鉴权）
-func registerUtilRoutes(v1 *gin.RouterGroup) {
-	utils := v1.Group("/utils")
+func registerUtilRoutes(api *gin.RouterGroup) {
+	utils := api.Group("/utils")
 	utils.Use(middleware.JWTAuth())
 	{
 		utils.POST("/calculate", handler.Calculate) // 公共计算/转换接口

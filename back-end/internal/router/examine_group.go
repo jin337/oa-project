@@ -8,8 +8,8 @@ import (
 )
 
 // registerExamineGroupRoutes 审核人员组管理路由
-func registerExamineGroupRoutes(v1 *gin.RouterGroup) {
-	examineGroups := v1.Group("/examine-groups")
+func registerExamineGroupRoutes(api *gin.RouterGroup) {
+	examineGroups := api.Group("/examine-groups")
 	examineGroups.Use(middleware.JWTAuth())
 	{
 		examineGroups.GET("", handler.ExamineGroupList)      // 审核人员组列表

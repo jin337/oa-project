@@ -24,7 +24,7 @@
 - **RBAC 权限模型**：用户 ⇄ 角色 ⇄ 菜单（目录/页面/按钮）多对多授权，部门树 + 数据范围过滤（全部 / 自定义 / 本部门 / 本部门及下级 / 仅本人）
 - **JWT 登录鉴权**：登录签发 token，`Authorization: Bearer <token>` 访问受保护接口，支持本人改密与管理员重置密码
 - **流程配置引擎**：流程（表单/表格）→ 数据表字段 → 表单元素 → 布局 → 审批流，全链路配置化，业务数据动态读写；流程编码由内置 `idgen` 生成（`app_<毫秒base32>_<随机base32>`，字典序即时间序）
-- **接口管理**：`oa_api_definitions` 定义 **SQL 直查 / HTTP 转发** 两类接口，统一分发端点 `/v1/api/interfaces/*path` 对外暴露，支持一键导入后端路由、试调、被引用统计（防误删）
+- **接口管理**：`oa_api_definitions` 定义 **SQL 直查 / HTTP 转发** 两类接口，统一分发端点 `{APIPrefix}/interfaces/*path` 对外暴露，支持一键导入后端路由、试调、被引用统计（防误删）
 - **审核人员组**：`oa_examine_groups` 配置可复用审核人集合，审批人 / 抄送对象均可选「审核人员组」
 - **审批工作流**：条件分支 + 指定人员/指定角色/发起人自选/审核人员组多种审批人类型，依次/会签/或签审批方式，草稿箱、自动通过、转交、撤回、退回全流程状态机，核心流转全部事务化
 - **动态表单引擎**：字段级数据源（静态/接口，可引用接口管理定义）、事件联动、动态显隐与禁用、校验规则、子表、文件上传，支持 form / detail / move-form / move-detail 四种布局模式
@@ -70,7 +70,7 @@ back-end/
 │   ├── model/
 │   │   ├── model.go            #   全部实体 + 请求/响应结构 + 状态枚举
 │   │   └── base.go             #   分页与公共字段
-│   ├── router/                 # 路由注册（RESTful，统一 /v1/api 前缀；v1 下各 Group 独立文件）
+│   ├── router/                 # 路由注册（RESTful，统一 {APIPrefix} 前缀；各 Group 独立文件）
 │   │   ├── router.go           #   总装配：全局中间件 + 各模块路由注册入口
 │   │   ├── auth.go / user.go / role.go / menu.go / dept.go       # 认证与 RBAC
 │   │   ├── application.go / approval.go / notification.go / upload.go / utils.go
@@ -174,7 +174,7 @@ $env:APP_ENV="dev"; go run ./cmd/server
 ```bash
 cd ../front-end
 npm install
-npm run dev          # 前端 8181，/v1/api 与 /uploads 代理到本服务 8180
+npm run dev          # 前端 8181，{APIPrefix} 与 /uploads 代理到本服务 8180
 ```
 
 浏览器访问 `http://localhost:8181/` 登录后即可联调；前端不再需要单独配置后端地址。
@@ -227,7 +227,7 @@ task clean          # 清理编译产物、bin/ 与 logs/
 | --- | --- | --- |
 | `server` | `port` | 服务端口，默认 8180 |
 | `server` | `mode` | gin 模式：`debug` / `release` / `test` |
-| `server` | `api_prefix` | **API 统一前缀，版本号变更唯一真值**（默认 `/v1/api`，改 `/v2/api` 时需同步前端 `.env` 与 Nginx） |
+| `server` | `api_prefix` | **API 统一前缀，版本号变更唯一真值**（默认 `{APIPrefix}`，改 `/v2/api` 时需同步前端 `.env` 与 Nginx） |
 | `server` | `request_timeout` | 接口统一请求超时（秒），默认 10；SSE 长连接已豁免 |
 | `server.jwt` | `secret` | JWT 签名密钥，**生产环境务必修改** |
 | `server.jwt` | `expire` | token 有效期（小时） |
@@ -302,11 +302,11 @@ RestartSec=3
 WantedBy=multi-user.target
 ```
 
-6. 前端静态资源由 Nginx 托管，`/v1/api` 反向代理到本服务（详见 `front-end/README.md`）
+6. 前端静态资源由 Nginx 托管，`{APIPrefix}` 反向代理到本服务（详见 `front-end/README.md`）
 
 ## 接口约定
 
-- 统一前缀 `/v1/api`（唯一真值：`configs/config-*.yaml` 的 `server.api_prefix`），标准 RESTful：GET 查询 / POST 新增 / PUT 修改 / DELETE 删除
+- 统一前缀 `{APIPrefix}`（唯一真值：`configs/config-*.yaml` 的 `server.api_prefix`），标准 RESTful：GET 查询 / POST 新增 / PUT 修改 / DELETE 删除
 - 统一返回体：`{ "code": 0, "msg": "success", "data": {...}, "timestamp": 1234567890 }`，`code=0` 成功，非 0 失败（`msg` 为中文错误提示）
 - 鉴权接口请求头携带 `Authorization: Bearer <token>`
 - 非法参数自动拦截并返回中文提示；系统 panic 被全局拦截，不泄露原生报错
@@ -319,33 +319,33 @@ WantedBy=multi-user.target
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | / | 健康检查：服务状态、环境名、数据库连通性（无需鉴权） |
-| POST | /v1/api/auth/login | 登录，返回 token |
-| GET | /v1/api/auth/profile | 当前用户 + 菜单树 + 权限标识 |
-| GET | /v1/api/auth/menus | 当前用户菜单树 |
+| POST | {APIPrefix}/auth/login | 登录，返回 token |
+| GET | {APIPrefix}/auth/profile | 当前用户 + 菜单树 + 权限标识 |
+| GET | {APIPrefix}/auth/menus | 当前用户菜单树 |
 
 ### 用户 / 角色 / 菜单 / 部门
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET/POST | /v1/api/users | 用户分页列表（数据范围过滤）/ 新增 |
-| PUT | /v1/api/users/switch-dept | 切换当前部门（多部门用户） |
-| GET/PUT/DELETE | /v1/api/users/:id | 用户详情 / 修改 / 删除 |
-| PUT | /v1/api/users/:id/roles | 用户分配角色（多对多） |
-| PUT | /v1/api/users/:id/password | 修改密码（仅限本人，需校验旧密码） |
-| PUT | /v1/api/users/:id/reset-password | 重置密码（管理员操作） |
-| GET/PUT | /v1/api/users/:id/profile | 获取 / 更新员工档案（1:1，upsert） |
-| GET/POST | /v1/api/roles | 角色分页列表 / 新增 |
-| GET | /v1/api/roles/users | 角色下的用户 |
-| GET/PUT/DELETE | /v1/api/roles/:id | 角色详情 / 修改 / 删除 |
-| PUT | /v1/api/roles/:id/menus | 角色分配菜单（多对多） |
-| PUT | /v1/api/roles/:id/depts | 角色自定义数据范围绑定部门 |
-| GET/POST | /v1/api/menus | 菜单树 / 新增（目录/页面/按钮） |
-| GET/PUT/DELETE | /v1/api/menus/:id | 菜单详情 / 修改 / 删除 |
-| GET/POST | /v1/api/depts | 部门树 / 新增 |
-| GET | /v1/api/depts/users | 部门下的用户 |
-| GET/PUT/DELETE | /v1/api/depts/:id | 部门详情 / 修改 / 删除 |
+| GET/POST | {APIPrefix}/users | 用户分页列表（数据范围过滤）/ 新增 |
+| PUT | {APIPrefix}/users/switch-dept | 切换当前部门（多部门用户） |
+| GET/PUT/DELETE | {APIPrefix}/users/:id | 用户详情 / 修改 / 删除 |
+| PUT | {APIPrefix}/users/:id/roles | 用户分配角色（多对多） |
+| PUT | {APIPrefix}/users/:id/password | 修改密码（仅限本人，需校验旧密码） |
+| PUT | {APIPrefix}/users/:id/reset-password | 重置密码（管理员操作） |
+| GET/PUT | {APIPrefix}/users/:id/profile | 获取 / 更新员工档案（1:1，upsert） |
+| GET/POST | {APIPrefix}/roles | 角色分页列表 / 新增 |
+| GET | {APIPrefix}/roles/users | 角色下的用户 |
+| GET/PUT/DELETE | {APIPrefix}/roles/:id | 角色详情 / 修改 / 删除 |
+| PUT | {APIPrefix}/roles/:id/menus | 角色分配菜单（多对多） |
+| PUT | {APIPrefix}/roles/:id/depts | 角色自定义数据范围绑定部门 |
+| GET/POST | {APIPrefix}/menus | 菜单树 / 新增（目录/页面/按钮） |
+| GET/PUT/DELETE | {APIPrefix}/menus/:id | 菜单详情 / 修改 / 删除 |
+| GET/POST | {APIPrefix}/depts | 部门树 / 新增 |
+| GET | {APIPrefix}/depts/users | 部门下的用户 |
+| GET/PUT/DELETE | {APIPrefix}/depts/:id | 部门详情 / 修改 / 删除 |
 
-### 审批（/v1/api/approval）
+### 审批（{APIPrefix}/approval）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -365,14 +365,14 @@ WantedBy=multi-user.target
 | PUT | /approval/instance/:id/task/:taskId/delegate | 转交（`to_user_id` 指定目标用户） |
 | PUT | /approval/instance/:id/task/:taskId/add-sign | 加签（前加签 / 后加签） |
 
-### 文件上传（/v1/api/upload）
+### 文件上传（{APIPrefix}/upload）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | POST | /upload | 单文件上传，form-data `file`，query `app_code` 指定流程编码；返回 `{url, name, size}` |
 | GET | /uploads/* | 上传文件静态访问（无需鉴权，直接映射磁盘 uploads 目录） |
 
-### 站内通知（/v1/api/notifications）
+### 站内通知（{APIPrefix}/notifications）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -382,7 +382,7 @@ WantedBy=multi-user.target
 | PUT | /notifications/:id/read | 单条标记为已读 |
 | GET | /notifications/stream?token=xxx | SSE 实时推送通知流（服务器发送事件） |
 
-### 工具接口（/v1/api/utils）
+### 工具接口（{APIPrefix}/utils）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -390,7 +390,7 @@ WantedBy=multi-user.target
 | | | - `type: "number_to_upper"`：数字转大写金额（如 100000 → "壹拾万元整"） |
 | | | - `type: "calc"`：表达式计算（支持 `+`、`-`、`*`、`/`、`%`、括号，如 `"(100+2)*3 % 7"` → 5） |
 
-### 接口管理（/v1/api/api-definitions）
+### 接口管理（{APIPrefix}/api-definitions）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -401,20 +401,20 @@ WantedBy=multi-user.target
 | POST | /api-definitions/backend/import | 一键导入后端路由为 HTTP 转发定义 |
 | GET/PUT/DELETE | /api-definitions/:id | 接口详情 / 修改 / 删除 |
 
-### 统一分发端点（/v1/api/interfaces）
+### 统一分发端点（{APIPrefix}/interfaces）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET/POST/PUT/DELETE | /interfaces/*path | 按 method+path（status=1）匹配接口定义并执行：SQL 直查返回行数组（单列 `_data` 且可解析 JSON 时返回对象/数组）；HTTP 转发原样透传目标响应体 |
 
-### 审核人员组（/v1/api/examine-groups）
+### 审核人员组（{APIPrefix}/examine-groups）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET/POST | /examine-groups | 审核人员组列表 / 新增 |
 | GET/PUT/DELETE | /examine-groups/:id | 详情 / 修改 / 删除（`approvers` 为用户昵称等翻译后信息） |
 
-### 流程配置（/v1/api/application）
+### 流程配置（{APIPrefix}/application）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -461,7 +461,7 @@ WantedBy=multi-user.target
 ### 接口管理（oa_api_definitions）
 
 - **双模式定义**：`type=sql` 为 SQL 模板直查（`${form.xxx}` 占位，参数化绑定，仅允许 SELECT）；`type=http` 为转发到内部相对路径（`target_path`）
-- **统一分发**：`/v1/api/interfaces/*path` 按 method+path（status=1）匹配定义，动态路径段（`:id`）支持模板匹配
+- **统一分发**：`{APIPrefix}/interfaces/*path` 按 method+path（status=1）匹配定义，动态路径段（`:id`）支持模板匹配
 - **SQL 直查数据权限**：按「静态写死」方式——模板内显式写 `dept_id IN (...)` / `created_by = ...` 过滤（无兜底注入，避免误导）；返回结构由 SQL 自身声明：结果单列且列名为 `_data` 且值可解析 JSON（`JSON_OBJECT` / `JSON_ARRAYAGG`）时自动解析为对象/数组，其余按行数组返回（列表/选项语义）
 - **HTTP 转发**：以当前账号身份调用内部接口，转发结果原样透传（`Forwarded` 标记避免双重包裹），保证联动填充能取到 `res.data`
 - **被引用统计**：`referenced` 字段运行时统计表单元素 `data_source` / `actions` 中对本接口的引用次数（不入库），`>0` 时前端禁用删除，防误删

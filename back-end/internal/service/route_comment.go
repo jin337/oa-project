@@ -12,7 +12,7 @@ import (
 )
 
 // LoadRouteComments 解析 router 包源码，读取路由注册处的行内注释作为接口名称。
-// 返回 map：key = "METHOD path"（path 不含 /v1/api 前缀），value = 行内注释文本。
+// 返回 map：key = "METHOD path"（path 不含配置前缀 {APIPrefix}），value = 行内注释文本。
 // 路由注册处写法示例（见 internal/router/approval.go）：
 //
 //	instance.POST("", handler.ApprovalInstanceCreate) // 发起审批
@@ -29,8 +29,8 @@ func LoadRouteComments() map[string]string {
 	}
 	for _, pkg := range pkgs {
 		for _, file := range pkg.Files {
-			// 组前缀表：变量名 → 完整前缀（v1 对应 /v1/api，导入路径不含此前缀，映射为空）
-			prefixes := map[string]string{"v1": ""}
+			// 组前缀表：变量名 → 完整前缀（根组变量 api 对应配置前缀，导入路径不含此前缀，映射为空）
+			prefixes := map[string]string{"api": ""}
 			collectGroupPrefixes(file, prefixes)
 			collectRouteComments(fset, file, prefixes, names)
 		}
@@ -53,7 +53,7 @@ func LoadRouteOrder() map[string]int {
 	}
 	for _, pkg := range pkgs {
 		for _, file := range pkg.Files {
-			prefixes := map[string]string{"v1": ""}
+			prefixes := map[string]string{"api": ""}
 			collectGroupPrefixes(file, prefixes)
 			ast.Inspect(file, func(n ast.Node) bool {
 				fd, ok := n.(*ast.FuncDecl)
@@ -91,7 +91,7 @@ func setupModuleOrder(dir string) map[string]int {
 		if !ok {
 			return true
 		}
-		// registerAuthRoutes(v1) 为包内直接调用，Fun 是 *ast.Ident
+		// registerAuthRoutes(api) 为包内直接调用，Fun 是 *ast.Ident
 		var name string
 		if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
 			name = sel.Sel.Name
@@ -161,7 +161,7 @@ func routerSourceDir() string {
 }
 
 // collectGroupPrefixes 收集 Group 赋值链的前缀：
-// v1 := r.Group(config.Cfg.Server.APIPrefix) → v1 = ""（根组；v1 已预置空前缀兜底）
+// api := r.Group(config.Cfg.Server.APIPrefix) → api = ""（根组；api 已预置空前缀兜底）
 // applications := v1.Group("/application") → applications = "/application"
 // instance := approval.Group("/instance") → instance = "/approval/instance"
 func collectGroupPrefixes(file *ast.File, prefixes map[string]string) {

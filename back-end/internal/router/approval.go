@@ -8,8 +8,8 @@ import (
 )
 
 // registerApprovalRoutes 审批管理路由
-func registerApprovalRoutes(v1 *gin.RouterGroup) {
-	approval := v1.Group("/approval")
+func registerApprovalRoutes(api *gin.RouterGroup) {
+	approval := api.Group("/approval")
 	approval.Use(middleware.JWTAuth())
 	{
 		approval.GET("/list", handler.ApprovalList) // 审批列表

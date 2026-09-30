@@ -8,8 +8,8 @@ import (
 )
 
 // registerUserRoutes 用户管理路由
-func registerUserRoutes(v1 *gin.RouterGroup) {
-	users := v1.Group("/users")
+func registerUserRoutes(api *gin.RouterGroup) {
+	users := api.Group("/users")
 	users.Use(middleware.JWTAuth())
 	{
 		users.GET("", handler.UserList)                    // 用户列表

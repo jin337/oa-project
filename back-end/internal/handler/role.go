@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RoleUsers GET /v1/api/roles/users 所有角色 + 每个角色下的用户列表
+// RoleUsers GET /{APIPrefix}/roles/users 所有角色 + 每个角色下的用户列表
 func RoleUsers(c *gin.Context) {
 	tree, err := service.RoleUsers()
 	if err != nil {
@@ -20,7 +20,7 @@ func RoleUsers(c *gin.Context) {
 	response.OK(c, tree)
 }
 
-// RoleList GET /v1/api/roles
+// RoleList GET /{APIPrefix}/roles
 func RoleList(c *gin.Context) {
 	var req model.RoleListReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -35,7 +35,7 @@ func RoleList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// RoleDetail GET /v1/api/roles/:id
+// RoleDetail GET /{APIPrefix}/roles/:id
 func RoleDetail(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -49,7 +49,7 @@ func RoleDetail(c *gin.Context) {
 	response.OK(c, role)
 }
 
-// RoleCreate POST /v1/api/roles
+// RoleCreate POST /{APIPrefix}/roles
 func RoleCreate(c *gin.Context) {
 	var req model.RoleCreateReq
 	if msg := vtrans.Validate(c, &req); msg != "" {
@@ -64,7 +64,7 @@ func RoleCreate(c *gin.Context) {
 	response.OK(c, role)
 }
 
-// RoleUpdate PUT /v1/api/roles/:id
+// RoleUpdate PUT /{APIPrefix}/roles/:id
 func RoleUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -83,7 +83,7 @@ func RoleUpdate(c *gin.Context) {
 	response.OK(c, role)
 }
 
-// RoleDelete DELETE /v1/api/roles/:id
+// RoleDelete DELETE /{APIPrefix}/roles/:id
 func RoleDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -96,7 +96,7 @@ func RoleDelete(c *gin.Context) {
 	response.OKMsg(c, "删除成功")
 }
 
-// RoleAssignMenus PUT /v1/api/roles/:id/menus
+// RoleAssignMenus PUT /{APIPrefix}/roles/:id/menus
 func RoleAssignMenus(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -114,7 +114,7 @@ func RoleAssignMenus(c *gin.Context) {
 	response.OKMsg(c, "分配菜单成功")
 }
 
-// RoleAssignDepts PUT /v1/api/roles/:id/depts 自定义数据范围绑定部门
+// RoleAssignDepts PUT /{APIPrefix}/roles/:id/depts 自定义数据范围绑定部门
 func RoleAssignDepts(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

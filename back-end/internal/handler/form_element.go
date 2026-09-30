@@ -22,7 +22,7 @@ func parseElementID(c *gin.Context) (uint, bool) {
 	return uint(id), true
 }
 
-// ApplicationElementList GET /v1/api/application/:id/element 表单元素分页列表
+// ApplicationElementList GET /{APIPrefix}/application/:id/element 表单元素分页列表
 func ApplicationElementList(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -41,7 +41,7 @@ func ApplicationElementList(c *gin.Context) {
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
 
-// ApplicationElementCreate POST /v1/api/application/:id/element 新增表单元素
+// ApplicationElementCreate POST /{APIPrefix}/application/:id/element 新增表单元素
 func ApplicationElementCreate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -60,7 +60,7 @@ func ApplicationElementCreate(c *gin.Context) {
 	response.OK(c, el)
 }
 
-// ApplicationElementUpdate PUT /v1/api/application/:id/element/:elementId 修改表单元素
+// ApplicationElementUpdate PUT /{APIPrefix}/application/:id/element/:elementId 修改表单元素
 func ApplicationElementUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -83,7 +83,7 @@ func ApplicationElementUpdate(c *gin.Context) {
 	response.OK(c, el)
 }
 
-// ApplicationElementDelete DELETE /v1/api/application/:id/element/:elementId 删除表单元素
+// ApplicationElementDelete DELETE /{APIPrefix}/application/:id/element/:elementId 删除表单元素
 func ApplicationElementDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
