@@ -640,7 +640,7 @@ export default function UserManage() {
       <Drawer
         title={`用户详情 - ${detailUser?.username || ''}`}
         visible={detailVisible}
-        width={560}
+        width={600}
         onOk={handleSaveProfile}
         confirmLoading={profileSaving}
         unmountOnExit

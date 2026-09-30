@@ -34,6 +34,53 @@ const Row = Grid.Row
 const Col = Grid.Col
 
 /**
+ * 方案1（校验错误归因）：表单校验失败时，若失败字段是由其他字段的 set_value 联动生成的
+ * （如可见的「项目」on_change 直接赋值 → 隐藏必填的「项目 id」），该字段的必填错误提示
+ * 渲染在隐藏字段上看不见，导致用户"必填都填了却提交不了"。
+ * 这里构建 target → 触发字段 的映射，把提示追加到可见的触发字段上，引导用户先操作触发字段。
+ */
+function remapLinkedFieldErrors(errors, form, app) {
+  if (!errors || typeof errors !== 'object' || !form || !app) return
+  const layout = parseLayoutJson(app?.form_layout_json)
+  const elements = layout?.elements || []
+  if (!elements.length) return
+  // target 字段 → { 触发字段 key / label }；同时收集字段 label 便于文案
+  const targetToSource = {}
+  const fieldLabels = {}
+  elements.forEach((el) => {
+    if (el.field_key) fieldLabels[el.field_key] = el.label || el.field_key
+    const actions = el.actions || {}
+    Object.values(actions).forEach((list) => {
+      if (!Array.isArray(list)) return
+      list.forEach((a) => {
+        if (a?.action_type !== 'set_value' || !Array.isArray(a.value) || !el.field_key) return
+        a.value.forEach((m) => {
+          if (m?.target) {
+            targetToSource[m.target] = { sourceField: el.field_key, sourceLabel: el.label || el.field_key }
+          }
+        })
+      })
+    })
+  })
+  const setObj = {}
+  Object.keys(errors).forEach((field) => {
+    const src = targetToSource[field]
+    if (!src) return
+    const targetLabel = fieldLabels[field] || field
+    const msg = `请先选择「${src.sourceLabel}」：必填项「${targetLabel}」由「${src.sourceLabel}」联动生成`
+    // Arco FormItem 渲染错误时对错误项取 .message，且 store 按「单错误对象」结构消费
+    // （validate 原生错误为 { field: errObj }）；数组会导致 Object.values 后 item.message 为空
+    const prev = setObj[src.sourceField]?.error?.message
+    setObj[src.sourceField] = {
+      error: { message: prev ? `${prev}；${msg}` : msg },
+    }
+  })
+  if (Object.keys(setObj).length) {
+    form.setFields(setObj)
+  }
+}
+
+/**
  * 审批申请页：上下按行排列的流式布局——每个分类独占一行（左侧名称与编辑/删除，右侧新增申请项），
  * 分类行下方以网格卡片展示该分类下的申请项。
  * 申请项通过「页面编码（code）」关联 ApplicationManage 中已配置的应用页面，
@@ -238,6 +285,10 @@ export default function Apply() {
     try {
       values = await drawerForm.validate()
     } catch (e) {
+      // 方案1：set_value 联动目标字段（如隐藏的必填「项目 id」）校验失败时，
+      // 错误提示在隐藏字段上看不见，这里把提示归因到触发它的可见字段（如「项目」）
+      // 注意：Arco validate reject 的是 ValidateError，字段错误对象在其 .errors 上
+      remapLinkedFieldErrors(e?.errors || e, drawerForm, drawerApp)
       return null
     }
     // 时间字段（date/datetime/time 等）统一序列化为 MySQL 兼容格式

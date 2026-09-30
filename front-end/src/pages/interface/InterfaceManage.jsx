@@ -160,7 +160,7 @@ export default function InterfaceManage() {
   // 一键导入后端全部业务路由为 HTTP 转发定义
   const handleImportRoutes = () => {
     Modal.confirm({
-      title: '导入后端路由',
+      title: '同步后端路由',
       content:
         '将后端全部业务路由（排除接口管理自身、登录、SSE 推送）导入为 HTTP 转发定义，已存在的接口自动跳过。确定导入？',
       okText: '导入',
@@ -453,7 +453,7 @@ export default function InterfaceManage() {
       extra={
         canEdit && (
           <Button icon={<IconSync />} onClick={handleImportRoutes}>
-            导入后端路由
+            同步后端路由
           </Button>
         )
       }
@@ -540,7 +540,7 @@ export default function InterfaceManage() {
         title={editing ? '编辑接口' : '新增接口'}
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
-        width={'50%'}
+        width={'60%'}
         footer={
           <Space>
             <Button type="primary" loading={saving} onClick={handleSave}>

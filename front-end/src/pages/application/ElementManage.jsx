@@ -41,7 +41,7 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 const CollapseItem = Collapse.Item
 
-const MODULE_LABEL = '表单元素'
+const MODULE_LABEL = '表单元素管理'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = [
@@ -913,7 +913,7 @@ export default function ElementManage() {
           </Space>
         }
         visible={drawerVisible}
-        width="55%"
+        width="60%"
         onOk={handleSave}
         confirmLoading={saving}
         onCancel={() => setDrawerVisible(false)}

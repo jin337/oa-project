@@ -97,7 +97,7 @@ export function ApproverEditDrawer({
     (approverType === 3 && selfSelect === 2) // 发起人自选：多选时展示
   return (
     <Drawer
-      width={560}
+      width={600}
       title="审批人设置"
       visible
       onCancel={onCancel}

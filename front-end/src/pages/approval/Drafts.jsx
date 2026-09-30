@@ -286,7 +286,7 @@ export default function Drafts() {
 
       {/* 继续编辑 Drawer：注入动态表单并回填草稿数据 */}
       <Drawer
-        width="50%"
+        width="60%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
         title={`编辑 - ${drawerApp?.item_name || drawerApp?.name || ''}`}

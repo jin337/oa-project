@@ -79,7 +79,7 @@ export function ConditionEditDrawer({
 
   return (
     <Drawer
-      width={560}
+      width={600}
       title={`编辑条件 - ${branch.isDefault ? '默认分支' : branch.label}`}
       visible
       onCancel={onCancel}

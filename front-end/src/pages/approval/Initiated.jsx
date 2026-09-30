@@ -261,7 +261,7 @@ export default function Initiated() {
 
       {/* 已驳回编辑 Drawer（仿草稿箱编辑，底部"重新提交"） */}
       <Drawer
-        width="50%"
+        width="60%"
         visible={editVisible}
         onCancel={() => setEditVisible(false)}
         title={`编辑 - ${editApp?.item_name || editApp?.name || ''}`}

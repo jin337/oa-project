@@ -377,7 +377,7 @@ export default function DynamicList({ app, code }) {
 
       {/* 编辑 / 查看 Drawer：按 drawerState 渲染 DynamicForm（编辑 / pageType=detail 查看） */}
       <Drawer
-        width="50%"
+        width="60%"
         title={
           drawerState === 'form'
             ? `编辑 - ${drawerApp?.name || ''}`
