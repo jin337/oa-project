@@ -182,6 +182,7 @@ func seedInitData(db *gorm.DB) error {
 	// 设计（与业务/前端动态路由对齐）：
 	// - 审批管理：目录，下挂 申请/我的发起/我的待办/我审批的/抄送我的/草稿箱
 	// - 应用配置：页面菜单（/application 应用配置页），下挂 表管理/表单元素/布局/审批管理/列表页（hidden=1）+ 管理按钮
+	// - 接口管理：页面菜单（/interface 接口管理页）+ 管理按钮
 	// - 用户设置：页面菜单（/profile，hidden=1，HeaderBar 头像下拉入口）
 	// 所有菜单创建后统一收集 ID，一次性绑定给超级管理员（避免遗漏目录/页面/按钮导致菜单不显示）
 	var allMenuIDs []uint
@@ -193,15 +194,16 @@ func seedInitData(db *gorm.DB) error {
 
 	userProfile := model.Menu{Name: "用户设置", Type: model.MenuTypeMenu, Path: "/profile", Perm: "profile", Sort: 1, Status: 1, Hidden: 1}
 	approvalDir := model.Menu{Name: "审批管理", Type: model.MenuTypeDir, Path: "/approval", Perm: "approval", Sort: 2, Status: 1, Hidden: 0}
-	applicationPage := model.Menu{Name: "应用配置", Type: model.MenuTypeMenu, Path: "/application", Perm: "application", Sort: 3, Status: 1, Hidden: 0}
-	systemDir := model.Menu{Name: "系统管理", Type: model.MenuTypeDir, Path: "/system", Perm: "system", Sort: 4, Status: 1, Hidden: 0}
-	if err := db.Create([]*model.Menu{&userProfile, &approvalDir, &applicationPage, &systemDir}).Error; err != nil {
+	interfacePage := model.Menu{Name: "接口管理", Type: model.MenuTypeMenu, Path: "/interface", Perm: "interface", Sort: 3, Status: 1, Hidden: 0}
+	applicationPage := model.Menu{Name: "流程配置", Type: model.MenuTypeMenu, Path: "/application", Perm: "application", Sort: 4, Status: 1, Hidden: 0}
+	systemDir := model.Menu{Name: "系统管理", Type: model.MenuTypeDir, Path: "/system", Perm: "system", Sort: 5, Status: 1, Hidden: 0}
+	if err := db.Create([]*model.Menu{&userProfile, &approvalDir, &interfacePage, &applicationPage, &systemDir}).Error; err != nil {
 		return err
 	}
-	collectMenuIDs(userProfile, approvalDir, applicationPage, systemDir)
+	collectMenuIDs(userProfile, approvalDir, interfacePage, applicationPage, systemDir)
 
-	// 页面菜单：系统管理 / 应用配置 / 审批管理 三组合并为一个切片一次创建
-	// 索引顺序：0-4 系统管理、5-9 应用配置、10-15 审批管理（按钮引用依赖此顺序）
+	// 页面菜单：系统管理 / 流程配置 / 审批管理 三组合并为一个切片一次创建
+	// 索引顺序：0-4 系统管理、5-9 流程配置、10-15 审批管理（按钮引用依赖此顺序）
 	pageMenus := []model.Menu{
 		// 系统管理
 		{ParentID: systemDir.ID, Name: "用户管理", Type: model.MenuTypeMenu, Path: "/system/user", Perm: "system:user", Sort: 1, Status: 1, Hidden: 0},
@@ -209,7 +211,7 @@ func seedInitData(db *gorm.DB) error {
 		{ParentID: systemDir.ID, Name: "菜单管理", Type: model.MenuTypeMenu, Path: "/system/menu", Perm: "system:menu", Sort: 3, Status: 1, Hidden: 0},
 		{ParentID: systemDir.ID, Name: "部门管理", Type: model.MenuTypeMenu, Path: "/system/dept", Perm: "system:dept", Sort: 4, Status: 1, Hidden: 0},
 		{ParentID: systemDir.ID, Name: "审核人员组", Type: model.MenuTypeMenu, Path: "/system/examine", Perm: "system:examine", Sort: 5, Status: 1, Hidden: 0},
-		// 应用配置
+		// 流程配置
 		{ParentID: applicationPage.ID, Name: "表管理", Type: model.MenuTypeMenu, Path: "/application/:id/tables", Perm: "application:tables", Sort: 1, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "表单元素管理", Type: model.MenuTypeMenu, Path: "/application/:id/elements", Perm: "application:elements", Sort: 2, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "布局管理", Type: model.MenuTypeMenu, Path: "/application/:id/layout", Perm: "application:layout", Sort: 3, Status: 1, Hidden: 1},
@@ -239,10 +241,12 @@ func seedInitData(db *gorm.DB) error {
 		{ParentID: pageMenus[2].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:menu:edit", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[3].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:dept:edit", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[4].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:examine:edit", Sort: 1, Status: 1, Hidden: 0},
-		// 应用配置页：管理按钮
+		// 流程配置页：管理按钮
 		{ParentID: applicationPage.ID, Name: "管理", Type: model.MenuTypeButton, Perm: "application:edit", Sort: 1, Status: 1, Hidden: 0},
-		// 审批-申请页：管理按钮（pageMenus[10] 申请）
+		// 审批-申请页：管理按钮
 		{ParentID: pageMenus[10].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "approval:edit", Sort: 1, Status: 1, Hidden: 0},
+		// 接口管理页：管理按钮
+		{ParentID: interfacePage.ID, Name: "管理", Type: model.MenuTypeButton, Perm: "interface:edit", Sort: 1, Status: 1, Hidden: 0},
 	}
 	if err := db.Create(&buttons).Error; err != nil {
 		return err
@@ -278,13 +282,14 @@ func menuPtrs(db *gorm.DB, ids []uint) []*model.Menu {
 	return menus
 }
 
-// seedApiDefinitionMenu 接口管理菜单：页面菜单(/interface) + 按钮权限(system:interface:edit) + 绑定超级管理员（幂等）
+// seedApiDefinitionMenu 接口管理菜单：页面菜单(/interface) + 按钮权限(interface:edit) + 绑定超级管理员（幂等）
+// 新环境已由 seedInitData 统一创建，此处仅兜底：已存在则复用/跳过，不重复创建
 func seedApiDefinitionMenu(db *gorm.DB) error {
 	// 页面菜单：path=/interface（已存在则复用其 ID）
 	var menu model.Menu
 	err := db.Where("path = ?", "/interface").First(&menu).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		menu = model.Menu{Name: "接口管理", Type: model.MenuTypeMenu, Path: "/interface", Perm: "interface", Sort: 4, Status: 1, Hidden: 0}
+		menu = model.Menu{Name: "接口管理", Type: model.MenuTypeMenu, Path: "/interface", Perm: "interface", Sort: 3, Status: 1, Hidden: 0}
 		if err := db.Create(&menu).Error; err != nil {
 			return err
 		}
@@ -293,13 +298,13 @@ func seedApiDefinitionMenu(db *gorm.DB) error {
 	}
 	// 按钮权限：不存在才创建并绑定超级管理员
 	var btnCount int64
-	if err := db.Model(&model.Menu{}).Where("perm = ?", "system:interface:edit").Count(&btnCount).Error; err != nil {
+	if err := db.Model(&model.Menu{}).Where("perm = ?", "interface:edit").Count(&btnCount).Error; err != nil {
 		return err
 	}
 	if btnCount > 0 {
 		return nil
 	}
-	btn := model.Menu{ParentID: menu.ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:interface:edit", Sort: 1, Status: 1, Hidden: 0}
+	btn := model.Menu{ParentID: menu.ID, Name: "管理", Type: model.MenuTypeButton, Perm: "interface:edit", Sort: 1, Status: 1, Hidden: 0}
 	if err := db.Create(&btn).Error; err != nil {
 		return err
 	}
