@@ -48,10 +48,10 @@ export default function LayoutManage() {
   const { id } = useParams()
   const { tabs, activeTab, addTab, updateTab } = useTabs()
 
-  // 左侧组件库（来自当前应用的表单元素接口）
+  // 左侧组件库（来自当前流程的表单元素接口）
   const [library, setLibrary] = useState([])
   const [libraryLoading, setLibraryLoading] = useState(false)
-  // 应用的主表 / 子表信息（用于组件库分组）
+  // 流程的主表 / 子表信息（用于组件库分组）
   const [appTables, setAppTables] = useState({ tableName: '', subTables: [] })
 
   // 布局数据：按页面类型（表单页 / 详情页）分别缓存两套布局配置
@@ -82,7 +82,7 @@ export default function LayoutManage() {
   const dragSourceId = useRef(null)
   const [dragOverIndex, setDragOverIndex] = useState(null)
 
-  // 挂载：确保页签存在、获取应用名更新标题、加载已有布局配置
+  // 挂载：确保页签存在、获取流程名更新标题、加载已有布局配置
   useEffect(() => {
     addTab({ path: location.pathname, title: MODULE_LABEL })
     let cancelled = false
@@ -121,7 +121,7 @@ export default function LayoutManage() {
     }
   }, [id, location.pathname, addTab, updateTab])
 
-  // 加载左侧组件库：获取当前应用关联的表单元素并映射为可拖拽项
+  // 加载左侧组件库：获取当前流程关联的表单元素并映射为可拖拽项
   useEffect(() => {
     let cancelled = false
     setLibraryLoading(true)

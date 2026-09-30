@@ -32,7 +32,7 @@ import { useTabs } from 'src/store/tab-context'
  */
 export default function ExamineManage() {
   const location = useLocation()
-  const { id } = useParams() // 应用 id：请求表单元素 / 审批流配置
+  const { id } = useParams() // 流程 id：请求表单元素 / 审批流配置
   const { addTab } = useTabs()
 
   // 审批流状态（节点树 + 编辑态 + 保存/加载态 + 全部节点操作）
@@ -61,10 +61,10 @@ export default function ExamineManage() {
     addTab({ path: location.pathname, title: MODULE_LABEL })
   }, [location.pathname, addTab])
 
-  // 应用表单元素列表（条件表达式字段来源 / 审批人表单字段权限），挂载即请求一次，供各弹层共享
+  // 流程表单元素列表（条件表达式字段来源 / 审批人表单字段权限），挂载即请求一次，供各弹层共享
   const [formFields, setFormFields] = useState([])
   const [fieldsLoading, setFieldsLoading] = useState(false)
-  // 应用主表名（table_name）：供条件编辑抽屉区分主表 / 子表字段分组
+  // 流程主表名（table_name）：供条件编辑抽屉区分主表 / 子表字段分组
   const [mainTable, setMainTable] = useState('')
 
   useEffect(() => {
@@ -114,7 +114,7 @@ export default function ExamineManage() {
     }
   }, [])
 
-  // 审批流数据回显：挂载 / id 变化时获取应用配置，解析 approval_flow_json 还原画布；
+  // 审批流数据回显：挂载 / id 变化时获取流程配置，解析 approval_flow_json 还原画布；
   // 空、不存在或解析失败时降级保持默认「发起人」节点
   useEffect(() => {
     if (!id) return
@@ -124,7 +124,7 @@ export default function ExamineManage() {
       .getApplication(id)
       .then((res) => {
         if (cancelled) return
-        // 记录应用主表名（供条件字段分组区分主表 / 子表）
+        // 记录流程主表名（供条件字段分组区分主表 / 子表）
         setMainTable(res.data?.table_name || '')
         const raw = res.data?.approval_flow_json
         let parsed = null

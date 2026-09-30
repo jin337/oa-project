@@ -324,7 +324,7 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
  * 扁平化展开其 children 节点链，直接衔接前后节点。传入 formData 时条件分支按规则动态评估。
  * 「发起人自选」节点支持点击「+」唤起 PersonSelectorModal 选择人员（选择结果经 onMembersChange 回调）。
  * @param {object} props
- * @param {string|Array} props.raw 应用配置的 approval_flow_json（JSON 字符串或节点数组）
+ * @param {string|Array} props.raw 流程配置的 approval_flow_json（JSON 字符串或节点数组）
  * @param {object} [props.formData] 实际填报的表单数据（主表字段 + 子表数组），用于条件分支命中评估
  * @param {Function} [props.onMembersChange] 发起人自选节点成员变化回调 (nodeId, members) => void
  */

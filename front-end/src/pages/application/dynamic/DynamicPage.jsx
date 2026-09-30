@@ -15,7 +15,7 @@ const DEFAULT_STATE = 'list'
 
 /**
  * 解析菜单 link_app（code:state，如 app_123:list）：
- * 空值 / state 缺失或纯空白 → 降级 list；返回 { code, state }，code 空表示未配置关联应用
+ * 空值 / state 缺失或纯空白 → 降级 list；返回 { code, state }，code 空表示未配置关联流程
  */
 function parseLinkApp(linkApp) {
   const raw = (linkApp || '').trim()
@@ -48,7 +48,7 @@ export default function DynamicPage() {
     return parseLinkApp(stateLink || cached || findMenuByPath(menus, location.pathname)?.link_app)
   }, [menus, location.pathname, location.state])
 
-  // 应用配置加载（请求 / Loading / 错误态与重试统一由 Hook 管理）
+  // 流程配置加载（请求 / Loading / 错误态与重试统一由 Hook 管理）
   const { app, loading, error, retry } = useApplicationData(code, state)
 
   // 详情模式数据加载（仅 state=detail 时启用；autoFetch 在 app 加载后才为 true）
@@ -96,7 +96,7 @@ export default function DynamicPage() {
   // 容错：配置加载失败或不存在，提供重试入口
   if (error || !app) {
     return (
-      <Empty description={error ? '应用配置加载失败' : '应用配置不存在'}>
+      <Empty description={error ? '流程配置加载失败' : '流程配置不存在'}>
         <Button type="primary" onClick={retry}>
           重新加载
         </Button>

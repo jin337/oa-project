@@ -160,7 +160,7 @@ export default function ApplicationManage() {
     }
   }
 
-  // 打开子页面：预添加独立页签并跳转，通过 state 传递应用名称
+  // 打开子页面：预添加独立页签并跳转，通过 state 传递流程名称
   const openSubPage = (record, module, label) => {
     const path = `/application/${record.id}/${module}`
     addTab({ path, title: `${record.name} - ${label}` })
@@ -168,7 +168,7 @@ export default function ApplicationManage() {
   }
 
   // 打开动态列表页：配置完成后才可使用的成果入口，openSubPage 同款方式（预添加页签 + 定制标题 + 跳转）
-  // 页面编码通过 location.state 传递（不暴露于 URL），并写入 sessionStorage 兜底刷新/页签切换
+  // 编码通过 location.state 传递（不暴露于 URL），并写入 sessionStorage 兜底刷新/页签切换
   const openListPage = (record) => {
     const path = '/application/list'
     const linkApp = `${record.code}:list`
@@ -217,10 +217,10 @@ export default function ApplicationManage() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { key: 'name', title: '页面名称', dataIndex: 'name' },
+    { key: 'name', title: '名称', dataIndex: 'name' },
     {
       key: 'code',
-      title: '页面编码',
+      title: '编码',
       dataIndex: 'code',
       render: (v) => <Typography.Text copyable>{v}</Typography.Text>,
     },
@@ -271,7 +271,7 @@ export default function ApplicationManage() {
               <Popconfirm
                 position="lb"
                 focusLock
-                title="确认删除该应用配置？"
+                title="确认删除该流程配置？"
                 content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
                 onOk={() => handleDelete(record)}
               >
@@ -303,13 +303,13 @@ export default function ApplicationManage() {
   const visibleColumns = columns.filter((c) => c.key === 'action' || visibleCols.includes(c.key))
 
   return (
-    <Card title="应用配置">
+    <Card title="流程配置">
       {/* 搜索区域 */}
       <div className="mb-3">
         <Space wrap>
           <Input
             className="w-55!"
-            placeholder="按页面名称 / 页面编码搜索"
+            placeholder="按名称 / 编码搜索"
             allowClear
             value={keyword}
             onChange={setKeyword}
@@ -326,7 +326,7 @@ export default function ApplicationManage() {
       <div className="mb-3 flex items-center justify-between">
         {hasPerm('application:edit') ? (
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
-            新增页面
+            新增流程
           </Button>
         ) : (
           <div></div>
@@ -368,7 +368,7 @@ export default function ApplicationManage() {
       />
 
       <Modal
-        title={editing ? '编辑应用配置' : '新增应用配置'}
+        title={editing ? '编辑配置' : '新增配置'}
         visible={modalVisible}
         onOk={handleSave}
         confirmLoading={saving}
@@ -380,10 +380,10 @@ export default function ApplicationManage() {
           <Row gutter={20}>
             <Col span={12}>
               <FormItem
-                label="页面名称"
+                label="名称"
                 field="name"
                 rules={[
-                  { required: true, message: '请输入页面名称' },
+                  { required: true, message: '请输入名称' },
                   { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
                 ]}
               >
@@ -391,7 +391,7 @@ export default function ApplicationManage() {
               </FormItem>
             </Col>
             <Col span={12}>
-              <FormItem label="页面编码" field="code">
+              <FormItem label="编码" field="code">
                 <Input placeholder="由系统自动生成" disabled />
               </FormItem>
             </Col>

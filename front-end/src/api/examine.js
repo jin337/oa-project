@@ -1,9 +1,9 @@
 import request from 'src/api/request'
 
-// 审批流配置接口（按应用隔离）：后端路径假定为 /examine/:appId/flow
+// 审批流配置接口（按流程隔离）：后端路径假定为 /examine/:appId/flow
 // flow 为审批流程节点数组（发起人 / 审批人 / 抄送人 / 条件分支），由 ExamineManage 设计器组装
 
-// GET /examine/:appId/flow 获取指定应用的审批流配置
+// GET /examine/:appId/flow 获取指定流程的审批流配置
 export function getExamineFlow(appId) {
   return request.get(`/examine/${appId}/flow`)
 }

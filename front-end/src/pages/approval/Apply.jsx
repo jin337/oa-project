@@ -83,8 +83,8 @@ function remapLinkedFieldErrors(errors, form, app) {
 /**
  * 审批申请页：上下按行排列的流式布局——每个分类独占一行（左侧名称与编辑/删除，右侧新增申请项），
  * 分类行下方以网格卡片展示该分类下的申请项。
- * 申请项通过「页面编码（code）」关联 ApplicationManage 中已配置的应用页面，
- * 点击申请项卡片时预请求应用配置，并在 Drawer 中注入动态表单组件进行展示。
+ * 申请项通过「页面编码（code）」关联 ApplicationManage 中已配置的流程页面，
+ * 点击申请项卡片时预请求流程配置，并在 Drawer 中注入动态表单组件进行展示。
  *
  * 管理模式：头部「管理」按钮（受 approval:edit 权限控制）切换 isManaging，
  * 进入管理模式后展示「新增分类」/「新增申请项」/分类与申请项的编辑删除操作，退出后隐藏。
@@ -248,7 +248,7 @@ export default function Apply() {
     }
   }
 
-  // 点击申请项卡片：预请求关联的应用配置，完成后在 Drawer 中注入动态表单组件
+  // 点击申请项卡片：预请求关联的流程配置，完成后在 Drawer 中注入动态表单组件
   const handleItemClick = async (record) => {
     const raw = (record.code || '').trim()
     if (!raw) {
@@ -271,7 +271,7 @@ export default function Apply() {
       const res = await applicationApi.getApplicationByCode(code.trim(), state.trim() || 'form')
       setDrawerApp(res.data)
     } catch (e) {
-      Message.error('应用配置加载失败，请稍后重试')
+      Message.error('流程配置加载失败，请稍后重试')
       setDrawerVisible(false)
     } finally {
       setDrawerLoading(false)
@@ -531,11 +531,11 @@ export default function Apply() {
           <Row gutter={16}>
             <Col span={12}>
               <FormItem
-                label="页面编码"
+                label="流程编码"
                 field="code"
-                rules={[{ required: true, message: '请输入关联的应用页面编码' }]}
+                rules={[{ required: true, message: '请输入关联的流程编码' }]}
               >
-                <Input placeholder="关联应用编码" />
+                <Input placeholder="关联流程编码" />
               </FormItem>
             </Col>
             <Col span={12}>
@@ -568,7 +568,7 @@ export default function Apply() {
         </Form>
       </Modal>
 
-      {/* 动态表单 Drawer：点击申请项卡片后加载应用配置并注入动态表单组件 */}
+      {/* 动态表单 Drawer：点击申请项卡片后加载流程配置并注入动态表单组件 */}
       <Drawer
         width="60%"
         visible={drawerVisible}

@@ -399,7 +399,7 @@ export default function ElementManage() {
   const [fieldOptions, setFieldOptions] = useState([])
   const [loadingFields, setLoadingFields] = useState(false)
 
-  // 加载分类（表名）选项：主表 + 子表（应用表结构很少变动，结果缓存避免重复请求）
+  // 加载分类（表名）选项：主表 + 子表（流程表结构很少变动，结果缓存避免重复请求）
   const tableOptionsCache = useRef(null)
   const loadTableOptions = useCallback(async () => {
     if (tableOptionsCache.current) return tableOptionsCache.current
@@ -427,7 +427,7 @@ export default function ElementManage() {
   }, [id])
 
   // 挂载时确保页签存在，并复用 /application/:id 请求结果：
-  // 既更新标题为「应用名 - 模块名」，又填充表选项缓存（打开抽屉时零额外请求）
+  // 既更新标题为「流程名 - 模块名」，又填充表选项缓存（打开抽屉时零额外请求）
   useEffect(() => {
     addTab({ path: location.pathname, title: MODULE_LABEL })
     let cancelled = false

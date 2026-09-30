@@ -10,7 +10,7 @@ export function getApplication(id) {
   return request.get(`/application/${id}`)
 }
 
-// GET /application/by-code/:code 按页面编码（code）查询应用配置（动态菜单页面渲染用）
+// GET /application/by-code/:code 按页面编码（code）查询流程配置（动态菜单页面渲染用）
 // @param {string} code     页面编码（如 app_1788413612）
 // @param {string} state    页面状态（如 list / form / detail），作为 query 参数（?state=xxx）透传后端，可选
 // @param {number} page     页码（state=list 时用于分页），可选

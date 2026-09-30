@@ -38,7 +38,7 @@ export default function DetailMode({
   )
 
   if (!elements.length) {
-    return <Empty description="该应用暂未配置表单布局" />
+    return <Empty description="该流程暂未配置表单布局" />
   }
 
   return (

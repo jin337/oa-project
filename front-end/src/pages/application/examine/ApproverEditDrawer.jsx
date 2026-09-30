@@ -227,7 +227,7 @@ export function ApproverEditDrawer({
             ))}
           </Checkbox.Group>
         </div>
-        {/* 步骤四：表单字段权限（字段来源于应用已配置的表单元素） */}
+        {/* 步骤四：表单字段权限（字段来源于流程已配置的表单元素） */}
         <div>
           <div className="mb-2 font-medium">表单字段权限</div>
           {fieldsLoading ? (

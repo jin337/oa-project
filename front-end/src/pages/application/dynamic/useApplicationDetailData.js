@@ -9,7 +9,7 @@ import * as applicationApi from 'src/api/application'
  * 因此在整体回填后，再对配置了动态状态（visible_if / disabled_if）的字段单独补写一次。
  * @param {object} form   Arco Form 实例
  * @param {object} data   业务数据（主表字段 + 子表数组）
- * @param {object} layout 应用布局（form_layout_json / detail_layout_json，含 elements 与子表 columns）
+ * @param {object} layout 流程布局（form_layout_json / detail_layout_json，含 elements 与子表 columns）
  */
 export function safeSetFieldsValue(form, data, layout) {
   if (!form || !data) return
@@ -51,7 +51,7 @@ export function safeSetFieldsValue(form, data, layout) {
  * 供 DynamicForm(pageType=detail) 与 DynamicList（编辑回填）等场景复用，
  * 保持 DynamicForm 的纯渲染职责不变。
  *
- * @param {object} app          应用配置（含 id / detail_layout_json；传 null 表示不由 hook 自动请求）
+ * @param {object} app          流程配置（含 id / detail_layout_json；传 null 表示不由 hook 自动请求）
  * @param {string|number} dataId 数据记录 ID（传 null 表示暂不请求）
  * @param {object} form         目标表单实例（回填目标；可为 null）
  * @param {object} options      配置项 { autoFetch }：默认 true（挂载自动请求）；false 时由调用方手动触发 fetchDetail
@@ -59,7 +59,7 @@ export function safeSetFieldsValue(form, data, layout) {
  *   - detailData  完整详情数据（含子表数组），请求成功后自动 setFieldsValue 回填
  *   - loading     请求中状态
  *   - fetchDetail 手动触发请求（支持覆盖 appId/dataId），返回 Promise<data|null>
- *   - detailApp   映射 detail_layout_json → form_layout_json 后的应用配置
+ *   - detailApp   映射 detail_layout_json → form_layout_json 后的流程配置
  */
 export function useApplicationDetailData(app, dataId, form, options = {}) {
   const { autoFetch = true } = options

@@ -48,7 +48,7 @@ export default function Drafts() {
     sizeMenu,
   } = useApprovalList('drafts', { title: PAGE_TITLE, colKeys: ALL_COL_KEYS })
 
-  // 继续编辑 Drawer：加载应用配置 + 草稿详情回填动态表单
+  // 继续编辑 Drawer：加载流程配置 + 草稿详情回填动态表单
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [drawerLoading, setDrawerLoading] = useState(false)
   const [drawerSaving, setDrawerSaving] = useState(false)

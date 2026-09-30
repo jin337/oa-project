@@ -231,7 +231,7 @@ export function useApprovalFlow() {
   const openEdit = useCallback((editing) => dispatch({ type: 'OPEN_EDIT', editing }), [])
   const closeEdit = useCallback(() => dispatch({ type: 'CLOSE_EDIT' }), [])
 
-  // ---- 保存审批流（写回应用 approval_flow_json 字段） ----
+  // ---- 保存审批流（写回流程 approval_flow_json 字段） ----
   const saveFlow = useCallback(async (id, nodes) => {
     if (!id) return
     dispatch({ type: 'SET_SAVING', saving: true })

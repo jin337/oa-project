@@ -3,9 +3,9 @@ import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 
 /**
- * 按页面编码 + 页面状态加载应用配置的自定义 Hook：
+ * 按页面编码 + 页面状态加载流程配置的自定义 Hook：
  * - code 为空时不发起请求（由调用方负责容错展示）
- * - code/state 变化时重置旧数据，避免短暂渲染上一个应用的内容
+ * - code/state 变化时重置旧数据，避免短暂渲染上一个流程的内容
  * - 请求失败置 error 并提供 retry（重新请求）
  *
  * @param {string} code  页面编码（如 app_1788413612；空值不请求）
@@ -24,7 +24,7 @@ export function useApplicationData(code, state) {
       setLoading(false)
       return
     }
-    // 重置旧数据：code/state 切换时避免短暂显示上一个应用的内容
+    // 重置旧数据：code/state 切换时避免短暂显示上一个流程的内容
     setApp(null)
     setError(false)
     setLoading(true)
@@ -33,7 +33,7 @@ export function useApplicationData(code, state) {
       setApp(res.data)
     } catch {
       setError(true)
-      Message.error('应用配置加载失败')
+      Message.error('流程配置加载失败')
     } finally {
       setLoading(false)
     }

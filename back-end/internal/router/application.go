@@ -12,12 +12,12 @@ func registerApplicationRoutes(v1 *gin.RouterGroup) {
 	applications := v1.Group("/application")
 	applications.Use(middleware.JWTAuth())
 	{
-		applications.GET("", handler.ApplicationList)                                // 应用列表
-		applications.POST("", handler.ApplicationCreate)                            // 新建应用
-		applications.GET("/by-code/:code", handler.ApplicationByCode)                // 按编码查询应用
-		applications.GET("/:id", handler.ApplicationDetail)                          // 应用详情
-		applications.PUT("/:id", handler.ApplicationUpdate)                          // 修改应用
-		applications.DELETE("/:id", handler.ApplicationDelete)                       // 删除应用
+		applications.GET("", handler.ApplicationList)                                // 流程列表
+		applications.POST("", handler.ApplicationCreate)                            // 新建流程
+		applications.GET("/by-code/:code", handler.ApplicationByCode)                // 按编码查询流程
+		applications.GET("/:id", handler.ApplicationDetail)                          // 流程详情
+		applications.PUT("/:id", handler.ApplicationUpdate)                          // 修改流程
+		applications.DELETE("/:id", handler.ApplicationDelete)                       // 删除流程
 		// 表字段管理
 		applications.GET("/:id/fields", handler.TableFieldList)                      // 表字段列表
 		applications.POST("/:id/fields", handler.TableFieldCreate)                   // 新增表字段
@@ -29,9 +29,9 @@ func registerApplicationRoutes(v1 *gin.RouterGroup) {
 		applications.PUT("/:id/element/:elementId", handler.ApplicationElementUpdate) // 修改表单元素
 		applications.DELETE("/:id/element/:elementId", handler.ApplicationElementDelete) // 删除表单元素
 		// 动态页面数据
-		applications.POST("/:id/data", handler.ApplicationDataCreate)                // 新增应用数据
-		applications.GET("/:id/data/:dataId", handler.ApplicationDataDetail)         // 应用数据详情
-		applications.PUT("/:id/data/:dataId", handler.ApplicationDataUpdate)         // 修改应用数据
-		applications.DELETE("/:id/data/:dataId", handler.ApplicationDataDelete)      // 删除应用数据
+		applications.POST("/:id/data", handler.ApplicationDataCreate)                // 新增流程数据
+		applications.GET("/:id/data/:dataId", handler.ApplicationDataDetail)         // 流程数据详情
+		applications.PUT("/:id/data/:dataId", handler.ApplicationDataUpdate)         // 修改流程数据
+		applications.DELETE("/:id/data/:dataId", handler.ApplicationDataDelete)      // 删除流程数据
 	}
 }

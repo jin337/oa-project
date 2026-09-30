@@ -26,7 +26,7 @@ const InterfaceManage = lazy(() => import('src/pages/interface/InterfaceManage.j
 // 个人中心
 const Profile = lazy(() => import('src/pages/profile/Profile.jsx'))
 
-// 应用管理
+// 流程管理
 const ApplicationManage = lazy(() => import('src/pages/application/ApplicationManage.jsx'))
 const TableManage = lazy(() => import('src/pages/application/TableManage.jsx'))
 const ElementManage = lazy(() => import('src/pages/application/ElementManage.jsx'))
@@ -63,7 +63,7 @@ function Page({ children }) {
  * 菜单 path（模式）-> 页面组件映射表。
  * 路由结构不再写死：由后端返回的菜单树驱动生成，这里只需注册"菜单路径 -> 渲染哪个页面"。
  * 菜单 path 支持动态段（如 /application/:id/tables），与 React Router 路径模式一致。
- * 未在此注册的菜单路径（如动态应用列表页 /application/list）统一交给 DynamicPage 分发渲染。
+ * 未在此注册的菜单路径（如动态流程列表页 /application/list）统一交给 DynamicPage 分发渲染。
  */
 const PAGE_MAP = [
   // 工作台（首页）
@@ -78,7 +78,7 @@ const PAGE_MAP = [
   { pattern: '/interface', component: InterfaceManage },
   // 个人中心
   { pattern: '/profile', component: Profile },
-  // 应用配置
+  // 流程配置
   { pattern: '/application', component: ApplicationManage },
   { pattern: '/application/:id/tables', component: TableManage },
   { pattern: '/application/:id/elements', component: ElementManage },
@@ -93,14 +93,14 @@ const PAGE_MAP = [
   { pattern: '/approval/drafts', component: ApprovalDrafts },
 ]
 
-// 菜单路径 -> 页面组件：先精确匹配映射表，未命中交给 DynamicPage（动态应用/列表页等）
+// 菜单路径 -> 页面组件：先精确匹配映射表，未命中交给 DynamicPage（动态流程/列表页等）
 function matchPage(path) {
   const hit = PAGE_MAP.find((p) => p.pattern === path)
   return hit ? hit.component : DynamicPage
 }
 
 // 扁平化菜单树，收集所有可访问的路由路径（排除按钮类型 type=3）
-// 一律使用菜单配置的原始 path（link_app 仅用于动态页面请求应用数据，不参与权限路径派生）
+// 一律使用菜单配置的原始 path（link_app 仅用于动态页面请求流程数据，不参与权限路径派生）
 function collectMenuPaths(menus) {
   const paths = new Set()
   const walk = (list) => {

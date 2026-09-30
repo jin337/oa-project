@@ -1206,11 +1206,11 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
   const loadOptionsRef = useRef(null)
   loadOptionsRef.current = loadOptions
 
-  // 挂载：应用默认值 + 执行 on_mount 动作 + 初始加载全部 api 动态选项
+  // 挂载：流程默认值 + 执行 on_mount 动作 + 初始加载全部 api 动态选项
   useEffect(() => {
     if (!isRuntime || !elements?.length) return
     const vals = formRef.current?.getFieldsValue?.() || {}
-    // 应用默认值 default_value：仅字段当前为空时填充（输入框->内容，选择型->默认选中）
+    // 流程默认值 default_value：仅字段当前为空时填充（输入框->内容，选择型->默认选中）
     const defPatch = {}
     elements.forEach((el) => {
       if (el.default_value === undefined || el.default_value === '') return
@@ -1610,7 +1610,7 @@ import MoveFormMode from './modes/MoveFormMode'
  * 动态表单路由分发器（Dispatcher）：
  * 解析布局配置后，根据 pageType 分发至对应的模式组件。
  *
- * @param {object} app         应用配置对象（含 form_layout_json 等字段）
+ * @param {object} app         流程配置对象（含 form_layout_json 等字段）
  * @param {object} form        Arco Form 实例（可由调用方通过 Form.useForm() 创建）
  * @param {string} pageType    展示模式：
  *   - 'form'        常规可填写动态表单

@@ -17,15 +17,17 @@
 
 ## 项目简介
 
-本服务是 OA 管理系统的后端，为同级目录 `front-end`（React 19 + Vite）提供统一的 RESTful API。项目内置 **RBAC 权限体系**（用户-角色-菜单-部门-数据范围）、**低代码应用引擎**（动态表单 / 数据表 / 审批流配置）与 **审批工作流引擎**（草稿、提交、审批、转交、撤回的完整状态机），可在不写代码的前提下完成「建应用 → 配字段 → 配表单 → 配布局 → 配审批流 → 发起审批」的全链路闭环。
+本服务是 OA 管理系统的后端，为同级目录 `front-end`（React 19 + Vite）提供统一的 RESTful API。项目内置 **RBAC 权限体系**（用户-角色-菜单-部门-数据范围）、**流程配置引擎**（动态表单 / 数据表 / 审批流配置）与 **审批工作流引擎**（草稿、提交、审批、转交、撤回的完整状态机），可在不写代码的前提下完成「建流程 → 配字段 → 配表单 → 配布局 → 配审批流 → 发起审批」的全链路闭环。
 
 ### 核心特性
 
-- **RBAC 权限模型**：用户 ⇄ 角色 ⇄ 菜单（目录/页面/按钮）多对多授权，部门树 + 数据范围过滤（全部 / 自定义 / 本部门 / 本部门及下级）
+- **RBAC 权限模型**：用户 ⇄ 角色 ⇄ 菜单（目录/页面/按钮）多对多授权，部门树 + 数据范围过滤（全部 / 自定义 / 本部门 / 本部门及下级 / 仅本人）
 - **JWT 登录鉴权**：登录签发 token，`Authorization: Bearer <token>` 访问受保护接口，支持本人改密与管理员重置密码
-- **低代码应用引擎**：应用（表单/表格）→ 数据表字段 → 表单元素 → 布局 → 审批流，全链路配置化，业务数据动态读写
-- **审批工作流**：条件分支 + 发起人自选/角色/成员/发起人多种审批人类型，依次/会签/或签审批方式，草稿箱、自动通过、转交、撤回、退回全流程状态机，核心流转全部事务化
-- **动态表单引擎**：字段级数据源（静态/接口）、事件联动、动态显隐与禁用、校验规则、子表、文件上传，支持 form / detail / move-form / move-detail 四种布局模式
+- **流程配置引擎**：流程（表单/表格）→ 数据表字段 → 表单元素 → 布局 → 审批流，全链路配置化，业务数据动态读写；流程编码由内置 `idgen` 生成（`app_<毫秒base32>_<随机base32>`，字典序即时间序）
+- **接口管理**：`oa_api_definitions` 定义 **SQL 直查 / HTTP 转发** 两类接口，统一分发端点 `/api/v1/interfaces/*path` 对外暴露，支持一键导入后端路由、试调、被引用统计（防误删）
+- **审核人员组**：`oa_examine_groups` 配置可复用审核人集合，审批人 / 抄送对象均可选「审核人员组」
+- **审批工作流**：条件分支 + 指定人员/指定角色/发起人自选/审核人员组多种审批人类型，依次/会签/或签审批方式，草稿箱、自动通过、转交、撤回、退回全流程状态机，核心流转全部事务化
+- **动态表单引擎**：字段级数据源（静态/接口，可引用接口管理定义）、事件联动、动态显隐与禁用、校验规则、子表、文件上传，支持 form / detail / move-form / move-detail 四种布局模式
 - **文件上传**：通用单文件上传接口（按 `app_code` 分目录存储），返回 `{url, name, size}`；上传文件通过 `/uploads/*` 静态服务直接映射磁盘目录
 - **站内通知**：审批待办/退回/抄送/结果事件自动生成站内通知，支持未读计数、已读标记、全部已读，通过 SSE 实时推送到前端（无需轮询）
 - **公共计算接口**：数字转大写金额与表达式计算，供表单事件联动调用
@@ -68,13 +70,20 @@ back-end/
 │   ├── model/
 │   │   ├── model.go            #   全部实体 + 请求/响应结构 + 状态枚举
 │   │   └── base.go             #   分页与公共字段
-│   ├── router/router.go        # 路由注册（RESTful，统一 /api/v1 前缀）
+│   ├── router/                 # 路由注册（RESTful，统一 /api/v1 前缀；v1 下各 Group 独立文件）
+│   │   ├── router.go           #   总装配：全局中间件 + 各模块路由注册入口
+│   │   ├── auth.go / user.go / role.go / menu.go / dept.go       # 认证与 RBAC
+│   │   ├── application.go / approval.go / notification.go / upload.go / utils.go
+│   │   ├── api_definition.go   #   接口管理（/api-definitions）+ 统一分发端点（/interfaces/*path）
+│   │   └── examine_group.go    #   审核人员组（/examine-groups）
 │   ├── handler/                # 接口处理器（薄封装：参数校验 → 调 service → 统一响应）
 │   │   ├── auth.go             #   登录 / 用户资料 / 菜单树
 │   │   ├── user.go / role.go / menu.go / dept.go            # RBAC 管理
-│   │   ├── application.go / form_element.go / table_field.go # 低代码应用配置
+│   │   ├── application.go / form_element.go / table_field.go # 流程配置（流程/表字段/表单元素）
 │   │   ├── approval.go         #   审批分类 / 申请项 / 审批列表
 │   │   ├── approval_instance.go#   流程实例与任务（发起/草稿/提交/详情/撤回/删除/审批/转交/加签）
+│   │   ├── api_definition.go   #   接口定义管理（列表/增删改/试调/枚举导入/统一分发）
+│   │   ├── examine_group.go    #   审核人员组
 │   │   ├── upload.go           #   通用文件上传（按 app_code 分目录）
 │   │   ├── notification.go     #   站内通知（列表/未读数/已读/SSE 推送）
 │   │   ├── utils.go            #   公共计算/转换接口
@@ -85,12 +94,15 @@ back-end/
 │   │   ├── application.go / form_element.go / table_field.go
 │   │   ├── approval.go         #   审批分类/申请项/列表聚合（待办/发起/已办/抄送/草稿）
 │   │   ├── approval_flow.go    #   流程定义模型、快照解析、条件评估、执行路径、自选成员注入
-│   │   ├── approval_member.go  #   审批人解析（自选/角色/成员/发起人类型）
+│   │   ├── approval_member.go  #   审批人解析（自选/角色/成员/审核人员组/发起人类型）
 │   │   ├── approval_instance.go#   实例生命周期：创建/草稿/提交/详情/撤回/删除（事务化状态流转）
 │   │   ├── approval_task.go    #   任务引擎：任务生成/自动通过/节点推进/终结/审批/转交/加签
+│   │   ├── api_definition.go   #   接口定义：SQL 模板校验 / SQL 执行引擎 / HTTP 转发 / 试调 / 被引用统计
+│   │   ├── examine_group.go    #   审核人员组 CRUD + 审核人信息翻译
+│   │   ├── route_comment.go    #   解析 router 源码行内注释 → 接口名称（导入后端路由用）
 │   │   ├── notification.go     #   通知落库 + 事务内队列 + SSE Hub
 │   │   └── helper.go           #   服务层公共辅助
-│   └── pkg/                    # 基础组件：logger 日志 / response 统一响应 / vtrans 中文翻译
+│   └── pkg/                    # 基础组件：logger 日志 / response 统一响应 / vtrans 中文翻译 / idgen 实体编码
 ├── uploads/                    # 上传文件存储根目录（按 app_code 分子目录，运行时生成）
 ├── bin/                        # 编译产物目录（已 gitignore）
 ├── logs/                       # 运行日志目录（已 gitignore）
@@ -356,7 +368,7 @@ WantedBy=multi-user.target
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | /upload | 单文件上传，form-data `file`，query `app_code` 指定应用编码；返回 `{url, name, size}` |
+| POST | /upload | 单文件上传，form-data `file`，query `app_code` 指定流程编码；返回 `{url, name, size}` |
 | GET | /uploads/* | 上传文件静态访问（无需鉴权，直接映射磁盘 uploads 目录） |
 
 ### 站内通知（/api/v1/notifications）
@@ -377,13 +389,37 @@ WantedBy=multi-user.target
 | | | - `type: "number_to_upper"`：数字转大写金额（如 100000 → "壹拾万元整"） |
 | | | - `type: "calc"`：表达式计算（支持 `+`、`-`、`*`、`/`、`%`、括号，如 `"(100+2)*3 % 7"` → 5） |
 
-### 低代码应用（/api/v1/application）
+### 接口管理（/api/v1/api-definitions）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET/POST | /application | 应用分页列表 / 新增 |
-| GET | /application/by-code/:code | 按应用编码获取（动态页面路由用） |
-| GET/PUT/DELETE | /application/:id | 应用详情 / 修改 / 删除 |
+| GET | /api-definitions | 接口列表（分页，支持关键字/方法/定义方式过滤，按时间倒序；返回 `referenced` 被引用数） |
+| POST | /api-definitions | 新建接口（`type=sql` SQL 直查 / `type=http` HTTP 转发，method+path 联合唯一） |
+| POST | /api-definitions/debug | 试调接口：以当前账号身份真实执行（SQL 直查 / HTTP 转发），应用当前账号数据权限 |
+| GET | /api-definitions/backend/routes | 枚举后端全部业务路由（解析 router 源码行内注释作为接口名称） |
+| POST | /api-definitions/backend/import | 一键导入后端路由为 HTTP 转发定义 |
+| GET/PUT/DELETE | /api-definitions/:id | 接口详情 / 修改 / 删除 |
+
+### 统一分发端点（/api/v1/interfaces）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET/POST/PUT/DELETE | /interfaces/*path | 按 method+path（status=1）匹配接口定义并执行：SQL 直查返回行数组（单列 `_data` 且可解析 JSON 时返回对象/数组）；HTTP 转发原样透传目标响应体 |
+
+### 审核人员组（/api/v1/examine-groups）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET/POST | /examine-groups | 审核人员组列表 / 新增 |
+| GET/PUT/DELETE | /examine-groups/:id | 详情 / 修改 / 删除（`approvers` 为用户昵称等翻译后信息） |
+
+### 流程配置（/api/v1/application）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET/POST | /application | 流程分页列表 / 新增 |
+| GET | /application/by-code/:code | 按流程编码获取（动态页面路由用） |
+| GET/PUT/DELETE | /application/:id | 流程详情 / 修改 / 删除 |
 | GET/POST | /application/:id/fields | 数据表字段列表 / 新增 |
 | PUT/DELETE | /application/:id/fields/:fieldId | 修改 / 删除数据表字段 |
 | GET/POST | /application/:id/element | 表单元素列表 / 新增 |
@@ -419,7 +455,31 @@ WantedBy=multi-user.target
 
 ### 数据权限（DataScope）
 
-角色数据范围：`1`=全部数据、`2`=自定义部门、`3`=仅本部门、`4`=本部门及下级。用户列表等按部门维度的查询自动追加 `WHERE dept_id IN (...)` 过滤（`middleware/datascope.go`）。
+角色数据范围：`1`=全部数据、`2`=自定义部门、`3`=仅本部门、`4`=本部门及下级、`5`=仅本人。部门维度（2/3/4）按部门集合追加 `dept_id IN (...)` 过滤，仅本人（5）追加 `created_by = 当前用户` 过滤；两种维度并存时取并集（`middleware/datascope.go`）。系统约定部门列统一为 `dept_id`、创建人列统一为 `created_by`，无别名主表查询自动限定到主表，JOIN 其他表不产生歧义。
+
+### 接口管理（oa_api_definitions）
+
+- **双模式定义**：`type=sql` 为 SQL 模板直查（`${form.xxx}` 占位，参数化绑定，仅允许 SELECT）；`type=http` 为转发到内部相对路径（`target_path`）
+- **统一分发**：`/api/v1/interfaces/*path` 按 method+path（status=1）匹配定义，动态路径段（`:id`）支持模板匹配
+- **SQL 直查数据权限**：按「静态写死」方式——模板内显式写 `dept_id IN (...)` / `created_by = ...` 过滤（无兜底注入，避免误导）；返回结构由 SQL 自身声明：结果单列且列名为 `_data` 且值可解析 JSON（`JSON_OBJECT` / `JSON_ARRAYAGG`）时自动解析为对象/数组，其余按行数组返回（列表/选项语义）
+- **HTTP 转发**：以当前账号身份调用内部接口，转发结果原样透传（`Forwarded` 标记避免双重包裹），保证联动填充能取到 `res.data`
+- **被引用统计**：`referenced` 字段运行时统计表单元素 `data_source` / `actions` 中对本接口的引用次数（不入库），`>0` 时前端禁用删除，防误删
+- **导入后端路由**：`GET /backend/routes` 解析 `internal/router/*.go` 源码，读取路由注册处的行内注释（如 `// 发起审批`）作为接口名称；`POST /backend/import` 批量生成 HTTP 转发定义（默认排序 1）
+- **试调**：`POST /api-definitions/debug` 以当前账号身份真实执行（SQL 直查 / HTTP 转发），并应用当前账号数据权限
+
+### 审核人员组（oa_examine_groups）
+
+审批对象类型「审核人员组」：`ExamineGroup` 记录组名称、编号、审核人 ID 列表（JSON 存储）与排序；服务层翻译填充 `approvers`（用户昵称等）供前端展示。审批人 / 抄送人节点均可选择审核人员组（单选），运行时解析为组内审核人集合，与指定角色同属多人审批场景。
+
+### 流程编码（idgen）
+
+实体编码统一由 `internal/pkg/idgen` 生成，结构为 `<段1>_<段2>_<段3>`（全小写）：
+
+- **段1**：实体类型前缀（流程为 `app`）
+- **段2**：40bit 毫秒时间戳（自定义纪元 2020-01-01）→ Crockford base32 定长 8 字符；同一毫秒内相同，字典序与时间序一致，可直接排序
+- **段3**：40bit `crypto/rand` 随机 → Crockford base32 定长 8 字符
+
+示例：`app_65vhh0h9_3f9k2m7x`、`app_65vhh0hb_k7nq2wbp`（字典序更大 = 更晚生成）。
 
 ### 审批流状态机
 

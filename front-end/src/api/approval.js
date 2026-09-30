@@ -44,7 +44,7 @@ export function deleteApprovalItem(id) {
   return request.delete(`/approval/category/item/${id}`)
 }
 
-// ========== 审批列表（跨应用聚合查询，供我的发起/待办/已办/抄送/草稿箱使用） ==========
+// ========== 审批列表（跨流程聚合查询，供我的发起/待办/已办/抄送/草稿箱使用） ==========
 
 // GET /approval/list 审批列表
 export function getApprovalList(params) {

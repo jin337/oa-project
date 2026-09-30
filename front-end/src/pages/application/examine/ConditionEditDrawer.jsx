@@ -4,14 +4,14 @@ import { IconClose, IconPlus } from '@arco-design/web-react/icon'
 import { OPERATOR_OPTIONS, RELATION_OPTIONS } from 'src/pages/application/constants'
 
 /**
- * 条件分支设置抽屉：配置条件关系与具体条件表达式（字段来源于应用表单元素列表）。
+ * 条件分支设置抽屉：配置条件关系与具体条件表达式（字段来源于流程表单元素列表）。
  * 字段按所属表（table_key：主表 / 子表）分组展示，条件规则中记录 table_key 以区分字段来源表。
  * @param {{
  *   node: Object,
  *   branch: Object,
- *   formFields: Object[],        // 应用表单元素列表（含 field_key / label / table_key）
+ *   formFields: Object[],        // 流程表单元素列表（含 field_key / label / table_key）
  *   fieldsLoading: boolean,
- *   mainTable: string,           // 应用主表名（table_name），用于分组标题区分主表/子表
+ *   mainTable: string,           // 流程主表名（table_name），用于分组标题区分主表/子表
  *   onCancel: () => void,
  *   onSave: (node: Object, branch: Object, payload: Object) => void,
  * }} props

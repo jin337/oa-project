@@ -27,7 +27,7 @@ const MenuItem = Menu.Item
 const SubMenu = Menu.SubMenu
 
 // 把后端菜单树转成 Arco Menu 项（只渲染目录和页面菜单，按钮权限项跳过；hidden=1 的菜单不显示在导航栏）
-// 导航路径一律使用菜单配置的原始 path（link_app 仅用于动态页面请求应用数据，不参与路由派生）
+// 导航路径一律使用菜单配置的原始 path（link_app 仅用于动态页面请求流程数据，不参与路由派生）
 function renderMenus(menus) {
   return menus
     .filter((m) => m.status === 1 && m.type !== 3 && m.hidden !== 1)

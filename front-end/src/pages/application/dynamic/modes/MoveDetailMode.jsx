@@ -51,7 +51,7 @@ export default function MoveDetailMode({
     >
       {elements.length === 0 ? (
         <div className="flex h-full items-center justify-center">
-          <Empty description="该应用暂未配置表单布局" />
+          <Empty description="该流程暂未配置表单布局" />
         </div>
       ) : (
         <Form

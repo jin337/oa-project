@@ -78,7 +78,7 @@ function isReservedField(name) {
   return RESERVED_FIELDS.has(String(name).toLowerCase())
 }
 
-// 解析应用的主表与子表：sub_table_name 可能为逗号分隔字符串
+// 解析流程的主表与子表：sub_table_name 可能为逗号分隔字符串
 function parseTables(app) {
   const main = app?.table_name?.trim()
   const subs = (app?.sub_table_name || '')
@@ -118,7 +118,7 @@ export default function TableManage() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
 
-  // 挂载时：确保页签存在、获取应用详情（解析表名 + 更新页签标题）
+  // 挂载时：确保页签存在、获取流程详情（解析表名 + 更新页签标题）
   useEffect(() => {
     addTab({ path: location.pathname, title: MODULE_LABEL })
     let cancelled = false
@@ -370,7 +370,7 @@ export default function TableManage() {
       )}
 
       {tables.length === 0 ? (
-        <Empty description="未配置数据表，请先在应用配置中设置主表或子表" />
+        <Empty description="未配置数据表，请先在流程配置中设置主表或子表" />
       ) : (
         <>
           {/* 搜索区域 */}

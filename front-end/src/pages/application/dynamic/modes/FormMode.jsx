@@ -44,7 +44,7 @@ export default function FormMode({
   if (!elements.length) {
     return (
       <RuntimeFormContext.Provider value={contextValue}>
-        <Empty description="该应用暂未配置表单布局" />
+        <Empty description="该流程暂未配置表单布局" />
       </RuntimeFormContext.Provider>
     )
   }

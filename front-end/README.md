@@ -16,7 +16,7 @@
   - [动态表单引擎（DynamicForm）](#动态表单引擎dynamicform)
   - [站内通知](#站内通知)
   - [审批工作台](#审批工作台)
-  - [低代码应用配置](#低代码应用配置)
+  - [流程配置](#流程配置)
 - [接口约定](#接口约定)
 
 ## 项目简介
@@ -27,12 +27,14 @@ OA 管理系统前端，承接同级目录 `back-end`（Go + Gin 服务，默认
 
 | 模块           | 内容                                                                                     |
 | -------------- | ---------------------------------------------------------------------------------------- |
-| RBAC 系统管理  | 用户 / 角色 / 菜单 / 部门，含菜单树驱动的动态路由与按钮级权限                            |
-| 低代码应用配置 | 应用、数据表字段、表单元素、可视化布局（表单页 / 详情页双模式）、审批流可视化编排        |
+| RBAC 系统管理  | 用户 / 角色 / 菜单 / 部门 / 审核人员组，含菜单树驱动的动态路由与按钮级权限                |
+| 流程配置       | 流程、数据表字段、表单元素、可视化布局（表单页 / 详情页双模式）、审批流可视化编排        |
 | 动态表单引擎   | 依据后端 `form_layout_json` 动态渲染，支持数据源、事件联动、显隐禁用、校验、子表、附件上传 |
 | 审批工作台     | 发起申请、我的待办、我的发起、经我处理、抄送我的、草稿箱、审批详情与时间线、站内通知      |
+| 接口管理       | 定义 SQL 直查 / HTTP 转发接口，统一分发对外暴露，支持试调、一键导入后端路由、被引用防误删 |
+| 审核人员组     | 可复用的审核人集合（/system/examine），审批人 / 抄送对象均可引用                          |
 
-整体为纯前端单页应用（SPA）：所有业务数据、页面布局与表单结构均由后端下发，前端负责渲染与交互，新增业务表单无需改动前端代码。
+整体为纯前端单页流程（SPA）：所有业务数据、页面布局与表单结构均由后端下发，前端负责渲染与交互，新增业务表单无需改动前端代码。
 
 ## 核心技术栈
 
@@ -73,9 +75,11 @@ front-end/
     │   ├── request.js            #   axios 实例：baseURL=/api/v1，统一错误提示 / 401 登出
     │   ├── fetchAll.js           #   全量取数：逐页拉全（列表接口一律用它，不要再用 size:9999）
     │   ├── auth.js / user.js / role.js / menu.js / dept.js    # RBAC 模块
-    │   ├── application.js        #   低代码应用 / 数据表字段 / 表单元素 / 业务数据
+    │   ├── application.js        #   流程配置：流程 / 数据表字段 / 表单元素 / 业务数据
     │   ├── approval.js           #   审批分类、申请项、列表、实例、任务
     │   ├── examine.js            #   审批流配置
+    │   ├── apiDefinition.js      #   接口管理（列表/增删改/试调/枚举后端路由/一键导入）
+    │   ├── examineGroup.js       #   审核人员组
     │   └── notification.js       #   站内通知
     ├── store/                    # 全局状态
     │   ├── auth-context.jsx      #   登录态：token / 用户 / 菜单树 / 权限标识
@@ -99,20 +103,22 @@ front-end/
         ├── Dashboard.jsx         # 工作台（后端健康检查 + 当前账号）
         ├── error/                # Forbidden(403) / NotFound(404)
         ├── profile/Profile.jsx   # 个人中心（含员工档案）
-        ├── system/               # 系统管理：UserManage / RoleManage / MenuManage / DeptManage
-        ├── application/          # 应用配置
-        │   ├── ApplicationManage.jsx   # 应用管理
+        ├── system/               # 系统管理：UserManage / RoleManage / MenuManage / DeptManage / ExamineGroupManage（审核人员组）
+        ├── interface/            # 接口管理
+        │   └── InterfaceManage.jsx    # 接口管理（列表/搜索/密度列设置/新建编辑/设置/试调/导入后端路由）
+        ├── application/          # 流程配置
+        │   ├── ApplicationManage.jsx   # 流程管理
         │   ├── TableManage.jsx         # 表管理（字段定义）
         │   ├── ElementManage.jsx   # 表单元素管理（数据源 / 事件联动 / 校验）
         │   ├── LayoutManage.jsx        # 布局管理（表单页 + 详情页可视化拖拽）
         │   ├── ExamineManage.jsx       # 审批管理（发起人 / 审批流 / 抄送配置）
-        │   ├── constants.js            # 应用配置公共常量
+        │   ├── constants.js            # 流程配置公共常量
         │   ├── dynamic/                # 动态页面运行时
         │   │   ├── DynamicForm.jsx         # 动态表单引擎（分发器 + 渲染配置中心 + 运行时）
         │   │   ├── DynamicList.jsx         # 动态列表页
         │   │   ├── DynamicPage.jsx         # 动态页面入口（按 code/state 分发）
         │   │   ├── DynamicFlowView.jsx     # 审批流只读视图
-        │   │   ├── useApplicationData.js        # 应用数据获取 Hook
+        │   │   ├── useApplicationData.js        # 流程数据获取 Hook
         │   │   ├── useApplicationDetailData.js  # 详情数据获取 Hook
         │   │   ├── elements/UploadElement.jsx   # 文件上传自定义元素
         │   │   ├── utils/evalExpression.js      # 表达式求值（自建词法/语法分析，不执行宿主 JS）
@@ -287,7 +293,7 @@ server {
 
 - **路由装配**（`src/router.jsx`）：`BrowserRouter` + `useRoutes`，路由表由 `useMemo` 依赖菜单树生成；
 - **登录守卫**：组件内判断 `getToken()`，未登录且不在 `/login` 时重定向登录页；已登录访问登录页则回首页；
-- **动态菜单路由**：`buildMenuRoutes()` 遍历后端菜单树，仅注册「页面菜单」（`type=2` 且启用且有 `path`）——目录与按钮不注册路由；每个路径经 `PAGE_MAP` 匹配页面组件，未匹配的交给 `DynamicPage` 承接低代码应用页面；
+- **动态菜单路由**：`buildMenuRoutes()` 遍历后端菜单树，仅注册「页面菜单」（`type=2` 且启用且有 `path`）——目录与按钮不注册路由；每个路径经 `PAGE_MAP` 匹配页面组件，未匹配的交给 `DynamicPage` 承接流程配置页面；
 - **页面级权限**：`RequirePermission` 用 `matchPath` 将当前 `pathname` 与用户菜单的原始 `path` 做模式匹配（支持 `/application/:id/tables` 这类动态段），不匹配则重定向 `/403`；菜单未加载完成时先显示 `Spin`，避免误判；
 - **兜底**：`/` 下未注册的路径统一 `Navigate` 到 `/403`；
 - **懒加载**：所有页面经 `lazy()` 导入，由 `Page` 组件统一包 `Suspense` 展示加载态；
@@ -295,7 +301,7 @@ server {
 
 ### 动态表单引擎（DynamicForm）
 
-低代码应用的核心运行时，根据后端返回的 `form_layout_json`（表单页）或 `detail_layout_json`（详情页）动态渲染表单。
+流程配置模块的核心运行时，根据后端返回的 `form_layout_json`（表单页）或 `detail_layout_json`（详情页）动态渲染表单。
 
 - **渲染配置中心**：`BASE_ELEMENT_CONFIGS`（基础元素：预览 + 属性面板）、`ELEMENT_RENDER_CONFIG`（元素类型 → 渲染实现）、`renderPreviewConfig`（详情只读预览），三者与 `src/config/app.js` 的 `ELEMENT_TYPE_OPTIONS` 深度关联——新增元素类型需同时登记，才能在设计器下拉中出现；
 - **自定义元素**：`elements/UploadElement.jsx` 通过统一配置接口接入，自带 `renderPreview` / `renderSettings` / `renderReadOnly`，四种模式（form / detail / move-form / move-detail）下各自呈现；
@@ -305,13 +311,13 @@ server {
   - `move-form`：设计器表单页模式（拖拽设计）
   - `move-detail`：设计器详情页模式（拖拽设计只读预览）
   - `dynamic/modes/` 下已有四种模式的独立实现，当前主链路仍统一由 `DynamicForm.jsx` 渲染，该目录为后续拆分的预留；
-- **动态数据源**（`data_source`）：支持静态数据与 `type=api` 按配置 `url/method/params` 请求接口，自动解析返回数据为选项；`label` / `value_field` 支持点路径取值（如 `data.list`、`profile.nickname`）；
+- **动态数据源**（`data_source`）：支持静态数据与 `type=api` 按配置 `url/method/params` 请求接口，自动解析返回数据为选项；`label` / `value_field` 支持点路径取值（如 `data.list`、`profile.nickname`）；可**引用接口管理**中的接口定义（`api_ref: 1`）——引用后 `url` / `method` 锁定禁用，`params` / `label` / `value_field` 仍可修改，运行时自动走统一分发端点 `/api/v1/interfaces`；
 - **取值表达式约定**：
   - **`form.xxx`**：引用整个表单当前值，如 `form.dept_id`，用于参数拼接、联动目标值等；
   - **`item.xxx`**：引用下拉 / 树选的**当前选中项**，如 `item.profile.nickname`，用于 `target_mapping` 与显示拼接；
   - **无前缀**：直接从**接口响应数据**根节点取值，如 `profile.nickname`，用于 `target_mapping.source`；
   - **拼接字符串**：只有在字符串中插值时才用 `${}`，如 `${item.username}-${item.dept.name}`；纯取值场景直接写 `item.xxx` / `form.xxx` / 无前缀路径；
-- **事件联动**（`actions`）：支持 `on_mount` / `on_change` / `on_blur` 三种触发时机；动作类型有两种——`set_value`（直接赋值）、`fetch_and_fill`（请求接口后按 `target_mapping` 填充）。公共计算接口 `/utils/calculate` 即通过 `fetch_and_fill` 调用：把表达式或金额放进 `params`，再将返回的 `result` 映射到目标字段（如金额 → 大写金额）；
+- **事件联动**（`actions`）：支持 `on_mount` / `on_change` / `on_blur` 三种触发时机；动作类型有两种——`set_value`（直接赋值）、`fetch_and_fill`（请求接口后按 `target_mapping` 填充）。`fetch_and_fill` 同样可**引用接口管理**中的接口定义（`api_ref: 1`，`params` / `target_mapping` 可改）。公共计算接口 `/utils/calculate` 即通过 `fetch_and_fill` 调用：把表达式或金额放进 `params`，再将返回的 `result` 映射到目标字段（如金额 → 大写金额）；
 - **动态显隐 / 禁用**（`dynamic_states`）：`visible_if` / `disabled_if` 支持表达式（如 `${form.dept_id === '1'}`），通过 Arco Form `shouldUpdate` 实时重渲染；
 - **校验规则**（`validation_rule`）：透传 Arco Form rules，支持 `required` / `pattern` / `min` / `max` 等，`validation_message` 自定义错误提示；
 - **子表**：columns 配置渲染为表格，支持行内编辑、联动、隐藏列（值仍保留提交）；
@@ -319,6 +325,19 @@ server {
 - **公共计算 / 转换接口**：`POST /utils/calculate`，支持以下类型：
   - `number_to_upper`：数字转大写金额（如 `100000` → `壹拾万元整`，支持小数与「零」补位）
   - `calc`：统一表达式计算（支持 `+`、`-`、`*`、`/`、`%` 与括号，如 `(100+2)*3 % 7` → `5`）
+
+### 接口管理
+
+- **InterfaceManage.jsx**（`/interface`）：接口定义管理页面，列表支持关键字（接口名称）+ 方法搜索、密度设置与列设置、备注超出省略；
+- **定义方式**：`sql`（SQL 模板直查，`${form.xxx}` 占位参数化）与 `http`（转发到内部相对路径 `target_path`）；新建 / 编辑抽屉只维护基础信息（名称、方法、路径、排序、状态、备注），SQL 模板 / 转发参数模板等在「设置」抽屉中配置；
+- **试调**：设置抽屉内置试调面板，填写试调参数后以当前账号身份真实执行（SQL 直查 / HTTP 转发），结果与错误集中展示在数据回显区；
+- **导入后端路由**：一键读取后端 `internal/router/*.go` 源码（行内注释即接口名称），批量生成 HTTP 转发定义，排序默认 1；
+- **被引用标记**：接口被表单元素数据源 / 联动动作引用时列表显示「被引用」，且删除按钮禁用（防误删）；引用交互在表单元素管理的「引用接口」弹窗中完成（`api_ref: 1` 标记）。
+
+### 审核人员组
+
+- **ExamineGroupManage.jsx**（`/system/examine`）：审核人员组管理，配置组名称、编号、审核人（按昵称搜索多选，昵称关联账号详情表）、排序、状态；
+- **审批流引用**：在流程配置的审批管理抽屉中，「审批对象」与「抄送人」均支持选择审核人员组（单选，复用 PersonSelectorModal 弹窗）；审批人 / 抄送对象类型枚举：`1` 指定人员 / `2` 指定角色 / `3` 发起人自选 / `4` 审核人员组。
 
 ### 站内通知
 
@@ -340,19 +359,20 @@ server {
 - **列表字段**：各列表统一以**申请项名称**（`item_name`）作为标题字段，打开的详情 / 编辑抽屉标题同样取申请项名称；
 - **审批状态印章**：详情页右上角显示旋转的审批状态印章（审批中 / 已通过 / 已拒绝 / 已退回等），配色取自 `approvalStatus.jsx` 的 `STATUS_TAG_COLOR`，与列表标签色保持一致。
 
-### 低代码应用配置
+### 流程配置
 
-配置顺序：**新建应用 → 表管理 → 表单元素管理 → 布局管理 → 审批管理**。
+配置顺序：**新建流程 → 表管理 → 表单元素管理 → 布局管理 → 审批管理**。
 
-- **应用管理**：应用列表、新增、编辑、删除（软删除数据在列表接口侧过滤）；
+- **流程管理**：流程列表、新增、编辑、删除（软删除数据在列表接口侧过滤）；
 - **表管理**：定义业务表字段，字段类型见 `FIELD_TYPES`；附件类字段使用 `json` 类型存储文件信息数组；
-- **表单元素管理**：选择字段并绑定元素类型，配置数据源（静态 / 接口）、事件联动、默认值、校验规则；
+- **表单元素管理**：选择字段并绑定元素类型，配置数据源（静态 / 接口 / **引用接口管理**）、事件联动（`fetch_and_fill` 可引用接口管理）、默认值、校验规则；「引用接口」弹窗选择接口后地址与方法锁定、其余参数可改；
 - **布局管理**：可视化拖拽布局，表单页与详情页分别配置；点击元素后在右侧属性面板编辑元素类型、字段名称、宽度占比及元素专属配置；
-- **审批管理**：配置发起人范围、审批流（条件分支、审批人类型、依次 / 会签 / 或签）、抄送人与抄送时机。
+- **审批管理**：配置发起人范围、审批流（条件分支、审批人类型：指定人员 / 指定角色 / 发起人自选 / 审核人员组，依次 / 会签 / 或签）、抄送人与抄送时机。
 
 ## 接口约定
 
 - 后端统一前缀 `/api/v1`，统一返回 `{ code, msg, data, timestamp }`，`code=0` 成功；
+- 接口管理定义的接口经统一分发端点暴露：`/api/v1/interfaces/*path`（按 method+path 匹配，表单元素引用的接口运行时自动走该端点）；
 - 开发环境由 Vite 代理转发：`/api` → `http://localhost:8180/api`，`/health` → 后端根路径健康检查，`/uploads` → 上传文件静态资源；
 - 鉴权接口请求头携带 `Authorization: Bearer <token>`（登录成功后自动写入，`src/utils/auth.js` 持久化到 localStorage）；
 - `code=401` 或 HTTP 401 时自动清除本地 token 并跳回登录页；其余非 0 code 由拦截器弹出 `msg` 提示；

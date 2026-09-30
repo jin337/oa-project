@@ -186,7 +186,7 @@ export default function MenuManage() {
     },
     { key: 'path', title: '路由地址', dataIndex: 'path', render: (v) => v || '-' },
     { key: 'perm', title: '权限标识', dataIndex: 'perm', render: (v) => v || '-' },
-    { key: 'link_app', title: '关联应用', dataIndex: 'link_app', render: (v) => v || '-' },
+    { key: 'link_app', title: '关联流程', dataIndex: 'link_app', render: (v) => v || '-' },
     {
       key: 'icon',
       title: '图标',
@@ -361,7 +361,7 @@ export default function MenuManage() {
             )}
             {formType === 2 && (
               <Col span={12}>
-                <FormItem label="关联应用" field="link_app">
+                <FormItem label="关联流程" field="link_app">
                   <Input placeholder="如：app_1" />
                 </FormItem>
               </Col>

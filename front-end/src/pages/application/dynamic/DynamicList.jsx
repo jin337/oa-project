@@ -55,13 +55,13 @@ function getDisplayValue(col, value) {
 }
 
 /**
- * 动态列表还原组件：根据应用配置（state=list）动态生成数据列表页面。
+ * 动态列表还原组件：根据流程配置（state=list）动态生成数据列表页面。
  * UI 结构与交互模式与系统管理页面（UserManage/RoleManage 等）保持一致：
  * - 搜索区域：由 search_fields 渲染（手动触发搜索/重置）
  * - 表格工具栏：刷新 / 密度下拉 / 列设置（操作列固定显示）
  * - 数据表格：分页集成于 Table.pagination（showTotal + sizeCanChange），支持密度与列显隐
  *
- * @param {object} app   应用配置对象（含 search_fields / columns / list / total 等）
+ * @param {object} app   流程配置对象（含 search_fields / columns / list / total 等）
  * @param {string} code  页面编码（由 DynamicPage 解析后传入，用于列表分页请求与详情跳转）
  */
 export default function DynamicList({ app, code }) {
@@ -100,7 +100,7 @@ export default function DynamicList({ app, code }) {
     autoFetch: false,
   })
 
-  // 打开编辑/查看 Drawer：按 state 预请求应用配置（form → 编辑表单，detail → 只读详情）
+  // 打开编辑/查看 Drawer：按 state 预请求流程配置（form → 编辑表单，detail → 只读详情）
   // 编辑模式额外加载完整数据（含子表 Form.List 数组）回填，与"查看"模式行为一致
   const openDrawer = async (record, state) => {
     setDrawerVisible(true)
@@ -130,7 +130,7 @@ export default function DynamicList({ app, code }) {
         }
       }
     } catch (e) {
-      Message.error('应用配置加载失败，请稍后重试')
+      Message.error('流程配置加载失败，请稍后重试')
       setDrawerVisible(false)
     } finally {
       setDrawerLoading(false)
