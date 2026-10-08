@@ -77,14 +77,13 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
   <>
     <div>
       <div className="mb-2 text-sm text-gray-600">元素类型</div>
-      <Tag color="arcoblue" size="mini">
+      <Tag color="arcoblue" size='medium'>
         {getTypeLabel(selectedElement.element_type)}
       </Tag>
     </div>
     <div>
       <div className="mb-2 text-sm text-gray-600">字段名称</div>
       <Input
-        size="mini"
         value={selectedElement.label}
         onChange={(v) => updateSelectedElement({ label: v })}
         placeholder="请输入字段名称"
@@ -93,7 +92,6 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
     <div>
       <div className="mb-2 text-sm text-gray-600">宽度占比</div>
       <Radio.Group
-        size="mini"
         type="button"
         value={selectedElement.width}
         onChange={(v) => updateSelectedElement({ width: v })}
@@ -449,7 +447,7 @@ export const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
           title: '操作',
           width: 60,
           render: (_, __, index) => (
-            <Button size="mini" status="danger" onClick={() => remove(index)}>
+            <Button  status="danger" onClick={() => remove(index)}>
               删除
             </Button>
           ),
@@ -469,7 +467,6 @@ export const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
           <>
             <Table
               key={el.table_key}
-              size="small"
               rowKey={(record) => record.key}
               border
               pagination={false}
@@ -538,7 +535,6 @@ export const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
                 {/* 表格错误提示：显示 Form.List 校验错误（整体必填 / 必填列非空） */}
                 <div className="arco-form-message">{errorMessage || ''}</div>
                 <Button
-                  size="mini"
                   type="primary"
                   icon={<IconPlus />}
                   onClick={() => add(genDefaultRow())}
@@ -584,14 +580,13 @@ export const BASE_ELEMENT_CONFIGS = {
       <>
         <div>
           <div className="mb-2 text-sm text-gray-600">元素类型</div>
-          <Tag color="arcoblue" size="mini">
+          <Tag color="arcoblue" size='medium'>
             分割线
           </Tag>
         </div>
         <div>
           <div className="mb-2 text-sm text-gray-600">分割线文字</div>
           <Input
-            size="mini"
             value={selectedElement.text || ''}
             onChange={(v) => updateSelectedElement({ text: v })}
             placeholder="可选，留空为纯分割线"
@@ -600,7 +595,6 @@ export const BASE_ELEMENT_CONFIGS = {
         <div>
           <div className="mb-2 text-sm text-gray-600">文字位置</div>
           <Radio.Group
-            size="mini"
             type="button"
             value={selectedElement.orientation || 'center'}
             onChange={(v) => updateSelectedElement({ orientation: v })}
@@ -643,13 +637,12 @@ export const BASE_ELEMENT_CONFIGS = {
       <>
         <div>
           <div className="mb-2 text-sm text-gray-600">元素类型</div>
-          <Tag color="arcoblue" size="mini">
+          <Tag color="arcoblue" size='medium'>
             表格
           </Tag>
         </div>
         <div className="text-sm text-gray-600">关联子表</div>
         <Select
-          size="small"
           placeholder="选择关联子表"
           value={selectedElement.table_key || undefined}
           onChange={handleTableKeyChange}
@@ -660,7 +653,6 @@ export const BASE_ELEMENT_CONFIGS = {
           <div key={col.id || `col_${idx}`} className="flex items-center justify-between gap-1">
             <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
             <Select
-              size="small"
               placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
               value={col.dataIndex || undefined}
               disabled={!selectedElement.table_key}
@@ -672,7 +664,6 @@ export const BASE_ELEMENT_CONFIGS = {
               onChange={(v) => handleColumnFieldChange(col.id, selectedElement.table_key, v)}
             />
             <Button
-              size="small"
               status="danger"
               icon={<IconDelete />}
               onClick={() => removeColumn(updateSelectedElementColumns, col.id)}
@@ -680,7 +671,6 @@ export const BASE_ELEMENT_CONFIGS = {
           </div>
         ))}
         <Button
-          size="mini"
           icon={<IconPlus />}
           disabled={!selectedElement.table_key}
           onClick={() => addColumn(updateSelectedElementColumns, selectedElement.table_key)}
@@ -690,7 +680,6 @@ export const BASE_ELEMENT_CONFIGS = {
         <div className="flex justify-between">
           <div className="text-sm text-gray-600">开启合计</div>
           <Switch
-            size="small"
             checked={Boolean(selectedElement.showSummary)}
             onChange={(v) => updateSelectedElement({ showSummary: v })}
           />
@@ -701,7 +690,6 @@ export const BASE_ELEMENT_CONFIGS = {
             {(selectedElement.summaryRules || []).map((rule, idx) => (
               <div key={idx} className="flex items-center gap-1">
                 <Select
-                  size="small"
                   placeholder="选择参与合计的表格列"
                   value={rule.colKey || undefined}
                   options={(selectedElement.columns || [])
@@ -719,7 +707,6 @@ export const BASE_ELEMENT_CONFIGS = {
                   }
                 />
                 <Button
-                  size="small"
                   status="danger"
                   icon={<IconDelete />}
                   onClick={() =>
@@ -733,7 +720,6 @@ export const BASE_ELEMENT_CONFIGS = {
               </div>
             ))}
             <Button
-              size="mini"
               icon={<IconPlus />}
               onClick={() =>
                 updateSelectedElement({
@@ -795,7 +781,7 @@ export const ELEMENT_RENDER_CONFIG = {
         return (
           <Select
             style={{ width: '100%' }}
-            placeholder={el.placeholder || '请选择'}
+            placeholder={el.placeholder || undefined}
             options={PREVIEW_OPTIONS}
           />
         )
@@ -807,7 +793,7 @@ export const ELEMENT_RENDER_CONFIG = {
         <Select
           style={{ width: '100%' }}
           options={options.length ? options : undefined}
-          placeholder={el.placeholder || '请选择'}
+          placeholder={el.placeholder || undefined}
         />
       )
     },
@@ -819,7 +805,7 @@ export const ELEMENT_RENDER_CONFIG = {
         return (
           <TreeSelect
             style={{ width: '100%' }}
-            placeholder={el.placeholder || '请选择'}
+            placeholder={el.placeholder || undefined}
             treeData={PREVIEW_OPTIONS}
           />
         )
@@ -834,7 +820,7 @@ export const ELEMENT_RENDER_CONFIG = {
           // Arco TreeSelect 的 treeData 字段名为 key/title（Select 为 value/label），
           // extractOptions 统一输出 value/title，此处通过 fieldNames 映射，
           fieldNames={{ key: 'value', title: 'title', children: 'children' }}
-          placeholder={el.placeholder || '请选择'}
+          placeholder={el.placeholder || undefined}
         />
       )
     },

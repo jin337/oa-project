@@ -43,7 +43,6 @@ export default function DetailMode({
 
   return (
     <Form
-      size="small"
       form={form}
       layout={formConfig.layout}
       labelAlign={formConfig.labelAlign}

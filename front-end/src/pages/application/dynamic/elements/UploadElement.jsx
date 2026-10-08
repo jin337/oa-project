@@ -1,4 +1,5 @@
-import { Button, Input, Radio, Tag, Upload } from '@arco-design/web-react'
+import { Button, Input, Radio, Upload } from '@arco-design/web-react'
+import { IconUpload } from '@arco-design/web-react/icon'
 import { useContext } from 'react'
 import { API_PREFIX } from 'src/utils/constants'
 import { RuntimeFormContext } from '../DynamicForm'
@@ -81,8 +82,9 @@ export function UploadElement({ el, pageType, value, onChange }) {
       multiple={el?.multiple !== false}
       accept={el?.accept || undefined}
       limit={el?.multiple !== false ? undefined : 1}
+      disabled={pageType === 'move-form'}
     >
-      <Button type="primary">{el?.buttonText || '点击上传'}</Button>
+      <Button type="primary" icon={<IconUpload />}>{el?.buttonText || '添加文件'}</Button>
     </Upload>
   )
 }
@@ -172,71 +174,30 @@ export function renderUploadReadOnly(value, el) {
   )
 }
 
-// 元素宽度占比（24 栅格，短标签适配按钮式 Radio）
-const WIDTH_OPTIONS = [
-  { value: 24, label: '整行' },
-  { value: 12, label: '1/2' },
-  { value: 8, label: '1/3' },
-  { value: 16, label: '2/3' },
-  { value: 6, label: '1/4' },
-  { value: 18, label: '3/4' },
-]
-
 /** 运行时 renderPreview 入口：供 ELEMENT_RENDER_CONFIG 注册 */
 export function renderUploadPreview(el, pageType) {
   return <UploadElement el={el} pageType={pageType} />
 }
 
 /**
- * upload 元素专属属性配置（布局管理右侧面板）：
- * 除通用的元素类型/字段名称/宽度占比外，额外提供上传模式、文件类型、大小限制。
+ * upload 元素专属属性配置（布局管理右侧面板，作为通用配置 renderCommonSettings 的追加项）：
+ * 按钮文字、上传模式、允许文件类型。
+ * 通用三项（元素类型 / 字段名称 / 宽度占比）由 renderElementSettings 组合 renderCommonSettings 渲染。
  */
 export function renderUploadSettings({ selectedElement, updateSelectedElement }) {
   return (
     <>
       <div>
-        <div className="mb-2 text-sm text-gray-600">元素类型</div>
-        <Tag color="arcoblue" size="mini">
-          文件上传
-        </Tag>
-      </div>
-      <div>
-        <div className="mb-2 text-sm text-gray-600">字段名称</div>
-        <Input
-          size="mini"
-          value={selectedElement.label || ''}
-          onChange={(v) => updateSelectedElement({ label: v })}
-          placeholder="请输入字段名称"
-        />
-      </div>
-      <div>
-        <div className="mb-2 text-sm text-gray-600">宽度占比</div>
-        <Radio.Group
-          size="mini"
-          type="button"
-          value={selectedElement.width}
-          onChange={(v) => updateSelectedElement({ width: v })}
-        >
-          {WIDTH_OPTIONS.map((opt) => (
-            <Radio key={opt.value} value={opt.value}>
-              {opt.label}
-            </Radio>
-          ))}
-        </Radio.Group>
-      </div>
-      <div>
         <div className="mb-2 text-sm text-gray-600">按钮文字</div>
         <Input
-          size="mini"
           value={selectedElement.buttonText || ''}
           onChange={(v) => updateSelectedElement({ buttonText: v })}
-          placeholder="留空默认：点击上传"
+          placeholder="留空默认：添加文件"
         />
       </div>
       <div>
         <div className="mb-2 text-sm text-gray-600">上传模式</div>
         <Radio.Group
-          size="mini"
           type="button"
           value={selectedElement.multiple ? 'multiple' : 'single'}
           onChange={(v) => updateSelectedElement({ multiple: v === 'multiple' })}
@@ -249,7 +210,6 @@ export function renderUploadSettings({ selectedElement, updateSelectedElement })
       <div>
         <div className="mb-2 text-sm text-gray-600">允许文件类型</div>
         <Input
-          size="mini"
           value={selectedElement.accept || ''}
           onChange={(v) => updateSelectedElement({ accept: v })}
           placeholder="如 .png,.jpg,.pdf，留空不限制"

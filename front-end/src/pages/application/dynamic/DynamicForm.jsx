@@ -520,13 +520,20 @@ export const RuntimeFieldWrap = ({ el, children }) => {
  * LayoutManage 右侧"元素属性"Tab 统一调用此函数，无需再关心具体类型。
  */
 export const renderElementSettings = (el, ctx) => {
-  // 基础元素（divider/table）走 BASE_ELEMENT_CONFIGS；
-  // 常规元素走 ELEMENT_RENDER_CONFIG 自带的 renderSettings；
-  // 都没有时回退通用配置。
+  // 基础元素（divider/table）走 BASE_ELEMENT_CONFIGS 的专属面板（无通用配置，不组合）；
+  // 常规元素：自定义 renderSettings 仅声明追加项，与通用配置（renderCommonSettings）组合渲染；
+  // 都没有自定义时回退通用配置。
   const baseCfg = getBaseElementConfig(el.element_type)
   if (baseCfg?.renderSettings) return baseCfg.renderSettings(ctx)
   const runtimeCfg = ELEMENT_RENDER_CONFIG[el.element_type]
-  if (runtimeCfg?.renderSettings) return runtimeCfg.renderSettings(ctx)
+  if (runtimeCfg?.renderSettings) {
+    return (
+      <>
+        {renderCommonSettings(ctx)}
+        {runtimeCfg.renderSettings(ctx)}
+      </>
+    )
+  }
   return renderCommonSettings(ctx)
 }
 

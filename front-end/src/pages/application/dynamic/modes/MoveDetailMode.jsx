@@ -55,7 +55,6 @@ export default function MoveDetailMode({
         </div>
       ) : (
         <Form
-          size="small"
           form={form}
           className="mx-auto max-w-187.5 detail-form-descriptions"
           layout={formConfig.layout}

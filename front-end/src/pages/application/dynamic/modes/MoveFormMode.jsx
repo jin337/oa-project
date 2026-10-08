@@ -55,7 +55,6 @@ export default function MoveFormMode({
         </div>
       ) : (
         <Form
-          size="small"
           form={form}
           className="mx-auto max-w-187.5"
           layout={formConfig.layout}

@@ -52,7 +52,6 @@ export default function FormMode({
   return (
     <RuntimeFormContext.Provider value={contextValue}>
       <Form
-        size="small"
         form={form}
         layout={formConfig.layout}
         labelAlign={formConfig.labelAlign}

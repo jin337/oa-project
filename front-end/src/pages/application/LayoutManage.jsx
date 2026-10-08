@@ -1,12 +1,12 @@
 import {
-    Button,
-    Empty,
-    InputNumber,
-    Message,
-    Popconfirm,
-    Radio,
-    Tabs,
-    Tooltip,
+  Button,
+  Empty,
+  InputNumber,
+  Message,
+  Popconfirm,
+  Radio,
+  Tabs,
+  Tooltip,
 } from '@arco-design/web-react'
 import { IconDelete, IconSave, IconSync } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -14,10 +14,10 @@ import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import { fetchAll } from 'src/api/fetchAll'
 import DynamicForm, {
-    BASE_LAYOUT_ELEMENTS,
-    DEFAULT_FORM_CONFIG,
-    parseLayoutJson,
-    renderElementSettings,
+  BASE_LAYOUT_ELEMENTS,
+  DEFAULT_FORM_CONFIG,
+  parseLayoutJson,
+  renderElementSettings,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { useTabs } from 'src/store/tab-context'
 
@@ -400,7 +400,7 @@ export default function LayoutManage() {
   return (
     <div className="flex h-full items-stretch border border-gray-200 bg-white">
       {/* ========== 左侧：组件库（按表分组，两列网格） ========== */}
-      <div className="flex w-56 shrink-0 flex-col">
+      <div className="flex w-83 shrink-0 flex-col">
         <div className="shrink-0 border-b border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-800">
           组件库
         </div>
@@ -538,7 +538,7 @@ export default function LayoutManage() {
       </div>
 
       {/* ========== 右侧：属性配置面板（Tabs 作为顶部导航） ========== */}
-      <div className="flex w-80 shrink-0 flex-col overflow-hidden">
+      <div className="flex w-83 shrink-0 flex-col overflow-hidden">
         <Tabs
           activeTab={panelKey}
           onChange={setActivePanel}
@@ -549,7 +549,7 @@ export default function LayoutManage() {
             <div className="flex flex-col gap-4 py-2">
               <div>
                 <div className="mb-2 text-sm text-gray-600">布局方式</div>
-                <Radio.Group size="mini"
+                <Radio.Group
                   type="button"
                   value={formConfig.layout}
                   onChange={(v) => updateFormConfig({ layout: v })}
@@ -560,7 +560,7 @@ export default function LayoutManage() {
                 <>
                   <div>
                     <div className="mb-2 text-sm text-gray-600">标签宽度</div>
-                    <InputNumber size="mini"
+                    <InputNumber
                       min={40}
                       max={300}
                       value={formConfig.labelWidth}
@@ -570,7 +570,7 @@ export default function LayoutManage() {
                   </div>
                   <div>
                     <div className="mb-2 text-sm text-gray-600">标签对齐方式</div>
-                    <Radio.Group size="mini"
+                    <Radio.Group
                       type="button"
                       value={formConfig.labelAlign}
                       onChange={(v) => updateFormConfig({ labelAlign: v })}
