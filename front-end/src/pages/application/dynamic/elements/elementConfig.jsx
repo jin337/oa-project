@@ -77,7 +77,7 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
   <>
     <div>
       <div className="mb-2 text-sm text-gray-600">元素类型</div>
-      <Tag color="arcoblue" size='medium'>
+      <Tag color="arcoblue" size="medium">
         {getTypeLabel(selectedElement.element_type)}
       </Tag>
     </div>
@@ -447,7 +447,7 @@ export const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
           title: '操作',
           width: 60,
           render: (_, __, index) => (
-            <Button  status="danger" onClick={() => remove(index)}>
+            <Button status="danger" onClick={() => remove(index)}>
               删除
             </Button>
           ),
@@ -534,11 +534,7 @@ export const TableElementField = ({ el, pageType, fieldPerms, editable }) => {
               <div className="mt-2 flex justify-between">
                 {/* 表格错误提示：显示 Form.List 校验错误（整体必填 / 必填列非空） */}
                 <div className="arco-form-message">{errorMessage || ''}</div>
-                <Button
-                  type="primary"
-                  icon={<IconPlus />}
-                  onClick={() => add(genDefaultRow())}
-                >
+                <Button type="primary" icon={<IconPlus />} onClick={() => add(genDefaultRow())}>
                   新增
                 </Button>
               </div>
@@ -580,7 +576,7 @@ export const BASE_ELEMENT_CONFIGS = {
       <>
         <div>
           <div className="mb-2 text-sm text-gray-600">元素类型</div>
-          <Tag color="arcoblue" size='medium'>
+          <Tag color="arcoblue" size="medium">
             分割线
           </Tag>
         </div>
@@ -637,7 +633,7 @@ export const BASE_ELEMENT_CONFIGS = {
       <>
         <div>
           <div className="mb-2 text-sm text-gray-600">元素类型</div>
-          <Tag color="arcoblue" size='medium'>
+          <Tag color="arcoblue" size="medium">
             表格
           </Tag>
         </div>
@@ -774,6 +770,29 @@ export const ELEMENT_RENDER_CONFIG = {
       <InputNumber style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
     ),
   },
+  date: {
+    renderPreview: (el) => (
+      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  datepicker: {
+    renderPreview: (el) => (
+      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  time: {
+    renderPreview: (el) => (
+      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  timepicker: {
+    renderPreview: (el) => (
+      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+    ),
+  },
+  switch: {
+    renderPreview: (el) => <Switch />,
+  },
   select: {
     renderPreview: (el, pageType, rt) => {
       // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
@@ -850,29 +869,6 @@ export const ELEMENT_RENDER_CONFIG = {
         <Checkbox.Group style={{ width: '100%' }} options={options.length ? options : undefined} />
       )
     },
-  },
-  date: {
-    renderPreview: (el) => (
-      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
-    ),
-  },
-  datepicker: {
-    renderPreview: (el) => (
-      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
-    ),
-  },
-  time: {
-    renderPreview: (el) => (
-      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
-    ),
-  },
-  timepicker: {
-    renderPreview: (el) => (
-      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
-    ),
-  },
-  switch: {
-    renderPreview: (el) => <Switch />,
   },
   upload: {
     renderPreview: renderUploadPreview,
