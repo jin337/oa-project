@@ -1,21 +1,21 @@
 import {
-  Button,
-  Card,
-  Checkbox,
-  Dropdown,
-  Form,
-  Grid,
-  Input,
-  InputNumber,
-  Menu,
-  Message,
-  Modal,
-  Popconfirm,
-  Popover,
-  Select,
-  Space,
-  Table,
-  Tag,
+    Button,
+    Card,
+    Checkbox,
+    Dropdown,
+    Form,
+    Grid,
+    Input,
+    InputNumber,
+    Menu,
+    Message,
+    Modal,
+    Popconfirm,
+    Popover,
+    Select,
+    Space,
+    Table,
+    Tag,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -309,7 +309,7 @@ export default function ExamineGroupManage() {
           <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} position="br">
+          <Dropdown droplist={sizeMenu} trigger='click' position="br">
             <Button size="mini" icon={<IconList />}>
               密度
             </Button>

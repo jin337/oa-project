@@ -327,7 +327,7 @@ export default function DynamicList({ app, code }) {
           <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} position="br">
+          <Dropdown droplist={sizeMenu} trigger='click' position="br">
             <Button size="mini" icon={<IconList />}>
               密度
             </Button>

@@ -203,7 +203,7 @@ function HeaderBar() {
           options={(user?.dept_ids || []).map((d) => ({ label: d.name, value: d.id }))}
           onChange={handleSwitchDept}
         />
-        <Dropdown droplist={profileMenu} position="br">
+        <Dropdown droplist={profileMenu} trigger='click' position="br">
           <Space className="cursor-pointer">
             <Avatar size={32} className="bg-[#165dff]!">
               <IconUser />

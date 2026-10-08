@@ -1,25 +1,25 @@
 import {
-  Alert,
-  Button,
-  Card,
-  Checkbox,
-  Divider,
-  Drawer,
-  Dropdown,
-  Form,
-  Grid,
-  Input,
-  InputNumber,
-  Menu,
-  Message,
-  Modal,
-  Popconfirm,
-  Popover,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
+    Alert,
+    Button,
+    Card,
+    Checkbox,
+    Divider,
+    Drawer,
+    Dropdown,
+    Form,
+    Grid,
+    Input,
+    InputNumber,
+    Menu,
+    Message,
+    Modal,
+    Popconfirm,
+    Popover,
+    Select,
+    Space,
+    Table,
+    Tag,
+    Typography,
 } from '@arco-design/web-react'
 import { IconList, IconRefresh, IconSettings, IconSync } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -505,7 +505,7 @@ export default function InterfaceManage() {
           <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} position="br">
+          <Dropdown droplist={sizeMenu} trigger='click' position="br">
             <Button size="mini" icon={<IconList />}>
               密度
             </Button>

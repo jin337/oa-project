@@ -1,4 +1,3 @@
-import { SIZE_OPTIONS } from 'src/config/app'
 import {
   Button,
   Card,
@@ -23,6 +22,7 @@ import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
+import { SIZE_OPTIONS } from 'src/config/app'
 import { useTabs } from 'src/store/tab-context'
 
 const FormItem = Form.Item
@@ -400,7 +400,7 @@ export default function TableManage() {
               <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
                 刷新
               </Button>
-              <Dropdown droplist={sizeMenu} position="br">
+              <Dropdown droplist={sizeMenu} trigger='click' position="br">
                 <Button size="mini" icon={<IconList />}>
                   密度
                 </Button>
