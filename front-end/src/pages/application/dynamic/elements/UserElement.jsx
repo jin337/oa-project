@@ -21,7 +21,7 @@ import { findOptionByValue, getStaticOptions } from '../utils/formUtils'
  *   - form        可交互选择（实际表单填写，FormItem 注入 value/onChange/disabled）
  *   - move-form   画布预览（禁用占位，不解析真实数据源）
  *   - detail      只读：展示已选人员名（数据源自加载反查）
- *   - move-detail 画布只读预览（占位）
+ *   - move-detail 画布详情预览由 renderFormItemElement 统一拦截渲染为模拟数据（MockDetailValue）
  */
 
 // ==================== 工具 ====================
@@ -203,11 +203,6 @@ export function UserReadOnly({ value, el, rt }) {
  */
 export function UserSelect({ el, pageType, rt, value, onChange, disabled }) {
   const options = useUserOptions(el, rt)
-
-  // 画布详情占位（move-detail）：仅一个只读输入框
-  if (pageType === 'move-detail') {
-    return <Input placeholder={el.placeholder || undefined} />
-  }
 
   // 画布表单占位（move-form）：只读输入框 + 禁用的「选择」按钮
   if (pageType === 'move-form') {

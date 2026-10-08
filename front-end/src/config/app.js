@@ -39,21 +39,22 @@ export const LOGIN_CONFIG = {
 }
 
 // —— 表单元素类型配置 ——
-// value: 唯一标识；label: 下拉展示名；needDataSource: 是否需要配置数据源
+// value: 唯一标识；label: 下拉展示名；needDataSource: 是否需要配置数据源；
+// mockDetailValue: 布局管理"详情页"画布预览的示例值（与元素类型一一对应）
 export const ELEMENT_TYPE_OPTIONS = [
-  { value: 'input', label: '单行输入', needDataSource: false },
-  { value: 'textarea', label: '多行文本', needDataSource: false },
-  { value: 'number', label: '数字输入', needDataSource: false },
-  { value: 'select', label: '下拉选择', needDataSource: true },
-  { value: 'treeselect', label: '树选择', needDataSource: true },
-  { value: 'radio', label: '单选框', needDataSource: true },
-  { value: 'checkbox', label: '多选框', needDataSource: true },
-  { value: 'datepicker', label: '日期选择', needDataSource: false },
-  { value: 'timepicker', label: '时间选择', needDataSource: false },
-  { value: 'switch', label: '开关', needDataSource: false },
-  { value: 'upload', label: '文件上传', needDataSource: false },
-  { value: 'deptselect', label: '部门选择', needDataSource: true },
-  { value: 'userselect', label: '人员选择', needDataSource: true },
+  { value: 'input', label: '单行输入', needDataSource: false, mockDetailValue: '示例文本' },
+  { value: 'textarea', label: '多行文本', needDataSource: false, mockDetailValue: '示例多行文本' },
+  { value: 'number', label: '数字输入', needDataSource: false, mockDetailValue: '100' },
+  { value: 'select', label: '下拉选择', needDataSource: true, mockDetailValue: '选项一' },
+  { value: 'treeselect', label: '树选择', needDataSource: true, mockDetailValue: '选项一' },
+  { value: 'radio', label: '单选框', needDataSource: true, mockDetailValue: '选项一' },
+  { value: 'checkbox', label: '多选框', needDataSource: true, mockDetailValue: '选项一, 选项二' },
+  { value: 'datepicker', label: '日期选择', needDataSource: false, mockDetailValue: '2026-10-08' },
+  { value: 'timepicker', label: '时间选择', needDataSource: false, mockDetailValue: '14:30' },
+  { value: 'switch', label: '开关', needDataSource: false, mockDetailValue: '是' },
+  { value: 'upload', label: '文件上传', needDataSource: false, mockDetailValue: '示例附件.pdf' },
+  { value: 'deptselect', label: '部门选择', needDataSource: true, mockDetailValue: '公司' },
+  { value: 'userselect', label: '人员选择', needDataSource: true, mockDetailValue: 'admin' },
 ]
 
 // —— 表格密度选项 ——

@@ -11,26 +11,16 @@ import { RuntimeFormContext } from '../DynamicForm'
  *   - form        可交互上传（实际表单填写）
  *   - move-form   画布预览（可交互形态占位）
  *   - detail      只读：展示已上传文件列表（图片用 Image，其他用链接）
- *   - move-detail 画布只读预览（占位）
+ *   - move-detail 画布详情预览由 renderFormItemElement 统一拦截渲染为模拟数据（MockDetailValue）
  */
 export function UploadElement({ el, pageType, value, onChange }) {
   // Arco FormItem 注入 value：直接作为受控值
   const fileList = normalizeValue(value)
   const rt = useContext(RuntimeFormContext)
 
-  // detail / move-detail：只读展示
+  // detail：只读展示
   if (pageType === 'detail') {
     return renderUploadReadOnly(fileList, el)
-  }
-  if (pageType === 'move-detail') {
-    if (fileList.length > 0) return renderUploadReadOnly(fileList, el)
-    return renderUploadReadOnly(
-      [
-        { uid: '-1', name: '文件1.pdf', url: '' },
-        { uid: '-2', name: '文件2.pdf', url: '' },
-      ],
-      el,
-    )
   }
 
   // form / move-form：可交互上传

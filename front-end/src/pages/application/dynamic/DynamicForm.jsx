@@ -34,6 +34,7 @@ import {
 // 元素渲染配置中心（基础/常规元素渲染 + 详情只读组件）独立维护于 ./elements/elementConfig.jsx
 import {
   ELEMENT_RENDER_CONFIG,
+  MockDetailValue,
   ReadonlyValue,
   TableElementField,
   getBaseElementConfig,
@@ -58,7 +59,7 @@ export {
   removeColumn,
   renderCommonSettings,
   renderPreviewConfig,
-  updateColumn,
+  updateColumn
 } from './elements/elementConfig'
 // 纯函数实现已迁移到 ./utils/formUtils，此处原样再导出以保持既有调用方不变
 export {
@@ -587,7 +588,8 @@ export const renderFormItemElement = (el, ctx) => {
   //   detail 纯文本、move-detail 画布禁用预览）；常规控件走统一渲染配置中心
   const renderControl = () => {
     if (el.element_type === 'table') {
-      // 表格（子表）：透传字段权限，支持 detail 下按列 perm=2 渲染可编辑控件
+      // 表格（子表）：透传字段权限，支持 detail 下按列 perm=2 渲染可编辑控件；
+      // move-detail（画布详情预览）内部渲染模拟数据表格
       return (
         <TableElementField
           el={el}
@@ -596,6 +598,10 @@ export const renderFormItemElement = (el, ctx) => {
           editable={editable}
         />
       )
+    }
+    // 画布详情页预览（move-detail）：常规字段渲染为模拟数据纯文本（divider 保持分割线）
+    if (pageType === 'move-detail' && el.element_type !== 'divider') {
+      return <MockDetailValue el={el} />
     }
     // detail 只读：upload 走专属只读渲染（文件链接/图片预览），其他走 ReadonlyValue
     if (pageType === 'detail' && el.element_type !== 'divider' && !permEditable) {
@@ -720,7 +726,7 @@ export const CanvasElement = memo(function CanvasElement({
         {isSelected && (
           <>
             {/* 拖拽图标：绝对定位左下角 */}
-            <span className="absolute -bottom-px -left-px bg-[rgb(var(--arcoblue-6))] px-1">
+            <span className="absolute bottom-0 left-0 bg-[rgb(var(--arcoblue-6))] px-1">
               <IconDragArrow className="cursor-grab text-white!" />
             </span>
             {/* 删除按钮：绝对定位右上角（悬浮于边框上） */}
