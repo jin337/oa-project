@@ -53,6 +53,7 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'switch', label: '开关', needDataSource: false },
   { value: 'upload', label: '文件上传', needDataSource: false },
   { value: 'deptselect', label: '部门选择', needDataSource: true },
+  { value: 'userselect', label: '人员选择', needDataSource: true },
 ]
 
 // —— 表格密度选项 ——

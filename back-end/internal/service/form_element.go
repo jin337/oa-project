@@ -8,13 +8,6 @@ import (
 	"back-end/internal/model"
 )
 
-// validElementTypes 允许的表单元素类型白名单（与前端 ApplicationElementManage.jsx ELEMENT_TYPES 一致）
-var validElementTypes = map[string]bool{
-	"input": true, "textarea": true, "number": true, "select": true, "treeselect": true,
-	"radio": true, "checkbox": true, "datepicker": true, "timepicker": true,
-	"switch": true, "upload": true,"deptselect": true,
-}
-
 // checkApplicationElementTableKey 校验 table_key 属于该页面配置（主表或子表）
 func checkApplicationElementTableKey(appID uint, tableKey string) error {
 	app, err := ApplicationDetail(appID)
@@ -107,9 +100,6 @@ func ApplicationElementCreate(curUserID, appID uint, req *model.ApplicationEleme
 	if err := checkApplicationElementTableKey(appID, req.TableKey); err != nil {
 		return nil, err
 	}
-	if !validElementTypes[req.ElementType] {
-		return nil, errors.New("不支持的字段类型: " + req.ElementType)
-	}
 	el := model.ApplicationElement{
 		AppID:          appID,
 		Label:          req.Label,
@@ -151,9 +141,6 @@ func ApplicationElementUpdate(curUserID, appID, id uint, req *model.ApplicationE
 		el.TableKey = req.TableKey
 	}
 	if req.ElementType != "" {
-		if !validElementTypes[req.ElementType] {
-			return nil, errors.New("不支持的字段类型: " + req.ElementType)
-		}
 		el.ElementType = req.ElementType
 	}
 	el.Placeholder = req.Placeholder

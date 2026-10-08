@@ -28,14 +28,14 @@ import {
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import { formatJsonQuotes } from 'src/utils/json'
 import * as apiDefinitionApi from 'src/api/apiDefinition'
 import * as applicationApi from 'src/api/application'
 import { fetchAll } from 'src/api/fetchAll'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
-import { ELEMENT_RENDER_CONFIG } from './dynamic/DynamicForm'
 import { useTabs } from 'src/store/tab-context'
+import { formatJsonQuotes } from 'src/utils/json'
+import { ELEMENT_RENDER_CONFIG } from './dynamic/DynamicForm'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -948,7 +948,7 @@ export default function ElementManage() {
                 const cur = form.getFieldValue('data_source') || {}
                 if (!cur?.type && !cur?.url && !cur?.method) {
                   form.setFieldsValue({
-                    data_source: { ...defaults, label: '', value_field: '', params: '', api_ref: 0 },
+                    data_source: { ...defaults, label: '', value_field: '', params: '', api_ref: 1 },
                   })
                 }
               }

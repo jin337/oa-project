@@ -42,7 +42,7 @@ export const getStaticOptions = (el) => {
 // ==================== 取值与表达式 ====================
 
 // 选项型元素（支持动态数据源）
-export const OPTION_ELEMENT_TYPES = new Set(['select', 'radio', 'checkbox', 'treeselect', 'deptselect'])
+export const OPTION_ELEMENT_TYPES = new Set(['select', 'radio', 'checkbox', 'treeselect', 'deptselect', 'userselect'])
 
 /** 递归查找选项：树形选项（children 子节点）的选中项匹配需下钻子级 */
 export const findOptionByValue = (opts, val) => {
