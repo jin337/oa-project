@@ -941,16 +941,14 @@ export default function ElementManage() {
                 form.setFieldsValue({ data_source: {} })
                 return
               }
-              // 元素类型声明了数据源默认值（如 deptselect → GET /depts）：
-              // 仅当数据源尚未配置时自动填充，已配置（编辑回填/手动调整）不覆盖
+              // 元素类型声明了数据源默认值（如 deptselect → GET /depts、userselect → GET /user-list）：
+              // 强制覆盖 defaults 中声明的字段（type/url/method），未声明的字段（label/value_field/params）保留现有配置
               const defaults = ELEMENT_RENDER_CONFIG[val]?.meta?.dataSourceDefaults
               if (defaults) {
                 const cur = form.getFieldValue('data_source') || {}
-                if (!cur?.type && !cur?.url && !cur?.method) {
-                  form.setFieldsValue({
-                    data_source: { ...defaults, label: '', value_field: '', params: '', api_ref: 1 },
-                  })
-                }
+                form.setFieldsValue({
+                  data_source: { ...cur, ...defaults, api_ref: 1 },
+                })
               }
             }
           }}
