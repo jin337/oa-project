@@ -12,7 +12,7 @@ import (
 var validElementTypes = map[string]bool{
 	"input": true, "textarea": true, "number": true, "select": true, "treeselect": true,
 	"radio": true, "checkbox": true, "datepicker": true, "timepicker": true,
-	"switch": true, "upload": true,
+	"switch": true, "upload": true,"deptselect": true,
 }
 
 // checkApplicationElementTableKey 校验 table_key 属于该页面配置（主表或子表）

@@ -34,6 +34,7 @@ import * as applicationApi from 'src/api/application'
 import { fetchAll } from 'src/api/fetchAll'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
+import { ELEMENT_RENDER_CONFIG } from './dynamic/DynamicForm'
 import { useTabs } from 'src/store/tab-context'
 
 const FormItem = Form.Item
@@ -938,6 +939,18 @@ export default function ElementManage() {
               const cfg = ELEMENT_TYPE_OPTIONS.find((o) => o.value === val)
               if (cfg && !cfg.needDataSource) {
                 form.setFieldsValue({ data_source: {} })
+                return
+              }
+              // 元素类型声明了数据源默认值（如 deptselect → GET /depts）：
+              // 仅当数据源尚未配置时自动填充，已配置（编辑回填/手动调整）不覆盖
+              const defaults = ELEMENT_RENDER_CONFIG[val]?.meta?.dataSourceDefaults
+              if (defaults) {
+                const cur = form.getFieldValue('data_source') || {}
+                if (!cur?.type && !cur?.url && !cur?.method) {
+                  form.setFieldsValue({
+                    data_source: { ...defaults, label: '', value_field: '', params: '', api_ref: 0 },
+                  })
+                }
               }
             }
           }}

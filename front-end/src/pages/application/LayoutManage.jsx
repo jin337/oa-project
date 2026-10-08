@@ -67,6 +67,24 @@ export default function LayoutManage() {
   const updateLayout = (patch) =>
     setLayouts((prev) => ({ ...prev, [activePage]: { ...prev[activePage], ...patch } }))
 
+  // 加载指定表下的字段列表（表单元素接口，按 table_key 过滤），并缓存
+  const loadTableFields = useCallback(
+    async (tableKey) => {
+      if (!tableKey) return
+      setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: true }))
+      try {
+        const res = await fetchAll((p) => applicationApi.listApplicationElements(id, { ...p, table_key: tableKey }))
+        const list = (res.data?.list || []).filter((f) => !tableKey || f.table_key === tableKey)
+        setTableFieldsMap((prev) => ({ ...prev, [tableKey]: list }))
+      } catch (e) {
+        setTableFieldsMap((prev) => ({ ...prev, [tableKey]: [] }))
+      } finally {
+        setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: false }))
+      }
+    },
+    [id],
+  )
+
   // 选中与面板
   const [selectedId, setSelectedId] = useState(null)
   const [activePanel, setActivePanel] = useState('form')
@@ -301,24 +319,6 @@ export default function LayoutManage() {
       }
     })
   }
-
-  // 加载指定表下的字段列表（表单元素接口，按 table_key 过滤），并缓存
-  const loadTableFields = useCallback(
-    async (tableKey) => {
-      if (!tableKey) return
-      setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: true }))
-      try {
-        const res = await fetchAll((p) => applicationApi.listApplicationElements(id, { ...p, table_key: tableKey }))
-        const list = (res.data?.list || []).filter((f) => !tableKey || f.table_key === tableKey)
-        setTableFieldsMap((prev) => ({ ...prev, [tableKey]: list }))
-      } catch (e) {
-        setTableFieldsMap((prev) => ({ ...prev, [tableKey]: [] }))
-      } finally {
-        setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: false }))
-      }
-    },
-    [id],
-  )
 
   // 全局关联子表：保存到表格元素层级，并联动加载字段缓存
   const handleTableKeyChange = (tableKey) => {

@@ -39,7 +39,7 @@ export const LOGIN_CONFIG = {
 }
 
 // —— 表单元素类型配置 ——
-// value: 唯一标识；label: 下拉展示名；needDataSource: 是否需要配置数据源；needPlaceholder: 是否需要占位提示
+// value: 唯一标识；label: 下拉展示名；needDataSource: 是否需要配置数据源
 export const ELEMENT_TYPE_OPTIONS = [
   { value: 'input', label: '单行输入', needDataSource: false },
   { value: 'textarea', label: '多行文本', needDataSource: false },
@@ -52,6 +52,7 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'timepicker', label: '时间选择', needDataSource: false },
   { value: 'switch', label: '开关', needDataSource: false },
   { value: 'upload', label: '文件上传', needDataSource: false },
+  { value: 'deptselect', label: '部门选择', needDataSource: true },
 ]
 
 // —— 表格密度选项 ——

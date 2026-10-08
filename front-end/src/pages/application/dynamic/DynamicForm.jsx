@@ -29,11 +29,7 @@ import {
 import request from 'src/api/request'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 import { API_PREFIX } from 'src/utils/constants'
-import {
-  renderUploadPreview,
-  renderUploadReadOnly,
-  renderUploadSettings,
-} from './elements/UploadElement'
+
 import { evalDynamicExpr } from './utils/evalExpression'
 import {
   DEFAULT_FORM_CONFIG,
@@ -50,6 +46,15 @@ import {
   resolveExpr,
   resolvePath,
 } from './utils/formUtils'
+
+// ==================== 组件库渲染映射 ====================
+import {
+  renderUploadPreview,
+  renderUploadReadOnly,
+  renderUploadSettings,
+} from './elements/UploadElement'
+
+import { DeptReadOnly, renderDeptPreview } from './elements/DeptElement'
 
 // 纯函数实现已迁移到 ./utils/formUtils，此处原样再导出以保持既有调用方不变
 export {
@@ -90,12 +95,10 @@ const PREVIEW_OPTIONS = [
 // 根据类型获取中文标签
 const getTypeLabel = (type) => ELEMENT_TYPE_OPTIONS.find((c) => c.value === type)?.label || type
 
-
 // 无字段标签的组件类型（画布 FormItem / 动态表单中隐藏 label 并走特殊布局，如分割线/表格）
 export const NO_LABEL_TYPES = ['divider', 'table']
 
 // ==================== 工具函数与解析逻辑 ====================
-
 
 /**
  * 常规表单元素的通用属性面板（元素类型 / 字段名称 / 宽度占比）
@@ -111,7 +114,8 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
     </div>
     <div>
       <div className="mb-2 text-sm text-gray-600">字段名称</div>
-      <Input size="mini"
+      <Input
+        size="mini"
         value={selectedElement.label}
         onChange={(v) => updateSelectedElement({ label: v })}
         placeholder="请输入字段名称"
@@ -572,7 +576,8 @@ export const BASE_ELEMENT_CONFIGS = {
         </div>
         <div>
           <div className="mb-2 text-sm text-gray-600">分割线文字</div>
-          <Input size="mini"
+          <Input
+            size="mini"
             value={selectedElement.text || ''}
             onChange={(v) => updateSelectedElement({ text: v })}
             placeholder="可选，留空为纯分割线"
@@ -580,7 +585,8 @@ export const BASE_ELEMENT_CONFIGS = {
         </div>
         <div>
           <div className="mb-2 text-sm text-gray-600">文字位置</div>
-          <Radio.Group size="mini"
+          <Radio.Group
+            size="mini"
             type="button"
             value={selectedElement.orientation || 'center'}
             onChange={(v) => updateSelectedElement({ orientation: v })}
@@ -872,6 +878,13 @@ export const ELEMENT_RENDER_CONFIG = {
     renderPreview: renderUploadPreview,
     renderSettings: renderUploadSettings,
   },
+  deptselect: {
+    // 元素类型元信息：表单元素管理选中该类型时，数据源配置的默认填充值（自动填入，可手动修改）
+    meta: {
+      dataSourceDefaults: { type: 'api', url: '/depts', method: 'GET' },
+    },
+    renderPreview: renderDeptPreview,
+  },
 }
 
 /**
@@ -884,20 +897,12 @@ export const renderPreviewConfig = Object.fromEntries(
 
 // ==================== 动态表单运行时：数据源(api) + 事件联动(actions) ====================
 
-
-
-
-
-
 /** 提取选项型元素的 api 数据源依赖字段（params/label 中的 ${form.xxx}）；非 api 数据源返回 null */
 const apiOptionDeps = (el) => {
   if (!OPTION_ELEMENT_TYPES.has(el?.element_type) || el?.data_source?.type !== 'api') return null
   const ds = el.data_source
   return extractFormDeps([ds.params, ds.label].filter(Boolean).join(' '))
 }
-
-
-
 
 /**
  * 收集全部字段定义：顶层元素 + 各表（table）的列。
@@ -1231,67 +1236,70 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
   }, [elements, isRuntime])
 
   /** 值变化：执行 on_change 动作；依赖字段变化的 api 选项刷新 */
-  const handleValuesChange = useCallback((changed, allValues) => {
-    // 仅填写场景（pageType='form'）启用联动：detail 展示/审批场景无填写交互，
-    // 且 Arco setFieldsValue 回填也会触发 onValuesChange——若此处执行 on_change，
-    // 无选中项上下文时 set_value 会把目标字段清空（如 user_id 联动清空 phone/email）
-    if (!isRuntime) return
-    const changedKeys = Object.keys(changed || {})
-    elementsRef.current.forEach((el) => {
-      const actions = el.actions?.on_change
-      // on_change 语义：仅当该元素自身字段值变化时触发；
-      // 联动写入（set_value/fetch_and_fill 的目标）按 linkWrittenRef 标记跳过，避免写回触发字段造成二次联动
-      if (Array.isArray(actions) && actions.length && changedKeys.includes(el.field_key)) {
-        const lw = linkWrittenRef.current
-        const val = changed[el.field_key]
-        const isLinkWrite = isLinkWritten(lw, el.field_key, val)
-        if (isLinkWrite) {
-          delete lw[el.field_key]
-        } else {
-          runActionsRef.current?.('on_change', el, allValues)
+  const handleValuesChange = useCallback(
+    (changed, allValues) => {
+      // 仅填写场景（pageType='form'）启用联动：detail 展示/审批场景无填写交互，
+      // 且 Arco setFieldsValue 回填也会触发 onValuesChange——若此处执行 on_change，
+      // 无选中项上下文时 set_value 会把目标字段清空（如 user_id 联动清空 phone/email）
+      if (!isRuntime) return
+      const changedKeys = Object.keys(changed || {})
+      elementsRef.current.forEach((el) => {
+        const actions = el.actions?.on_change
+        // on_change 语义：仅当该元素自身字段值变化时触发；
+        // 联动写入（set_value/fetch_and_fill 的目标）按 linkWrittenRef 标记跳过，避免写回触发字段造成二次联动
+        if (Array.isArray(actions) && actions.length && changedKeys.includes(el.field_key)) {
+          const lw = linkWrittenRef.current
+          const val = changed[el.field_key]
+          const isLinkWrite = isLinkWritten(lw, el.field_key, val)
+          if (isLinkWrite) {
+            delete lw[el.field_key]
+          } else {
+            runActionsRef.current?.('on_change', el, allValues)
+          }
         }
-      }
-      const deps = apiOptionDeps(el)
-      if (deps && changedKeys.some((k) => deps.has(k))) {
-        loadOptionsRef.current?.(el, allValues)
-      }
-      // 子表列：与元素同结构解析——on_change（同行联动）与 api 选项刷新
-      if (el.element_type === 'table' && Array.isArray(el.columns)) {
-        const tableKey = el.table_key || el.id || ''
-        el.columns.forEach((col) => {
-          const colKey = col.dataIndex || col.field_key
-          if (!colKey) return
-          // 命中 tableKey[索引].colKey（Arco Form.List 实际格式）或 tableKey.索引.colKey 变化：触发该列 on_change（同行联动）
-          // 用字符串前缀+后缀匹配替代每次 new RegExp，高频字段变更下避免反复编译正则
-          const suffix = `.${colKey}`
-          const rowHit = changedKeys.find((k) => k.startsWith(tableKey) && k.endsWith(suffix))
-          if (rowHit) {
-            // 提取索引：tableKey[3].colKey -> 3；tableKey.3.colKey -> 3
-            const idxMatch = rowHit.match(/\[(\d+)\]|\.(\d+)\./)
-            const idx = Number(idxMatch ? idxMatch[1] || idxMatch[2] : 0)
-            const colActions = col.actions?.on_change
-            if (Array.isArray(colActions) && colActions.length) {
-              runActionsRef.current?.('on_change', col, allValues, {
-                tableKey,
-                index: idx,
-                fieldKey: colKey,
-              })
+        const deps = apiOptionDeps(el)
+        if (deps && changedKeys.some((k) => deps.has(k))) {
+          loadOptionsRef.current?.(el, allValues)
+        }
+        // 子表列：与元素同结构解析——on_change（同行联动）与 api 选项刷新
+        if (el.element_type === 'table' && Array.isArray(el.columns)) {
+          const tableKey = el.table_key || el.id || ''
+          el.columns.forEach((col) => {
+            const colKey = col.dataIndex || col.field_key
+            if (!colKey) return
+            // 命中 tableKey[索引].colKey（Arco Form.List 实际格式）或 tableKey.索引.colKey 变化：触发该列 on_change（同行联动）
+            // 用字符串前缀+后缀匹配替代每次 new RegExp，高频字段变更下避免反复编译正则
+            const suffix = `.${colKey}`
+            const rowHit = changedKeys.find((k) => k.startsWith(tableKey) && k.endsWith(suffix))
+            if (rowHit) {
+              // 提取索引：tableKey[3].colKey -> 3；tableKey.3.colKey -> 3
+              const idxMatch = rowHit.match(/\[(\d+)\]|\.(\d+)\./)
+              const idx = Number(idxMatch ? idxMatch[1] || idxMatch[2] : 0)
+              const colActions = col.actions?.on_change
+              if (Array.isArray(colActions) && colActions.length) {
+                runActionsRef.current?.('on_change', col, allValues, {
+                  tableKey,
+                  index: idx,
+                  fieldKey: colKey,
+                })
+              }
             }
-          }
-          // 列 api 选项刷新：依赖字段变化（顶层字段或同行字段）时重新加载
-          const colDeps = apiOptionDeps(col)
-          if (
-            colDeps &&
-            [...colDeps].some(
-              (d) => changedKeys.includes(d) || changedKeys.some((k) => k.endsWith(`.${d}`)),
-            )
-          ) {
-            loadOptionsRef.current?.(col, allValues)
-          }
-        })
-      }
-    })
-  }, [isRuntime])
+            // 列 api 选项刷新：依赖字段变化（顶层字段或同行字段）时重新加载
+            const colDeps = apiOptionDeps(col)
+            if (
+              colDeps &&
+              [...colDeps].some(
+                (d) => changedKeys.includes(d) || changedKeys.some((k) => k.endsWith(`.${d}`)),
+              )
+            ) {
+              loadOptionsRef.current?.(col, allValues)
+            }
+          })
+        }
+      })
+    },
+    [isRuntime],
+  )
 
   /** 元素失焦：执行 on_blur 动作 */
   const handleElementBlur = useCallback(
@@ -1348,8 +1356,6 @@ export const renderElementSettings = (el, ctx) => {
 
 // ==================== 画布/常规表单渲染辅助 ====================
 
-
-
 /**
  * 将数据值映射为 data_source 配置的展示 label（select/radio/checkbox 等选项型字段）；
  * 未配置 data_source 或值无匹配项时原样返回。
@@ -1373,6 +1379,10 @@ const ReadonlyValue = ({ value, elementType, dataSource, el }) => {
   if (elementType === 'upload') {
     return renderUploadReadOnly(value, el)
   }
+  // deptselect 类型：数据源自加载反查部门名
+  if (elementType === 'deptselect') {
+    return <DeptReadOnly value={value} el={el} />
+  }
   let text
   if (value == null || value === '') {
     text = '-'
@@ -1392,14 +1402,7 @@ const ReadonlyValue = ({ value, elementType, dataSource, el }) => {
  * @param {object} ctx  渲染上下文 { isHorizontal, formConfig, pageType, isMoveMode }
  */
 export const renderFormItemElement = (el, ctx) => {
-  const {
-    isHorizontal,
-    formConfig,
-    pageType,
-    isMoveMode,
-    fieldPerms,
-    editable,
-  } = ctx
+  const { isHorizontal, formConfig, pageType, isMoveMode, fieldPerms, editable } = ctx
   const noLabel = isNoLabelElement(el.element_type)
   const isTableElement = el.element_type === 'table'
   const isFormMode = pageType === 'form'
@@ -1452,7 +1455,12 @@ export const renderFormItemElement = (el, ctx) => {
     if (pageType === 'detail' && el.element_type !== 'divider' && !permEditable) {
       if (el.element_type === 'upload') {
         return (
-          <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} el={el} renderUpload />
+          <ReadonlyValue
+            elementType={el.element_type}
+            dataSource={el.data_source}
+            el={el}
+            renderUpload
+          />
         )
       }
       return <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} />
