@@ -29,9 +29,9 @@ import {
 } from '../utils/formUtils'
 
 import { DeptReadOnly, renderDeptPreview } from './DeptElement'
-import { UserReadOnly, renderUserPreview } from './UserElement'
 import { RuntimeFormContext } from './runtimeContext'
 import { renderUploadPreview, renderUploadReadOnly, renderUploadSettings } from './UploadElement'
+import { UserReadOnly, renderUserPreview } from './UserElement'
 
 // 运行时表单上下文在此原样再导出：DynamicForm 经 `export { RuntimeFormContext } from './elements/elementConfig'`
 // 转发给 modes/UploadElement 等既有调用方，保持单一 Context 定义源（runtimeContext.js）
@@ -893,14 +893,12 @@ export const ELEMENT_RENDER_CONFIG = {
     renderSettings: renderUploadSettings,
   },
   deptselect: {
-    // 元素类型元信息：表单元素管理选中该类型时，数据源配置的默认填充值（自动填入，可手动修改）
     meta: {
-      dataSourceDefaults: { type: 'api', url: '/depts', method: 'GET'},
+      dataSourceDefaults: { type: 'api', url: '/depts', method: 'GET' },
     },
     renderPreview: renderDeptPreview,
   },
   userselect: {
-    // 元素类型元信息：表单元素管理选中该类型时，数据源配置的默认填充值（自动填入，可手动修改）
     meta: {
       dataSourceDefaults: { type: 'api', url: '/user-list', method: 'GET' },
     },
