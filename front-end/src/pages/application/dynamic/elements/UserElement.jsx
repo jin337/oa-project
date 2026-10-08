@@ -33,7 +33,8 @@ const toListOptions = (list) =>
         .map((n) => {
           if (n == null) return null
           const value = n.value ?? n.id ?? n.uid ?? n.user_id
-          const title = n.title ?? n.label ?? n.nickname ?? n.name ?? n.username ?? String(value ?? '')
+          const title =
+            n.title ?? n.label ?? n.nickname ?? n.name ?? n.username ?? String(value ?? '')
           if (value === undefined || value === null || value === '') return null
           return { value, title: String(title ?? '') }
         })
@@ -44,7 +45,11 @@ const toListOptions = (list) =>
 const filterOptions = (options, keyword) => {
   if (!keyword) return options
   const k = String(keyword).toLowerCase()
-  return options.filter((o) => String(o.title || '').toLowerCase().includes(k))
+  return options.filter((o) =>
+    String(o.title || '')
+      .toLowerCase()
+      .includes(k),
+  )
 }
 
 /**
@@ -100,7 +105,7 @@ const useUserOptions = (el, rt) => {
  * 弹窗内人员列表单选（点击选中高亮，可关键字搜索），确定后回填选中人员 value。
  * value：人员 id（单选标量）；onChange：选中人员 id（未选传 ''）。
  */
-function UserPicker({ value, onChange, options, placeholder, disabled }) {
+function UserPicker({ value, onChange, options, placeholder, label, disabled }) {
   const [visible, setVisible] = useState(false)
   const [selectedValue, setSelectedValue] = useState('')
   const [searchValue, setSearchValue] = useState('')
@@ -124,14 +129,14 @@ function UserPicker({ value, onChange, options, placeholder, disabled }) {
       <Input.Search
         value={selectedLabel}
         readOnly
-        placeholder={placeholder || '选择人员'}
+        placeholder={placeholder || undefined}
         searchButton="选择"
         onSearch={open}
         disabled={disabled}
       />
       {visible && (
         <Modal
-          title={placeholder || '选择人员'}
+          title={label ? `${label}选择` : '人员选择'}
           visible
           onCancel={() => setVisible(false)}
           onOk={() => {
@@ -146,7 +151,7 @@ function UserPicker({ value, onChange, options, placeholder, disabled }) {
               allowClear
               value={searchValue}
               onChange={setSearchValue}
-              placeholder="搜索人员"
+              placeholder={label ? `搜索${label}` : '搜索人员'}
             />
           </div>
           <div className="h-80 overflow-auto rounded border border-gray-200">
@@ -156,8 +161,8 @@ function UserPicker({ value, onChange, options, placeholder, disabled }) {
                 return (
                   <div
                     key={o.value}
-                    className={`flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-[var(--color-fill-2)] ${
-                      active ? 'bg-[var(--color-primary-light-1)]' : ''
+                    className={`flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-(--color-fill-2) ${
+                      active ? 'bg-(--color-primary-light-1)' : ''
                     }`}
                     onClick={() => setSelectedValue(o.value)}
                   >
@@ -168,7 +173,7 @@ function UserPicker({ value, onChange, options, placeholder, disabled }) {
               })
             ) : (
               <div className="py-8 text-center text-xs text-gray-400">
-                {searchValue ? '无匹配人员' : '暂无人员数据'}
+                {searchValue ? '无匹配内容' : '暂无数据'}
               </div>
             )}
           </div>
@@ -206,13 +211,7 @@ export function UserSelect({ el, pageType, rt, value, onChange, disabled }) {
 
   // 画布表单占位（move-form）：只读输入框 + 禁用的「选择」按钮
   if (pageType === 'move-form') {
-    return (
-      <Input.Search
-        placeholder={el.placeholder || undefined}
-        searchButton="选择"
-        disabled
-      />
-    )
+    return <Input.Search placeholder={el.placeholder || undefined} searchButton="选择" disabled />
   }
 
   // detail 只读：展示已选人员名
@@ -227,6 +226,7 @@ export function UserSelect({ el, pageType, rt, value, onChange, disabled }) {
       onChange={onChange}
       options={options}
       placeholder={el?.placeholder}
+      label={el?.label}
       disabled={disabled}
     />
   )

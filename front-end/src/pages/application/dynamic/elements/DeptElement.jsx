@@ -111,7 +111,7 @@ const useDeptOptions = (el, rt) => {
  * 弹窗内部门树勾选单选（父子独立勾选，仅取最后勾选项；取消全部勾选后确定即清空）。
  * value：部门 id（单选标量）；onChange：选中部门 id（未选传 ''）。
  */
-function DeptPicker({ value, onChange, options, placeholder, disabled }) {
+function DeptPicker({ value, onChange, options, placeholder, label, disabled }) {
   const [visible, setVisible] = useState(false)
   const [checkedKeys, setCheckedKeys] = useState([])
   const [searchValue, setSearchValue] = useState('')
@@ -144,14 +144,14 @@ function DeptPicker({ value, onChange, options, placeholder, disabled }) {
       <Input.Search
         value={selectedLabel}
         readOnly
-        placeholder={placeholder || '选择部门'}
+        placeholder={placeholder || undefined}
         searchButton="选择"
         onSearch={open}
         disabled={disabled}
       />
       {visible && (
         <Modal
-          title={placeholder || '选择部门'}
+          title={label ? `${label}选择` : '部门选择'}
           visible
           onCancel={() => setVisible(false)}
           onOk={() => {
@@ -166,7 +166,7 @@ function DeptPicker({ value, onChange, options, placeholder, disabled }) {
               allowClear
               value={searchValue}
               onChange={setSearchValue}
-              placeholder="搜索部门"
+              placeholder={label ? `搜索${label}` : '搜索部门'}
             />
           </div>
           <div className="h-80 overflow-auto rounded border border-gray-200 p-3">
@@ -185,7 +185,7 @@ function DeptPicker({ value, onChange, options, placeholder, disabled }) {
               />
             ) : (
               <div className="py-8 text-center text-xs text-gray-400">
-                {searchValue ? '无匹配部门' : '暂无部门数据'}
+                {searchValue ? '无匹配内容' : '暂无数据'}
               </div>
             )}
           </div>
@@ -243,7 +243,8 @@ export function DeptSelect({ el, pageType, rt, value, onChange, disabled }) {
       value={value}
       onChange={onChange}
       options={options}
-      placeholder={el?.placeholder}
+      placeholder={el?.placeholder||undefined}
+      label={el?.label}
       disabled={disabled}
     />
   )
