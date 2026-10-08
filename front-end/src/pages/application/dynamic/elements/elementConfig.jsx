@@ -2,7 +2,6 @@ import {
   Button,
   Checkbox,
   DatePicker,
-  Divider,
   Form,
   Input,
   InputNumber,
@@ -29,6 +28,7 @@ import {
 } from '../utils/formUtils'
 
 import { DeptReadOnly, renderDeptPreview } from './DeptElement'
+import { renderDividerPreview, renderDividerSettings } from './DividerElement'
 import { RuntimeFormContext } from './runtimeContext'
 import { renderUploadPreview, renderUploadReadOnly, renderUploadSettings } from './UploadElement'
 import { UserReadOnly, renderUserPreview } from './UserElement'
@@ -660,39 +660,8 @@ export const BASE_ELEMENT_CONFIGS = {
       width: 24,
       defaultProps: { orientation: 'center', text: '分割线' },
     },
-    renderPreview: (el) =>
-      el.text ? <Divider orientation={el.orientation || 'center'}>{el.text}</Divider> : <Divider />,
-    renderSettings: ({ selectedElement, updateSelectedElement }) => (
-      <>
-        <div>
-          <div className="mb-2 text-sm text-gray-600">元素类型</div>
-          <Tag color="arcoblue" size="medium">
-            分割线
-          </Tag>
-        </div>
-        <div>
-          <div className="mb-2 text-sm text-gray-600">分割线文字</div>
-          <Input
-            value={selectedElement.text || ''}
-            onChange={(v) => updateSelectedElement({ text: v })}
-            placeholder="可选，留空为纯分割线"
-          />
-        </div>
-        <div>
-          <div className="mb-2 text-sm text-gray-600">文字位置</div>
-          <Radio.Group
-            type="button"
-            value={selectedElement.orientation || 'center'}
-            onChange={(v) => updateSelectedElement({ orientation: v })}
-            options={[
-              { label: '左', value: 'left' },
-              { label: '中', value: 'center' },
-              { label: '右', value: 'right' },
-            ]}
-          />
-        </div>
-      </>
-    ),
+    renderPreview: renderDividerPreview,
+    renderSettings: renderDividerSettings,
   },
 
   table: {
