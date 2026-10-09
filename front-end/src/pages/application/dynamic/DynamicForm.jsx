@@ -596,6 +596,8 @@ export const renderFormItemElement = (el, ctx) => {
           pageType={pageType}
           fieldPerms={fieldPerms}
           editable={editable}
+          renderPreviewConfig={renderPreviewConfig}
+          ReadonlyValue={ReadonlyValue}
         />
       )
     }
