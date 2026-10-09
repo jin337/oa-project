@@ -28,7 +28,7 @@ import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 import { API_PREFIX } from 'src/utils/constants'
 import { formatJsonQuotes } from 'src/utils/json'
-import { formatSql } from 'src/utils/sql'
+import SqlEditor from './SqlEditor'
 
 const MenuItem = Menu.Item
 
@@ -636,22 +636,7 @@ export default function InterfaceManage() {
             <>
               <Divider orientation="left">SQL 数据源</Divider>
               <FormItem
-                label={
-                  <span className="inline-flex w-[calc(100%-18px)] items-center justify-between">
-                    <span>SQL 模板</span>
-                    <Button
-                      type="text"
-                      size="mini"
-                      onClick={() => {
-                        const cur = form.getFieldValue('sql_template')
-                        if (!cur) return
-                        form.setFieldValue('sql_template', formatSql(cur))
-                      }}
-                    >
-                      格式化
-                    </Button>
-                  </span>
-                }
+                label="SQL 模板"
                 field="sql_template"
                 rules={[{ required: true, message: '请输入 SQL 模板' }]}
                 extra={
@@ -662,13 +647,11 @@ export default function InterfaceManage() {
                   </span>
                 }
               >
-                <Input.TextArea
-                  autoSize={{ minRows: 4, maxRows: 10 }}
+                <SqlEditor
                   maxLength={8000}
                   placeholder={
                     'SELECT * FROM oa_depts WHERE name LIKE ? /* 不要写注释 */\n示例：SELECT id, name FROM oa_depts WHERE name LIKE ${form.keyword}'
                   }
-                  style={{ fontFamily: 'monospace' }}
                 />
               </FormItem>
             </>
@@ -726,7 +709,7 @@ export default function InterfaceManage() {
         {/* 内嵌试调：仅编辑已保存的接口可用 */}
         {!isNew && (
           <div className="mt-2">
-            <Alert type="info" title="保存后即可发起试调" />
+            <Alert type="info" title="保存后可发起试调" />
             <Divider orientation="left">试调</Divider>
             <Alert
               className="mb-3"
