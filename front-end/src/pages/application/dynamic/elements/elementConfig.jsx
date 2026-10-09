@@ -9,13 +9,7 @@ import {
 } from '@arco-design/web-react'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 
-import {
-  TIME_ELEMENT_TYPES,
-  formatTimeValue,
-  getStaticOptions,
-} from '../utils/formUtils'
-
-import { DeptReadOnly, renderDeptPreview } from './DeptElement'
+import { renderDeptPreview } from './DeptElement'
 import { renderDividerPreview, renderDividerSettings } from './DividerElement'
 import {
   renderCheckboxPreview,
@@ -23,9 +17,14 @@ import {
   renderSelectPreview,
   renderTreeSelectPreview,
 } from './OptionElement'
+import { ReadonlyValue } from './ReadonlyValue'
 import { TableElementField, renderTableSettings } from './TableElement'
-import { renderUploadPreview, renderUploadReadOnly, renderUploadSettings } from './UploadElement'
-import { UserReadOnly, renderUserPreview } from './UserElement'
+import { renderUploadPreview, renderUploadSettings } from './UploadElement'
+import { renderUserPreview } from './UserElement'
+
+// 详情只读数据回显与表格列配置工具、画布详情模拟渲染：
+// DynamicForm 等既有调用方经本文件转发引用（零改动）
+export { ReadonlyValue } from './ReadonlyValue'
 
 // 表格列配置工具、画布详情模拟渲染与表格字段组件：
 // DynamicForm 等既有调用方经本文件转发引用（零改动）
@@ -96,50 +95,6 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
 
 // ==================== 详情只读展示 ====================
 
-/**
- * 将数据值映射为 data_source 配置的展示 label（select/radio/checkbox 等选项型字段）；
- * 未配置 data_source 或值无匹配项时原样返回。
- */
-const labelOfValue = (value, dataSource) => {
-  if (dataSource == null || value == null) return value
-  const opts = getStaticOptions({ data_source: dataSource })
-  if (!opts.length) return value
-  const hit = opts.find((o) => String(o.value) === String(value))
-  return hit && hit.label != null ? hit.label : value
-}
-
-/**
- * 详情只读模式（pageType='detail'）下的纯文本展示组件：
- * 作为 FormItem 单子元素接收 Arco 注入的 value，输出数据值对应的 data_source label
- * （数组值逐项映射后以 ", " 连接），空值显示 '-'。
- * elementType 为时间/日期类型时，value 经 formatTimeValue 格式化为标准可读的日期/时间字符串。
- */
-export const ReadonlyValue = ({ value, elementType, dataSource, el }) => {
-  // upload 类型：走 UploadElement 的只读渲染
-  if (elementType === 'upload') {
-    return renderUploadReadOnly(value, el)
-  }
-  // deptselect 类型：数据源自加载反查部门名
-  if (elementType === 'deptselect') {
-    return <DeptReadOnly value={value} el={el} />
-  }
-  // userselect 类型：数据源自加载反查人员名
-  if (elementType === 'userselect') {
-    return <UserReadOnly value={value} el={el} />
-  }
-  let text
-  if (value == null || value === '') {
-    text = '-'
-  } else if (TIME_ELEMENT_TYPES.includes(elementType)) {
-    text = formatTimeValue(value, elementType)
-  } else if (Array.isArray(value)) {
-    text = value.map((v) => labelOfValue(v, dataSource)).join(', ')
-  } else {
-    text = String(labelOfValue(value, dataSource))
-  }
-  return <span className="break-all whitespace-pre-wrap">{text}</span>
-}
-
 /** 判断是否为基础组件（不显示通用字段名称/宽度等配置） */
 export const isBaseElement = (element_type) => Boolean(BASE_ELEMENT_CONFIGS[element_type])
 
@@ -198,20 +153,6 @@ export const BASE_ELEMENT_CONFIGS = {
     renderSettings: renderTableSettings,
   },
 }
-
-/**
- * 从配置派生左侧组件库"基础"分组的 items（保持原有数据结构，供拖拽使用）
- */
-export const BASE_LAYOUT_ELEMENTS = Object.values(BASE_ELEMENT_CONFIGS).map(({ meta }) => ({
-  key: meta.key,
-  element_type: meta.element_type,
-  label: meta.label,
-  field_key: '',
-  table_key: '',
-  width: meta.width,
-  required: false,
-  ...(meta.defaultProps || {}),
-}))
 
 /**
  * 组件统一渲染配置中心：每个 element_type 一个配置对象，
@@ -297,3 +238,17 @@ export const ELEMENT_RENDER_CONFIG = {
 export const renderPreviewConfig = Object.fromEntries(
   Object.entries(ELEMENT_RENDER_CONFIG).map(([key, cfg]) => [key, cfg.renderPreview]),
 )
+
+/**
+ * 从配置派生左侧组件库"基础"分组的 items（保持原有数据结构，供拖拽使用）
+ */
+export const BASE_LAYOUT_ELEMENTS = Object.values(BASE_ELEMENT_CONFIGS).map(({ meta }) => ({
+  key: meta.key,
+  element_type: meta.element_type,
+  label: meta.label,
+  field_key: '',
+  table_key: '',
+  width: meta.width,
+  required: false,
+  ...(meta.defaultProps || {}),
+}))

@@ -606,19 +606,16 @@ export const renderFormItemElement = (el, ctx) => {
     if (pageType === 'move-detail' && el.element_type !== 'divider') {
       return <MockDetailValue el={el} />
     }
-    // detail 只读：upload 走专属只读渲染（文件链接/图片预览），其他走 ReadonlyValue
+    // detail 只读：统一经 ReadonlyValue 回显（upload/deptselect/userselect 由内部自动分派），
+    // value 由 FormItem 注入
     if (pageType === 'detail' && el.element_type !== 'divider' && !permEditable) {
-      if (el.element_type === 'upload') {
-        return (
-          <ReadonlyValue
-            elementType={el.element_type}
-            dataSource={el.data_source}
-            el={el}
-            renderUpload
-          />
-        )
-      }
-      return <ReadonlyValue elementType={el.element_type} dataSource={el.data_source} />
+      return (
+        <ReadonlyValue
+          elementType={el.element_type}
+          dataSource={el.data_source}
+          el={el}
+        />
+      )
     }
     const baseCfg = getBaseElementConfig(el.element_type)
     if (baseCfg?.renderPreview) return baseCfg.renderPreview(el, pageType)
