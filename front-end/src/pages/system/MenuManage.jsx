@@ -279,16 +279,16 @@ export default function MenuManage() {
           <div />
         )}
         <Space>
-          <Button size="mini" icon={<IconRefresh />} onClick={fetchTree}>
+          <Button size="small" icon={<IconRefresh />} onClick={fetchTree}>
             刷新
           </Button>
           <Dropdown droplist={sizeMenu} trigger='click' position="br">
-            <Button size="mini" icon={<IconList />}>
+            <Button size="small" icon={<IconList />}>
               密度
             </Button>
           </Dropdown>
           <Popover content={colSettingsPopover} position="br" trigger="click">
-            <Button size="mini" icon={<IconSettings />}>
+            <Button size="small" icon={<IconSettings />}>
               列设置
             </Button>
           </Popover>

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strconv"
 
 	"back-end/internal/database"
 	"back-end/internal/middleware"
@@ -76,7 +77,7 @@ func buildOrgTree(depts []*model.Dept, byDept map[uint][]model.User) []*model.Or
 			ID:       d.ID,
 			Name:     d.Name,
 			ParentID: d.ParentID,
-			Leader:   d.Leader,
+			Leader:   strconv.FormatUint(uint64(d.Leader), 10),
 			Sort:     d.Sort,
 			Status:   d.Status,
 		}

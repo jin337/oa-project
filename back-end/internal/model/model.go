@@ -45,7 +45,7 @@ type Role struct {
 	BaseModel
 	Name      string `gorm:"size:64;uniqueIndex;not null;comment:角色名称" json:"name"`
 	Code      string `gorm:"size:64;uniqueIndex;not null;comment:角色编码" json:"code"`
-	Sort      int    `gorm:"default:0;comment:排序" json:"sort"`
+	Sort      int    `gorm:"default:1;comment:排序" json:"sort"`
 	Status    int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	DataScope int    `gorm:"default:3;comment:数据范围 1全部 2自定义 3仅本部门 4本部门及下级 5仅本人" json:"data_scope"`
 	Remark    string `gorm:"size:255;comment:备注" json:"remark"`
@@ -67,7 +67,7 @@ type ExamineGroup struct {
 	Name        string `gorm:"size:64;uniqueIndex;not null;comment:审核人员组名称" json:"name"`
 	Code        string `gorm:"size:64;uniqueIndex;not null;comment:编号" json:"code"`
 	ApproverIDs []uint `gorm:"serializer:json;type:json;comment:审核人用户ID列表" json:"approver_ids"`
-	Sort        int    `gorm:"default:0;comment:排序" json:"sort"`
+	Sort        int    `gorm:"default:1;comment:排序" json:"sort"`
 	Status      int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 
 	Approvers []ExamineGroupApprover `gorm:"-" json:"approvers,omitempty"` // 审核人信息（服务层翻译填充）
@@ -87,7 +87,7 @@ type ApiDefinition struct {
 	TargetPath   string                 `gorm:"size:255;comment:转发目标路径" json:"target_path"`
 	Params       map[string]interface{} `gorm:"serializer:json;type:json;comment:转发参数模板" json:"params"`
 	Status       int                    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
-	Sort         int                    `gorm:"default:0;comment:排序" json:"sort"`
+	Sort         int                    `gorm:"default:1;comment:排序" json:"sort"`
 	Remark       string                 `gorm:"size:255;comment:备注" json:"remark"`
 	Referenced   int                    `gorm:"-" json:"referenced"` // 被表单元素引用次数（运行时统计，不入库）
 }
@@ -162,7 +162,7 @@ type Menu struct {
 	Perm     string `gorm:"size:128;index;comment:权限标识 如 system:user:add" json:"perm"`
 	LinkApp  string `gorm:"size:64;comment:关联应用" json:"link_app"`
 	Icon     string `gorm:"size:64;comment:图标" json:"icon"`
-	Sort     int    `gorm:"default:0;comment:排序" json:"sort"`
+	Sort     int    `gorm:"default:1;comment:排序" json:"sort"`
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	Hidden   int    `gorm:"default:0;comment:是否隐藏 1是 0否" json:"hidden"`
 
@@ -181,8 +181,8 @@ type Dept struct {
 	BaseModel
 	ParentID uint   `gorm:"index;default:0;comment:父级ID" json:"parent_id"`
 	Name     string `gorm:"size:64;not null;comment:部门名称" json:"name"`
-	Leader   string `gorm:"size:64;comment:负责人" json:"leader"`
-	Sort     int    `gorm:"default:0;comment:排序" json:"sort"`
+	Leader   uint   `gorm:"default:0;comment:负责人" json:"leader"`
+	Sort     int    `gorm:"default:1;comment:排序" json:"sort"`
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 
 	Children []*Dept `gorm:"foreignKey:ParentID" json:"children,omitempty"`
@@ -363,7 +363,7 @@ type MenuUpdateReq struct {
 type DeptCreateReq struct {
 	ParentID uint   `json:"parent_id" validate:"omitempty" label:"父级ID"`
 	Name     string `json:"name" validate:"required,min=1,max=64" label:"部门名称"`
-	Leader   string `json:"leader" validate:"omitempty,max=64" label:"负责人"`
+	Leader   uint   `json:"leader" validate:"omitempty" label:"负责人"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 }
@@ -371,7 +371,7 @@ type DeptCreateReq struct {
 type DeptUpdateReq struct {
 	ParentID uint   `json:"parent_id" validate:"omitempty" label:"父级ID"`
 	Name     string `json:"name" validate:"omitempty,min=1,max=64" label:"部门名称"`
-	Leader   string `json:"leader" validate:"omitempty,max=64" label:"负责人"`
+	Leader   uint   `json:"leader" validate:"omitempty" label:"负责人"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 }
@@ -585,7 +585,7 @@ type ApplicationElementListReq struct {
 type ApprovalCategory struct {
 	BaseModel
 	Name string `gorm:"size:64;not null;comment:分类名称" json:"name"`
-	Sort int    `gorm:"default:0;comment:排序" json:"sort"`
+	Sort int    `gorm:"default:1;comment:排序" json:"sort"`
 }
 
 type ApprovalCategoryCreateReq struct {
@@ -609,7 +609,7 @@ type ApprovalCategoryItem struct {
 	Code       string `gorm:"size:64;comment:关联应用页面编码" json:"code"`
 	CategoryID uint   `gorm:"index;not null;comment:所属分类ID" json:"category_id"`
 	Icon       string `gorm:"size:64;comment:图标" json:"icon"`
-	Sort       int    `gorm:"default:0;comment:排序" json:"sort"`
+	Sort       int    `gorm:"default:1;comment:排序" json:"sort"`
 
 	Category *ApprovalCategory `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 }
@@ -685,7 +685,7 @@ type ApprovalInstanceTask struct {
 	InstanceID    uint       `gorm:"index;not null;comment:所属流程实例ID" json:"instance_id"`
 	NodeID        string     `gorm:"size:64;not null;comment:流程节点ID(对应approval_flow_json中的节点id)" json:"node_id"`
 	NodeName      string     `gorm:"size:64;comment:节点名称" json:"node_name"`
-	Sort          int        `gorm:"default:0;comment:节点在execution_path中的序号" json:"sort"`
+	Sort          int        `gorm:"default:1;comment:节点在execution_path中的序号" json:"sort"`
 	AssigneeID    uint       `gorm:"index;not null;comment:审批人用户ID" json:"assignee_id"`
 	Status        int        `gorm:"default:0;comment:任务状态 0待处理 1已通过 2已拒绝 3已驳回 4已转交 5已取消" json:"status"`
 	Comment       string     `gorm:"size:500;comment:审批意见" json:"comment"`

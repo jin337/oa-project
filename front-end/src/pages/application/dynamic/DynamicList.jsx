@@ -324,16 +324,16 @@ export default function DynamicList({ app, code }) {
       <div className="mb-3 flex items-center justify-between">
         <div></div>
         <Space>
-          <Button size="mini" icon={<IconRefresh />} onClick={() => fetchList()}>
+          <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
           <Dropdown droplist={sizeMenu} trigger='click' position="br">
-            <Button size="mini" icon={<IconList />}>
+            <Button size="small" icon={<IconList />}>
               密度
             </Button>
           </Dropdown>
           <Popover content={colSettingsPopover} position="br" trigger="click">
-            <Button size="mini" icon={<IconSettings />}>
+            <Button size="small" icon={<IconSettings />}>
               列设置
             </Button>
           </Popover>

@@ -22,6 +22,8 @@ import {
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as deptApi from 'src/api/dept'
+import { fetchAll } from 'src/api/fetchAll'
+import * as userApi from 'src/api/user'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 
@@ -44,7 +46,7 @@ function toTreeData(depts) {
 const EMPTY_FORM = {
   name: '',
   parent_id: undefined,
-  leader: '',
+  leader: undefined,
   sort: 1,
   status: 1,
 }
@@ -63,6 +65,30 @@ export default function DeptManage() {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
 
+  // 负责人下拉选项：全量用户（展示优先 nickname，回退 username；搜索 nickname + username 均可命中）
+  const [userOptions, setUserOptions] = useState([])
+
+  // 负责人下拉选项：仅弹窗需要时按需拉取一次
+  const ensureUserOptions = useCallback(async () => {
+    if (userOptions.length > 0) return
+    try {
+      const res = await fetchAll(userApi.listUsers)
+      const users = res?.data?.list || res?.data || []
+      setUserOptions(
+        users.map((u) => {
+          const nickname = u.profile?.nickname
+          return {
+            label: nickname || u.username, // 展示：优先 nickname，无 nickname 时回退 username
+            value: u.id,
+            searchText: `${nickname || ''} ${u.username || ''}`.toLowerCase(), // 搜索：nickname + username 均可命中
+          }
+        }),
+      )
+    } catch (e) {
+      // 错误已在请求层提示
+    }
+  }, [userOptions])
+
   const fetchTree = useCallback(async () => {
     setLoading(true)
     try {
@@ -77,12 +103,14 @@ export default function DeptManage() {
 
   useEffect(() => {
     fetchTree()
-  }, [fetchTree])
+    ensureUserOptions()
+  }, [fetchTree, ensureUserOptions])
 
   const openCreate = (parentId) => {
     setEditing(null)
     form.setFieldsValue({ ...EMPTY_FORM, parent_id: parentId || undefined })
     setModalVisible(true)
+    ensureUserOptions()
   }
 
   const openEdit = (record) => {
@@ -95,6 +123,7 @@ export default function DeptManage() {
       status: record.status,
     })
     setModalVisible(true)
+    ensureUserOptions()
   }
 
   const handleSave = async () => {
@@ -147,7 +176,15 @@ export default function DeptManage() {
 
   const columns = [
     { key: 'name', title: '部门名称', dataIndex: 'name' },
-    { key: 'leader', title: '负责人', dataIndex: 'leader', render: (v) => v || '-' },
+    {
+      key: 'leader',
+      title: '负责人',
+      dataIndex: 'leader',
+      render: (v) => {
+        const u = userOptions.find((o) => o.value === v)
+        return u ? u.label : '-'
+      },
+    },
     { key: 'sort', title: '排序', dataIndex: 'sort', width: 80,align: 'center', },
     {
       key: 'status',
@@ -229,16 +266,16 @@ export default function DeptManage() {
           <div />
         )}
         <Space>
-          <Button size="mini" icon={<IconRefresh />} onClick={fetchTree}>
+          <Button size="small" icon={<IconRefresh />} onClick={fetchTree}>
             刷新
           </Button>
           <Dropdown droplist={sizeMenu} trigger='click' position="br">
-            <Button size="mini" icon={<IconList />}>
+            <Button size="small" icon={<IconList />}>
               密度
             </Button>
           </Dropdown>
           <Popover content={colSettingsPopover} position="br" trigger="click">
-            <Button size="mini" icon={<IconSettings />}>
+            <Button size="small" icon={<IconSettings />}>
               列设置
             </Button>
           </Popover>
@@ -284,9 +321,24 @@ export default function DeptManage() {
                 <TreeSelect placeholder="不选则为顶级部门" allowClear treeData={toTreeData(tree)} />
               </FormItem>
             </Col>
-            <Col span={12}>
+            <Col span={24}>
               <FormItem label="负责人" field="leader">
-                <Input placeholder="选填" />
+                <Select
+                  placeholder="请选择负责人"
+                  allowClear
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option.props.searchText || String(option.props.children).toLowerCase()).includes(
+                      input.toLowerCase(),
+                    )
+                  }
+                >
+                  {userOptions.map((u) => (
+                    <Select.Option key={u.value} value={u.value} searchText={u.searchText}>
+                      {u.label}
+                    </Select.Option>
+                  ))}
+                </Select>
               </FormItem>
             </Col>
             <Col span={12}>

@@ -67,16 +67,16 @@ export default function ApprovalTableToolbar({
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-end">
         <Space>
-          <Button size="mini" icon={<IconRefresh />} onClick={onRefresh}>
+          <Button size="small" icon={<IconRefresh />} onClick={onRefresh}>
             刷新
           </Button>
           <Dropdown droplist={sizeMenu} trigger='click' position="br">
-            <Button size="mini" icon={<IconList />}>
+            <Button size="small" icon={<IconList />}>
               密度
             </Button>
           </Dropdown>
           <Popover content={colSettingsPopover} position="br" trigger="click">
-            <Button size="mini" icon={<IconSettings />}>
+            <Button size="small" icon={<IconSettings />}>
               列设置
             </Button>
           </Popover>
