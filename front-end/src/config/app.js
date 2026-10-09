@@ -45,16 +45,16 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'input', label: '单行输入', needDataSource: false, mockDetailValue: '示例文本' },
   { value: 'textarea', label: '多行文本', needDataSource: false, mockDetailValue: '示例多行文本' },
   { value: 'number', label: '数字输入', needDataSource: false, mockDetailValue: '100' },
-  { value: 'select', label: '下拉选择', needDataSource: true, mockDetailValue: '选项一' },
-  { value: 'treeselect', label: '树选择', needDataSource: true, mockDetailValue: '选项一' },
-  { value: 'radio', label: '单选框', needDataSource: true, mockDetailValue: '选项一' },
-  { value: 'checkbox', label: '多选框', needDataSource: true, mockDetailValue: '选项一, 选项二' },
+  { value: 'select', label: '下拉选择', needDataSource: true, mockDetailValue: '示例选项' },
+  { value: 'treeselect', label: '树选择', needDataSource: true, mockDetailValue: '示例选项' },
+  { value: 'radio', label: '单选框', needDataSource: true, mockDetailValue: '示例选项' },
+  { value: 'checkbox', label: '多选框', needDataSource: true, mockDetailValue: '示例选项一, 示例选项二' },
   { value: 'datepicker', label: '日期选择', needDataSource: false, mockDetailValue: '2026-10-08' },
   { value: 'timepicker', label: '时间选择', needDataSource: false, mockDetailValue: '14:30:00' },
   { value: 'switch', label: '开关', needDataSource: false, mockDetailValue: '是' },
   { value: 'upload', label: '文件上传', needDataSource: false, mockDetailValue: '示例附件.pdf' },
-  { value: 'deptselect', label: '部门选择', needDataSource: true, mockDetailValue: '部门' },
-  { value: 'userselect', label: '人员选择', needDataSource: true, mockDetailValue: '人员' },
+  { value: 'deptselect', label: '部门选择', needDataSource: true, mockDetailValue: '示例部门' },
+  { value: 'userselect', label: '人员选择', needDataSource: true, mockDetailValue: '示例人员' },
 ]
 
 // —— 表格密度选项 ——
