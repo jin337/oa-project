@@ -18,15 +18,15 @@ import {
 import { evalDynamicExpr } from '../utils/evalExpression'
 import { RuntimeFormContext } from './runtimeContext'
 
-const SummaryRow = Table.Summary.Row
-const SummaryCell = Table.Summary.Cell
-const FormItem = Form.Item
-const FormList = Form.List
-
 /**
  * 表格元素（组件库/基础）：运行时组件、设计器设置面板与列配置工具独立维护；
  * 注册结构（meta + 引用）保留在 elementConfig.jsx 的 BASE_ELEMENT_CONFIGS 中。
  * 为避免与渲染配置中心循环依赖，列单元格渲染所需的 renderPreviewConfig / ReadonlyValue 由调用方注入。
+ *
+ * 导出清单：
+ *   - TableElementField         表格运行时组件（Form.List 多行录入 + 只读回显）
+ *   - renderTableSettings       设计器设置面板（BASE_ELEMENT_CONFIGS.table 注册）
+ *   - genColumn / addColumn / removeColumn / updateColumn  表格列配置工具（LayoutManage 转发引用）
  */
 
 // ==================== 表格列配置工具 ====================
@@ -52,6 +52,11 @@ export const updateColumn = (updateSelectedElementColumns, colId, patch) =>
   updateSelectedElementColumns((cols) => cols.map((c) => (c.id === colId ? { ...c, ...patch } : c)))
 
 // ==================== 表格运行时组件 ====================
+
+const SummaryRow = Table.Summary.Row
+const SummaryCell = Table.Summary.Cell
+const FormItem = Form.Item
+const FormList = Form.List
 
 /**
  * 表格组件（table）字段：基于 Arco Form.List 的多行数据录入表格。

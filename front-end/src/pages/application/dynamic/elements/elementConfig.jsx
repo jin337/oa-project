@@ -22,6 +22,23 @@ import { TableElementField, renderTableSettings } from './TableElement'
 import { renderUploadPreview, renderUploadSettings } from './UploadElement'
 import { renderUserPreview } from './UserElement'
 
+/**
+ * 渲染配置中心（动态表单引擎的统一配置层）：
+ *
+ * 1. 转发导出（对外 API）：ReadonlyValue / TableElement / RuntimeFormContext 等由元素文件
+ *    与 runtimeContext 实现、此处原样再导出，DynamicForm 等既有调用方经本文件引用零改动。
+ * 2. 常量与全局配置：宽度占比选项、类型标签映射、无字段标签类型。
+ * 3. 通用属性面板（renderCommonSettings）：元素类型 / 字段名称 / 宽度占比，作为
+ *    常规控件的 renderSettings 基础项，upload 等追加专属配置项。
+ * 4. 基础组件配置中心（BASE_ELEMENT_CONFIGS）：不依赖后端表单元素的组件
+ *    （分割线 / 表格）的 meta + renderPreview + renderSettings，及查询函数。
+ * 5. 统一渲染配置中心（ELEMENT_RENDER_CONFIG）：每个 element_type 一个配置对象，
+ *    统一经 renderPreview(el, pageType) 承担所有表单控件的渲染；renderPreviewConfig 由此派生。
+ * 6. 组件库 items 派生（BASE_LAYOUT_ELEMENTS）：左侧"基础"分组拖拽数据源。
+ */
+
+// ==================== 转发导出（对外 API） ====================
+
 // 详情只读数据回显：DynamicForm 等既有调用方经本文件转发引用（零改动）
 export { ReadonlyValue } from './ReadonlyValue'
 
@@ -52,7 +69,7 @@ const getTypeLabel = (type) => ELEMENT_TYPE_OPTIONS.find((c) => c.value === type
 // 无字段标签的组件类型（画布 FormItem / 动态表单中隐藏 label 并走特殊布局，如分割线/表格）
 export const NO_LABEL_TYPES = ['divider', 'table']
 
-// ==================== 工具函数与解析逻辑 ====================
+// ==================== 通用属性面板 ====================
 
 /**
  * 常规表单元素的通用属性面板（元素类型 / 字段名称 / 宽度占比）
@@ -91,16 +108,7 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
   </>
 )
 
-// ==================== 详情只读展示 ====================
-
-/** 判断是否为基础组件（不显示通用字段名称/宽度等配置） */
-export const isBaseElement = (element_type) => Boolean(BASE_ELEMENT_CONFIGS[element_type])
-
-/** 判断是否为无字段标签元素（画布中不显示 label；upload 等字段型基础组件不受影响） */
-export const isNoLabelElement = (element_type) => NO_LABEL_TYPES.includes(element_type)
-
-/** 获取基础组件配置（含 renderPreview / renderSettings） */
-export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[element_type] || null
+// ==================== 基础组件配置中心 ====================
 
 /**
  * 布局设计器 —— 基础组件配置中心
@@ -151,6 +159,17 @@ export const BASE_ELEMENT_CONFIGS = {
     renderSettings: renderTableSettings,
   },
 }
+
+/** 判断是否为基础组件（不显示通用字段名称/宽度等配置） */
+export const isBaseElement = (element_type) => Boolean(BASE_ELEMENT_CONFIGS[element_type])
+
+/** 判断是否为无字段标签元素（画布中不显示 label；upload 等字段型基础组件不受影响） */
+export const isNoLabelElement = (element_type) => NO_LABEL_TYPES.includes(element_type)
+
+/** 获取基础组件配置（含 renderPreview / renderSettings） */
+export const getBaseElementConfig = (element_type) => BASE_ELEMENT_CONFIGS[element_type] || null
+
+// ==================== 统一渲染配置中心 ====================
 
 /**
  * 组件统一渲染配置中心：每个 element_type 一个配置对象，
@@ -236,6 +255,8 @@ export const ELEMENT_RENDER_CONFIG = {
 export const renderPreviewConfig = Object.fromEntries(
   Object.entries(ELEMENT_RENDER_CONFIG).map(([key, cfg]) => [key, cfg.renderPreview]),
 )
+
+// ==================== 组件库 items 派生 ====================
 
 /**
  * 从配置派生左侧组件库"基础"分组的 items（保持原有数据结构，供拖拽使用）

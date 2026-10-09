@@ -11,13 +11,23 @@ import { getStaticOptions } from '../utils/formUtils'
  * 选项型元素（select / treeselect / radio / checkbox）：
  * 画布预览（move-*）统一硬编码预览选项，运行时优先动态接口选项（data_source.type=api），
  * 其次静态 JSON 选项（getStaticOptions）。注册结构保留在 elementConfig.jsx 的 ELEMENT_RENDER_CONFIG 中。
+ *
+ * 导出清单（均为 ELEMENT_RENDER_CONFIG 注册入口）：
+ *   - renderSelectPreview      下拉选择（select）
+ *   - renderTreeSelectPreview  树形下拉选择（treeselect）
+ *   - renderRadioPreview       单选（radio）
+ *   - renderCheckboxPreview    多选（checkbox）
  */
+
+// ==================== 常量 ====================
 
 // 画布模式（move-*）下依赖选项组件的统一预览占位选项（不解析真实 data_source）
 const PREVIEW_OPTIONS = [
   { label: '选项一', value: 'option1' },
   { label: '选项二', value: 'option2' },
 ]
+
+// ==================== 渲染入口 ====================
 
 /** 下拉选择（select） */
 export const renderSelectPreview = (el, pageType, rt) => {

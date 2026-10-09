@@ -22,6 +22,11 @@ import { findOptionByValue, getStaticOptions } from '../utils/formUtils'
  *   - move-form   画布预览（禁用占位，不解析真实数据源）
  *   - detail / move-detail 只读回显由 renderFormItemElement 统一拦截：经 ReadonlyValue →
  *     UserReadOnly 反查人员名（move-detail 注入模拟值，反查不到回退原值）
+ *
+ * 导出清单：
+ *   - UserSelect        人员选择主组件（form / move-form / detail 分派）
+ *   - UserReadOnly      只读展示（READONLY_RENDERERS 注册）
+ *   - renderUserPreview ELEMENT_RENDER_CONFIG 注册入口
  */
 
 // ==================== 工具 ====================
@@ -98,7 +103,7 @@ const useUserOptions = (el, rt) => {
   return options
 }
 
-// ==================== 弹窗单选控件 ====================
+// ==================== 选择控件 ====================
 
 /**
  * Input.Search 形式：输入框只读（展示已选人员名，不可手动输入），点「选择」按钮唤起弹窗，
@@ -183,7 +188,7 @@ function UserPicker({ value, onChange, options, placeholder, label, disabled }) 
   )
 }
 
-// ==================== 只读展示（detail 模式） ====================
+// ==================== 只读展示 ====================
 
 /** 详情只读：显示已选人员名（数据源自加载反查），空值显示 '-' */
 export function UserReadOnly({ value, el, rt }) {

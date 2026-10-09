@@ -5,9 +5,13 @@ import { Divider, Input, Radio, Tag } from '@arco-design/web-react'
  * 注册结构（meta + 引用）保留在 elementConfig.jsx 的 BASE_ELEMENT_CONFIGS 中。
  */
 
+// ==================== 渲染入口 ====================
+
 /** 画布/运行时渲染：有文字时带 orientation 的带字分割线，否则纯分割线 */
 export const renderDividerPreview = (el) =>
   el.text ? <Divider orientation={el.orientation || 'center'}>{el.text}</Divider> : <Divider />
+
+// ==================== 设置面板 ====================
 
 /** 设计器设置面板：元素类型 + 分割线文字 + 文字位置（纯受控 UI） */
 export const renderDividerSettings = ({ selectedElement, updateSelectedElement }) => (
