@@ -50,7 +50,7 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'radio', label: '单选框', needDataSource: true, mockDetailValue: '选项一' },
   { value: 'checkbox', label: '多选框', needDataSource: true, mockDetailValue: '选项一, 选项二' },
   { value: 'datepicker', label: '日期选择', needDataSource: false, mockDetailValue: '2026-10-08' },
-  { value: 'timepicker', label: '时间选择', needDataSource: false, mockDetailValue: '14:30' },
+  { value: 'timepicker', label: '时间选择', needDataSource: false, mockDetailValue: '14:30:00' },
   { value: 'switch', label: '开关', needDataSource: false, mockDetailValue: '是' },
   { value: 'upload', label: '文件上传', needDataSource: false, mockDetailValue: '示例附件.pdf' },
   { value: 'deptselect', label: '部门选择', needDataSource: true, mockDetailValue: '公司' },

@@ -18,8 +18,8 @@ import { findOptionByValue, getStaticOptions } from '../utils/formUtils'
  * pageType 渲染策略：
  *   - form        可交互选择（实际表单填写，FormItem 注入 value/onChange/disabled）
  *   - move-form   画布预览（禁用占位，不解析真实数据源）
- *   - detail      只读：展示已选部门名（数据源自加载反查）
- *   - move-detail 画布详情预览由 renderFormItemElement 统一拦截渲染为模拟数据（MockDetailValue）
+ *   - detail / move-detail 只读回显由 renderFormItemElement 统一拦截：经 ReadonlyValue →
+ *     DeptReadOnly 反查部门名（move-detail 注入模拟值，反查不到回退原值）
  */
 
 // ==================== 工具 ====================

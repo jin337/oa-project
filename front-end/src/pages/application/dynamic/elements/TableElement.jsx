@@ -16,7 +16,6 @@ import {
   parseDefaultValue,
 } from '../utils/formUtils'
 import { evalDynamicExpr } from '../utils/evalExpression'
-import { MockDetailTable } from './MockPreview'
 import { RuntimeFormContext } from './runtimeContext'
 
 const SummaryRow = Table.Summary.Row
@@ -59,8 +58,8 @@ export const updateColumn = (updateSelectedElementColumns, colId, patch) =>
  * - Form.List field 绑定 el.table_key，行数据以 table_key[index].colKey 嵌套路径注册到 Form store
  * - 校验规则挂在 Form.List 上（整体至少一行 + 必填列非空），错误通过 useFormState 读取并显示在表格底部
  * - form / move-form：可编辑模式，显示"新增"按钮与行内"删除"按钮，行内控件可交互
- * - detail：详情只读模式，行内单元格渲染为纯文本（ReadonlyValue，空值 '-'）
- * - move-detail：画布只读预览，渲染模拟数据表格（MockDetailTable）
+ * - detail / move-detail：只读模式（真实详情 / 画布详情预览注入 mock 数据），
+ *   行内单元格渲染为纯文本（ReadonlyValue，空值 '-'）
  */
 export const TableElementField = ({
   el,
@@ -74,8 +73,8 @@ export const TableElementField = ({
   const rt = useContext(RuntimeFormContext)
   // 可编辑：实际填写（form）与画布表单页（move-form）
   const isEditable = pageType === 'form' || pageType === 'move-form'
-  // 详情只读：仅真实详情页（detail）渲染纯文本；画布 move-detail 保持禁用控件预览
-  const isReadonlyText = pageType === 'detail'
+  // 详情只读：真实详情页（detail）与画布详情预览（move-detail，注入 mock 数据）均渲染纯文本
+  const isReadonlyText = pageType === 'detail' || pageType === 'move-detail'
   const { form } = Form.useFormContext()
   // Form.List 字段名：优先关联子表名（table_key），其次元素 id 兜底
   const listField = el.table_key || el.id || 'table'
@@ -153,10 +152,8 @@ export const TableElementField = ({
     },
   ]
 
-  // 画布详情页预览（move-detail）：渲染 2 行模拟数据表格（不依赖 Form store / 校验 / 提交链路）
-  if (pageType === 'move-detail') {
-    return <MockDetailTable el={el} />
-  }
+  // 画布详情预览（move-detail）与真实详情（detail）共用同一只读管线：
+  // 数据由 MoveDetailMode 注入 mock 行，此处不特判，直接走下方 FormList + 列只读渲染
 
   return (
     // initialValue：可编辑模式下默认初始化一行空记录（{}），挂载/重置（resetFields）后表格至少有一行可填写

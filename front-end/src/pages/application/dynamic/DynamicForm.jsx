@@ -34,7 +34,6 @@ import {
 // 元素渲染配置中心（基础/常规元素渲染 + 详情只读组件）独立维护于 ./elements/elementConfig.jsx
 import {
   ELEMENT_RENDER_CONFIG,
-  MockDetailValue,
   ReadonlyValue,
   TableElementField,
   getBaseElementConfig,
@@ -583,10 +582,10 @@ export const renderFormItemElement = (el, ctx) => {
       : buildValidationRules(el, () => ctx.runtime?.getFormValues?.() || {}, false, false)
 
   // 控件渲染分发：
-  // - 详情只读模式（pageType='detail'）：常规控件与字段型组件（如 upload）渲染为纯文本（空值显示 '-'），
-  //   divider 保持分割线、table 走表格只读逻辑
+  // - 详情只读（pageType='detail' / 'move-detail'）：常规控件与字段型组件（如 upload）渲染为纯文本
+  //   （空值显示 '-'；move-detail 为 MoveDetailMode 注入的模拟数据），divider 保持分割线
   // - 其余模式：基础组件走专属配置（传原始 pageType，表格据此区分 form/move-form 可编辑、
-  //   detail 纯文本、move-detail 画布禁用预览）；常规控件走统一渲染配置中心
+  //   detail/move-detail 纯文本）；常规控件走统一渲染配置中心
   const renderControl = () => {
     if (el.element_type === 'table') {
       // 表格（子表）：透传字段权限，支持 detail 下按列 perm=2 渲染可编辑控件；
@@ -602,13 +601,13 @@ export const renderFormItemElement = (el, ctx) => {
         />
       )
     }
-    // 画布详情页预览（move-detail）：常规字段渲染为模拟数据纯文本（divider 保持分割线）
-    if (pageType === 'move-detail' && el.element_type !== 'divider') {
-      return <MockDetailValue el={el} />
-    }
-    // detail 只读：统一经 ReadonlyValue 回显（upload/deptselect/userselect 由内部自动分派），
-    // value 由 FormItem 注入
-    if (pageType === 'detail' && el.element_type !== 'divider' && !permEditable) {
+    // detail / move-detail 只读：统一经 ReadonlyValue 回显（upload/deptselect/userselect 由内部自动分派），
+    // value 由 FormItem 注入（move-detail 为 MoveDetailMode 注入的模拟数据）
+    if (
+      (pageType === 'detail' || pageType === 'move-detail') &&
+      el.element_type !== 'divider' &&
+      !permEditable
+    ) {
       return (
         <ReadonlyValue
           elementType={el.element_type}

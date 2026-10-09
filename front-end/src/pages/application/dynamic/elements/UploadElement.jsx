@@ -10,8 +10,8 @@ import { RuntimeFormContext } from '../DynamicForm'
  * pageType 渲染策略：
  *   - form        可交互上传（实际表单填写）
  *   - move-form   画布预览（可交互形态占位）
- *   - detail      只读：展示已上传文件列表（图片用 Image，其他用链接）
- *   - move-detail 画布详情预览由 renderFormItemElement 统一拦截渲染为模拟数据（MockDetailValue）
+ *   - detail / move-detail 只读回显由 renderFormItemElement 统一拦截：经 ReadonlyValue →
+ *     renderUploadReadOnly 渲染文件列表（move-detail 注入模拟文件数组）
  */
 export function UploadElement({ el, pageType, value, onChange }) {
   // Arco FormItem 注入 value：直接作为受控值

@@ -22,15 +22,13 @@ import { TableElementField, renderTableSettings } from './TableElement'
 import { renderUploadPreview, renderUploadSettings } from './UploadElement'
 import { renderUserPreview } from './UserElement'
 
-// 详情只读数据回显与表格列配置工具、画布详情模拟渲染：
-// DynamicForm 等既有调用方经本文件转发引用（零改动）
+// 详情只读数据回显：DynamicForm 等既有调用方经本文件转发引用（零改动）
 export { ReadonlyValue } from './ReadonlyValue'
 
-// 表格列配置工具、画布详情模拟渲染与表格字段组件：
+// 表格列配置工具与表格字段组件：
 // DynamicForm 等既有调用方经本文件转发引用（零改动）
 export { addColumn, genColumn, removeColumn, updateColumn } from './TableElement'
 export { TableElementField } from './TableElement'
-export { MockDetailValue } from './MockPreview'
 
 // 运行时表单上下文在此原样再导出：DynamicForm 经 `export { RuntimeFormContext } from './elements/elementConfig'`
 // 转发给 modes/UploadElement 等既有调用方，保持单一 Context 定义源（runtimeContext.js）
