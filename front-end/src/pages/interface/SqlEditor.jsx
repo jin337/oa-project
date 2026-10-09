@@ -1,6 +1,6 @@
 import { Button, Modal, Space } from '@arco-design/web-react'
 import { IconFullscreen, IconFullscreenExit } from '@arco-design/web-react/icon'
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 
 // ──────────────────────────────── SQL 工具 ────────────────────────────────
 // SQL 模板美化：关键字大写；SELECT/FROM/WHERE 等子句关键字独占一行（顶格），
@@ -8,29 +8,92 @@ import { useRef, useState } from 'react'
 // 逐行换行、逐级缩进。字符串字面量与 ${form.xxx} 占位符原样保留；幂等，可重复点击。
 
 const KW = new Set([
-  'SELECT', 'DISTINCT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER',
-  'CROSS', 'FULL', 'ON', 'AND', 'OR', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT',
-  'OFFSET', 'UNION', 'ALL', 'AS', 'ASC', 'DESC', 'INSERT', 'INTO', 'UPDATE',
-  'DELETE', 'SET', 'VALUES', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'IS', 'NULL',
-  'IN', 'LIKE', 'BETWEEN', 'NOT', 'EXISTS',
+  'SELECT',
+  'DISTINCT',
+  'FROM',
+  'WHERE',
+  'JOIN',
+  'LEFT',
+  'RIGHT',
+  'INNER',
+  'OUTER',
+  'CROSS',
+  'FULL',
+  'ON',
+  'AND',
+  'OR',
+  'GROUP',
+  'BY',
+  'ORDER',
+  'HAVING',
+  'LIMIT',
+  'OFFSET',
+  'UNION',
+  'ALL',
+  'AS',
+  'ASC',
+  'DESC',
+  'INSERT',
+  'INTO',
+  'UPDATE',
+  'DELETE',
+  'SET',
+  'VALUES',
+  'CASE',
+  'WHEN',
+  'THEN',
+  'ELSE',
+  'END',
+  'IS',
+  'NULL',
+  'IN',
+  'LIKE',
+  'BETWEEN',
+  'NOT',
+  'EXISTS',
 ])
 
 // 复合子句前缀 → 后续必须跟随的词
 const PREFIX_FOLLOW = {
-  LEFT: 'JOIN', RIGHT: 'JOIN', INNER: 'JOIN', OUTER: 'JOIN', CROSS: 'JOIN', FULL: 'JOIN',
-  GROUP: 'BY', ORDER: 'BY', UNION: 'ALL', INSERT: 'INTO', DELETE: 'FROM',
+  LEFT: 'JOIN',
+  RIGHT: 'JOIN',
+  INNER: 'JOIN',
+  OUTER: 'JOIN',
+  CROSS: 'JOIN',
+  FULL: 'JOIN',
+  GROUP: 'BY',
+  ORDER: 'BY',
+  UNION: 'ALL',
+  INSERT: 'INTO',
+  DELETE: 'FROM',
 }
 
 // 独占一行（顶格）的单字子句关键字
 const CLAUSE_TOP = new Set([
-  'SELECT', 'FROM', 'WHERE', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'SET', 'VALUES', 'UPDATE',
+  'SELECT',
+  'FROM',
+  'WHERE',
+  'HAVING',
+  'LIMIT',
+  'OFFSET',
+  'UNION',
+  'SET',
+  'VALUES',
+  'UPDATE',
 ])
 
 // 独占一行（顶格）的复合子句
 const COMPOUND_TOP = new Set(['INSERT INTO', 'DELETE FROM', 'GROUP BY', 'ORDER BY', 'UNION ALL'])
 
 // FROM 块内缩进 4 的复合子句（JOIN 系）
-const COMPOUND_INDENT = new Set(['LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'CROSS JOIN', 'FULL JOIN'])
+const COMPOUND_INDENT = new Set([
+  'LEFT JOIN',
+  'RIGHT JOIN',
+  'INNER JOIN',
+  'OUTER JOIN',
+  'CROSS JOIN',
+  'FULL JOIN',
+])
 
 function tokenize(src) {
   const toks = []
@@ -202,6 +265,80 @@ function formatSql(text) {
   return lines.join('\n')
 }
 
+// HTML 转义：防止 SQL 中的特殊字符破坏高亮结构
+const escapeHtml = (s) =>
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+// 关键字高亮：KW 集合中的词渲染为蓝色加粗。
+// 按原文本逐字符扫描，空白/占位符/字符串/数字/标点全部原样保留（tokenize 会丢弃空白，不能用于渲染）。
+const highlightLine = (line) => {
+  let html = ''
+  let i = 0
+  const n = line.length
+  const emit = (s) => {
+    html += escapeHtml(s)
+  }
+  while (i < n) {
+    const c = line[i]
+    // ${form.xxx} 占位符：整体原样保留（含内部空格）
+    if (c === '$' && line[i + 1] === '{') {
+      let j = i + 2
+      while (j < n && line[j] !== '}') j++
+      if (j < n) j++
+      emit(line.slice(i, j))
+      i = j
+    } else if (c === "'" || c === '"') {
+      // 字符串/标识符字面量（单/双引号，含转义）：整体渲染为红色，内部不做关键字高亮
+      const q = c
+      let j = i + 1
+      let s = q
+      while (j < n) {
+        const ch = line[j]
+        if (ch === '\\' && j + 1 < n) {
+          s += ch + line[j + 1]
+          j += 2
+          continue
+        }
+        s += ch
+        j++
+        if (ch === q) break
+      }
+      html += `<span style="color:#f53f3f">${escapeHtml(s)}</span>`
+      i = j
+    } else if (/\s/.test(c)) {
+      // 连续空白原样保留
+      let j = i
+      while (j < n && /\s/.test(line[j])) j++
+      emit(line.slice(i, j))
+      i = j
+    } else if (/[A-Za-z_]/.test(c)) {
+      let j = i
+      while (j < n && /[A-Za-z0-9_]/.test(line[j])) j++
+      const word = line.slice(i, j)
+      const u = word.toUpperCase()
+      html +=
+        u && KW.has(u)
+          ? `<span style="color:#3370ff;font-weight:600">${escapeHtml(word)}</span>`
+          : escapeHtml(word)
+      i = j
+    } else if (/[0-9]/.test(c)) {
+      let j = i
+      while (j < n && /[0-9.]/.test(line[j])) j++
+      emit(line.slice(i, j))
+      i = j
+    } else {
+      emit(c)
+      i++
+    }
+  }
+  return html
+}
+
 // 简化：把 SQL 压缩为紧凑单行（去除换行与多余空格）。
 // 字符串字面量（含 ${form.xxx} 占位符）原样保留；
 // . / ( 前紧贴且后紧贴（u.id、JSON_OBJECT(），, / ) / ; 前紧贴，其余运算符两侧保留单空格。
@@ -225,62 +362,45 @@ function compactSql(text) {
 
 // ──────────────────────────────── 组件 ────────────────────────────────
 
-// 常用 SQL 关键字：输入时按前缀匹配提示，点击补全到光标处
-const SQL_KEYWORDS = [
-  'SELECT',
-  'FROM',
-  'WHERE',
-  'AND',
-  'OR',
-  'ORDER BY',
-  'GROUP BY',
-  'LEFT JOIN',
-  'INNER JOIN',
-  'RIGHT JOIN',
-  'ON',
-  'AS',
-  'DISTINCT',
-  'LIMIT',
-  'OFFSET',
-  'INSERT INTO',
-  'UPDATE',
-  'DELETE FROM',
-  'SET',
-  'VALUES',
-  'UNION ALL',
-  'CASE WHEN',
-  'THEN',
-  'ELSE',
-  'END',
-  'JSON_OBJECT',
-  'COUNT',
-  'SUM',
-  'MAX',
-  'MIN',
-  'AVG',
-  'IFNULL',
-  'CONCAT',
-]
-
-// ──────────────────────────────── 组件 ────────────────────────────────
-
-// 带行号的等宽编辑区：底层行号列（pre）+ 透明原生 textarea 叠加。
-// 不使用组件库 TextArea，行高/字号/内边距全部显式控制（20px 紧凑行高），
-// white-space: pre 不自动换行，行号严格对应逻辑行，滚动时行号列同步。
+// 带行号的等宽编辑区：底层语法高亮层（pre-wrap）+ 透明原生 textarea 叠加。
+// 不使用组件库 TextArea，行高/字号/内边距全部显式控制（20px 紧凑行高）。
+// 高亮层与 textarea 同宽同字体同折行规则，关键字（KW 集合）蓝色加粗；
+// textarea 文字透明仅保留光标/选择，负责输入与滚动；滚动时高亮层/行号列同步。
+// 每逻辑行折行段数通过高亮层测量，折行段行号补空白行，行号与视觉行严格对齐。
 function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRows, maxRows, id }) {
   const gutterRef = useRef(null)
-  const lineCount = value ? value.split('\n').length : 1
+  const highlightRef = useRef(null)
+  const [wrapSegs, setWrapSegs] = useState([])
+  const lines = value ? value.split('\n') : ['']
   const ROW_H = 20
-  const rows = Math.max(minRows, Math.min(maxRows, lineCount))
+  // 总视觉行数 = 各逻辑行折行段数之和（未测量时按逻辑行数估算）
+  const totalLines = wrapSegs.length ? wrapSegs.reduce((a, b) => a + b, 0) : lines.length
+  const rows = Math.max(minRows, Math.min(maxRows, totalLines))
   const height = rows * ROW_H + 8
   const fontStyle = {
     fontFamily: 'ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace',
     fontSize: 13,
     lineHeight: `${ROW_H}px`,
   }
+  const padStyle = { padding: '4px 8px' }
 
+  // 文本变化后测量高亮层中每个逻辑行的折行段数（与 textarea 同宽同字体同折行规则）
+  useLayoutEffect(() => {
+    if (!highlightRef.current) return
+    const segs = Array.from(highlightRef.current.children).map((el) =>
+      Math.max(1, Math.round(el.offsetHeight / ROW_H)),
+    )
+    setWrapSegs(segs)
+  }, [value, minRows, maxRows])
+
+  // 滚动同步：行号列（纵向）+ 高亮层（纵/横向）
   const syncScroll = (e) => {
-    if (gutterRef.current) gutterRef.current.scrollTop = e.target.scrollTop
+    const t = e.target
+    if (gutterRef.current) gutterRef.current.scrollTop = t.scrollTop
+    if (highlightRef.current) {
+      highlightRef.current.scrollTop = t.scrollTop
+      highlightRef.current.scrollLeft = t.scrollLeft
+    }
   }
 
   // 原生 textarea 的 onChange 传事件对象，需转为 (value, event) 以匹配外层受控接口
@@ -290,88 +410,66 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
     <div className="flex" style={{ height, ...fontStyle }}>
       <pre
         ref={gutterRef}
-        className="m-0 select-none overflow-hidden border-r border-gray-200 bg-gray-50 py-1 pr-2 text-right text-gray-400"
+        className="m-0 overflow-hidden border-r border-gray-200 bg-gray-50 py-1 pr-2 text-right text-gray-400 select-none"
         style={{ ...fontStyle, width: 44, paddingLeft: 4, flexShrink: 0 }}
       >
-        {Array.from({ length: lineCount }, (_, i) => i + 1).join('\n')}
+        {lines.map((l, i) => (
+          <div key={i}>
+            {i + 1}
+            {Array.from({ length: (wrapSegs[i] || 1) - 1 }, (_, j) => (
+              <div key={j}> </div>
+            ))}
+          </div>
+        ))}
       </pre>
-      <textarea
-        id={id}
-        value={value}
-        onChange={handleNativeChange}
-        onFocus={onFocus}
-        onScroll={syncScroll}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        spellCheck={false}
-        className="h-full flex-1 resize-none border-none outline-none bg-gray-50"
-        style={{
-          ...fontStyle,
-          padding: '4px 8px',
-          color: '#1d2129',
-          whiteSpace: 'pre',
-          overflowWrap: 'normal',
-          overflow: 'auto',
-        }}
-      />
+      <div className="relative flex-1 overflow-hidden bg-gray-50" style={{ height }}>
+        {/* 语法高亮层：关键字蓝色加粗；与 textarea 同尺寸同折行规则，随 textarea 滚动 */}
+        <div
+          ref={highlightRef}
+          aria-hidden
+          className="absolute inset-0 overflow-hidden"
+          style={{ ...fontStyle, ...padStyle, whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}
+        >
+          {lines.map((l, i) => (
+            <div key={i} dangerouslySetInnerHTML={{ __html: l ? highlightLine(l) : ' ' }} />
+          ))}
+        </div>
+        {/* 透明输入层：文字透明仅保留光标/选区，placeholder 通过外部样式保持可见 */}
+        <textarea
+          id={id}
+          value={value}
+          onChange={handleNativeChange}
+          onFocus={onFocus}
+          onScroll={syncScroll}
+          placeholder={placeholder}
+          maxLength={maxLength}
+          spellCheck={false}
+          className="sql-editor-input absolute inset-0 resize-none border-none bg-transparent outline-none"
+          style={{
+            ...fontStyle,
+            ...padStyle,
+            color: 'transparent',
+            caretColor: '#1d2129',
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'break-word',
+            overflow: 'auto',
+          }}
+        />
+      </div>
     </div>
   )
 }
 
 /**
- * SQL 模板编辑器：顶部功能按钮区（美化 / 全屏）+ 输入区 + 输入关键字前缀提示。
+ * SQL 模板编辑器：顶部功能按钮区（美化 / 全屏）+ 带行号输入区。
  * 受控组件，可直接作为 Arco FormItem 的 children（透传 value/onChange/id）。
  */
 export default function SqlEditor(props) {
   const { value = '', onChange, id, placeholder, maxLength = 8000 } = props
   const [fullscreen, setFullscreen] = useState(false)
-  const [suggestions, setSuggestions] = useState([])
-  // 最近一次聚焦/输入的原生 textarea，用于读取光标位置
-  const lastTarget = useRef(null)
 
-  // 根据光标前的最后一个词计算前缀匹配的关键字候选
-  const collectSuggestions = (v, el) => {
-    if (!el) return
-    const pos = el.selectionStart ?? v.length
-    const before = v.slice(0, pos)
-    const m = before.match(/([A-Za-z_][A-Za-z0-9_]*)$/)
-    if (!m) return
-    const word = m[1]
-    const hit = SQL_KEYWORDS.filter((kw) => {
-      const head = kw.split(' ')[0].toUpperCase()
-      return head.startsWith(word.toUpperCase()) && head !== word.toUpperCase()
-    })
-    setSuggestions(hit.slice(0, 8))
-  }
-
-  const handleChange = (v, e) => {
+  const handleChange = (v) => {
     onChange?.(v)
-    lastTarget.current = e?.target
-    collectSuggestions(v, e?.target)
-  }
-
-  const handleFocus = (e) => {
-    lastTarget.current = e.target
-  }
-
-  // 在光标处插入文本；replaceWord 为 true 时替换光标前的部分词（补全场景）
-  const insertText = (text, replaceWord = false) => {
-    const el = lastTarget.current
-    if (!el) return
-    const pos = el.selectionStart ?? value.length
-    let start = pos
-    if (replaceWord) {
-      const m = value.slice(0, pos).match(/([A-Za-z_][A-Za-z0-9_]*)$/)
-      if (m) start = pos - m[1].length
-    }
-    const next = value.slice(0, start) + text + value.slice(pos)
-    onChange?.(next)
-    requestAnimationFrame(() => {
-      el.focus()
-      const p = start + text.length
-      el.setSelectionRange(p, p)
-    })
-    setSuggestions([])
   }
 
   const handleFormat = () => {
@@ -384,26 +482,10 @@ export default function SqlEditor(props) {
     onChange?.(compactSql(value))
   }
 
-  // 候选提示条（主区 / 全屏共用渲染）
-  const renderSuggestions = () =>
-    suggestions.length > 0 && (
-      <div className="flex flex-wrap gap-1 border-t border-gray-200 bg-gray-50 px-2 py-1">
-        {suggestions.map((kw) => (
-          <button
-            key={kw}
-            type="button"
-            className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs text-gray-600 hover:border-blue-400 hover:text-blue-500"
-            onClick={() => insertText(kw, true)}
-          >
-            {kw}
-          </button>
-        ))}
-      </div>
-    )
-
-  return (
-    <div className="overflow-hidden rounded border border-gray-200">
-      {/* 功能按钮区 */}
+  // 共享编辑区：工具栏（美化/简化 + 右侧按钮）+ 带行号输入区。
+  // 主区与全屏 Modal 显示完全一致，唯一差异是传入的右侧按钮（全屏 / 退出全屏）。
+  const renderEditor = (toolbarAction, textareaProps) => (
+    <>
       <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-2 py-1">
         <Space>
           <Button type="text" size="mini" onClick={handleFormat}>
@@ -413,59 +495,58 @@ export default function SqlEditor(props) {
             简化
           </Button>
         </Space>
-        <Button type="text" size="mini" onClick={() => setFullscreen(true)}>
-          <IconFullscreen /> 全屏
-        </Button>
+        {toolbarAction}
       </div>
-      {/* 输入区（带行号） */}
-      <LineTextarea
-        id={id}
-        value={value}
-        onChange={handleChange}
-        onFocus={handleFocus}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        minRows={4}
-        maxRows={10}
-      />
-      {renderSuggestions()}
+      <LineTextarea {...textareaProps} />
+    </>
+  )
 
-      {/* 全屏编辑 */}
-      <Modal
-        title="SQL编辑器"
-        visible={fullscreen}
-        footer={null}
-        style={{ width: '92vw', maxWidth: 1400 }}
-        onCancel={() => setFullscreen(false)}
-        unmountOnExit
-      >
-        <div className="mb-2 flex items-center justify-between">
-          <Space>
-            <Button size="mini" onClick={handleFormat}>
-              美化
-            </Button>
-            <Button size="mini" onClick={handleCompact}>
-              简化
-            </Button>
-          </Space>
-          <Button size="mini" onClick={() => setFullscreen(false)}>
-            <IconFullscreenExit /> 退出全屏
-          </Button>
-        </div>
-        <div className="border border-gray-200">
-          <LineTextarea
-            value={value}
-            onChange={handleChange}
-            onFocus={handleFocus}
-            placeholder={placeholder}
-            maxLength={maxLength}
-            minRows={16}
-            maxRows={40}
-          />
-        </div>
-        {renderSuggestions()}
-        <span className="text-xs text-gray-400">输入时按前缀提示关键字，点击补全</span>
-      </Modal>
-    </div>
+  return (
+    <>
+      {/* 输入层文字透明，placeholder 需单独着色保持可见 */}
+      <style>{'.sql-editor-input::placeholder { color: #c9cdd4; }'}</style>
+      <div className="overflow-hidden rounded border border-gray-200">
+        {renderEditor(
+          <Button type="text" size="mini" onClick={() => setFullscreen(true)}>
+            <IconFullscreen /> 全屏
+          </Button>,
+          {
+            id,
+            value,
+            onChange: handleChange,
+            placeholder,
+            maxLength,
+            minRows: 4,
+            maxRows: 10,
+          },
+        )}
+
+        {/* 全屏编辑 */}
+        <Modal
+          title="SQL编辑器"
+          visible={fullscreen}
+          footer={null}
+          closable={false}
+          style={{ width: '100%', height: '100%' }}
+          className="[&_.arco-modal-content]:p-0!"
+          onCancel={() => setFullscreen(false)}
+          unmountOnExit
+        >
+          {renderEditor(
+            <Button type="text" size="mini" onClick={() => setFullscreen(false)}>
+              <IconFullscreenExit /> 退出全屏
+            </Button>,
+            {
+              value,
+              onChange: handleChange,
+              placeholder,
+              maxLength,
+              minRows: 16,
+              maxRows: 40,
+            },
+          )}
+        </Modal>
+      </div>
+    </>
   )
 }
