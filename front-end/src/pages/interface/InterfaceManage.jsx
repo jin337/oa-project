@@ -1,25 +1,25 @@
 import {
-    Alert,
-    Button,
-    Card,
-    Checkbox,
-    Divider,
-    Drawer,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    InputNumber,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Select,
-    Space,
-    Table,
-    Tag,
-    Typography,
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Divider,
+  Drawer,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
 } from '@arco-design/web-react'
 import { IconList, IconRefresh, IconSettings, IconSync } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -28,6 +28,7 @@ import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 import { API_PREFIX } from 'src/utils/constants'
 import { formatJsonQuotes } from 'src/utils/json'
+import { formatSql } from 'src/utils/sql'
 
 const MenuItem = Menu.Item
 
@@ -635,7 +636,22 @@ export default function InterfaceManage() {
             <>
               <Divider orientation="left">SQL 数据源</Divider>
               <FormItem
-                label="SQL 模板"
+                label={
+                  <span className="inline-flex w-[calc(100%-18px)] items-center justify-between">
+                    <span>SQL 模板</span>
+                    <Button
+                      type="text"
+                      size="mini"
+                      onClick={() => {
+                        const cur = form.getFieldValue('sql_template')
+                        if (!cur) return
+                        form.setFieldValue('sql_template', formatSql(cur))
+                      }}
+                    >
+                      格式化
+                    </Button>
+                  </span>
+                }
                 field="sql_template"
                 rules={[{ required: true, message: '请输入 SQL 模板' }]}
                 extra={
