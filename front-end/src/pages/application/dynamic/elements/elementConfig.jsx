@@ -1,14 +1,11 @@
 import {
-  Checkbox,
   DatePicker,
   Input,
   InputNumber,
   Radio,
-  Select,
   Switch,
   Tag,
   TimePicker,
-  TreeSelect,
 } from '@arco-design/web-react'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 
@@ -20,6 +17,12 @@ import {
 
 import { DeptReadOnly, renderDeptPreview } from './DeptElement'
 import { renderDividerPreview, renderDividerSettings } from './DividerElement'
+import {
+  renderCheckboxPreview,
+  renderRadioPreview,
+  renderSelectPreview,
+  renderTreeSelectPreview,
+} from './OptionElement'
 import { TableElementField, renderTableSettings } from './TableElement'
 import { renderUploadPreview, renderUploadReadOnly, renderUploadSettings } from './UploadElement'
 import { UserReadOnly, renderUserPreview } from './UserElement'
@@ -44,12 +47,6 @@ const WIDTH_OPTIONS = [
   { value: 16, label: '2/3' },
   { value: 6, label: '1/4' },
   { value: 18, label: '3/4' },
-]
-
-// 画布模式（move-*）下依赖选项组件的统一预览占位选项（不解析真实 data_source）
-const PREVIEW_OPTIONS = [
-  { label: '选项一', value: 'option1' },
-  { label: '选项二', value: 'option2' },
 ]
 
 // 根据类型获取中文标签
@@ -264,81 +261,16 @@ export const ELEMENT_RENDER_CONFIG = {
     renderPreview: (el) => <Switch />,
   },
   select: {
-    renderPreview: (el, pageType, rt) => {
-      // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
-      if (pageType?.startsWith('move-')) {
-        return (
-          <Select
-            style={{ width: '100%' }}
-            placeholder={el.placeholder || undefined}
-            options={PREVIEW_OPTIONS}
-          />
-        )
-      }
-      // 运行时优先使用动态接口选项（data_source.type=api），其次静态 JSON 选项
-      const runtimeOptions = rt?.getOptions?.(el)
-      const options = runtimeOptions?.length ? runtimeOptions : getStaticOptions(el)
-      return (
-        <Select
-          style={{ width: '100%' }}
-          options={options.length ? options : undefined}
-          placeholder={el.placeholder || undefined}
-        />
-      )
-    },
+    renderPreview: renderSelectPreview,
   },
   treeselect: {
-    renderPreview: (el, pageType, rt) => {
-      // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
-      if (pageType?.startsWith('move-')) {
-        return (
-          <TreeSelect
-            style={{ width: '100%' }}
-            placeholder={el.placeholder || undefined}
-            treeData={PREVIEW_OPTIONS}
-          />
-        )
-      }
-      // 运行时优先动态接口选项，其次静态 JSON；data_source 支持扁平 [{label,value}] 与树形 [{label,value,children}]
-      const runtimeOptions = rt?.getOptions?.(el)
-      const options = runtimeOptions?.length ? runtimeOptions : getStaticOptions(el)
-      return (
-        <TreeSelect
-          style={{ width: '100%' }}
-          treeData={options.length ? options : undefined}
-          // Arco TreeSelect 的 treeData 字段名为 key/title（Select 为 value/label），
-          // extractOptions 统一输出 value/title，此处通过 fieldNames 映射，
-          fieldNames={{ key: 'value', title: 'title', children: 'children' }}
-          placeholder={el.placeholder || undefined}
-        />
-      )
-    },
+    renderPreview: renderTreeSelectPreview,
   },
   radio: {
-    renderPreview: (el, pageType, rt) => {
-      // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
-      if (pageType?.startsWith('move-')) {
-        return <Radio.Group style={{ width: '100%' }} options={PREVIEW_OPTIONS} />
-      }
-      const runtimeOptions = rt?.getOptions?.(el)
-      const options = runtimeOptions?.length ? runtimeOptions : getStaticOptions(el)
-      return (
-        <Radio.Group style={{ width: '100%' }} options={options.length ? options : undefined} />
-      )
-    },
+    renderPreview: renderRadioPreview,
   },
   checkbox: {
-    renderPreview: (el, pageType, rt) => {
-      // 画布模式（move-*）：统一硬编码预览选项，不解析 data_source
-      if (pageType?.startsWith('move-')) {
-        return <Checkbox.Group style={{ width: '100%' }} options={PREVIEW_OPTIONS} />
-      }
-      const runtimeOptions = rt?.getOptions?.(el)
-      const options = runtimeOptions?.length ? runtimeOptions : getStaticOptions(el)
-      return (
-        <Checkbox.Group style={{ width: '100%' }} options={options.length ? options : undefined} />
-      )
-    },
+    renderPreview: renderCheckboxPreview,
   },
   upload: {
     renderPreview: renderUploadPreview,
