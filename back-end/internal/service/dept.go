@@ -21,7 +21,63 @@ func DeptTree(curUserID uint, req *model.DeptListReq) ([]*model.Dept, error) {
 	if err := db.Order("sort ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err
 	}
-	return buildDeptTree(list, 0), nil
+	tree := buildDeptTree(list, 0)
+	fillDeptLeaderNames(tree)
+	return tree, nil
+}
+
+// deptLeaderString 负责人指针转字符串（组织树 DTO 用；nil 返回空串）
+func deptLeaderString(leader *uint) string {
+	if leader == nil {
+		return ""
+	}
+	return strconv.FormatUint(uint64(*leader), 10)
+}
+
+// fillDeptLeaderNames 批量填充部门树各节点的负责人昵称（leader_name），避免前端依赖额外用户接口
+func fillDeptLeaderNames(depts []*model.Dept) {	var all []*model.Dept
+	var walk func(list []*model.Dept)
+	walk = func(list []*model.Dept) {
+		for _, d := range list {
+			all = append(all, d)
+			if len(d.Children) > 0 {
+				walk(d.Children)
+			}
+		}
+	}
+	walk(depts)
+	if len(all) == 0 {
+		return
+	}
+	idSet := map[uint]bool{}
+	for _, d := range all {
+		if d.Leader != nil && *d.Leader > 0 {
+			idSet[*d.Leader] = true
+		}
+	}
+	if len(idSet) == 0 {
+		return
+	}
+	ids := make([]uint, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	var users []model.User
+	if err := database.DB.Preload("Profile").Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return
+	}
+	nameMap := map[uint]string{}
+	for _, u := range users {
+		nameMap[u.ID] = userNickname(u)
+	}
+	for _, d := range all {
+		if d.Leader == nil {
+			continue
+		}
+		if name, ok := nameMap[*d.Leader]; ok {
+			d.LeaderName = name
+		}
+	}
 }
 
 // DeptUsers 所有公司部门 + 每个部门下的用户（GET /depts/users）
@@ -77,7 +133,7 @@ func buildOrgTree(depts []*model.Dept, byDept map[uint][]model.User) []*model.Or
 			ID:       d.ID,
 			Name:     d.Name,
 			ParentID: d.ParentID,
-			Leader:   strconv.FormatUint(uint64(d.Leader), 10),
+			Leader:   deptLeaderString(d.Leader),
 			Sort:     d.Sort,
 			Status:   d.Status,
 		}

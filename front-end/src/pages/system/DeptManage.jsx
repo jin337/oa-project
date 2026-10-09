@@ -20,7 +20,7 @@ import {
   TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import { fetchAll } from 'src/api/fetchAll'
 import * as userApi from 'src/api/user'
@@ -67,10 +67,13 @@ export default function DeptManage() {
 
   // 负责人下拉选项：全量用户（展示优先 nickname，回退 username；搜索 nickname + username 均可命中）
   const [userOptions, setUserOptions] = useState([])
+  // 幂等守卫：避免 userOptions 状态变化导致上层 effect 重跑、重复请求
+  const usersLoadedRef = useRef(false)
 
-  // 负责人下拉选项：仅弹窗需要时按需拉取一次
+  // 负责人下拉选项：仅弹窗/页面需要时按需拉取一次（失败可重试）
   const ensureUserOptions = useCallback(async () => {
-    if (userOptions.length > 0) return
+    if (usersLoadedRef.current) return
+    usersLoadedRef.current = true
     try {
       const res = await fetchAll(userApi.listUsers)
       const users = res?.data?.list || res?.data || []
@@ -85,9 +88,10 @@ export default function DeptManage() {
         }),
       )
     } catch (e) {
+      usersLoadedRef.current = false // 失败时允许下次重试
       // 错误已在请求层提示
     }
-  }, [userOptions])
+  }, [])
 
   const fetchTree = useCallback(async () => {
     setLoading(true)
@@ -103,8 +107,7 @@ export default function DeptManage() {
 
   useEffect(() => {
     fetchTree()
-    ensureUserOptions()
-  }, [fetchTree, ensureUserOptions])
+  }, [fetchTree])
 
   const openCreate = (parentId) => {
     setEditing(null)
@@ -118,7 +121,7 @@ export default function DeptManage() {
     form.setFieldsValue({
       name: record.name,
       parent_id: record.parent_id || undefined,
-      leader: record.leader,
+      leader: record.leader ?? undefined,
       sort: record.sort,
       status: record.status,
     })
@@ -180,10 +183,7 @@ export default function DeptManage() {
       key: 'leader',
       title: '负责人',
       dataIndex: 'leader',
-      render: (v) => {
-        const u = userOptions.find((o) => o.value === v)
-        return u ? u.label : '-'
-      },
+      render: (v, record) => record.leader_name || '-',
     },
     { key: 'sort', title: '排序', dataIndex: 'sort', width: 80,align: 'center', },
     {

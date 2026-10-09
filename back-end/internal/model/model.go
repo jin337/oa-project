@@ -79,43 +79,43 @@ type ExamineGroup struct {
 //   - type=http：转发内部接口（method + target_path + params 模板，转发方法与对外方法一致）
 type ApiDefinition struct {
 	BaseModel
-	Name         string                 `gorm:"size:64;uniqueIndex;not null;comment:接口名称" json:"name"`
-	Method       string                 `gorm:"size:10;not null;default:GET;uniqueIndex:uk_api_def_method_path;comment:对外请求方法" json:"method"`
-	Path         string                 `gorm:"size:255;not null;uniqueIndex:uk_api_def_method_path;comment:对外路径" json:"path"`
-	Type         string                 `gorm:"size:10;not null;default:sql;comment:定义方式 sql|http" json:"type"`
-	SQLTemplate  string                 `gorm:"type:text;comment:SQL 模板(${form.xxx} 占位)" json:"sql_template"`
-	TargetPath   string                 `gorm:"size:255;comment:转发目标路径" json:"target_path"`
-	Params       map[string]interface{} `gorm:"serializer:json;type:json;comment:转发参数模板" json:"params"`
-	Status       int                    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
-	Sort         int                    `gorm:"default:1;comment:排序" json:"sort"`
-	Remark       string                 `gorm:"size:255;comment:备注" json:"remark"`
-	Referenced   int                    `gorm:"-" json:"referenced"` // 被表单元素引用次数（运行时统计，不入库）
+	Name        string                 `gorm:"size:64;uniqueIndex;not null;comment:接口名称" json:"name"`
+	Method      string                 `gorm:"size:10;not null;default:GET;uniqueIndex:uk_api_def_method_path;comment:对外请求方法" json:"method"`
+	Path        string                 `gorm:"size:255;not null;uniqueIndex:uk_api_def_method_path;comment:对外路径" json:"path"`
+	Type        string                 `gorm:"size:10;not null;default:sql;comment:定义方式 sql|http" json:"type"`
+	SQLTemplate string                 `gorm:"type:text;comment:SQL 模板(${form.xxx} 占位)" json:"sql_template"`
+	TargetPath  string                 `gorm:"size:255;comment:转发目标路径" json:"target_path"`
+	Params      map[string]interface{} `gorm:"serializer:json;type:json;comment:转发参数模板" json:"params"`
+	Status      int                    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
+	Sort        int                    `gorm:"default:1;comment:排序" json:"sort"`
+	Remark      string                 `gorm:"size:255;comment:备注" json:"remark"`
+	Referenced  int                    `gorm:"-" json:"referenced"` // 被表单元素引用次数（运行时统计，不入库）
 }
 
 type ApiDefinitionCreateReq struct {
-	Name         string                 `json:"name" validate:"required,min=1,max=64" label:"接口名称"`
-	Method       string                 `json:"method" validate:"required,oneof=GET POST PUT DELETE" label:"请求方法"`
-	Path         string                 `json:"path" validate:"required,min=1,max=255" label:"对外路径"`
-	Type         string                 `json:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
-	SQLTemplate  string                 `json:"sql_template" validate:"omitempty,max=8000" label:"SQL 模板"`
-	TargetPath   string                 `json:"target_path" validate:"omitempty,min=1,max=255" label:"转发目标路径"`
-	Params       map[string]interface{} `json:"params" validate:"omitempty" label:"转发参数模板"`
-	Status       int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
-	Sort         int                    `json:"sort" validate:"omitempty" label:"排序"`
-	Remark       string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
+	Name        string                 `json:"name" validate:"required,min=1,max=64" label:"接口名称"`
+	Method      string                 `json:"method" validate:"required,oneof=GET POST PUT DELETE" label:"请求方法"`
+	Path        string                 `json:"path" validate:"required,min=1,max=255" label:"对外路径"`
+	Type        string                 `json:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
+	SQLTemplate string                 `json:"sql_template" validate:"omitempty,max=8000" label:"SQL 模板"`
+	TargetPath  string                 `json:"target_path" validate:"omitempty,min=1,max=255" label:"转发目标路径"`
+	Params      map[string]interface{} `json:"params" validate:"omitempty" label:"转发参数模板"`
+	Status      int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Sort        int                    `json:"sort" validate:"omitempty" label:"排序"`
+	Remark      string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
 }
 
 type ApiDefinitionUpdateReq struct {
-	Name         string                 `json:"name" validate:"omitempty,min=1,max=64" label:"接口名称"`
-	Method       string                 `json:"method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"请求方法"`
-	Path         string                 `json:"path" validate:"omitempty,min=1,max=255" label:"对外路径"`
-	Type         string                 `json:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
-	SQLTemplate  string                 `json:"sql_template" validate:"omitempty,max=8000" label:"SQL 模板"`
-	TargetPath   string                 `json:"target_path" validate:"omitempty,min=1,max=255" label:"转发目标路径"`
-	Params       map[string]interface{} `json:"params" validate:"omitempty" label:"转发参数模板"`
-	Status       int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
-	Sort         int                    `json:"sort" validate:"omitempty" label:"排序"`
-	Remark       string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
+	Name        string                 `json:"name" validate:"omitempty,min=1,max=64" label:"接口名称"`
+	Method      string                 `json:"method" validate:"omitempty,oneof=GET POST PUT DELETE" label:"请求方法"`
+	Path        string                 `json:"path" validate:"omitempty,min=1,max=255" label:"对外路径"`
+	Type        string                 `json:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
+	SQLTemplate string                 `json:"sql_template" validate:"omitempty,max=8000" label:"SQL 模板"`
+	TargetPath  string                 `json:"target_path" validate:"omitempty,min=1,max=255" label:"转发目标路径"`
+	Params      map[string]interface{} `json:"params" validate:"omitempty" label:"转发参数模板"`
+	Status      int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Sort        int                    `json:"sort" validate:"omitempty" label:"排序"`
+	Remark      string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
 }
 
 type ApiDefinitionListReq struct {
@@ -149,7 +149,7 @@ const (
 	DataScopeCustom       = 2 // 自定义部门
 	DataScopeDept         = 3 // 仅本部门
 	DataScopeDeptAndBelow = 4 // 本部门及下级
-	DataScopeSelf          = 5 // 仅本人
+	DataScopeSelf         = 5 // 仅本人
 )
 
 // Menu 导航/菜单：目录、页面菜单、按钮/权限标识，parent_id 自关联成树
@@ -181,11 +181,12 @@ type Dept struct {
 	BaseModel
 	ParentID uint   `gorm:"index;default:0;comment:父级ID" json:"parent_id"`
 	Name     string `gorm:"size:64;not null;comment:部门名称" json:"name"`
-	Leader   uint   `gorm:"default:0;comment:负责人" json:"leader"`
+	Leader   *uint  `gorm:"comment:负责人" json:"leader"`
 	Sort     int    `gorm:"default:1;comment:排序" json:"sort"`
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 
-	Children []*Dept `gorm:"foreignKey:ParentID" json:"children,omitempty"`
+	LeaderName string  `gorm:"-" json:"leader_name,omitempty"` // 负责人昵称（联查填充，不入库）
+	Children   []*Dept `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
 
 // 组织架构树节点类型（GET /depts/users、GET /roles/users 混合树）
@@ -363,7 +364,7 @@ type MenuUpdateReq struct {
 type DeptCreateReq struct {
 	ParentID uint   `json:"parent_id" validate:"omitempty" label:"父级ID"`
 	Name     string `json:"name" validate:"required,min=1,max=64" label:"部门名称"`
-	Leader   uint   `json:"leader" validate:"omitempty" label:"负责人"`
+	Leader   *uint  `json:"leader" validate:"omitempty" label:"负责人"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 }
@@ -371,7 +372,7 @@ type DeptCreateReq struct {
 type DeptUpdateReq struct {
 	ParentID uint   `json:"parent_id" validate:"omitempty" label:"父级ID"`
 	Name     string `json:"name" validate:"omitempty,min=1,max=64" label:"部门名称"`
-	Leader   uint   `json:"leader" validate:"omitempty" label:"负责人"`
+	Leader   *uint  `json:"leader" validate:"omitempty" label:"负责人"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 }

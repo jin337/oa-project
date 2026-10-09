@@ -144,8 +144,8 @@ func seedInitData(db *gorm.DB) error {
 		return err
 	}
 	childDepts := []model.Dept{
-		{Name: "研发部", ParentID: rootDept.ID, Sort: 2, Status: 1},
-		{Name: "市场部", ParentID: rootDept.ID, Sort: 3, Status: 1},
+		{Name: "研发部", ParentID: rootDept.ID, Sort: 1, Status: 1},
+		{Name: "市场部", ParentID: rootDept.ID, Sort: 2, Status: 1},
 	}
 	if err := db.Create(&childDepts).Error; err != nil {
 		return err
