@@ -53,8 +53,8 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'timepicker', label: '时间选择', needDataSource: false, mockDetailValue: '14:30:00' },
   { value: 'switch', label: '开关', needDataSource: false, mockDetailValue: '是' },
   { value: 'upload', label: '文件上传', needDataSource: false, mockDetailValue: '示例附件.pdf' },
-  { value: 'deptselect', label: '部门选择', needDataSource: true, mockDetailValue: '公司' },
-  { value: 'userselect', label: '人员选择', needDataSource: true, mockDetailValue: 'admin' },
+  { value: 'deptselect', label: '部门选择', needDataSource: true, mockDetailValue: '部门' },
+  { value: 'userselect', label: '人员选择', needDataSource: true, mockDetailValue: '人员' },
 ]
 
 // —— 表格密度选项 ——

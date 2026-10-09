@@ -6,7 +6,7 @@ import {
   getStaticOptions,
 } from '../utils/formUtils'
 import { DeptReadOnly } from './DeptElement'
-import { renderUploadReadOnly } from './UploadElement'
+import { UploadReadOnly } from './UploadElement'
 import { UserReadOnly } from './UserElement'
 
 /**
@@ -37,7 +37,7 @@ const labelOfValue = (value, dataSource) => {
 export const ReadonlyValue = ({ value, elementType, dataSource, el }) => {
   // upload 类型：走 UploadElement 的只读渲染
   if (elementType === 'upload') {
-    return renderUploadReadOnly(value, el)
+    return <UploadReadOnly value={value} el={el} />
   }
   // deptselect 类型：数据源自加载反查部门名
   if (elementType === 'deptselect') {
@@ -61,25 +61,11 @@ export const ReadonlyValue = ({ value, elementType, dataSource, el }) => {
 }
 
 /** 按元素类型生成与类型匹配的模拟展示值（不解析真实 data_source）；
- * 示例值来自 ELEMENT_TYPE_OPTIONS 的 mockDetailValue（类型注册表单一事实源），未注册的类型回退默认值 */
+ * 示例值来自 ELEMENT_TYPE_OPTIONS 的 mockDetailValue（类型注册表单一事实源），未注册的类型回退默认值；
+ * 所有字段类型统一返回示例字符串，upload 的字符串兜底渲染（单条蓝色文件链接）由
+ * UploadReadOnly 的展示层兜底完成——mock 层不感知字段数据结构 */
 const getMockDetailValue = (el) =>
   ELEMENT_TYPE_OPTIONS.find((o) => o.value === el?.element_type)?.mockDetailValue ?? '示例值'
-
-/** upload 模拟值：构造文件数组喂 renderUploadReadOnly（蓝色链接 + placeholder 提示），
- * 单选（multiple === false）1 条、多选派生 2 条（扩展名前插入序号） */
-const resolveUploadMock = (el) => {
-  const base =
-    ELEMENT_TYPE_OPTIONS.find((o) => o.value === 'upload')?.mockDetailValue ?? '示例附件.pdf'
-  const names =
-    el?.multiple === false
-      ? [base]
-      : [base, /\.\w+$/.test(base) ? base.replace(/\.(\w+)$/, '2.$1') : `${base}2`]
-  return names.map((name) => ({ name, url: '' }))
-}
-
-/** 单个元素（字段/列）的模拟值：upload 返回文件数组，其余返回类型注册的示例文本 */
-const resolveMockValue = (el) =>
-  el?.element_type === 'upload' ? resolveUploadMock(el) : getMockDetailValue(el)
 
 /** 由表单布局元素构造完整模拟数据（主表字段 + 子表 2 行）：
  * - 主表元素：{ [field_key]: mockValue }
@@ -92,7 +78,7 @@ export const buildMockFormData = (elements) => {
         const row = {}
         ;(el.columns || []).forEach((col) => {
           const colKey = col.dataIndex || col.field_key
-          if (colKey) row[colKey] = resolveMockValue(col)
+          if (colKey) row[colKey] = getMockDetailValue(col)
         })
         return row
       })
@@ -100,7 +86,7 @@ export const buildMockFormData = (elements) => {
       return
     }
     const key = el.field_key || el.name
-    if (key) data[key] = resolveMockValue(el)
+    if (key) data[key] = getMockDetailValue(el)
   })
   return data
 }

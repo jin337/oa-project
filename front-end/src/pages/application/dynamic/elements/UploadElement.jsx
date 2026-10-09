@@ -11,7 +11,7 @@ import { RuntimeFormContext } from '../DynamicForm'
  *   - form        可交互上传（实际表单填写）
  *   - move-form   画布预览（可交互形态占位）
  *   - detail / move-detail 只读回显由 renderFormItemElement 统一拦截：经 ReadonlyValue →
- *     renderUploadReadOnly 渲染文件列表（move-detail 注入模拟文件数组）
+ *     UploadReadOnly 渲染文件列表（move-detail 注入模拟文件，字符串兜底为单条链接）
  */
 export function UploadElement({ el, pageType, value, onChange }) {
   // Arco FormItem 注入 value：直接作为受控值
@@ -20,7 +20,7 @@ export function UploadElement({ el, pageType, value, onChange }) {
 
   // detail：只读展示
   if (pageType === 'detail') {
-    return renderUploadReadOnly(fileList, el)
+    return <UploadReadOnly value={fileList} el={el} />
   }
 
   // form / move-form：可交互上传
@@ -96,14 +96,16 @@ function normalizeOne(item) {
   }
 }
 
-/** 只读渲染：解析 JSON 字符串/数组，渲染文件链接/图片预览（供 detail 模式调用） */
-export function renderUploadReadOnly(value, el) {
+/** 上传只读展示（与 DeptReadOnly / UserReadOnly 同款命名）：
+ * 解析 JSON 字符串/数组，渲染文件链接/图片预览（供 detail / move-detail 模式调用）；
+ * 非 JSON 的普通字符串（如画布 mock 示例值）兜底为单条文件链接，避免显示空态 */
+export function UploadReadOnly({ value, el }) {
   let list = value
   if (typeof list === 'string') {
     try {
       list = JSON.parse(list)
     } catch {
-      list = null
+      list = [{ name: value }]
     }
   }
 
