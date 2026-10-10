@@ -459,7 +459,7 @@ export default function TableManage() {
             field="type"
             rules={[{ required: true, message: '请选择字段类型' }]}
           >
-            <Select placeholder="请选择类型" allowClear>
+            <Select placeholder="请选择类型" allowClear showSearch>
               {FIELD_TYPES.map((t) => (
                 <Select.Option key={t} value={t}>
                   {t}
