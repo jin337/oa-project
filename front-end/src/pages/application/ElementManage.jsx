@@ -129,115 +129,122 @@ const CONFIG_HELP_CONTENT = (
     <ul className="mb-3 list-disc pl-4">
       <li>
         <b className="text-gray-700">字段分类</b>：该元素所属的数据表（主表 /
-        子表），决定数据写入哪张表
+        子表），决定数据写入哪张表；
       </li>
       <li>
-        <b className="text-gray-700">对应字段</b>
-        {'：'}表中的具体列，决定数据存到哪个字段；切换数据表后需要重新选择
+        <b className="text-gray-700">对应字段</b>{'：'}表中的具体列，决定数据存到哪个字段；切换数据表后需要重新选择；
       </li>
       <li>
-        <b className="text-gray-700">名称</b>
-        {'：'}表单上显示的标签；选择字段后自动带出字段注释，可手动修改
+        <b className="text-gray-700">名称</b>{'：'}表单上显示的标签；选择字段后自动带出字段注释，可手动修改；
       </li>
       <li>
-        <b className="text-gray-700">元素类型</b>：决定渲染成什么控件；下拉选择 / 树选择 / 单选框 /
-        多选框需要配置数据源，其余类型不需要
+        <b className="text-gray-700">元素类型</b>：决定渲染成什么控件
+        <div className="mt-1">
+          无需数据源：单行输入 / 多行文本 / 数字输入 / 日期 / 开关 / 文件上传；
+        </div>
+        <div>需配置数据源：下拉选择 / 树选择 / 单选框 / 多选框 / …等其他自定义组件；</div>
+        <div>
+          自定义组件选择后如需数据源，自动按默认数据源填充（{'GET /depts'}、{'GET /user-list'}
+          ），无需手动配置接口；
+        </div>
       </li>
       <li>
-        <b className="text-gray-700">默认值</b>：新增表单时仅当该字段为空才填充。输入类填文本；下拉
-        / 单选填选项的「提交值」；多选类（多选框、树选择多选）填 JSON 数组 {'["a","b"]'} 或逗号分隔
-        a,b；如需按其它字段动态生成，请用下方「事件驱动与联动」的「初始化触发 + 直接赋值」
+        <b className="text-gray-700">默认值</b>：新增表单时仅当该字段为空才填充。
+        <div>输入类填文本；下拉 / 单选填选项的「提交值」；</div>
+        <div>多选类（多选框、树选择多选）填 JSON 数组 {'["a","b"]'} 或逗号分隔 a,b；</div>
+        <div>如需按其它字段动态生成，请用下方「事件驱动与联动」的「初始化触发 + 直接赋值」；</div>
       </li>
       <li>
-        <b className="text-gray-700">占位提示</b>
-        {'：'}控件内的灰色提示文字；文件上传元素中作为上传区的提示语
+        <b className="text-gray-700">占位提示</b>{'：'}控件内的灰色提示文字；文件上传元素中作为上传区的提示语；
       </li>
     </ul>
 
     <div className="mb-1 font-medium text-gray-800">二、校验与显示控制</div>
     <ul className="mb-3 list-disc pl-4">
       <li>
-        <b className="text-gray-700">校验规则</b>：两种写法，留空表示不校验
-        <div className="mt-1">① 正则：{'/^1[3-9]\\d{9}$/'}（以 / 开头，可带 i 等修饰符）</div>
+        <b className="text-gray-700">校验规则</b>：两种写法，留空表示不校验；
+        <div className="mt-1">① 正则：{'/^1[3-9]\\d{9}$/'}（以 / 开头，可带 i 等修饰符）；</div>
         <div>
-          ② 表达式：含 {'${}'}，求值为 true 才通过，如 {'${form.end_date} > ${form.start_date}'}
+          ② 表达式：含 {'${}'}，求值为 true 才通过，如 {'${form.end_date} > ${form.start_date}'}；
         </div>
       </li>
       <li>
-        <b className="text-gray-700">错误提示</b>：校验不通过时的文案，留空使用默认提示
+        <b className="text-gray-700">错误提示</b>：校验不通过时的文案，留空使用默认提示；
       </li>
       <li>
-        <b className="text-gray-700">是否必填</b>：为空时拦截提交（详情 / 审批只读场景不生效）
+        <b className="text-gray-700">是否必填</b>：为空时拦截提交（详情 / 审批只读场景不生效）；
       </li>
       <li>
-        <b className="text-gray-700">列表列显示</b>：勾选后该字段作为列表页的一列
+        <b className="text-gray-700">列表列显示</b>：勾选后该字段作为列表页的一列；
       </li>
       <li>
-        <b className="text-gray-700">搜索项显示</b>：勾选后该字段作为列表页的搜索条件
+        <b className="text-gray-700">搜索项显示</b>：勾选后该字段作为列表页的搜索条件；
       </li>
     </ul>
 
     <div className="mb-1 font-medium text-gray-800">三、动态状态控制</div>
     <ul className="mb-3 list-disc pl-4">
       <li>
-        <b className="text-gray-700">动态显隐</b>：表达式为 true 时才显示该元素
+        <b className="text-gray-700">动态显隐</b>：表达式为 true 时才显示该元素；
       </li>
       <li>
-        <b className="text-gray-700">动态禁用 / 只读</b>：表达式为 true 时禁用该控件
+        <b className="text-gray-700">动态禁用 / 只读</b>：表达式为 true 时禁用该控件；
       </li>
       <li>
         语法：用 {'${form.字段}'} 引用表单字段值（支持点路径，如 {'${form.user.dept_id}'}）；支持{' '}
-        {'=== !== == != > < >= <= && || !'} 与算术 {'+ - * / %'}
+        {'=== !== == != > < >= <= && || !'} 与算术 {'+ - * / %'}；
       </li>
       <li>
         可直接填 {'1'} / {'true'} 为真，{'0'} / {'false'} 为假，不必写比较表达式；也可用 {'${true}'}
-        、{'${1000}'} 这类带 {'${}'} 的字面量
+        、{'${1000}'} 这类带 {'${}'} 的字面量；
       </li>
       <li>
         示例：
-        <div className="mt-1">{'1'}（恒为真：始终显示 / 始终禁用）</div>
-        <div>{'0'}（恒为假：始终隐藏 / 不禁用）</div>
-        <div>{'${form.country_id} === "CN"'}</div>
-        <div>{'${form.amount} > 1000 && ${form.type} === "A"'}</div>
-        <div>{'${form.user_id} === ""'}（未选择用户时禁用）</div>
+        <div className="mt-1">{'1'}（恒为真：始终显示 / 始终禁用）;</div>
+        <div>{'0'}（恒为假：始终隐藏 / 不禁用）;</div>
+        <div>{'${form.country_id} === "CN"'};</div>
+        <div>{'${form.amount} > 1000 && ${form.type} === "A"'};</div>
+        <div>{'${form.user_id} === ""'}（未选择用户时禁用）；</div>
       </li>
       <li>
-        留空时：动态显隐默认显示、动态禁用默认不禁用；但表达式写错或求值失败按 false
-        处理，动态显隐会因此把元素隐藏
+        留空时：动态显隐默认显示、动态禁用默认不禁用；但表达式写错或求值失败按 false 处理，动态显隐会因此把元素隐藏；
       </li>
       <li>
         判断字段值注意类型：数字 {'0'} 直接写 {'${form.字段}'}{' '}
         即为假；选项「提交值」存的是字符串，值为 {'"0"'} 时 {'${form.字段}'} 仍为真，需写{' '}
-        {'${form.字段} === "0"'}
+        {'${form.字段} === "0"'}；
       </li>
     </ul>
 
-    <div className="mb-1 font-medium text-gray-800">
-      四、数据源配置（仅下拉选择 / 树选择 / 单选框 / 多选框显示）
-    </div>
+    <div className="mb-1 font-medium text-gray-800">四、数据源配置</div>
     <ul className="mb-3 list-disc pl-4">
       <li>
-        <b className="text-gray-700">静态数据</b>
-        {'：'}手动添加选项，「显示标签」是界面文案，「提交值」是实际存库的值
+        <b className="text-gray-700">静态数据</b>{'：'}手动添加选项，「显示标签」是界面文案，「提交值」是实际存库的值；
       </li>
       <li>
         <b className="text-gray-700">动态接口</b>：
         <div className="mt-1">
-          接口地址：支持 {'${form.xxx}'} 路径模板，如 {'/dept/list?pid=${form.parent_id}'}
+          接口地址：支持 {'${form.xxx}'} 路径模板，如 {'/dept/list?pid=${form.parent_id}'};
         </div>
-        <div>请求方法：GET / POST / PUT / DELETE</div>
+        <div>请求方法：GET / POST / PUT / DELETE;</div>
+        <div>
+          引用接口：从「接口管理」选择一个接口，自动回填接口地址（对外路径）与请求方法
+          ，并禁用这两个输入框（由接口管理统一维护）；显示标签 / 对应值 / 请求参数仍可修改
+          ；可「取消引用」恢复手动编辑；
+        </div>
         <div>
           请求参数：JSON，值支持 {'${form.xxx}'}，如 {'{"user_id":"${form.id}","page":1}'}
+          ；右侧「格式化」按钮为未加引号的键值补双引号（重复点击幂等，已加引号的保持不变）；
         </div>
         <div>
           显示标签：接口返回的单条数据用 {'${item.xxx}'} 取，如 {'${item.id}-${item.name}'}
         </div>
-        <div>对应值：写入表单 / 存库的值，如 {'${item.id}'}</div>
+        <div>对应值：写入表单 / 存库的值，如 {'${item.id}'}；</div>
       </li>
-      <li>参数或标签里引用了 {'${form.xxx}'} 时，该字段变化会自动重新请求刷新选项</li>
+      <li>参数或标签里引用了 {'${form.xxx}'} 时，该字段变化会自动重新请求刷新选项；</li>
       <li>
         无前缀的 {'${xxx}'} 视为表单字段简写（等价 {'${form.xxx}'}）；引用接口数据必须显式写{' '}
-        {'${item.xxx}'}
+        {'${item.xxx}'}；
       </li>
     </ul>
 
@@ -245,46 +252,50 @@ const CONFIG_HELP_CONTENT = (
     <div className="mb-1 text-gray-700">触发时机（每个时机可配置多条规则）</div>
     <ul className="mb-2 list-disc pl-4">
       <li>
-        <b className="text-gray-700">初始化触发</b>：表单加载后执行一次，适合打开即带出的数据
+        <b className="text-gray-700">初始化触发</b>：表单加载后执行一次，适合打开即带出的数据；
       </li>
       <li>
-        <b className="text-gray-700">值改变触发</b>：仅当该元素自身字段值变化时执行
+        <b className="text-gray-700">值改变触发</b>：仅当该元素自身字段值变化时执行；
       </li>
       <li>
-        <b className="text-gray-700">失焦触发</b>：控件失焦时执行
+        <b className="text-gray-700">失焦触发</b>：控件失焦时执行；
       </li>
     </ul>
     <div className="mb-1 text-gray-700">动作类型</div>
     <ul className="list-disc pl-4">
       <li>
         <b className="text-gray-700">直接赋值</b>：配置多条「来源 →
-        目标字段」映射，可一次写入多个字段
+        目标字段」映射，可一次写入多个字段；
         <div className="mt-1">
-          来源写 {'item.xxx'}：取当前选中项的字段，如 {'item.city_name'}
+          来源写 {'item.xxx'}：取当前选中项的字段，如 {'item.city_name'}；
         </div>
-        <div>来源写 {'form.xxx'}：取表单其它字段；不含前缀时按选中项字段取</div>
+        <div>来源写 {'form.xxx'}：取表单其它字段；不含前缀时按选中项字段取；</div>
         <div>
-          含 {'${}'} 时按拼接处理，如 {'${item.id}-${item.name}'}
+          含 {'${}'} 时按拼接处理，如 {'${item.id}-${item.name}'}；
         </div>
-        <div>目标字段从当前数据表的字段中选择；目标等于触发字段自身时会自动跳过</div>
+        <div>目标字段从当前数据表的字段中选择；目标等于触发字段自身时会自动跳过；</div>
       </li>
       <li>
         <b className="text-gray-700">请求并填充</b>：先请求接口，再按映射填充目标字段
         <div className="mt-1">
           接口地址 / 请求方法 / 请求参数：规则同数据源，参数支持 {'${form.xxx}'} 与 {'${item.xxx}'}
+          ；
         </div>
-        <div>目标字段的来源是「接口响应里的字段路径」（点路径），如 {'user.city_name'}</div>
+        <div>
+          同样支持「引用接口」（回填并禁用地址 / 方法）；请求参数右侧「格式化」按钮可补键值双引号；
+        </div>
+        <div>目标字段的来源是「接口响应里的字段路径」（点路径），如 {'user.city_name'}；</div>
         <div>公共计算 / 转换接口 {'POST /utils/calculate'} 支持的类型：</div>
         <ul className="list-disc pl-4">
           <li className="mt-1">
             <b className="text-gray-700">{'number_to_upper'}</b>：数字转大写金额，请求{' '}
-            {'{"type":"number_to_upper","value":100000}'} → 返回 {'{"result":"壹拾万元整"}'}
+            {'{"type":"number_to_upper","value":100000}'} → 返回 {'{"result":"壹拾万元整"}'}；
           </li>
           <li>
             <b className="text-gray-700">{'calc'}</b>：表达式计算（支持加减乘除取模和括号），请求{' '}
-            {'{"type":"calc","value":"(100+2)*3 % 7"}'} → 返回 {'{"result":5}'}
+            {'{"type":"calc","value":"(100+2)*3 % 7"}'} → 返回 {'{"result":5}'}；
           </li>
-          <li>支持的运算：+、-、*、/、%、()；支持小数、负数，空格自动忽略</li>
+          <li>支持的运算：+、-、*、/、%、()；支持小数、负数，空格自动忽略；</li>
         </ul>
       </li>
     </ul>
@@ -873,7 +884,7 @@ export default function ElementManage() {
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} trigger='click' position="br">
+          <Dropdown droplist={sizeMenu} trigger="click" position="br">
             <Button size="small" icon={<IconList />}>
               密度
             </Button>
