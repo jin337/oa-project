@@ -367,7 +367,7 @@ function compactSql(text) {
 // 高亮层与 textarea 同宽同字体同折行规则，关键字（KW 集合）蓝色加粗；
 // textarea 文字透明仅保留光标/选择，负责输入与滚动；滚动时高亮层/行号列同步。
 // 每逻辑行折行段数通过高亮层测量，折行段行号补空白行，行号与视觉行严格对齐。
-function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRows, maxRows, id }) {
+function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRows, maxRows, id,full }) {
   const gutterRef = useRef(null)
   const highlightRef = useRef(null)
   const [wrapSegs, setWrapSegs] = useState([])
@@ -407,7 +407,7 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
   const handleNativeChange = (e) => onChange?.(e.target.value, e)
 
   return (
-    <div className="flex" style={{ height, ...fontStyle }}>
+    <div className="flex" style={{ height, ...fontStyle , ...(full?{height:'calc(100% - 34px)'}:{})}}>
       <pre
         ref={gutterRef}
         className="m-0 overflow-hidden border-r border-gray-200 bg-gray-50 py-1 pr-2 text-right text-gray-400 select-none"
@@ -422,7 +422,7 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
           </div>
         ))}
       </pre>
-      <div className="relative flex-1 overflow-hidden bg-gray-50" style={{ height }}>
+      <div className="relative flex-1 overflow-hidden bg-gray-50 h-full" >
         {/* 语法高亮层：关键字蓝色加粗；与 textarea 同尺寸同折行规则，随 textarea 滚动 */}
         <div
           ref={highlightRef}
@@ -528,7 +528,7 @@ export default function SqlEditor(props) {
           footer={null}
           closable={false}
           style={{ width: '100%', height: '100%' }}
-          className="[&_.arco-modal-content]:p-0!"
+          className="[&_.arco-modal-content]:h-[calc(100vh-48px)] [&_.arco-modal-content]:p-0!"
           onCancel={() => setFullscreen(false)}
           unmountOnExit
         >
@@ -543,6 +543,7 @@ export default function SqlEditor(props) {
               maxLength,
               minRows: 16,
               maxRows: 40,
+              full: true,
             },
           )}
         </Modal>
