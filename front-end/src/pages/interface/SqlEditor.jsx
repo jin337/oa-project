@@ -82,6 +82,10 @@ const CLAUSE_TOP = new Set([
   'UPDATE',
 ])
 
+// CASE 块内缩进单字关键字：CASE/END 缩进 4、WHEN/ELSE 缩进 8（各独占一行，后续内容同行）
+const CLAUSE_INDENT = new Set(['CASE', 'END'])
+const CLAUSE_INDENT_DEEP = new Set(['WHEN', 'ELSE'])
+
 // 独占一行（顶格）的复合子句
 const COMPOUND_TOP = new Set(['INSERT INTO', 'DELETE FROM', 'GROUP BY', 'ORDER BY', 'UNION ALL'])
 
@@ -198,6 +202,7 @@ function formatSql(text) {
   let indent = '' // 当前行缩进
   let depth = 0 // 括号深度
   let lastIsDot = false
+  let lastIsOpenParen = false // 上一 token 是 '('（其后内容紧贴不空格）
   let pending = false // 子句关键字后，下一 token 换行（缩进由 indent 决定）
 
   // 输出当前行并清空（indent 保留，供后续行沿用）
@@ -207,17 +212,19 @@ function formatSql(text) {
     pending = false
   }
   const isPunct = (ch) => ch === ',' || ch === '(' || ch === ')' || ch === ';' || ch === '.'
-  // 标点紧贴前一 token；普通 token 空格分隔（. 后不空格）
+  // 标点紧贴前一 token；普通 token 空格分隔（. 后与 ( 后不空格）
   const append = (t) => {
     if (isPunct(t)) {
       if (cur.endsWith(' ')) cur = cur.slice(0, -1)
       cur += t
       lastIsDot = t === '.'
+      lastIsOpenParen = false
       return
     }
-    if (cur && cur.trim() && !lastIsDot) cur += ' '
+    if (cur && cur.trim() && !lastIsDot && !lastIsOpenParen) cur += ' '
     cur += t
     lastIsDot = false
+    lastIsOpenParen = false
   }
   // 普通 token：子句关键字刚结束时换行（indent 已由括号/子句逻辑设置，仅空 indent 时补默认 4）
   const addToken = (t) => {
@@ -236,10 +243,10 @@ function formatSql(text) {
     cur = kw
     pending = true
   }
-  // 块内关键字（JOIN 系）：独占一行（缩进 4），后续内容同行
-  const startIndented = (kw) => {
+  // 块内关键字（JOIN 系 / CASE 块）：独占一行（默认缩进 4，可指定层级），后续内容同行
+  const startIndented = (kw, level = 4) => {
     flush()
-    indent = '    '
+    indent = ' '.repeat(level)
     cur = kw
     pending = false
   }
@@ -267,10 +274,20 @@ function formatSql(text) {
       startClause(t)
       continue
     }
-    // 逗号（任意括号层级）：保留在行尾，换行缩进与上一行同级
+    // 块内缩进关键字（CASE 块内 CASE/END 缩进 4）：独占一行，后续内容同行
+    if (CLAUSE_INDENT.has(t) && depth === 0) {
+      startIndented(t)
+      continue
+    }
+    // CASE 块内 WHEN/ELSE 深一层缩进 8：独占一行，后续内容同行
+    if (CLAUSE_INDENT_DEEP.has(t) && depth === 0) {
+      startIndented(t, 8)
+      continue
+    }
+    // 逗号：括号外（顶层 SELECT 列列表）保留在行尾换行；括号内（函数/列表/子查询）同行
     if (t === ',') {
       addToken(t)
-      flush()
+      if (depth === 0) flush()
       continue
     }
     // 括号外 AND/OR：换行缩进 4
@@ -280,21 +297,27 @@ function formatSql(text) {
       cur = t
       continue
     }
-    // 函数调用括号：挂行尾后换行，参数行缩进加一级
+    // 左括号：紧贴挂行尾，括号内内容不换行（不加深缩进）。
+    // 函数名/标识符后紧贴（JSON_OBJECT( / COUNT(），关键字、运算符、标点后保留空格（IN ( / AND ( / = (）
     if (t === '(') {
-      append(t)
+      const prevIdent =
+        k > 0 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(norm[k - 1]) && !KW.has(norm[k - 1].toUpperCase())
+      if (prevIdent) {
+        if (cur.endsWith(' ')) cur = cur.slice(0, -1)
+      } else if (cur && !cur.endsWith(' ')) {
+        cur += ' '
+      }
+      cur += '('
       depth++
-      flush()
-      indent += '    '
-      pending = true
+      lastIsOpenParen = true
       continue
     }
-    // 闭合括号：缩进退回函数行层级，括号紧贴最后参数
+    // 右括号：紧贴最后参数结束（缩进不变，括号内未加深）
     if (t === ')') {
       depth = Math.max(0, depth - 1)
-      if (indent.length >= 4) indent = indent.slice(0, -4)
       if (cur.endsWith(' ')) cur = cur.slice(0, -1)
       cur += t
+      lastIsOpenParen = false
       continue
     }
     addToken(t)
