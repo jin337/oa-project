@@ -1,5 +1,5 @@
 import { Button, Modal, Space } from '@arco-design/web-react'
-import { IconFullscreen, IconFullscreenExit } from '@arco-design/web-react/icon'
+import { IconCode, IconFullscreen, IconFullscreenExit } from '@arco-design/web-react/icon'
 import { useLayoutEffect, useRef, useState } from 'react'
 
 // ──────────────────────────────── SQL 工具 ────────────────────────────────
@@ -94,6 +94,44 @@ const COMPOUND_INDENT = new Set([
   'CROSS JOIN',
   'FULL JOIN',
 ])
+
+// 常用函数（MySQL 直查高频）：JSON 系 / 聚合 / 条件 / 字符串 / 数值 / 日期
+const SQL_FUNCS = [
+  // JSON
+  'JSON_OBJECT', 'JSON_ARRAY', 'JSON_ARRAYAGG', 'JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_SET',
+  // 聚合
+  'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'GROUP_CONCAT',
+  // 条件
+  'IF', 'IFNULL', 'COALESCE', 'NULLIF',
+  // 字符串
+  'CONCAT', 'CONCAT_WS', 'SUBSTRING', 'REPLACE', 'TRIM', 'UPPER', 'LOWER', 'LENGTH', 'FIND_IN_SET',
+  // 数值
+  'ROUND', 'FLOOR', 'CEIL', 'ABS',
+  // 日期
+  'NOW', 'CURDATE', 'DATE_FORMAT', 'DATE', 'YEAR', 'MONTH', 'DAY',
+  // 类型转换
+  'CAST',
+]
+
+// 常用 DDL / 语句关键字
+const SQL_EXTRA = [
+  'TABLE', 'DATABASE', 'SCHEMA', 'SHOW', 'USE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'RENAME',
+  'PRIMARY', 'FOREIGN', 'REFERENCES', 'INDEX', 'UNIQUE', 'DEFAULT', 'AUTO_INCREMENT', 'COMMENT', 'ENGINE',
+  'BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION',
+]
+
+// 输入提示词库：KW 单词 + 复合子句 + 函数 + 扩展关键字，去重后短词优先
+const SUGGEST_POOL = Array.from(
+  new Set([
+    ...Array.from(KW),
+    ...Object.entries(PREFIX_FOLLOW).map(([a, b]) => `${a} ${b}`),
+    ...Array.from(CLAUSE_TOP),
+    ...Array.from(COMPOUND_TOP),
+    ...Array.from(COMPOUND_INDENT),
+    ...SQL_FUNCS,
+    ...SQL_EXTRA,
+  ]),
+).sort((a, b) => a.length - b.length || a.localeCompare(b))
 
 function tokenize(src) {
   const toks = []
@@ -329,7 +367,7 @@ const highlightLine = (line) => {
     } else if (/[0-9]/.test(c)) {
       let j = i
       while (j < n && /[0-9.]/.test(line[j])) j++
-      emit(line.slice(i, j))
+      html += `<span style="color:#00b42a">${escapeHtml(line.slice(i, j))}</span>`
       i = j
     } else {
       emit(c)
@@ -370,7 +408,14 @@ function compactSql(text) {
 function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRows, maxRows, id,full }) {
   const gutterRef = useRef(null)
   const highlightRef = useRef(null)
+  const taRef = useRef(null)
+  // 光标位置测量：measureRef 渲染光标行前缀 + marker，markerRef 坐标即光标像素位置
+  const measureRef = useRef(null)
+  const markerRef = useRef(null)
   const [wrapSegs, setWrapSegs] = useState([])
+  const [suggestions, setSuggestions] = useState([])
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [caretPos, setCaretPos] = useState({ top: 0, left: 0 })
   const lines = value ? value.split('\n') : ['']
   const ROW_H = 20
   // 总视觉行数 = 各逻辑行折行段数之和（未测量时按逻辑行数估算）
@@ -403,8 +448,99 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
     }
   }
 
+  // 提示打开时测量光标像素位置（相对文本容器）：累计前序行的 offsetTop + 光标行内前缀的 offsetLeft
+  useLayoutEffect(() => {
+    if (!suggestions.length || !measureRef.current || !markerRef.current) return
+    setCaretPos({ top: markerRef.current.offsetTop, left: markerRef.current.offsetLeft })
+  }, [suggestions, value])
+
+  // 输入后计算补全候选：光标前最后一个词长度 >= 2 且命中词库才提示
+  const computeSuggestions = (src) => {
+    const ta = taRef.current
+    const pos = ta ? ta.selectionStart : src.length
+    const before = src.slice(0, pos)
+    const m = before.match(/([A-Za-z_][A-Za-z0-9_]*)$/)
+    if (!m || m[1].length < 2) {
+      setSuggestions([])
+      return
+    }
+    const pre = m[1].toLowerCase()
+    const hits = SUGGEST_POOL.filter((s) => s.toLowerCase().startsWith(pre))
+    setSuggestions(hits)
+    setActiveIdx(0)
+  }
+
+  // 填入候选：替换光标前的当前词，光标移到填入内容末尾
+  const applySuggestion = (s) => {
+    const ta = taRef.current
+    const pos = ta ? ta.selectionStart : value.length
+    const before = value.slice(0, pos)
+    const m = before.match(/([A-Za-z_][A-Za-z0-9_]*)$/)
+    const wordStart = m ? pos - m[1].length : pos
+    const next = value.slice(0, wordStart) + s + value.slice(ta ? ta.selectionEnd : pos)
+    onChange?.(next)
+    setSuggestions([])
+    requestAnimationFrame(() => {
+      if (!ta) return
+      const p = wordStart + s.length
+      ta.focus()
+      ta.setSelectionRange(p, p)
+    })
+  }
+
   // 原生 textarea 的 onChange 传事件对象，需转为 (value, event) 以匹配外层受控接口
-  const handleNativeChange = (e) => onChange?.(e.target.value, e)
+  const handleNativeChange = (e) => {
+    onChange?.(e.target.value, e)
+    computeSuggestions(e.target.value)
+  }
+
+  // 键盘：Enter 补全（提示打开时）/ 自动缩进；上下键切换候选；Esc 关闭提示
+  const handleKeyDown = (e) => {
+    const ta = e.target
+    if (e.key === 'Enter' && suggestions.length > 0) {
+      e.preventDefault()
+      applySuggestion(suggestions[activeIdx])
+      return
+    }
+    if (e.key === 'ArrowDown' && suggestions.length > 0) {
+      e.preventDefault()
+      setActiveIdx((i) => (i + 1) % suggestions.length)
+      return
+    }
+    if (e.key === 'ArrowUp' && suggestions.length > 0) {
+      e.preventDefault()
+      setActiveIdx((i) => (i - 1 + suggestions.length) % suggestions.length)
+      return
+    }
+    if (e.key === 'Escape') {
+      setSuggestions([])
+      return
+    }
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    // 回车换行：新行自动继承当前行的前导空白缩进，光标定位到缩进之后（与上一行对齐）
+    const pos = ta.selectionStart
+    const end = ta.selectionEnd
+    const lineStart = value.lastIndexOf('\n', pos - 1) + 1
+    const indent = (value.slice(lineStart, pos).match(/^[ \t]*/) || [''])[0]
+    const next = value.slice(0, pos) + '\n' + indent + value.slice(end)
+    onChange?.(next, e)
+    requestAnimationFrame(() => {
+      const p = pos + 1 + indent.length
+      ta.focus()
+      ta.setSelectionRange(p, p)
+    })
+  }
+
+  // 光标测量层内容：提示打开时渲染到光标行（前序行完整 + 光标行前缀 + marker）
+  let measureLines = null
+  if (suggestions.length > 0) {
+    const pos = taRef.current ? taRef.current.selectionStart : value.length
+    const upTo = value.slice(0, pos)
+    const lineIdx = upTo.split('\n').length - 1
+    const prefix = upTo.slice(upTo.lastIndexOf('\n') + 1)
+    measureLines = [...lines.slice(0, lineIdx), prefix]
+  }
 
   return (
     <div className="flex" style={{ height, ...fontStyle , ...(full?{height:'calc(100% - 34px)'}:{})}}>
@@ -437,9 +573,12 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
         {/* 透明输入层：文字透明仅保留光标/选区，placeholder 通过外部样式保持可见 */}
         <textarea
           id={id}
+          ref={taRef}
           value={value}
           onChange={handleNativeChange}
+          onKeyDown={handleKeyDown}
           onFocus={onFocus}
+          onBlur={() => setSuggestions([])}
           onScroll={syncScroll}
           placeholder={placeholder}
           maxLength={maxLength}
@@ -455,6 +594,47 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
             overflow: 'auto',
           }}
         />
+        {/* 光标测量层：提示打开时渲染到光标位置，marker 坐标即光标像素位置 */}
+        {suggestions.length > 0 && (
+          <div
+            ref={measureRef}
+            aria-hidden
+            className="absolute inset-0 invisible"
+            style={{ ...fontStyle, ...padStyle, whiteSpace: 'pre-wrap', overflowWrap: 'break-word', pointerEvents: 'none' }}
+          >
+            {measureLines.map((l, i) => (
+              <div key={i}>
+                {l || ' '}
+                {i === measureLines.length - 1 && <span ref={markerRef}>|</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        {/* 补全下拉框：定位在光标下方 */}
+        {suggestions.length > 0 && (
+          <div
+            className="absolute z-20 max-h-56 overflow-auto rounded border border-gray-200 bg-white py-1 shadow-lg"
+            style={{ top: caretPos.top + ROW_H, left: caretPos.left, minWidth: 160 }}
+          >
+            {suggestions.map((s, i) => (
+              <div
+                key={s}
+                className={
+                  'flex cursor-pointer items-center px-2 py-0.5 text-[13px] leading-5 ' +
+                  (i === activeIdx ? 'bg-blue-50 text-blue-600' : 'text-gray-700')
+                }
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  applySuggestion(s)
+                }}
+                onMouseEnter={() => setActiveIdx(i)}
+              >
+                <IconCode className="mr-1.5 text-gray-400" />
+                {s}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -541,8 +721,6 @@ export default function SqlEditor(props) {
               onChange: handleChange,
               placeholder,
               maxLength,
-              minRows: 16,
-              maxRows: 40,
               full: true,
             },
           )}
