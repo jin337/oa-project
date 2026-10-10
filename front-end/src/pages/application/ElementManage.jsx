@@ -986,7 +986,7 @@ export default function ElementManage() {
                 field="field_key"
                 rules={[{ required: true, message: '请选择对应字段' }]}
               >
-                <Select
+                <Select showSearch
                   placeholder="请选择字段"
                   loading={loadingFields}
                   onChange={handleFieldChange}
@@ -1316,7 +1316,7 @@ export default function ElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Select
+                                            <Select showSearch
                                               placeholder="请选择字段"
                                               loading={loadingFields}
                                             >
@@ -1453,7 +1453,7 @@ export default function ElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Select
+                                            <Select showSearch
                                               placeholder="请选择字段"
                                               loading={loadingFields}
                                             >
