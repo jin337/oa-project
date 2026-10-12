@@ -5,7 +5,7 @@ import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 import { useApprovalList } from 'src/pages/approval/useApprovalList'
 import { formatTime } from 'src/utils/format'
 
-const PAGE_TITLE = '我审批的'
+const PAGE_TITLE = '经我处理'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = [
@@ -13,12 +13,13 @@ const ALL_COL_KEYS = [
   'item_name',
   'dept_name',
   'created_name',
+  'bill_no',
   'created_at',
   'finished_at',
   'approval_status',
 ]
 
-/** 我审批的：展示当前用户已处理完毕的历史审批记录，只读查看详情 */
+/** 经我处理：展示当前用户已处理完毕的历史审批记录，只读查看详情 */
 export default function Workplace() {
   const {
     list,
@@ -53,6 +54,7 @@ export default function Workplace() {
     { title: '模块', key: 'item_name', dataIndex: 'item_name', render: (v, r) => v || '-' },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
     { title: '申请人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
+    { title: '单据编号', key: 'bill_no', dataIndex: 'bill_no', render: (v) => v || '-' },
     {
       title: '申请时间',
       key: 'created_at',

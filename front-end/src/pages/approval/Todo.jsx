@@ -14,6 +14,7 @@ const ALL_COL_KEYS = [
   'node_name',
   'dept_name',
   'created_name',
+  'bill_no',
   'created_at',
   'approval_status',
 ]
@@ -55,6 +56,7 @@ export default function Todo() {
     { title: '审批节点', key: 'node_name', dataIndex: 'node_name', render: (v) => v || '-' },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
     { title: '申请人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
+    { title: '单据编号', key: 'bill_no', dataIndex: 'bill_no', render: (v) => v || '-' },
     {
       title: '申请时间',
       key: 'created_at',

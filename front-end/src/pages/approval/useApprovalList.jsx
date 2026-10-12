@@ -7,7 +7,7 @@ import { useTabs } from 'src/store/tab-context'
 /**
  * 审批列表页通用 Hook：
  * 统一管理「列表数据 + 分页 + 加载 + 搜索 + 表格密度 + 列设置 + 详情 Drawer」状态与拉取逻辑，
- * 我的待办 / 我的发起 / 我审批的 / 抄送我的 / 草稿箱 共用，避免各页重复骨架。
+ * 我的待办 / 我的发起 / 经我处理 / 抄送我的 / 草稿箱 共用，避免各页重复骨架。
  *
  * @param {string} scope        列表作用域：todo | initiated | approved | cc | drafts
  * @param {object} options

@@ -13,6 +13,7 @@ const ALL_COL_KEYS = [
   'item_name',
   'dept_name',
   'created_name',
+  'bill_no',
   'created_at',
   'finished_at',
   'approval_status',
@@ -53,6 +54,7 @@ export default function ToMe() {
     { title: '模块', key: 'item_name', dataIndex: 'item_name', render: (v, r) => v || '-' },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
     { title: '申请人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
+    { title: '单据编号', key: 'bill_no', dataIndex: 'bill_no', render: (v) => v || '-' },
     {
       title: '申请时间',
       key: 'created_at',

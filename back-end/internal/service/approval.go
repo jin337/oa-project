@@ -354,6 +354,75 @@ func buildApprovalRecord(inst model.ApprovalInstance, app model.Application) mod
 	}
 }
 
+// fillApprovalBillNo 回填审批列表的「单据编号」（业务主表 bill_no）：
+// 按业务表分组批量查询，避免逐条回表造成的 N+1；业务表缺少 bill_no 列时该表跳过。
+func fillApprovalBillNo(records []model.ApprovalRecord) {
+	if len(records) == 0 {
+		return
+	}
+	// 1. 应用 → 业务表名
+	appIDs := make([]uint, 0, len(records))
+	for _, r := range records {
+		if r.AppID > 0 {
+			appIDs = append(appIDs, r.AppID)
+		}
+	}
+	if len(appIDs) == 0 {
+		return
+	}
+	var apps []model.Application
+	if err := database.DB.Select("id", "table_name").Where("id IN ?", appIDs).Find(&apps).Error; err != nil {
+		return
+	}
+	tableOf := make(map[uint]string, len(apps))
+	for _, a := range apps {
+		tableOf[a.ID] = a.TableName
+	}
+
+	// 2. 按业务表分组收集业务数据 ID
+	grouped := make(map[string][]uint)
+	for _, r := range records {
+		table := tableOf[r.AppID]
+		if table == "" || r.BusinessDataID == 0 || !isValidTableName(table) {
+			continue
+		}
+		grouped[table] = append(grouped[table], r.BusinessDataID)
+	}
+
+	// 3. 分组查询单号
+	billOf := make(map[string]string)
+	for table, ids := range grouped {
+		real := bizTableName(table)
+		cols, err := queryColumnSet(real)
+		if err != nil || !cols[billNoColumn] {
+			continue
+		}
+		var rows []struct {
+			ID     uint
+			BillNo string
+		}
+		if err := database.DB.
+			Raw("SELECT `id`, IFNULL(`"+billNoColumn+"`, '') AS bill_no FROM `"+real+"` WHERE `id` IN ?", ids).
+			Scan(&rows).Error; err != nil {
+			continue
+		}
+		for _, row := range rows {
+			if row.BillNo != "" {
+				billOf[fmt.Sprintf("%s:%d", table, row.ID)] = row.BillNo
+			}
+		}
+	}
+
+	// 4. 回填到列表记录
+	for i := range records {
+		table := tableOf[records[i].AppID]
+		if table == "" {
+			continue
+		}
+		records[i].BillNo = billOf[fmt.Sprintf("%s:%d", table, records[i].BusinessDataID)]
+	}
+}
+
 // applyApprovalKeyword 审批列表关键词过滤：按应用名 / 发起人用户名 / 昵称 LIKE 匹配。
 // 复用 JOIN 引用 oa_approval_instances 的 app_id / created_by，适用于全部列表作用域。
 func applyApprovalKeyword(db *gorm.DB, keyword string) *gorm.DB {
@@ -375,20 +444,31 @@ func applyApprovalKeyword(db *gorm.DB, keyword string) *gorm.DB {
 //   - cc        抄送我的  ：从实例执行路径中的抄送节点（type=3）解析抄送人，匹配当前用户
 //   - drafts    草稿箱    ：created_by=当前用户 且 status=草稿
 func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
+	var (
+		list  []model.ApprovalRecord
+		total int64
+		err   error
+	)
 	switch req.Scope {
 	case "todo":
-		return approvalListTodo(curUserID, req)
+		list, total, err = approvalListTodo(curUserID, req)
 	case "initiated":
-		return approvalListInitiated(curUserID, req)
+		list, total, err = approvalListInitiated(curUserID, req)
 	case "cc":
-		return approvalListCC(curUserID, req)
+		list, total, err = approvalListCC(curUserID, req)
 	case "approved":
-		return approvalListApproved(curUserID, req)
+		list, total, err = approvalListApproved(curUserID, req)
 	case "drafts":
-		return approvalListFromInstances(curUserID, req)
+		list, total, err = approvalListFromInstances(curUserID, req)
 	default:
 		return nil, 0, errors.New("非法的审批列表类型")
 	}
+	if err != nil {
+		return nil, 0, err
+	}
+	// 各作用域公共后置处理：回填业务单据编号
+	fillApprovalBillNo(list)
+	return list, total, nil
 }
 
 // approvalListTodo 待办列表：从 approval_task 表查询当前用户的待处理任务

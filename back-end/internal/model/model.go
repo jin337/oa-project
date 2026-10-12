@@ -810,6 +810,7 @@ type ApprovalRecord struct {
 	StatusName     string                 `json:"status_name"`           // 审核状态中文名
 	CreatedBy      uint                   `json:"created_by"`            // 发起人 ID
 	CreatedName    string                 `json:"created_name"`          // 发起人姓名
+	BillNo         string                 `json:"bill_no"`               // 业务单据编号（提交审核时生成，展示在申请人之后）
 	DeptID         uint                   `json:"dept_id"`               // 发起人部门 ID（快照）
 	DeptName       string                 `json:"dept_name"`             // 发起人部门名称
 	FinishedAt     *time.Time             `json:"finished_at"`           // 完成时间

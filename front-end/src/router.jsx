@@ -40,7 +40,7 @@ const Forbidden = lazy(() => import('src/pages/error/Forbidden.jsx'))
 
 // 审批申请页：分类 + 申请项管理
 const ApprovalApply = lazy(() => import('src/pages/approval/Apply.jsx'))
-// 审批列表页：我的发起 / 我的待办 / 我审批的 / 抄送我的 / 草稿箱
+// 审批列表页：我的发起 / 我的待办 / 经我处理 / 抄送我的 / 草稿箱
 const ApprovalInitiated = lazy(() => import('src/pages/approval/Initiated.jsx'))
 const ApprovalTodo = lazy(() => import('src/pages/approval/Todo.jsx'))
 const ApprovalWorkplace = lazy(() => import('src/pages/approval/Workplace.jsx'))
