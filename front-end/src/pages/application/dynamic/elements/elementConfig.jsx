@@ -17,6 +17,7 @@ import {
   renderSelectPreview,
   renderTreeSelectPreview,
 } from './OptionElement'
+import { renderProjectPreview } from './ProjectElement'
 import { ReadonlyValue } from './ReadonlyValue'
 import { TableElementField, renderTableSettings } from './TableElement'
 import { renderUploadPreview, renderUploadSettings } from './UploadElement'
@@ -44,8 +45,7 @@ export { ReadonlyValue } from './ReadonlyValue'
 
 // 表格列配置工具与表格字段组件：
 // DynamicForm 等既有调用方经本文件转发引用（零改动）
-export { addColumn, genColumn, removeColumn, updateColumn } from './TableElement'
-export { TableElementField } from './TableElement'
+export { TableElementField, addColumn, genColumn, removeColumn, updateColumn } from './TableElement'
 
 // 运行时表单上下文在此原样再导出：DynamicForm 经 `export { RuntimeFormContext } from './elements/elementConfig'`
 // 转发给 modes/UploadElement 等既有调用方，保持单一 Context 定义源（runtimeContext.js）
@@ -245,6 +245,18 @@ export const ELEMENT_RENDER_CONFIG = {
       dataSourceDefaults: { type: 'api', url: '/user-list', method: 'GET' },
     },
     renderPreview: renderUserPreview,
+  },
+  projectselect: {
+    meta: {
+      dataSourceDefaults: {
+        type: 'api',
+        url: '/project-list',
+        method: 'GET',
+        value_field: 'item.project_name',
+        label: 'item.project_name',
+      },
+    },
+    renderPreview: renderProjectPreview,
   },
 }
 

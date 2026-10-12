@@ -6,6 +6,8 @@
  * 需要被外部或 DynamicForm.jsx 使用的符号均由 DynamicForm.jsx 原样再导出，调用方无需改动。
  */
 
+import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
+
 import { evalDynamicExpr } from './evalExpression'
 
 // ==================== 布局与数据源解析 ====================
@@ -41,8 +43,12 @@ export const getStaticOptions = (el) => {
 
 // ==================== 取值与表达式 ====================
 
-// 选项型元素（支持动态数据源）
-export const OPTION_ELEMENT_TYPES = new Set(['select', 'radio', 'checkbox', 'treeselect', 'deptselect', 'userselect'])
+// 选项型元素（支持动态数据源，如 select/deptselect/userselect/projectselect 等）：
+// 由元素类型配置 ELEMENT_TYPE_OPTIONS 的 needDataSource 标记自动派生，
+// 新增元素类型只需在 src/config/app.js 声明 needDataSource: true，无需在此处手工登记。
+export const OPTION_ELEMENT_TYPES = new Set(
+  ELEMENT_TYPE_OPTIONS.filter((o) => o.needDataSource).map((o) => o.value),
+)
 
 /** 递归查找选项：树形选项（children 子节点）的选中项匹配需下钻子级 */
 export const findOptionByValue = (opts, val) => {

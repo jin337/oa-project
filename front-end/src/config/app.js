@@ -55,6 +55,7 @@ export const ELEMENT_TYPE_OPTIONS = [
   { value: 'upload', label: '文件上传', needDataSource: false, mockDetailValue: '示例附件.pdf' },
   { value: 'deptselect', label: '部门选择', needDataSource: true, mockDetailValue: '示例部门' },
   { value: 'userselect', label: '人员选择', needDataSource: true, mockDetailValue: '示例人员' },
+  { value: 'projectselect', label: '项目选择', needDataSource: true, mockDetailValue: '示例项目' },
 ]
 
 // —— 表格密度选项 ——

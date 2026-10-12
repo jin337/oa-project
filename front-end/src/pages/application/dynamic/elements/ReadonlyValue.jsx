@@ -6,6 +6,7 @@ import {
   getStaticOptions,
 } from '../utils/formUtils'
 import { DeptReadOnly } from './DeptElement'
+import { ProjectReadOnly } from './ProjectElement'
 import { UploadMockValue, UploadReadOnly } from './UploadElement'
 import { UserReadOnly } from './UserElement'
 
@@ -41,6 +42,7 @@ const READONLY_RENDERERS = {
   upload: UploadReadOnly,
   deptselect: DeptReadOnly,
   userselect: UserReadOnly,
+  projectselect: ProjectReadOnly,
 }
 
 /**
