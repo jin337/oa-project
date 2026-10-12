@@ -1083,9 +1083,9 @@ func createBizTable(tableName string, withParent bool, comment string) error {
 		// 子表：额外添加关联主表的外键字段
 		b.WriteString("`parent_id` bigint unsigned DEFAULT NULL COMMENT '关联主表ID',")
 	}
-	// 主表：单据编号列（提交审核时由后端生成，见 bill_no.go），唯一索引兜底防重号
+	// 主表：单号列（提交审核时由后端生成，见 bill_no.go），唯一索引兜底防重号
 	if !withParent {
-		b.WriteString("`bill_no` varchar(64) DEFAULT NULL COMMENT '单据编号',")
+		b.WriteString("`bill_no` varchar(64) DEFAULT NULL COMMENT '单号',")
 	}
 	b.WriteString("PRIMARY KEY (`id`),")
 	if !withParent {

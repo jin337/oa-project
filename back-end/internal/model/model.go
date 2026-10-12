@@ -424,7 +424,7 @@ type ApplicationListReq struct {
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
 }
 
-// BillSequence 单据编号序列：按「应用 + 期间(YYYYMMDD)」维度记录当前流水号，
+// BillSequence 单号序列：按「应用 + 期间(YYYYMMDD)」维度记录当前流水号，
 // 提交审核时在事务内行锁自增，保证同一应用同一天的单号不重号。
 type BillSequence struct {
 	BaseModel
@@ -810,7 +810,7 @@ type ApprovalRecord struct {
 	StatusName     string                 `json:"status_name"`           // 审核状态中文名
 	CreatedBy      uint                   `json:"created_by"`            // 发起人 ID
 	CreatedName    string                 `json:"created_name"`          // 发起人姓名
-	BillNo         string                 `json:"bill_no"`               // 业务单据编号（提交审核时生成，展示在申请人之后）
+	BillNo         string                 `json:"bill_no"`               // 业务单号（提交审核时生成，展示在申请人之后）
 	DeptID         uint                   `json:"dept_id"`               // 发起人部门 ID（快照）
 	DeptName       string                 `json:"dept_name"`             // 发起人部门名称
 	FinishedAt     *time.Time             `json:"finished_at"`           // 完成时间

@@ -254,7 +254,7 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		return nil, err
 	}
 
-	// 3. 生成单据编号（提交时才生成；未配置前缀或已有单号时自动跳过，见 bill_no.go）
+	// 3. 生成单号（提交时才生成；未配置前缀或已有单号时自动跳过，见 bill_no.go）
 	if err := ensureBillNo(req.AppID, ctx.app.TableName, req.BusinessDataID, curUserID); err != nil {
 		return nil, err
 	}
@@ -442,7 +442,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		return nil, err
 	}
 
-	// 5. 生成单据编号（草稿保存时不生成、提交时才生成；已有单号则复用，见 bill_no.go）
+	// 5. 生成单号（草稿保存时不生成、提交时才生成；已有单号则复用，见 bill_no.go）
 	if err := ensureBillNo(instance.AppID, ctx.app.TableName, instance.BusinessDataID, curUserID); err != nil {
 		return nil, err
 	}

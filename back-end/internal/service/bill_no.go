@@ -1,7 +1,7 @@
 package service
 
 // ============================================================
-// 单据编号生成
+// 单号生成
 // ============================================================
 // 已确认规则：
 //  1. 单号落在业务主表 bill_no 列（列上加唯一索引兜底），不落在审批实例表；
@@ -25,15 +25,15 @@ import (
 	"back-end/internal/model"
 )
 
-// billNoColumn 业务主表承载单据编号的列名
+// billNoColumn 业务主表承载单号的列名
 const billNoColumn = "bill_no"
 
-// billSequenceTable 单据编号序列表名（含配置的表前缀）
+// billSequenceTable 单号序列表名（含配置的表前缀）
 func billSequenceTable() string {
 	return bizTablePrefix() + "bill_sequences"
 }
 
-// ensureBillNo 提交审核时为业务数据生成单据编号（幂等）：
+// ensureBillNo 提交审核时为业务数据生成单号（幂等）：
 //   - 应用未配置单号前缀 → 跳过，不生成
 //   - 业务表缺少 bill_no 列（历史表未补列）→ 跳过，不阻断提交
 //   - 业务行已有单号 → 复用，不重新取号
@@ -67,7 +67,7 @@ func ensureBillNo(appID uint, tableName string, dataID, curUserID uint) error {
 	if err := database.DB.
 		Raw("SELECT IFNULL(`"+billNoColumn+"`, '') FROM `"+real+"` WHERE `id` = ?", dataID).
 		Scan(&existed).Error; err != nil {
-		return fmt.Errorf("读取单据编号失败: %w", err)
+		return fmt.Errorf("读取单号失败: %w", err)
 	}
 	if existed != "" {
 		return nil
@@ -85,7 +85,7 @@ func ensureBillNo(appID uint, tableName string, dataID, curUserID uint) error {
 			"UPDATE `"+real+"` SET `"+billNoColumn+"` = ?, `updated_by` = ? WHERE `id` = ? AND (`"+billNoColumn+"` IS NULL OR `"+billNoColumn+"` = '')",
 			billNo, curUserID, dataID,
 		).Error; err != nil {
-			return fmt.Errorf("写入单据编号失败: %w", err)
+			return fmt.Errorf("写入单号失败: %w", err)
 		}
 		return nil
 	})

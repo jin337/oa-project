@@ -354,7 +354,7 @@ func buildApprovalRecord(inst model.ApprovalInstance, app model.Application) mod
 	}
 }
 
-// fillApprovalBillNo 回填审批列表的「单据编号」（业务主表 bill_no）：
+// fillApprovalBillNo 回填审批列表的「单号」（业务主表 bill_no）：
 // 按业务表分组批量查询，避免逐条回表造成的 N+1；业务表缺少 bill_no 列时该表跳过。
 func fillApprovalBillNo(records []model.ApprovalRecord) {
 	if len(records) == 0 {
@@ -466,7 +466,7 @@ func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalR
 	if err != nil {
 		return nil, 0, err
 	}
-	// 各作用域公共后置处理：回填业务单据编号
+	// 各作用域公共后置处理：回填业务单号
 	fillApprovalBillNo(list)
 	return list, total, nil
 }
@@ -510,7 +510,7 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 		// 查询申请项名称
 		var item model.ApprovalCategoryItem
 		database.DB.Where("code = ?", app.Code).First(&item)
-		
+
 		rec := model.ApprovalRecord{
 			ID:             t.ID,
 			InstanceID:     inst.ID,
@@ -913,4 +913,3 @@ func getUserIDsByDataScope(curUserID uint) []uint {
 	// 默认：只看自己
 	return []uint{curUserID}
 }
-
