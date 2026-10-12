@@ -202,30 +202,54 @@ export const buildValidationRules = (el, getFormValues, isDetail, skipRequired) 
 
 /**
  * 解析元素默认值 default_value：
+ * - 时间表达式（'${new Date()}' / '${now()}' / '${today()}'）：求值为当前时间；
+ *   时间类元素按元素粒度格式化，其余元素格式化为 'YYYY-MM-DD HH:mm:ss'
+ * - 当前用户表达式（'${user.id}' / '${user.username}' / '${user.profile.nickname}' /
+ *   '${user.dept_id}' / '${user.dept_name}'）：按点路径取当前登录用户字段；
+ *   用户资料未就绪时返回 undefined（不填充，就绪后由调用方重新解析补填）
+ * - 时间类元素（date/datepicker/datetime/time/timepicker）：统一规范化为标准格式串，
+ *   无法解析的值返回 undefined（不填充），避免组件渲染出 Invalid Date
  * - 输入类：字符串原样作为输入框内容
  * - 下拉/单选（select/radio/treeselect 单选）：值字符串（匹配选项 value）
  * - 多选（checkbox/multi_select/treeselect 多选）：JSON 数组（'["a","b"]'）或逗号分隔（"a,b"）
  * - 无法解析时原样返回
+ * @param {*} raw         default_value 原始配置
+ * @param {string} elementType 元素类型
+ * @param {Object} [context] 求值上下文，当前仅支持 { user }（当前登录用户对象）
  */
-export const parseDefaultValue = (raw, elementType) => {
+export const parseDefaultValue = (raw, elementType, context) => {
   if (raw == null || raw === '') return undefined
+  const text = String(raw)
+  const isTimeType = TIME_ELEMENT_TYPES.includes(elementType)
+  // 时间表达式：求值为当前时间（时间类元素按元素粒度格式化）
+  if (TIME_DEFAULT_EXPR_RE.test(text.trim())) {
+    const now = new Date()
+    return isTimeType ? normalizeTimeDefault(now, elementType) : formatTimeValue(now, 'datetime')
+  }
+  // 当前用户表达式：按点路径取当前登录用户字段
+  const userMatch = USER_DEFAULT_EXPR_RE.exec(text.trim())
+  if (userMatch) {
+    const v = resolveUserDefault(userMatch[1], context?.user)
+    return v == null || v === '' ? undefined : v
+  }
   try {
-    const v = JSON.parse(raw)
+    const v = JSON.parse(text)
     // 数组/对象按结构化值返回（多选默认选中项、树选择等）
     if (Array.isArray(v)) return v
     if (v !== null && typeof v === 'object') return v
-    return raw
+    // 标量（字符串/数字/布尔）：时间类仍需规范化为标准格式
+    return isTimeType ? normalizeTimeDefault(v, elementType) : text
   } catch (e) {
     // 多选型支持逗号分隔字符串
     if (
       ['checkbox', 'multi_select', 'treeselect'].includes(elementType) &&
-      String(raw).includes(',')
+      text.includes(',')
     ) {
-      return String(raw)
+      return text
         .split(',')
         .map((x) => x.trim())
     }
-    return raw
+    return isTimeType ? normalizeTimeDefault(text, elementType) : text
   }
 }
 
@@ -276,6 +300,49 @@ export function formatTimeValue(value, elementType, emptyValue = '-') {
   const s = pad2(date.getSeconds())
   if (elementType === 'time' || elementType === 'timepicker') return `${h}:${mi}:${s}`
   return `${y}-${mo}-${d} ${h}:${mi}:${s}`
+}
+
+/**
+ * 默认值中支持的时间表达式：'${new Date()}' / '${now()}' / '${today()}'（容忍空格与大小写差异）。
+ * 仅识别这三种"当前时间"语义的写法，其余 ${...} 一律按普通字面量处理，不做通用 JS 求值。
+ */
+const TIME_DEFAULT_EXPR_RE =
+  /^\$\{\s*(?:new\s+Date\s*\(\s*\)|now\s*\(\s*\)|today\s*\(\s*\))\s*\}$/i
+
+/**
+ * 时间类默认值规范化：按元素粒度转成标准格式串（YYYY-MM-DD / YYYY-MM-DD HH:mm:ss / HH:mm:ss）。
+ * 入参兼容 Date 对象、ISO/带格式字符串、13 位毫秒与 10 位秒时间戳；
+ * 无法解析时返回 undefined（不填充该字段），避免非法值被日期组件渲染成 Invalid Date、
+ * 或被 serializeTimeFields 原样透传写进数据库。
+ */
+const normalizeTimeDefault = (value, elementType) => {
+  if (value == null || value === '') return undefined
+  const formatted = formatTimeValue(value, elementType, undefined)
+  if (formatted == null || formatted === '') return undefined
+  const probe = String(formatted)
+  if (elementType === 'time' || elementType === 'timepicker') {
+    return /^\d{2}:\d{2}:\d{2}$/.test(probe) ? probe : undefined
+  }
+  const dt = new Date(probe.replace(' ', 'T'))
+  return Number.isNaN(dt.getTime()) ? undefined : probe
+}
+
+/**
+ * 默认值中支持的当前用户表达式：'${user.id}' / '${user.username}' / '${user.profile.nickname}'
+ * / '${user.dept_id}' / '${user.dept_name}'（dept_name 由 dept_ids 按当前 dept_id 派生）。
+ * 仅按点路径从当前登录用户对象（/auth/profile 返回的 user）取值，不做任意 JS 求值。
+ */
+const USER_DEFAULT_EXPR_RE = /^\$\{\s*user\.([\w.]+)\s*\}$/i
+
+/** 按点路径读取当前用户字段；用户对象缺失或路径不存在时返回 undefined */
+const resolveUserDefault = (path, user) => {
+  if (!user) return undefined
+  // 部门名称：dept_ids 中与当前 dept_id 匹配的那一项
+  if (path === 'dept_name') {
+    const hit = (user.dept_ids || []).find((d) => d.id === user.dept_id)
+    return hit?.name
+  }
+  return path.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), user)
 }
 
 /**

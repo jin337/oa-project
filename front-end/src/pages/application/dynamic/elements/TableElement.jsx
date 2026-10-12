@@ -9,6 +9,7 @@ import {
 } from '@arco-design/web-react'
 import { IconDelete, IconPlus } from '@arco-design/web-react/icon'
 import { useCallback, useContext, useEffect, useMemo } from 'react'
+import { useAuth } from 'src/store/auth-context'
 
 import {
   buildValidationRules,
@@ -81,6 +82,8 @@ export const TableElementField = ({
   // 详情只读：真实详情页（detail）与画布详情预览（move-detail，注入 mock 数据）均渲染纯文本
   const isReadonlyText = pageType === 'detail' || pageType === 'move-detail'
   const { form } = Form.useFormContext()
+  // 当前登录用户：供列默认值中的 ${user.xxx} 表达式求值
+  const { user } = useAuth()
   // Form.List 字段名：优先关联子表名（table_key），其次元素 id 兜底
   const listField = el.table_key || el.id || 'table'
   // 按列 default_value 生成一行默认数据（列与元素同结构解析）
@@ -89,12 +92,12 @@ export const TableElementField = ({
     ;(el.columns || []).forEach((col) => {
       const key = col.dataIndex || col.field_key
       if (key && col.default_value !== undefined && col.default_value !== '') {
-        const def = parseDefaultValue(col.default_value, col.element_type)
+        const def = parseDefaultValue(col.default_value, col.element_type, { user })
         if (def !== undefined) row[key] = def
       }
     })
     return row
-  }, [el.columns])
+  }, [el.columns, user])
   // 列级 visible_if 依赖字段（全局表单值）：订阅变化重建列可见性
   const colVifDeps = useMemo(() => {
     const s = new Set()

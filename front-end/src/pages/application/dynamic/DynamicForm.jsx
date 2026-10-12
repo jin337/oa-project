@@ -15,6 +15,7 @@ import {
   useState,
 } from 'react'
 import request from 'src/api/request'
+import { useAuth } from 'src/store/auth-context'
 import { API_PREFIX } from 'src/utils/constants'
 
 import { evalDynamicExpr } from './utils/evalExpression'
@@ -253,6 +254,8 @@ const extractOptions = (resp, ds, vars) => {
 export const useRuntimeForm = ({ elements, form, pageType, app }) => {
   const [apiOptions, setApiOptions] = useState({})
   const isRuntime = pageType === 'form'
+  // 当前登录用户（/auth/profile）：供默认值中的 ${user.xxx} 表达式求值
+  const { user } = useAuth()
   const formRef = useRef(null)
   // 联动写入标记：set_value/fetch_and_fill 写入的字段值，onValuesChange 识别并跳过（防写回触发字段导致二次联动）
   const linkWrittenRef = useRef({})
@@ -385,21 +388,26 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
   const loadOptionsRef = useRef(null)
   loadOptionsRef.current = loadOptions
 
-  // 挂载：流程默认值 + 执行 on_mount 动作 + 初始加载全部 api 动态选项
+  // 流程默认值 default_value：仅字段当前为空时填充（输入框->内容，选择型->默认选中）
+  // 独立为单独 effect：${user.xxx} 依赖异步加载的当前用户资料，user 就绪后需重新解析补填
   useEffect(() => {
     if (!isRuntime || !elements?.length) return
-    const vals = formRef.current?.getFieldsValue?.() || {}
-    // 流程默认值 default_value：仅字段当前为空时填充（输入框->内容，选择型->默认选中）
     const defPatch = {}
     elements.forEach((el) => {
       if (el.default_value === undefined || el.default_value === '') return
       const current = formRef.current?.getFieldValue?.(el.field_key)
       if (current === undefined || current === null || current === '') {
-        const def = parseDefaultValue(el.default_value, el.element_type)
+        const def = parseDefaultValue(el.default_value, el.element_type, { user })
         if (def !== undefined) defPatch[el.field_key] = def
       }
     })
     if (Object.keys(defPatch).length) formRef.current?.setFieldsValue?.(defPatch)
+  }, [elements, isRuntime, user])
+
+  // 挂载：执行 on_mount 动作 + 初始加载全部 api 动态选项
+  useEffect(() => {
+    if (!isRuntime || !elements?.length) return
+    const vals = formRef.current?.getFieldsValue?.() || {}
     // 顶层元素：on_mount 动作（列级 on_mount 无行上下文，由列默认值/初始化承担）
     elements.forEach((el) => {
       runActionsRef.current?.('on_mount', el, vals)
