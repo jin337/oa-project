@@ -387,6 +387,7 @@ type Application struct {
 	Name             string                 `gorm:"size:64;not null;comment:页面名称" json:"name"`
 	Code             string                 `gorm:"size:64;uniqueIndex;not null;comment:页面编码" json:"code"`
 	TableName        string                 `gorm:"size:128;not null;comment:对应表" json:"table_name"`
+	BillPrefix       string                 `gorm:"size:32;comment:单号前缀" json:"bill_prefix"`
 	SubTableName     string                 `gorm:"size:255;comment:子表(多个用逗号分隔)" json:"sub_table_name"`
 	Status           int                    `gorm:"default:1;comment:状态 1启用 2停用" json:"status"`
 	FormLayoutJSON   map[string]interface{} `gorm:"serializer:json;type:json;comment:表单页布局配置" json:"form_layout_json"`
@@ -398,6 +399,7 @@ type ApplicationCreateReq struct {
 	Name             string                 `json:"name" validate:"required,min=2,max=64" label:"页面名称"`
 	Code             string                 `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"` // 新增时后端自动生成，忽略前端传入
 	TableName        string                 `json:"table_name" validate:"required,max=128" label:"对应表"`
+	BillPrefix       string                 `json:"bill_prefix" validate:"omitempty,max=32" label:"单号前缀"`
 	SubTableName     string                 `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
 	Status           int                    `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
 	FormLayoutJSON   map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
@@ -409,6 +411,7 @@ type ApplicationUpdateReq struct {
 	Name             *string                 `json:"name" validate:"omitempty,min=2,max=64" label:"页面名称"`
 	Code             string                  `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"`
 	TableName        *string                 `json:"table_name" validate:"omitempty,max=128" label:"对应表"`
+	BillPrefix       *string                 `json:"bill_prefix" validate:"omitempty,max=32" label:"单号前缀"`
 	SubTableName     *string                 `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
 	Status           int                     `json:"status" validate:"omitempty,oneof=1 2" label:"状态"`
 	FormLayoutJSON   *map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
@@ -419,6 +422,15 @@ type ApplicationUpdateReq struct {
 type ApplicationListReq struct {
 	BaseListReq
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
+}
+
+// BillSequence 单据编号序列：按「应用 + 期间(YYYYMMDD)」维度记录当前流水号，
+// 提交审核时在事务内行锁自增，保证同一应用同一天的单号不重号。
+type BillSequence struct {
+	BaseModel
+	AppID  uint   `gorm:"not null;uniqueIndex:uk_bill_seq_app_period;comment:应用ID" json:"app_id"`
+	Period string `gorm:"size:8;not null;uniqueIndex:uk_bill_seq_app_period;comment:期间(YYYYMMDD)" json:"period"`
+	Seq    int64  `gorm:"not null;default:0;comment:当前序号" json:"seq"`
 }
 
 // 动态业务数据审核状态（approval_status 列取值）

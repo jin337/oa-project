@@ -72,6 +72,7 @@ const RESERVED_FIELDS = new Set([
   'updated_by',
   'deleted_at',
   'parent_id',
+  'bill_no'
 ])
 
 function isReservedField(name) {

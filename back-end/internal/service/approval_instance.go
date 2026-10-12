@@ -254,7 +254,12 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		return nil, err
 	}
 
-	// 3. 创建流程实例（事务）：状态=进行中，生成首个审批节点任务
+	// 3. 生成单据编号（提交时才生成；未配置前缀或已有单号时自动跳过，见 bill_no.go）
+	if err := ensureBillNo(req.AppID, ctx.app.TableName, req.BusinessDataID, curUserID); err != nil {
+		return nil, err
+	}
+
+	// 4. 创建流程实例（事务）：状态=进行中，生成首个审批节点任务
 	var instance model.ApprovalInstance
 	err = withNotify(func(tx *gorm.DB) error {
 		// 查发起人当前部门，记录快照
@@ -437,11 +442,16 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		return nil, err
 	}
 
-	// 5. 序列化快照（Updates map 不走 serializer，需手动序列化）
+	// 5. 生成单据编号（草稿保存时不生成、提交时才生成；已有单号则复用，见 bill_no.go）
+	if err := ensureBillNo(instance.AppID, ctx.app.TableName, instance.BusinessDataID, curUserID); err != nil {
+		return nil, err
+	}
+
+	// 6. 序列化快照（Updates map 不走 serializer，需手动序列化）
 	injectedFlowBytes, _ := json.Marshal(ctx.injectedNodes)
 	execPathBytes, _ := json.Marshal(ctx.execPath)
 
-	// 6. 事务：原子状态流转（草稿→进行中）+ 更新快照/路径 + 生成首个任务
+	// 7. 事务：原子状态流转（草稿→进行中）+ 更新快照/路径 + 生成首个任务
 	err = withNotify(func(tx *gorm.DB) error {
 		// 原子守卫：仅当实例仍为草稿时才更新，防止并发重复提交
 		res := tx.Model(&model.ApprovalInstance{}).

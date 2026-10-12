@@ -1083,7 +1083,14 @@ func createBizTable(tableName string, withParent bool, comment string) error {
 		// 子表：额外添加关联主表的外键字段
 		b.WriteString("`parent_id` bigint unsigned DEFAULT NULL COMMENT '关联主表ID',")
 	}
+	// 主表：单据编号列（提交审核时由后端生成，见 bill_no.go），唯一索引兜底防重号
+	if !withParent {
+		b.WriteString("`bill_no` varchar(64) DEFAULT NULL COMMENT '单据编号',")
+	}
 	b.WriteString("PRIMARY KEY (`id`),")
+	if !withParent {
+		b.WriteString("UNIQUE KEY `uk_bill_no` (`bill_no`),")
+	}
 	b.WriteString("KEY `idx_deleted_at` (`deleted_at`)")
 	b.WriteString(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
 	if comment != "" {
@@ -1128,6 +1135,7 @@ func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.
 		Name:             req.Name,
 		Code:             idgen.New("app"), // 自动生成，忽略前端传入
 		TableName:        req.TableName,
+		BillPrefix:       req.BillPrefix,
 		SubTableName:     req.SubTableName,
 		Status:           status,
 		FormLayoutJSON:   req.FormLayoutJSON,
@@ -1262,6 +1270,9 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 		app.TableName = *req.TableName
 	}
 	// 以下字段使用指针，区分“未传递”（保持原值）与“主动清空”（传空串）
+	if req.BillPrefix != nil {
+		app.BillPrefix = *req.BillPrefix
+	}
 	if req.SubTableName != nil {
 		app.SubTableName = *req.SubTableName
 	}

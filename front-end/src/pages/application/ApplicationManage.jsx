@@ -37,13 +37,22 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'name', 'code', 'table_name', 'sub_table_name', 'status']
+const ALL_COL_KEYS = [
+  'index',
+  'name',
+  'code',
+  'table_name',
+  'sub_table_name',
+  'bill_prefix',
+  'status',
+]
 const EMPTY_FORM = {
   name: '',
   code: '',
-  table_name: '',
-  sub_table_name: '',
   status: 1,
+  table_name: '',
+  bill_prefix: '',
+  sub_table_name: '',
 }
 
 
@@ -119,9 +128,10 @@ export default function ApplicationManage() {
     form.setFieldsValue({
       name: record.name,
       code: record.code,
-      table_name: record.table_name,
-      sub_table_name: record.sub_table_name || '',
       status: record.status ?? 1,
+      table_name: record.table_name,
+      bill_prefix: record.bill_prefix || '',
+      sub_table_name: record.sub_table_name || '',
     })
     setModalVisible(true)
   }
@@ -229,6 +239,13 @@ export default function ApplicationManage() {
       key: 'sub_table_name',
       title: '子表',
       dataIndex: 'sub_table_name',
+      render: (v) => v || '-',
+    },
+    {
+      key: 'bill_prefix',
+      title: '单号前缀',
+      dataIndex: 'bill_prefix',
+      width: 110,
       render: (v) => v || '-',
     },
     {
@@ -378,7 +395,12 @@ export default function ApplicationManage() {
       >
         <Form form={form} layout="vertical" autoComplete="off">
           <Row gutter={20}>
-            <Col span={12}>
+            <Col span={10}>
+              <FormItem label="编码" field="code">
+                <Input placeholder="由系统自动生成" disabled />
+              </FormItem>
+            </Col>
+            <Col span={14}>
               <FormItem
                 label="名称"
                 field="name"
@@ -390,12 +412,15 @@ export default function ApplicationManage() {
                 <Input placeholder="如：订单管理" />
               </FormItem>
             </Col>
-            <Col span={12}>
-              <FormItem label="编码" field="code">
-                <Input placeholder="由系统自动生成" disabled />
+            <Col span={10}>
+              <FormItem label="状态" field="status" triggerPropName="value">
+                <Select>
+                  <Select.Option value={1}>启用</Select.Option>
+                  <Select.Option value={2}>停用</Select.Option>
+                </Select>
               </FormItem>
             </Col>
-            <Col span={12}>
+            <Col span={14}>
               <FormItem
                 label="对应表"
                 field="table_name"
@@ -404,20 +429,20 @@ export default function ApplicationManage() {
                 <Input placeholder="如：order" />
               </FormItem>
             </Col>
-            <Col span={12}>
-              <FormItem label="状态" field="status" triggerPropName="value">
-                <Select>
-                  <Select.Option value={1}>启用</Select.Option>
-                  <Select.Option value={2}>停用</Select.Option>
-                </Select>
+            <Col span={10}>
+              <FormItem
+                label="单号前缀"
+                field="bill_prefix"
+                rules={[{ maxLength: 32, message: '最长 32 个字符' }]}
+              >
+                <Input placeholder="如：CC（用于生成单据编号）" />
               </FormItem>
             </Col>
-            <Col span={24}>
+            <Col span={14}>
               <FormItem label="子表" field="sub_table_name">
                 <Input placeholder="多个子表用逗号隔开，如：order_item,order_detail" />
               </FormItem>
             </Col>
-
           </Row>
         </Form>
       </Modal>
