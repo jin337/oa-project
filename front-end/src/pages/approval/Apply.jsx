@@ -1,4 +1,5 @@
 import {
+  AutoComplete,
   Button,
   Card,
   Drawer,
@@ -108,6 +109,9 @@ export default function Apply() {
   const [editingItem, setEditingItem] = useState(null)
   const [saving, setSaving] = useState(false)
   const [itemForm] = Form.useForm()
+  // 流程配置列表：新增/编辑申请项时，申请项名称改为从此列表选择，
+  // 选中后自动填充申请项名称与流程编码
+  const [appOptions, setAppOptions] = useState([])
 
   // 动态表单 Drawer（点击申请项卡片打开）
   const [drawerVisible, setDrawerVisible] = useState(false)
@@ -143,10 +147,22 @@ export default function Apply() {
     }
   }, [])
 
+  // 加载流程配置列表（申请项名称的可选项）
+  const fetchApplications = useCallback(async () => {
+    try {
+      const res = await fetchAll(applicationApi.listApplications)
+      setAppOptions(res.data?.list || [])
+    } catch (e) {
+      // 错误已在请求层提示
+    }
+  }, [])
+
   useEffect(() => {
     setLoading(true)
-    Promise.all([fetchCategories(), fetchItems()]).finally(() => setLoading(false))
-  }, [fetchCategories, fetchItems])
+    Promise.all([fetchCategories(), fetchItems(), fetchApplications()]).finally(() =>
+      setLoading(false),
+    )
+  }, [fetchCategories, fetchItems, fetchApplications])
 
   // ==================== 分类管理 ====================
 
@@ -437,41 +453,45 @@ export default function Apply() {
                       <Col span={4} key={item.id}>
                         <Card
                           hoverable
-                          className="group relative cursor-pointer"
+                          className="group cursor-pointer"
                           bodyStyle={{ padding: '10px' }}
                           onClick={() => handleItemClick(item)}
                         >
-                          {/* 卡片右上角操作区：编辑 / 删除（管理模式直接显示，退出后隐藏） */}
-                          {isManaging && hasPerm('approval:edit') && (
-                            <div
-                              className="absolute top-2 right-2 z-10 flex items-center"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Button
-                                size="mini"
-                                type="text"
-                                icon={<IconEdit />}
-                                onClick={() => openEditItem(item)}
-                              />
-                              <Popconfirm
-                                title="确定删除该申请项吗？"
-                                onOk={() => handleItemDelete(item)}
-                                position="br"
+                          {/* 卡片内容行：左侧图标+名称，右侧编辑/删除，同一行垂直居中对齐 */}
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-lg text-blue-600">
+                                <MenuIcon name={item.icon} />
+                              </div>
+                              <div className="min-w-0 truncate font-medium" title={item.name}>
+                                {item.name}
+                              </div>
+                            </div>
+                            {isManaging && hasPerm('approval:edit') && (
+                              <div
+                                className="flex shrink-0 items-center"
+                                onClick={(e) => e.stopPropagation()}
                               >
                                 <Button
                                   size="mini"
                                   type="text"
-                                  status="danger"
-                                  icon={<IconDelete />}
+                                  icon={<IconEdit />}
+                                  onClick={() => openEditItem(item)}
                                 />
-                              </Popconfirm>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-lg text-blue-600">
-                              <MenuIcon name={item.icon} />
-                            </div>
-                            <div className="min-w-0 font-medium">{item.name}</div>
+                                <Popconfirm
+                                  title="确定删除该申请项吗？"
+                                  onOk={() => handleItemDelete(item)}
+                                  position="br"
+                                >
+                                  <Button
+                                    size="mini"
+                                    type="text"
+                                    status="danger"
+                                    icon={<IconDelete />}
+                                  />
+                                </Popconfirm>
+                              </div>
+                            )}
                           </div>
                         </Card>
                       </Col>
@@ -519,14 +539,27 @@ export default function Apply() {
         confirmLoading={saving}
         onCancel={() => setItemModalVisible(false)}
         unmountOnExit
+        autoFocus={false}
+        focusLock={false}
       >
         <Form form={itemForm} layout="vertical" autoComplete="off">
+          {/* 申请项名称：可从流程配置列表下拉选取（自动带出名称与流程编码），也可直接手动输入自定义名称 */}
           <FormItem
             label="申请项名称"
             field="name"
-            rules={[{ required: true, message: '请输入申请项名称' }]}
+            rules={[{ required: true, message: '请选择或输入申请项名称' }]}
           >
-            <Input placeholder="如：加班申请、差旅费报销" maxLength={30} showWordLimit />
+            <AutoComplete
+              placeholder="请选择或输入申请项名称"
+              data={appOptions.map((a) => a.name)}
+              onChange={(value) => {
+                // 命中流程配置时同步带出流程编码；手动输入的自定义名称不改动编码
+                const target = appOptions.find((a) => a.name === value)
+                if (target) {
+                  itemForm.setFieldsValue({ name: target.name, code: target.code })
+                }
+              }}
+            />
           </FormItem>
           <Row gutter={16}>
             <Col span={12}>
