@@ -58,7 +58,7 @@ export default function ToMe() {
       title: '单号',
       key: 'bill_no',
       dataIndex: 'bill_no',
-      width: 170,
+      width: 200,
       render: (v) => v || '-',
     },
     {

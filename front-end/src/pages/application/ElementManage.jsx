@@ -268,7 +268,10 @@ const CONFIG_HELP_CONTENT = (
         <b className="text-gray-700">初始化触发</b>：表单加载后执行一次，适合打开即带出的数据；
       </li>
       <li>
-        <b className="text-gray-700">值改变触发</b>：仅当该元素自身字段值变化时执行；
+        <b className="text-gray-700">值改变触发</b>：该元素字段值变化时执行——用户输入会触发；
+        被其它字段的联动写入时同样触发（写回本元素自身的联动除外），
+        因此可用于「先由联动算出值、再据此继续下一步」的链式场景（如明细求和写入总金额后自动生成大写金额）；
+        链路最多 5 跳，超过即停，避免互相写入造成死循环；
       </li>
       <li>
         <b className="text-gray-700">失焦触发</b>：控件失焦时执行；
@@ -947,7 +950,7 @@ export default function ElementManage() {
       <Drawer
         title={
           <Space size={6} align="center">
-            <span>{editing ? '编辑表单元素' : '新增表单元素'}</span>
+            <span>{editing ? `${editing.field_key || ''}-编辑表单元素` : '新增表单元素'}</span>
             {/* Arco Popover 默认写死 style.maxWidth=350，会压窄内容，这里覆盖 */}
             <Popover
               content={CONFIG_HELP_CONTENT}
