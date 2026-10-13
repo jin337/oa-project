@@ -26,7 +26,7 @@ import {
   IconRefresh,
   IconSettings,
 } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as apiDefinitionApi from 'src/api/apiDefinition'
 import * as applicationApi from 'src/api/application'
@@ -132,6 +132,9 @@ const ACTION_TYPE_OPTIONS = [
   { value: 'set_value', label: '直接赋值' },
   { value: 'fetch_and_fill', label: '请求并填充' },
 ]
+
+// 「子表汇总」选项：仅当流程配置了子表（sub_table_name）时才加入动作类型下拉
+const SUM_TABLE_ACTION_OPTION = { value: 'sum_table', label: '子表汇总' }
 
 const ACTION_TRIGGER_KEYS = ['on_mount', 'on_change', 'on_blur']
 
@@ -342,6 +345,19 @@ const CONFIG_HELP_CONTENT = (
           <li>支持的运算：+、-、*、/、%、()；支持小数、负数，空格自动忽略；</li>
         </ul>
       </li>
+      <li>
+        <b className="text-gray-700">子表汇总</b>：把某张子表某一列的合计写回当前元素（仅当流程配置了子表时可选）；
+        <div className="mt-1">
+          来源子表 / 来源列：选择参与合计的子表及其列，如 {'clfbx_detail'} 的 {'fymoney'}；
+        </div>
+        <div>目标字段就是当前正在配置的这个元素自身，因此只配来源，不用再选目标；</div>
+        <div>
+          触发时机与「初始化 / 值改变 / 失焦」无关：只要该子表数据变化就重算，改金额、添加行、删除行都会覆盖；
+        </div>
+        <div>
+          合计值等于当前值时不重复写入；写入后本元素的「值改变触发」照常执行，可继续下一步（如算出总金额后自动生成大写金额）；
+        </div>
+      </li>
     </ul>
   </div>
 )
@@ -398,6 +414,10 @@ function buildActionsFromValues(actions) {
             .filter((m) => m && (m.source || m.target))
             .map((m) => ({ source: m.source || '', target: m.target || '' }))
           if (tm.length) item.target_mapping = tm
+        } else if (a.action_type === 'sum_table') {
+          // 子表汇总：只存来源（目标字段就是配置该动作的元素自身）
+          if (a.table_key) item.table_key = a.table_key
+          if (a.source_field) item.source_field = a.source_field
         }
         return item
       })
@@ -446,8 +466,19 @@ export default function ElementManage() {
   const dataSourceType = Form.useWatch('data_source.type', form)
   // 数据源是否引用接口管理（api_ref=1 时 url/method 由接口管理回填并禁用）
   const dsApiRef = Form.useWatch('data_source.api_ref', form)
+  // 子表名列表（取自流程的 sub_table_name）：决定「子表汇总」是否可选，并提供来源子表选项。
+  // 必须在下面的 actionTypeOptions（useMemo）之前声明，否则会命中暂时性死区报错。
+  const [subTables, setSubTables] = useState([])
+
   // 事件驱动 actions：监听整个对象以联动渲染每条规则的 action_type 分支
   const actionsWatch = Form.useWatch('actions', form)
+
+  // 动作类型下拉选项：流程没有配置子表时不提供「子表汇总」
+  const actionTypeOptions = useMemo(
+    () =>
+      subTables.length ? [...ACTION_TYPE_OPTIONS, SUM_TABLE_ACTION_OPTION] : ACTION_TYPE_OPTIONS,
+    [subTables],
+  )
 
   // 接口引用选择弹窗：null=关闭；{ target:'ds' }=数据源；{ target:'action', trigger, index }=联动动作
   const [apiPicker, setApiPicker] = useState(null)
@@ -474,16 +505,15 @@ export default function ElementManage() {
       if (app?.table_name) {
         options.push({ label: `${app.table_name}（主表）`, value: app.table_name })
       }
-      if (app?.sub_table_name) {
-        app.sub_table_name
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .forEach((t) => options.push({ label: `${t}（子表）`, value: t }))
-      }
+      const subs = (app?.sub_table_name || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      subs.forEach((t) => options.push({ label: `${t}（子表）`, value: t }))
       const cached = { app, options }
       tableOptionsCache.current = cached
       setTableOptions(options)
+      setSubTables(subs)
       return cached
     } catch (e) {
       return null
@@ -1302,7 +1332,7 @@ export default function ElementManage() {
                                 >
                                   <Select
                                     placeholder="请选择动作类型"
-                                    options={ACTION_TYPE_OPTIONS}
+                                    options={actionTypeOptions}
                                   />
                                 </FormItem>
                               </Col>
@@ -1517,6 +1547,16 @@ export default function ElementManage() {
                                 </Form.List>
                               </>
                             )}
+
+                            {/* sum_table：子表汇总（目标字段 = 当前正在配置的元素自身） */}
+                            {actionType === 'sum_table' && (
+                              <SumTableActionFields
+                                field={item.field}
+                                subTables={subTables}
+                                appId={id}
+                                tableKey={actionsWatch?.[trigger.key]?.[index]?.table_key}
+                              />
+                            )}
                           </div>
                         )
                       })}
@@ -1544,6 +1584,72 @@ export default function ElementManage() {
         onSelect={handleApiPick}
       />
     </Card>
+  )
+}
+
+/**
+ * 「子表汇总」动作配置：选择来源子表与来源列。
+ * 目标字段就是当前正在配置的这个元素自身（合计结果写回该字段），所以这里只配来源。
+ * 表单值路径形如 actions.on_change.0.table_key / source_field。
+ */
+function SumTableActionFields({ field, subTables, appId, tableKey }) {
+  const [fields, setFields] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!tableKey) {
+      setFields([])
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    fetchAll((p) => applicationApi.listTableFields(appId, p, tableKey))
+      .then((res) => {
+        // fetchAll 返回的是响应结构（与原接口一致），字段列表在 res.data.list
+        if (!cancelled) setFields(res?.data?.list || [])
+      })
+      .catch(() => {
+        if (!cancelled) setFields([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [appId, tableKey])
+
+  return (
+    <Row gutter={16}>
+      <Col span={12}>
+        <FormItem
+          label="来源子表"
+          field={`${field}.table_key`}
+          rules={[{ required: true, message: '请选择来源子表' }]}
+        >
+          <Select
+            placeholder="请选择来源子表"
+            options={subTables.map((t) => ({ label: t, value: t }))}
+          />
+        </FormItem>
+      </Col>
+      <Col span={12}>
+        <FormItem
+          label="来源列"
+          field={`${field}.source_field`}
+          rules={[{ required: true, message: '请选择来源列' }]}
+        >
+          <Select showSearch placeholder="请选择来源列" loading={loading}>
+            {fields.map((f) => (
+              <Select.Option key={f.name} value={f.name}>
+                {f.name}
+                {f.comment ? `（${f.comment}）` : ''}
+              </Select.Option>
+            ))}
+          </Select>
+        </FormItem>
+      </Col>
+    </Row>
   )
 }
 

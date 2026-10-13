@@ -136,6 +136,10 @@ const requestDynamicApi = async (cfg, vars) => {
 // 联动链路最大跳数：超过即停止继续触发 on_change，防止 A→B→A 这类联动回环无限执行
 const MAX_LINK_DEPTH = 5
 
+// 子表汇总写入的来源标记：刻意与任何 field_key 都不相等，
+// 使目标字段自身的 on_change 照常继续执行（如 number_to_upper 生成大写金额）
+const SUM_TABLE_SOURCE = '__sum_table__'
+
 /** 给联动写入的字段打标记：记录写入值、触发字段与链路深度（onValuesChange 据此判断是否继续下一跳） */
 const stampWrites = (patch, fromKey, depth) => {
   const out = {}
@@ -515,6 +519,33 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
           })
         }
       })
+
+      // 子表汇总（action_type='sum_table'）：目标字段 = 配置该动作的元素自身，
+      // 值 = 来源子表 table_key 中 source_field 列的合计。
+      // 不挂在某个触发时机下，而是只要表单值变化就重算——这样改金额、添加行、删除行都能覆盖；
+      // 新值等于当前值时跳过写入，保证幂等，避免写入后再次触发 onValuesChange 造成循环。
+      const sumPatch = {}
+      elementsRef.current.forEach((el) => {
+        if (!el?.field_key || !el.actions || typeof el.actions !== 'object') return
+        Object.values(el.actions).forEach((list) => {
+          if (!Array.isArray(list)) return
+          list.forEach((a) => {
+            if (a?.action_type !== 'sum_table' || !a.table_key || !a.source_field) return
+            const rows = allValues?.[a.table_key]
+            const sum = (Array.isArray(rows) ? rows : []).reduce(
+              (acc, row) => acc + (Number(row?.[a.source_field]) || 0),
+              0,
+            )
+            if (sum !== formRef.current?.getFieldValue?.(el.field_key)) {
+              sumPatch[el.field_key] = sum
+            }
+          })
+        })
+      })
+      if (Object.keys(sumPatch).length) {
+        linkWrittenRef.current = stampWrites(sumPatch, SUM_TABLE_SOURCE, 0)
+        formRef.current?.setFieldsValue?.(sumPatch)
+      }
     },
     [isRuntime],
   )
