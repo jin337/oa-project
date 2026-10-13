@@ -367,7 +367,7 @@ export default function Apply() {
           ? selfSelectUserIDs
           : undefined,
       })
-      Message.success('提交成功，等待审核')
+      Message.success('提交成功')
       setDrawerVisible(false)
       setSelfSelectMembers({})
     } catch (e) {

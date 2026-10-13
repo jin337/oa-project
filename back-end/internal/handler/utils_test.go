@@ -39,6 +39,9 @@ func TestNumberToUpper(t *testing.T) {
 		{"零元零五分", 0.05, "零元零伍分"},
 		{"一元五角五分", 1.55, "壹元伍角伍分"},
 		{"负小数", -1.5, "负壹元伍角"},
+		{"空字符串", "", ""},
+		{"空白字符串", "  ", ""},
+		{"nil 视为空值", nil, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -54,6 +57,7 @@ func TestNumberToUpper(t *testing.T) {
 }
 
 // TestNumberToUpperInvalid 非法输入必须返回错误而不是 panic。
+// 注意：空值（未传 / null / 空串 / 纯空白）不属于非法输入，见 TestNumberToUpper。
 func TestNumberToUpperInvalid(t *testing.T) {
 	cases := []struct {
 		name string
@@ -61,7 +65,6 @@ func TestNumberToUpperInvalid(t *testing.T) {
 	}{
 		{"布尔值", true},
 		{"非数字字符串", "abc"},
-		{"nil", nil},
 		{"超大数值", 1000000000000},
 	}
 	for _, c := range cases {
@@ -117,6 +120,67 @@ func TestCalculateExpression(t *testing.T) {
 			}
 			if math.Abs(got-c.want) > 1e-9 {
 				t.Errorf("CalculateExpression(%q) = %v, 期望 %v", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// TestTryDateDiff 覆盖「日期(时间) - 日期(时间)」识别、绝对时间差、负数、小数、非法日期与非日期表达式。
+func TestTryDateDiff(t *testing.T) {
+	cases := []struct {
+		name        string
+		in          string
+		want        float64
+		wantMatched bool
+		wantErr     bool
+	}{
+		{"纯日期相减", "2026-10-13-2026-10-12", 1, true, false},
+		{"纯日期相减带空格", "2026-10-13 - 2026-10-12", 1, true, false},
+		{"反向相减为负", "2026-10-12-2026-10-13", -1, true, false},
+		{"同一天为零", "2026-10-13 - 2026-10-13", 0, true, false},
+		{"跨月", "2026-10-31 - 2026-10-01", 30, true, false},
+		{"跨年", "2027-01-01 - 2026-12-31", 1, true, false},
+		{"闰年二月", "2028-03-01 - 2028-02-28", 2, true, false},
+		{"时间戳绝对时间差", "2026-10-13 12:00:00 - 2026-10-12 06:00:00", 1.25, true, false},
+		{"时间戳负数", "2026-10-12 06:00:00 - 2026-10-13 12:00:00", -1.25, true, false},
+		{"时分精度", "2026-10-13 12:00 - 2026-10-13 00:00", 0.5, true, false},
+		{"日期与时间混合", "2026-10-13 - 2026-10-12 06:00:00", 0.75, true, false},
+		{"T 分隔", "2026-10-13T12:00:00 - 2026-10-13T00:00:00", 0.5, true, false},
+		{"保留两位小数", "2026-10-13 08:00:00 - 2026-10-12 00:00:00", 1.33, true, false},
+		{"左侧为空", "2026-10-13-", 0, true, false},
+		{"左侧为空带空格", "2026-10-13 - ", 0, true, false},
+		{"右侧为空", "-2026-10-13", 0, true, false},
+		{"左侧为空带时间戳", "2026-10-13 12:00:00-", 0, true, false},
+		{"右侧为空带时间戳", "- 2026-10-13 12:00:00", 0, true, false},
+		{"两侧均为空", "-", 0, true, false},
+		{"单个日期不误判", "2026-10-13", 0, false, false},
+		{"普通加法不误判", "1+2", 0, false, false},
+		{"普通表达式不误判", "(100+2)*3 % 7", 0, false, false},
+		{"日期减数字不误判", "2026-10-13 - 5", 0, false, false},
+		{"三个日期连减不误判", "2026-10-13-2026-10-12-2026-10-11", 0, false, false},
+		{"非法日期报错", "2026-13-45-2026-10-12", 0, true, true},
+		{"左侧非法日期报错", "2026-13-45-", 0, true, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, matched, err := TryDateDiff(c.in)
+			if matched != c.wantMatched {
+				t.Fatalf("TryDateDiff(%q) matched = %v, 期望 %v", c.in, matched, c.wantMatched)
+			}
+			if c.wantErr {
+				if err == nil {
+					t.Fatalf("TryDateDiff(%q) 期望返回错误，实际得到 %v", c.in, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("TryDateDiff(%q) 返回错误: %v", c.in, err)
+			}
+			if !matched {
+				return
+			}
+			if math.Abs(got-c.want) > 1e-9 {
+				t.Errorf("TryDateDiff(%q) = %v, 期望 %v", c.in, got, c.want)
 			}
 		})
 	}

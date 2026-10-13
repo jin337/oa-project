@@ -183,7 +183,7 @@ export default function Drafts() {
           business_data_id: record.data_id ?? record.id,
         })
       }
-      Message.success('提交成功，等待审核')
+      Message.success('提交成功')
       setDrawerVisible(false)
       fetchList()
     } catch (e) {

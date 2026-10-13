@@ -106,10 +106,9 @@ func prepareApprovalContext(appID, businessDataID uint, selfSelectMembers map[st
 	}
 
 	// 4. 评估条件分支，得到执行路径
+	// 执行路径为空（流程只配置了发起人节点，或命中的分支内既无审批人也无抄送人）：
+	// 不再拦截，由各提交入口按「提交即自动通过」处理（见 finishNoApproverInstance）。
 	execPath := flattenExecutionPath(nodes, formData)
-	if len(execPath) == 0 {
-		return nil, errors.New("审批流评估后无审批节点，请检查流程配置")
-	}
 
 	// 5. 将发起人自选审批人注入流程快照（approverType=3 节点的 members 直接包含最终选人）
 	injectedNodes := injectSelfSelectIntoNodes(nodes, selfSelectMembers)
@@ -231,12 +230,22 @@ func loadOwnedInstance(db *gorm.DB, curUserID, instanceID uint, action string, a
 	return &instance, nil
 }
 
+// finishNoApproverInstance 无审批节点的流程（执行路径为空）提交即自动通过：
+//   - 发起人节点（type=1）只代表「谁可以发起」的权限范围，不是审批步骤；
+//     流程只配发起人、或条件分支命中后既无审批人（type=2）也无抄送人（type=3）时，
+//     执行路径为空，没有任何任务可生成；
+//   - 此时不生成审批任务，实例直接置为「已通过」，并复用 finishInstance 的终态处理
+//     （取消待办 / 流程结束抄送 / 结果通知）。
+func finishNoApproverInstance(tx *gorm.DB, instance *model.ApprovalInstance, curUserID uint) error {
+	return finishInstance(tx, instance, model.InstanceStatusPassed, "自动通过", curUserID)
+}
+
 // ApprovalInstanceCreate 发起审批：
 //  1. 校验/解析业务数据
 //  2. 快照审批流配置 + 表单数据
-//  3. 评估条件分支，得到执行路径
+//  3. 评估条件分支，得到执行路径（为空表示无审批节点，提交即自动通过）
 //  4. 校验发起人自选节点已选审批人
-//  5. 事务内创建流程实例（状态=进行中）并为首个审批节点生成任务
+//  5. 事务内创建流程实例并为首个审批节点生成任务
 func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
 	// 0. 解析业务数据 ID（支持自动创建）
 	if _, err := resolveBusinessDataID(curUserID, req); err != nil {
@@ -280,6 +289,10 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		instance.CreatedBy, instance.UpdatedBy = curUserID, curUserID
 		if err := tx.Create(&instance).Error; err != nil {
 			return err
+		}
+		// 无审批节点（如仅配置了发起人）：提交即自动通过，不生成审批任务
+		if len(ctx.execPath) == 0 {
+			return finishNoApproverInstance(tx, &instance, curUserID)
 		}
 		// 为首个审批节点生成任务（自选成员已在快照 members 中，无需额外传入）
 		if err := generateTasksForCurrentNode(tx, &instance, ctx.injectedNodes, curUserID, ""); err != nil {
@@ -476,6 +489,11 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 			return err
 		}
 
+		// 无审批节点（如仅配置了发起人）：提交即自动通过，不生成审批任务
+		if len(ctx.execPath) == 0 {
+			return finishNoApproverInstance(tx, &instance, curUserID)
+		}
+
 		// 生成首个审批节点任务（自选成员已在快照 members 中）
 		if err := generateTasksForCurrentNode(tx, &instance, ctx.injectedNodes, curUserID, ""); err != nil {
 			return err
@@ -518,9 +536,6 @@ func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.Approv
 			return err
 		}
 		execPath := flattenExecutionPath(nodes, formData)
-		if len(execPath) == 0 {
-			return errors.New("审批流评估后无审批节点，请检查流程配置")
-		}
 		execPathBytes, _ := json.Marshal(execPath)
 
 		// 3. 原子守卫：仅当实例仍为已驳回时流转为进行中，重置游标到首节点，更新执行路径
@@ -548,6 +563,10 @@ func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.Approv
 		}
 		if err := tx.First(&instance, instanceID).Error; err != nil {
 			return err
+		}
+		// 无审批节点（如仅配置了发起人）：重新提交即自动通过，不生成审批任务
+		if len(execPath) == 0 {
+			return finishNoApproverInstance(tx, &instance, curUserID)
 		}
 		return generateTasksForCurrentNode(tx, &instance, nodes, curUserID, "")
 	})
@@ -598,7 +617,7 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 
 // ApprovalInstanceDelete 删除流程实例（软删除）
 // 仅允许发起人删除已终结的实例（已拒绝/已驳回/已作废/已撤回/草稿）
-// 同时级联软删除对应的业务表数据
+// 同时级联软删除对应的业务表数据，并清理该实例产生的通知
 func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "删除",
@@ -613,6 +632,12 @@ func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 			if err := deleteBusinessData(tx, instance.AppID, instance.BusinessDataID); err != nil {
 				return fmt.Errorf("删除业务数据失败: %w", err)
 			}
+		}
+
+		// 清理该实例产生的通知（待办/退回/抄送/结果）：通知表无软删除字段，物理删除，
+		// 避免实例删除后通知仍残留在「消息通知」里
+		if err := tx.Where("instance_id = ?", instanceID).Delete(&model.Notification{}).Error; err != nil {
+			return err
 		}
 
 		// 软删除审批实例

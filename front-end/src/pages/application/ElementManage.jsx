@@ -149,9 +149,22 @@ const CONFIG_HELP_CONTENT = (
         </div>
       </li>
       <li>
-        <b className="text-gray-700">默认值</b>：新增表单时仅当该字段为空才填充。
+        <b className="text-gray-700">默认值</b>：新增表单时仅当该字段为空才填充（已有值不会被覆盖）。
         <div>输入类填文本；下拉 / 单选填选项的「提交值」；</div>
         <div>多选类（多选框、树选择多选）填 JSON 数组 {'["a","b"]'} 或逗号分隔 a,b；</div>
+        <div>
+          时间类（日期 / 日期时间）可取当前时间：{'${new Date()}'}、{'${now()}'}、{'${today()}'}
+          ，按元素粒度自动格式化为 {'YYYY-MM-DD'} 或 {'YYYY-MM-DD HH:mm:ss'}；
+        </div>
+        <div>
+          可取当前登录用户：{'${user.id}'}（用户 ID）、{'${user.username}'}
+          （登录账号）、{'${user.profile.nickname}'}（昵称）、{'${user.dept_id}'}
+          （本部门 ID）、{'${user.dept_name}'}（本部门名称）；支持点路径，如{' '}
+          {'${user.dept_ids.0.name}'}；
+        </div>
+        <div>
+          以上表达式仅在「填写」场景生效；解析不出结果时不填充（不会把表达式原文显示或写入数据）；
+        </div>
         <div>如需按其它字段动态生成，请用下方「事件驱动与联动」的「初始化触发 + 直接赋值」；</div>
       </li>
       <li>
@@ -282,7 +295,8 @@ const CONFIG_HELP_CONTENT = (
           ；
         </div>
         <div>
-          同样支持「引用接口」（回填并禁用地址 / 方法）；请求参数右侧「格式化」按钮可补键值双引号；
+          同样支持「引用接口」（回填并禁用地址 / 方法，同时把该接口的「转发参数模板」填充为请求参数初值）；
+          填充后可手工修改，请求参数右侧「格式化」按钮可补键值双引号；运行时以实际请求参数为准；
         </div>
         <div>目标字段的来源是「接口响应里的字段路径」（点路径），如 {'user.city_name'}；</div>
         <div>公共计算 / 转换接口 {'POST /utils/calculate'} 支持的类型：</div>
@@ -290,10 +304,19 @@ const CONFIG_HELP_CONTENT = (
           <li className="mt-1">
             <b className="text-gray-700">{'number_to_upper'}</b>：数字转大写金额，请求{' '}
             {'{"type":"number_to_upper","value":100000}'} → 返回 {'{"result":"壹拾万元整"}'}；
+            金额为空（不传 / null / 空串 / 纯空白）时返回 {'{"result":""}'}，不报错；{'0'} 返回「零元整」；
+            非数字内容（如 {'"abc"'}）仍报错；
           </li>
           <li>
             <b className="text-gray-700">{'calc'}</b>：表达式计算（支持加减乘除取模和括号），请求{' '}
             {'{"type":"calc","value":"(100+2)*3 % 7"}'} → 返回 {'{"result":5}'}；
+          </li>
+          <li>
+            <b className="text-gray-700">{'calc'}</b>：日期相减，请求{' '}
+            {'{"type":"calc","value":"2026-10-13-2026-10-12"}'} → 返回 {'{"result":1}'}；
+            形如「日期(时间) - 日期(时间)」时按绝对时间差返回<b className="text-gray-700">天</b>
+            （保留 2 位小数、允许负数；如 {'2026-10-13 12:00:00 - 2026-10-12 06:00:00'} → {'1.25'}）；
+            任一侧为空（如 {'2026-10-13-'} / {'-2026-10-13'}）按空值计算，返回 {'0'}；
           </li>
           <li>支持的运算：+、-、*、/、%、()；支持小数、负数，空格自动忽略；</li>
         </ul>
@@ -566,8 +589,10 @@ export default function ElementManage() {
     }
   }
 
-  // 接口引用弹窗确认：回填 method+path 并置 api_ref=1（数据源 / 联动动作共用）
+  // 接口引用弹窗确认：回填 method+path、置 api_ref=1，并把接口的「转发参数模板」填充为请求参数初值；
+  // 模板为空时保留原有请求参数不动；填充后仍可手工修改，运行时以实际请求参数为准
   const handleApiPick = (def) => {
+    const tpl = safeStringify(def?.params)
     if (apiPicker?.target === 'ds') {
       form.setFieldsValue({
         data_source: {
@@ -575,6 +600,7 @@ export default function ElementManage() {
           url: def.path,
           method: def.method,
           api_ref: 1,
+          ...(tpl ? { params: tpl } : {}),
         },
       })
     } else if (apiPicker?.target === 'action') {
@@ -587,6 +613,7 @@ export default function ElementManage() {
           api_url: def.path,
           method: def.method,
           api_ref: 1,
+          ...(tpl ? { params: tpl } : {}),
         }
         form.setFieldsValue({ actions: next })
       }

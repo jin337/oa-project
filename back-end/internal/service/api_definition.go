@@ -519,6 +519,19 @@ func evalParamsTemplate(params map[string]interface{}, vars map[string]interface
 	return out
 }
 
+// mergeForwardParams 合并转发参数：模板铺底，调用方传入的同名键覆盖模板。
+// 「转发参数模板」因此只作为引用接口时的默认值/初值，运行时不覆盖调用方的实际参数。
+func mergeForwardParams(tpl, form map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(tpl)+len(form))
+	for k, v := range tpl {
+		out[k] = v
+	}
+	for k, v := range form {
+		out[k] = v
+	}
+	return out
+}
+
 // forwardHTTP 转发内部接口：method（与对外方法一致）+ target_path + params 模板（独立 context 8s 超时）
 func forwardHTTP(bearerToken string, def *model.ApiDefinition, vars map[string]interface{}) (*model.ApiDefinitionDebugResult, error) {
 	method := strings.ToUpper(def.Method)
@@ -528,13 +541,11 @@ func forwardHTTP(bearerToken string, def *model.ApiDefinition, vars map[string]i
 	if err := validateInternalPath(def.TargetPath); err != nil {
 		return nil, err
 	}
-	params := evalParamsTemplate(def.Params, vars)
-	if len(params) == 0 && len(def.Params) == 0 {
-		// 未配置参数模板：原样透传外部请求参数
-		if form, ok := vars["form"].(map[string]interface{}); ok {
-			params = form
-		}
-	}
+	// 转发参数模板只作「默认值」：先按模板铺底，再用调用方实际传入的参数覆盖同名键。
+	// 即引用接口时模板会填充为请求参数初值，之后调用方改过的请求参数优先；
+	// 模板为空时等价于原样透传调用方参数。
+	form, _ := vars["form"].(map[string]interface{})
+	params := mergeForwardParams(evalParamsTemplate(def.Params, vars), form)
 	// 渲染目标路径中的 :xxx 段（试调动态路径接口时用 params 中的路径参数替换；
 	// 统一分发路径已由 Execute 渲染过，此处幂等无副作用）
 	targetPath := renderPathTemplate(def.TargetPath, params)

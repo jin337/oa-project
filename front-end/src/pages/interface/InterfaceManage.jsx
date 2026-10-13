@@ -692,7 +692,9 @@ export default function InterfaceManage() {
                 extra={
                   <span>
                     JSON 对象，值支持 {'${form.xxx}'} 占位（如 {'{"keyword": "${form.keyword}"}'}
-                    ）；留空表示无参数
+                    ）；留空表示无参数；
+                    <br />
+                    仅作「默认值」：表单元素引用该接口时填充为请求参数初值，运行时以实际请求参数为准（同名键覆盖模板）；
                   </span>
                 }
               >

@@ -3,8 +3,10 @@ package handler
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"back-end/internal/pkg/response"
 
@@ -37,13 +39,23 @@ func Calculate(c *gin.Context) {
 	case "number_to_upper":
 		result, err = NumberToUpper(req.Value)
 	case "calc":
-		// 表达式计算，支持类似 (100+2)*3 的表达式
+		// 表达式计算：支持类似 (100+2)*3 的表达式；
+		// 若形如「日期(时间) - 日期(时间)」则按绝对时间差返回天数
 		expr, ok := req.Value.(string)
 		if !ok {
 			response.Fail(c, response.CodeParamError, "参数错误: value 必须是表达式字符串")
 			return
 		}
-		result, err = CalculateExpression(expr)
+		days, isDateDiff, derr := TryDateDiff(expr)
+		if derr != nil {
+			response.Fail(c, response.CodeParamError, "计算失败: "+derr.Error())
+			return
+		}
+		if isDateDiff {
+			result = days
+		} else {
+			result, err = CalculateExpression(expr)
+		}
 	default:
 		response.Fail(c, response.CodeParamError, "不支持的计算类型: "+req.Type)
 		return
@@ -61,6 +73,12 @@ func Calculate(c *gin.Context) {
 
 // NumberToUpper 数字转大写金额
 func NumberToUpper(value interface{}) (string, error) {
+	// 空值（未传 / null / 空串 / 纯空白）视为「未填写」，返回空字符串而不报错，
+	// 避免表单金额为空时调用该接口直接失败
+	if isEmptyValue(value) {
+		return "", nil
+	}
+
 	num, err := toFloat64(value)
 	if err != nil {
 		return "", err
@@ -337,6 +355,81 @@ func (p *exprParser) parseFactor() (float64, error) {
 	}
 
 	return 0, fmt.Errorf("意外的字符: %c", ch)
+}
+
+// dateDiffRe 匹配「日期(时间) - 日期(时间)」形式的表达式，例如：
+//   - 2026-10-13-2026-10-12
+//   - 2026-10-13 - 2026-10-12
+//   - 2026-10-13 12:00:00 - 2026-10-12 06:00:00
+//   - 2026-10-13 12:00 - 2026-10-12 06:00
+//
+// 两侧均允许为空，用于兼容表单里取到空值的情况（如 2026-10-13- / -2026-10-13）。
+var dateDiffRe = regexp.MustCompile(`^\s*(\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)?\s*-\s*(\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)?\s*$`)
+
+// TryDateDiff 识别「日期(时间) - 日期(时间)」表达式，按绝对时间差返回天数
+// （保留 2 位小数，允许负数；含时间戳时按真实时长折算，如 30 小时 = 1.25）。
+// 任一侧为空时（如 2026-10-13- / -2026-10-13）视为空值参与相减，返回 0。
+// 未命中该形式时返回 matched=false，交由 CalculateExpression 按普通数学表达式处理；
+// 命中但日期非法时返回 matched=true 并携带错误，避免静默算出错误数值。
+func TryDateDiff(expr string) (days float64, matched bool, err error) {
+	m := dateDiffRe.FindStringSubmatch(expr)
+	if m == nil {
+		return 0, false, nil
+	}
+
+	leftStr, rightStr := strings.TrimSpace(m[1]), strings.TrimSpace(m[2])
+
+	// 非空的一侧必须是合法日期（支持时间戳），否则报错，避免静默算出错误结果
+	var left, right time.Time
+	if leftStr != "" {
+		t, perr := parseDateTime(leftStr)
+		if perr != nil {
+			return 0, true, fmt.Errorf("无效的日期: %s", leftStr)
+		}
+		left = t
+	}
+	if rightStr != "" {
+		t, perr := parseDateTime(rightStr)
+		if perr != nil {
+			return 0, true, fmt.Errorf("无效的日期: %s", rightStr)
+		}
+		right = t
+	}
+
+	// 任一侧为空（如 2026-10-13- / -2026-10-13）：空值参与相减，返回 0
+	if leftStr == "" || rightStr == "" {
+		return 0, true, nil
+	}
+
+	days = left.Sub(right).Hours() / 24
+	days = math.Round(days*100) / 100
+	if days == 0 {
+		days = 0 // 消除 -0
+	}
+	return days, true, nil
+}
+
+// parseDateTime 解析日期 / 日期时间（支持 YYYY-MM-DD、YYYY-MM-DD HH:mm、YYYY-MM-DD HH:mm:ss，也接受 T 分隔）
+func parseDateTime(s string) (time.Time, error) {
+	s = strings.TrimSpace(strings.ReplaceAll(s, "T", " "))
+	for _, layout := range []string{"2006-01-02 15:04:05", "2006-01-02 15:04", "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("无法解析的时间: %s", s)
+}
+
+// isEmptyValue 判断入参是否为「空值」：未传（nil）、null、空串或纯空白字符串。
+func isEmptyValue(value interface{}) bool {
+	switch v := value.(type) {
+	case nil:
+		return true
+	case string:
+		return strings.TrimSpace(v) == ""
+	default:
+		return false
+	}
 }
 
 // toFloat64 转换为 float64

@@ -133,13 +133,27 @@ const requestDynamicApi = async (cfg, vars) => {
   })
 }
 
-/** 判断联动写入标记是否命中当前变化值（写回触发字段时跳过二次联动） */
-const isLinkWritten = (lw, key, val) => {
-  if (!lw || !Object.prototype.hasOwnProperty.call(lw, key)) return false
+// 联动链路最大跳数：超过即停止继续触发 on_change，防止 A→B→A 这类联动回环无限执行
+const MAX_LINK_DEPTH = 5
+
+/** 给联动写入的字段打标记：记录写入值、触发字段与链路深度（onValuesChange 据此判断是否继续下一跳） */
+const stampWrites = (patch, fromKey, depth) => {
+  const out = {}
+  Object.keys(patch).forEach((k) => {
+    out[k] = { value: patch[k], from: fromKey, depth: (depth || 0) + 1 }
+  })
+  return out
+}
+
+/** 匹配联动写入标记：命中返回该条标记（含 from / depth），未命中返回 null */
+const matchLinkWrite = (lw, key, val) => {
+  if (!lw || !Object.prototype.hasOwnProperty.call(lw, key)) return null
+  const entry = lw[key]
+  if (!entry || typeof entry !== 'object') return null
   try {
-    return JSON.stringify(lw[key]) === JSON.stringify(val)
+    return JSON.stringify(entry.value) === JSON.stringify(val) ? entry : null
   } catch {
-    return lw[key] === val
+    return entry.value === val ? entry : null
   }
 }
 
@@ -257,7 +271,8 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
   // 当前登录用户（/auth/profile）：供默认值中的 ${user.xxx} 表达式求值
   const { user } = useAuth()
   const formRef = useRef(null)
-  // 联动写入标记：set_value/fetch_and_fill 写入的字段值，onValuesChange 识别并跳过（防写回触发字段导致二次联动）
+  // 联动写入标记：set_value/fetch_and_fill 写入的字段值 + 触发字段 + 链路深度，
+  // onValuesChange 据此判断该写入是否要继续触发目标字段的 on_change（写回触发字段自身时跳过）
   const linkWrittenRef = useRef({})
   formRef.current = form
   // 最新动态选项（联动 set_value 需按选中项 raw 取值）
@@ -294,8 +309,8 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
     }
   }, [])
 
-  /** 执行 fetch_and_fill 动作：请求接口并按 target_mapping 填充目标字段 */
-  const runFetchFill = useCallback(async (action, allValues, currentObj) => {
+  /** 执行 fetch_and_fill 动作：请求接口并按 target_mapping 填充目标字段（fromKey/depth 用于联动链路标记） */
+  const runFetchFill = useCallback(async (action, allValues, currentObj, fromKey, depth) => {
     // vars：form = 表单值；item = 选中项数据（api_url 中显式写 ${item.xxx} 引用）
     const vars = { form: allValues || {}, item: currentObj }
     // 先解析 URL 中的 ${form.xxx} / ${item.xxx} 路径模板，避免 ${} 被请求层整体编码
@@ -312,7 +327,7 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
         }
       }
       if (Object.keys(patch).length) {
-        linkWrittenRef.current = { ...patch }
+        linkWrittenRef.current = stampWrites(patch, fromKey, depth)
         formRef.current?.setFieldsValue?.(patch)
       }
     } catch (e) {
@@ -322,7 +337,7 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
 
   /** 执行某元素指定触发时机的全部动作（set_value / fetch_and_fill）；colCtx 为子表列上下文（tableKey/index/fieldKey） */
   const runActions = useCallback(
-    (trigger, el, allValues, colCtx) => {
+    (trigger, el, allValues, colCtx, depth = 0) => {
       const actions = Array.isArray(el.actions?.[trigger]) ? el.actions[trigger] : []
       for (const action of actions) {
         if (!action?.action_type) continue
@@ -370,12 +385,22 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
             }
           }
           if (Object.keys(patch).length) {
-            linkWrittenRef.current = { ...patch }
+            // 触发字段 key：列场景为同行 tableKey[索引].列，普通场景为 field_key
+            const fromKey = colCtx
+              ? `${colCtx.tableKey}[${colCtx.index}].${colCtx.fieldKey}`
+              : el?.field_key
+            linkWrittenRef.current = stampWrites(patch, fromKey, depth)
             formRef.current?.setFieldsValue?.(patch)
           }
         } else if (action.action_type === 'fetch_and_fill') {
           // 传入选中项完整数据：api_url 中的 ${item.xxx} / ${form.xxx} 均可解析
-          runFetchFill(action, allValues, currentObj)
+          runFetchFill(
+            action,
+            allValues,
+            currentObj,
+            colCtx ? `${colCtx.tableKey}[${colCtx.index}].${colCtx.fieldKey}` : el?.field_key,
+            depth,
+          )
         }
       }
     },
@@ -430,14 +455,22 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
       const changedKeys = Object.keys(changed || {})
       elementsRef.current.forEach((el) => {
         const actions = el.actions?.on_change
-        // on_change 语义：仅当该元素自身字段值变化时触发；
-        // 联动写入（set_value/fetch_and_fill 的目标）按 linkWrittenRef 标记跳过，避免写回触发字段造成二次联动
+        // on_change 语义：仅当该元素自身字段值发生变化时触发。
+        // 联动写入（set_value/fetch_and_fill 的目标）分两种处理：
+        //   ① 写回触发字段自身 → 跳过，避免二次联动；
+        //   ② 写入其它字段 → 照常执行目标字段的 on_change（如明细求和写入 totalmoney 后，
+        //      继续用 number_to_upper 生成大写金额），链路深度超过 MAX_LINK_DEPTH 即停防回环。
         if (Array.isArray(actions) && actions.length && changedKeys.includes(el.field_key)) {
           const lw = linkWrittenRef.current
           const val = changed[el.field_key]
-          const isLinkWrite = isLinkWritten(lw, el.field_key, val)
-          if (isLinkWrite) {
+          const entry = matchLinkWrite(lw, el.field_key, val)
+          if (entry) {
             delete lw[el.field_key]
+            const selfWrite = entry.from === el.field_key
+            const depth = entry.depth || 0
+            if (!selfWrite && depth <= MAX_LINK_DEPTH) {
+              runActionsRef.current?.('on_change', el, allValues, undefined, depth)
+            }
           } else {
             runActionsRef.current?.('on_change', el, allValues)
           }
