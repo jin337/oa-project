@@ -226,6 +226,10 @@ export default function ApprovalTimeline({
   const instMeta = INSTANCE_STATUS_META[instance.status] || { label: '未知', color: 'gray' }
   const createdByName = instance.created_by_name || `用户#${instance.created_by}`
 
+  // 流程里只有发起人时（没有审批人 / 抄送人节点）不展示审批流程区，
+  // 避免只显示一条孤立的「发起人」记录。下方 Timeline 实际只渲染 type 2 / 3。
+  if (!flowNodes.some((n) => n.type === 2 || n.type === 3)) return null
+
   // 按 node_id 分组 tasks
   const tasksByNode = {}
   tasks.forEach((t) => {

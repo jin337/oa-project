@@ -10,6 +10,7 @@ import {
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 
 import { renderDeptPreview } from './DeptElement'
+import { renderDescriptionPreview, renderDescriptionSettings } from './DescriptionElement'
 import { renderDividerPreview, renderDividerSettings } from './DividerElement'
 import { renderModelPreview } from './ModelElement'
 import {
@@ -69,6 +70,13 @@ const getTypeLabel = (type) => ELEMENT_TYPE_OPTIONS.find((c) => c.value === type
 
 // 无字段标签的组件类型（画布 FormItem / 动态表单中隐藏 label 并走特殊布局，如分割线/表格）
 export const NO_LABEL_TYPES = ['divider', 'table']
+
+// 详情只读（detail / move-detail）下保持自身渲染、不交给 ReadonlyValue 的展示型组件：
+// 这些组件不承载字段值，打成纯文本会变成 '-'（与 NO_LABEL_TYPES 解耦）
+export const SELF_RENDER_TYPES = ['divider', 'description']
+
+/** 判断是否为详情只读下自渲染的展示型组件 */
+export const isSelfRenderElement = (element_type) => SELF_RENDER_TYPES.includes(element_type)
 
 // ==================== 通用属性面板 ====================
 
@@ -133,6 +141,18 @@ export const BASE_ELEMENT_CONFIGS = {
     },
     renderPreview: renderDividerPreview,
     renderSettings: renderDividerSettings,
+  },
+
+  description: {
+    meta: {
+      key: 'base_description',
+      element_type: 'description',
+      label: '说明文字',
+      width: 24,
+      defaultProps: { content: '内容', contentRed: true },
+    },
+    renderPreview: renderDescriptionPreview,
+    renderSettings: renderDescriptionSettings,
   },
 
   table: {

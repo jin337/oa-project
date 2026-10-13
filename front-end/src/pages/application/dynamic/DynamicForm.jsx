@@ -39,6 +39,7 @@ import {
   TableElementField,
   getBaseElementConfig,
   isNoLabelElement,
+  isSelfRenderElement,
   renderCommonSettings,
   renderPreviewConfig,
 } from './elements/elementConfig'
@@ -56,6 +57,7 @@ export {
   getBaseElementConfig,
   isBaseElement,
   isNoLabelElement,
+  isSelfRenderElement,
   removeColumn,
   renderCommonSettings,
   renderPreviewConfig,
@@ -655,7 +657,8 @@ export const renderFormItemElement = (el, ctx) => {
 
   // 控件渲染分发：
   // - 详情只读（pageType='detail' / 'move-detail'）：常规控件与字段型组件（如 upload）渲染为纯文本
-  //   （空值显示 '-'；move-detail 为 MoveDetailMode 注入的模拟数据），divider 保持分割线
+  //   （空值显示 '-'；move-detail 为 MoveDetailMode 注入的模拟数据），
+  //   无字段标签的展示型组件（divider / description）保持自身渲染
   // - 其余模式：基础组件走专属配置（传原始 pageType，表格据此区分 form/move-form 可编辑、
   //   detail/move-detail 纯文本）；常规控件走统一渲染配置中心
   const renderControl = () => {
@@ -677,7 +680,7 @@ export const renderFormItemElement = (el, ctx) => {
     // value 由 FormItem 注入（move-detail 为 MoveDetailMode 注入的模拟数据）
     if (
       (pageType === 'detail' || pageType === 'move-detail') &&
-      el.element_type !== 'divider' &&
+      !isSelfRenderElement(el.element_type) &&
       !permEditable
     ) {
       return (
