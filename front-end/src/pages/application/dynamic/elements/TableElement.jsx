@@ -250,6 +250,8 @@ export const TableElementField = ({
                       value={cellValue}
                       elementType={col.element_type}
                       dataSource={col.data_source}
+                      el={col}
+                      rt={rt}
                     />
                   ) : (
                     renderFn(col, undefined, rt)
@@ -273,7 +275,12 @@ export const TableElementField = ({
                     {cellEditable ? (
                       renderFn(col, 'form', rt)
                     ) : isReadonlyText ? (
-                      <ReadonlyValueCmp elementType={col.element_type} dataSource={col.data_source} />
+                      <ReadonlyValueCmp
+                        elementType={col.element_type}
+                        dataSource={col.data_source}
+                        el={col}
+                        rt={rt}
+                      />
                     ) : (
                       renderFn(col, undefined, rt)
                     )}

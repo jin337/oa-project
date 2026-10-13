@@ -52,12 +52,16 @@ const READONLY_RENDERERS = {
  * 作为 FormItem 单子元素接收 Arco 注入的 value，输出数据值对应的 data_source label
  * （数组值逐项映射后以 ", " 连接），空值显示 '-'。
  * elementType 为时间/日期类型时，value 经 formatTimeValue 格式化为标准可读的日期/时间字符串。
+ *
+ * rt 为运行时上下文（RuntimeFormContext）：专属组件（modelselect 等）需借它取已加载选项，
+ * 缺失时专属组件会退化为自加载接口。el 缺失时用 dataSource 兜底构造最小 el，
+ * 保证表格列（只透传 dataSource）也能反查展示名。
  */
-export const ReadonlyValue = ({ value, elementType, dataSource, el }) => {
+export const ReadonlyValue = ({ value, elementType, dataSource, el, rt }) => {
   // 专属只读组件分派（upload/deptselect/userselect 等注册类型）
   const Renderer = READONLY_RENDERERS[elementType]
   if (Renderer) {
-    return <Renderer value={value} el={el} />
+    return <Renderer value={value} el={el || { data_source: dataSource }} rt={rt} />
   }
   let text
   if (value == null || value === '') {

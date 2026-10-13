@@ -688,6 +688,7 @@ export const renderFormItemElement = (el, ctx) => {
           elementType={el.element_type}
           dataSource={el.data_source}
           el={el}
+          rt={ctx.runtime}
         />
       )
     }

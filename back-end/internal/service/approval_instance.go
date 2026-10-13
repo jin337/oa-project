@@ -733,9 +733,8 @@ func toTaskResults(tasks []model.ApprovalInstanceTask) []model.ApprovalInstanceT
 	return results
 }
 
-// loadBusinessData 读取实例关联的业务数据（主表 + 子表，与 ApplicationDataDetail 逻辑一致）
-// 返回前统一剥离审计字段（deleted_at/created_at/created_by/updated_at/updated_by），
-// 覆盖主表行与每一条子表行，避免内部字段传递给前端
+// loadBusinessData 读取实例关联的业务数据（主表 + 子表）
+// 保留审计字段（deleted_at/created_at/created_by/updated_at/updated_by）：审批详情需回显创建信息
 func loadBusinessData(instance model.ApprovalInstance) map[string]interface{} {
 	var bizData map[string]interface{}
 	real := bizTableName(instance.BusinessTable)
@@ -746,8 +745,6 @@ func loadBusinessData(instance model.ApprovalInstance) map[string]interface{} {
 		}
 		database.DB.Raw(sql, instance.BusinessDataID).Scan(&bizData)
 	}
-	// 主表行剥离审计字段（bizData 为 nil 时 delete 为空操作）
-	stripAuditFields(bizData)
 	// 子表数据：按 parent_id 关联主表
 	var app model.Application
 	if err := database.DB.First(&app, instance.AppID).Error; err == nil && app.SubTableName != "" {
@@ -765,10 +762,6 @@ func loadBusinessData(instance model.ApprovalInstance) map[string]interface{} {
 				}
 				if bizData == nil {
 					bizData = make(map[string]interface{})
-				}
-				// 子表行剥离审计字段
-				for _, row := range rows {
-					stripAuditFields(row)
 				}
 				bizData[sub] = rows
 			}
