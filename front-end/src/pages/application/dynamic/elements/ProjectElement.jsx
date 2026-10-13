@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import request from 'src/api/request'
 import { API_PREFIX } from 'src/utils/constants'
 import { findOptionByValue, getStaticOptions } from '../utils/formUtils'
+import { applyScroll, markScroll } from '../utils/scrollGuard'
 
 /**
  * 项目选择元素（projectselect）
@@ -124,6 +125,7 @@ function ProjectPicker({ value, onChange, options, placeholder, label, disabled 
   const filtered = useMemo(() => filterOptions(options, searchValue.trim()), [options, searchValue])
 
   const open = () => {
+    markScroll() // Modal 开合会改写 body overflow 并可能重置滚动位置，先记下来
     setSearchValue('')
     setSelectedValue(value == null || value === '' ? '' : value)
     setVisible(true)
@@ -143,10 +145,14 @@ function ProjectPicker({ value, onChange, options, placeholder, label, disabled 
         <Modal
           title={label ? `${label}选择` : '项目选择'}
           visible
-          onCancel={() => setVisible(false)}
+          onCancel={() => {
+            setVisible(false)
+            applyScroll()
+          }}
           onOk={() => {
             onChange(selectedValue)
             setVisible(false)
+            applyScroll()
           }}
           style={{ width: 480 }}
           autoFocus={false}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import request from 'src/api/request'
 import { API_PREFIX } from 'src/utils/constants'
 import { findOptionByValue, getStaticOptions } from '../utils/formUtils'
+import { applyScroll, markScroll } from '../utils/scrollGuard'
 
 /**
  * 弹窗选择元素（modelselect）
@@ -127,6 +128,7 @@ function ModelPicker({ value, onChange, options, placeholder, label, disabled })
   const filtered = useMemo(() => filterOptions(options, searchValue.trim()), [options, searchValue])
 
   const open = () => {
+    markScroll() // Modal 开合会改写 body overflow 并可能重置滚动位置，先记下来
     setSearchValue('')
     setSelectedValue(value == null || value === '' ? '' : value)
     setVisible(true)
@@ -146,10 +148,14 @@ function ModelPicker({ value, onChange, options, placeholder, label, disabled })
         <Modal
           title={label ? `请选择${label}` : '弹窗选择'}
           visible
-          onCancel={() => setVisible(false)}
+          onCancel={() => {
+            setVisible(false)
+            applyScroll()
+          }}
           onOk={() => {
             onChange(selectedValue)
             setVisible(false)
+            applyScroll()
           }}
           style={{ width: 480 }}
           autoFocus={false}

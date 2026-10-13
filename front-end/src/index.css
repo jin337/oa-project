@@ -83,6 +83,14 @@ strong {
   margin: 0;
 }
 
+.detail-form-descriptions .arco-col-24:has(> .arco-divider) {
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.detail-form-descriptions .arco-col-24:has(> .arco-divider):has(+ .arco-col .arco-table) {
+  border-bottom: none;
+}
+
 .detail-form-descriptions .arco-form-layout-horizontal .arco-form-label-item {
   background-color: #f7f8fa !important;
   border-right: 1px solid #e5e6eb;

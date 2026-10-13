@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import request from 'src/api/request'
 import { API_PREFIX } from 'src/utils/constants'
 import { findOptionByValue, getStaticOptions } from '../utils/formUtils'
+import { applyScroll, markScroll } from '../utils/scrollGuard'
 
 /**
  * 部门选择元素（deptselect）
@@ -139,6 +140,7 @@ function DeptPicker({ value, onChange, options, placeholder, label, disabled }) 
   }, [options, searchValue])
 
   const open = () => {
+    markScroll() // Modal 开合会改写 body overflow 并可能重置滚动位置，先记下来
     setSearchValue('')
     setCheckedKeys(value == null || value === '' ? [] : [value])
     setVisible(true)
@@ -158,10 +160,14 @@ function DeptPicker({ value, onChange, options, placeholder, label, disabled }) 
         <Modal
           title={label ? `${label}选择` : '部门选择'}
           visible
-          onCancel={() => setVisible(false)}
+          onCancel={() => {
+            setVisible(false)
+            applyScroll()
+          }}
           onOk={() => {
             onChange(checkedKeys.length ? checkedKeys[checkedKeys.length - 1] : '')
             setVisible(false)
+            applyScroll()
           }}
           style={{ width: 480 }}
           autoFocus={false}
