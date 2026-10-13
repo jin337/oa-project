@@ -11,6 +11,7 @@ import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 
 import { renderDeptPreview } from './DeptElement'
 import { renderDividerPreview, renderDividerSettings } from './DividerElement'
+import { renderModelPreview } from './ModelElement'
 import {
   renderCheckboxPreview,
   renderRadioPreview,
@@ -257,6 +258,11 @@ export const ELEMENT_RENDER_CONFIG = {
       },
     },
     renderPreview: renderProjectPreview,
+  },
+  // 弹窗选择：渲染方式与 projectselect 一致，区别是不声明 dataSourceDefaults——
+  // 数据源完全由使用方在「数据源配置」中自行选择，不做默认值注入
+  modelselect: {
+    renderPreview: renderModelPreview,
   },
 }
 

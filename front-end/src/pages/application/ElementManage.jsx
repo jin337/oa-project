@@ -58,6 +58,25 @@ const ALL_COL_KEYS = [
   'vis_list',
   'vis_search',
 ]
+// 数据源表单字段：按「点号路径」逐个写出，且显式写全所有键。
+// Arco 的 setFieldsValue 内部是 lodash set(store, field, value)，
+// 直接写 { data_source: {...} } 只覆盖 data_source 这一层，子键会带上一条记录的残留，
+// 于是切换编辑不同元素时，数据源配置里的显示标签 / 对应值还停在上一个元素的值。
+// 这里改为逐个子字段路径写入，保证每个字段都被显式覆盖。
+function dataSourceFormFields(ds) {
+  const src = ds || {}
+  return {
+    'data_source.type': src.type || undefined,
+    'data_source.options': Array.isArray(src.options) ? src.options : [],
+    'data_source.url': src.url || '',
+    'data_source.method': src.method || 'GET',
+    'data_source.label': src.label || '',
+    'data_source.value_field': src.value_field || '',
+    'data_source.api_ref': src.api_ref === 1 ? 1 : 0,
+    'data_source.params': safeStringify(src.params),
+  }
+}
+
 const EMPTY_FORM = {
   label: '',
   field_key: undefined,
@@ -72,7 +91,6 @@ const EMPTY_FORM = {
   vis_search: false,
   disabled_if: '',
   visible_if: '',
-  data_source: {},
   actions: { on_mount: [], on_change: [], on_blur: [] },
 }
 
@@ -569,25 +587,14 @@ export default function ElementManage() {
   const handleDataSourceTypeChange = (type) => {
     if (type === 'json') {
       form.setFieldsValue({
-        data_source: {
-          type: 'json',
-          options: [],
-          url: '',
-          method: undefined,
-          label: '',
-        },
+        ...dataSourceFormFields(),
+        'data_source.type': 'json',
+        'data_source.method': undefined,
       })
     } else if (type === 'api') {
       form.setFieldsValue({
-        data_source: {
-          type: 'api',
-          options: [],
-          url: '',
-          method: 'GET',
-          label: '',
-          params: '',
-          api_ref: 0,
-        },
+        ...dataSourceFormFields(),
+        'data_source.type': 'api',
       })
     }
   }
@@ -647,6 +654,7 @@ export default function ElementManage() {
     setEditing(null)
     setCurrentElementType(undefined)
     form.setFieldsValue(EMPTY_FORM)
+    form.setFieldsValue(dataSourceFormFields())
     setFieldOptions([])
     const cached = await loadTableOptions()
     const app = cached?.app || null
@@ -676,13 +684,10 @@ export default function ElementManage() {
       vis_search: record.visibility?.search ?? false,
       disabled_if: record.dynamic_states?.disabled_if || '',
       visible_if: record.dynamic_states?.visible_if || '',
-      data_source: {
-        ...(record.data_source || {}),
-        // params 为对象结构，回填时反序列化为 JSON 字符串供 TextArea 展示
-        params: safeStringify(record.data_source?.params),
-      },
       actions: normalizeActionsForForm(record.actions),
     })
+    // 数据源逐字段路径写入，避免上一条记录的子键残留在表单里
+    form.setFieldsValue(dataSourceFormFields(record.data_source))
     if (record.table_key) {
       await loadFieldOptions(record.table_key)
     }
