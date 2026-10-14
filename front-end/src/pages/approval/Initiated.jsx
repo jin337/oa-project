@@ -352,7 +352,6 @@ export default function Initiated() {
         unmountOnExit
         footer={
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setEditVisible(false)}>取消</Button>
             {Number(editRecord?.approval_status) === WITHDRAWN_STATUS ? (
               <>
                 <Button loading={editSaving} onClick={handleSaveWithdrawn}>
