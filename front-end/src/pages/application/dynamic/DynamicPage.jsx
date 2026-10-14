@@ -10,7 +10,9 @@ import NotFound from 'src/pages/error/NotFound'
 import { useAuth } from 'src/store/auth-context'
 
 // 合法页面状态与默认降级状态
-const VALID_STATES = ['list', 'form', 'detail']
+// list：只读列表页（无新增入口，操作列仅「查看」）
+// list-edit：可编辑列表页（工具栏「新增」+ 操作列「查看/编辑/删除」）
+const VALID_STATES = ['list', 'list-edit', 'form', 'detail']
 const DEFAULT_STATE = 'list'
 
 /**
@@ -28,7 +30,8 @@ function parseLinkApp(linkApp) {
 
 /**
  * 动态页面入口：按当前路径反查菜单项，读取 link_app（code:state）后分发渲染
- * list → DynamicList / form → DynamicForm / detail → DynamicForm(pageType=detail)；
+ * list → DynamicList（只读）/ list-edit → DynamicList（可编辑：新增/编辑/删除）/
+ * form → DynamicForm / detail → DynamicForm(pageType=detail)；
  * 菜单缺失、link_app 未配置、state 非法、加载失败时均有容错展示
  */
 export default function DynamicPage() {
@@ -49,7 +52,9 @@ export default function DynamicPage() {
   }, [menus, location.pathname, location.state])
 
   // 流程配置加载（请求 / Loading / 错误态与重试统一由 Hook 管理）
-  const { app, loading, error, retry } = useApplicationData(code, state)
+  // list-edit 复用列表配置：后端只认 list / form / detail，新增抽屉由 autoCreate 触发
+  const configState = state === 'list-edit' ? 'list' : state
+  const { app, loading, error, retry } = useApplicationData(code, configState)
 
   // 详情模式数据加载（仅 state=detail 时启用；autoFetch 在 app 加载后才为 true）
   const { detailData, loading: detailLoading } = useApplicationDetailData(
@@ -107,7 +112,11 @@ export default function DynamicPage() {
   // 按 state 分发渲染（code 传给列表页，供分页/详情跳转使用）
   switch (state) {
     case 'list':
+      // 只读列表页：无新增入口，操作列仅「查看」
       return <DynamicList app={app} code={code} />
+    case 'list-edit':
+      // 可编辑列表页：工具栏提供「新增」，操作列提供「查看/编辑/删除」（不自动打开抽屉）
+      return <DynamicList app={app} code={code} editable />
     case 'form':
       return <DynamicForm app={app} form={form} pageType="form" />
     case 'detail':

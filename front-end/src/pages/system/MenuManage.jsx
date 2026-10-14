@@ -1,23 +1,23 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    InputNumber,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Select,
-    Space,
-    Table,
-    Tag,
-    Tooltip,
-    TreeSelect,
+  Button,
+  Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -46,6 +46,15 @@ const ALL_COL_KEYS = [
 ]
 const TYPE_MAP = { 1: '目录', 2: '菜单', 3: '按钮' }
 
+// 关联流程的页面状态：与 DynamicPage 的 VALID_STATES 保持一致
+// link_app 存储格式为 "流程编码:页面状态"（如 app_123:list-edit），缺省时降级 list
+const LINK_STATE_OPTIONS = [
+  { label: '列表', value: 'list' },
+  { label: '列表+编辑', value: 'list-edit' },
+  { label: '表单', value: 'form' },
+]
+const DEFAULT_LINK_STATE = 'list'
+
 function toTreeData(menus) {
   return (menus || []).map((m) => ({
     key: String(m.id),
@@ -63,6 +72,7 @@ const EMPTY_FORM = {
   perm: '',
   icon: '',
   link_app: '',
+  link_state: DEFAULT_LINK_STATE,
   sort: 1,
   status: 1,
   hidden: 0,
@@ -84,6 +94,8 @@ export default function MenuManage() {
   const [form] = Form.useForm()
   // 流程配置列表：「关联流程」下拉选项（显示 name，提交 code）
   const [appOptions, setAppOptions] = useState([])
+  // 未选择关联流程时「页面状态」不可选（没有流程则状态无意义）
+  const watchedLinkApp = Form.useWatch('link_app', form)
 
   const fetchTree = useCallback(async () => {
     setLoading(true)
@@ -117,6 +129,8 @@ export default function MenuManage() {
 
   const openEdit = (record) => {
     setEditing(record)
+    // link_app 存储格式为 "流程编码:页面状态"，拆分后分别回填到两个字段
+    const [linkAppCode = '', linkAppState = ''] = (record.link_app || '').split(':')
     form.setFieldsValue({
       name: record.name,
       parent_id: record.parent_id || undefined,
@@ -124,7 +138,8 @@ export default function MenuManage() {
       path: record.path,
       perm: record.perm,
       icon: record.icon,
-      link_app: record.link_app,
+      link_app: linkAppCode.trim(),
+      link_state: linkAppState.trim() || DEFAULT_LINK_STATE,
       sort: record.sort,
       status: record.status,
       hidden: record.hidden,
@@ -135,13 +150,19 @@ export default function MenuManage() {
 
   const handleSave = async () => {
     const values = await form.validate()
+    // link_app 与 link_state 合成 "流程编码:页面状态" 后提交；link_state 仅作前端中间态，不落库
+    const { link_state: linkState, ...rest } = values
+    const payload = {
+      ...rest,
+      link_app: values.link_app ? `${values.link_app}:${linkState || DEFAULT_LINK_STATE}` : '',
+    }
     setSaving(true)
     try {
       if (editing) {
-        await menuApi.updateMenu(editing.id, values)
+        await menuApi.updateMenu(editing.id, payload)
         Message.success('保存成功')
       } else {
-        await menuApi.createMenu(values)
+        await menuApi.createMenu(payload)
         Message.success('创建成功')
       }
       setModalVisible(false)
@@ -196,7 +217,21 @@ export default function MenuManage() {
     },
     { key: 'path', title: '路由地址', dataIndex: 'path', render: (v) => v || '-' },
     { key: 'perm', title: '权限标识', dataIndex: 'perm', render: (v) => v || '-' },
-    { key: 'link_app', title: '关联流程', dataIndex: 'link_app', render: (v) => v || '-' },
+    {
+      key: 'link_app',
+      title: '关联流程',
+      dataIndex: 'link_app',
+      // link_app 存 "流程编码:页面状态"，列表展示为「流程名称（页面状态）」；无配置显示 -
+      render: (v) => {
+        if (!v) return '-'
+        const [code = '', st = ''] = String(v).split(':')
+        const name = appOptions.find((a) => a.code === code.trim())?.name || code.trim()
+        const state = LINK_STATE_OPTIONS.find(
+          (o) => o.value === (st.trim() || DEFAULT_LINK_STATE),
+        )
+        return state ? `${name}（${state.label}）` : name
+      },
+    },
     {
       key: 'icon',
       title: '图标',
@@ -370,16 +405,27 @@ export default function MenuManage() {
               </Col>
             )}
             {formType === 2 && (
-              <Col span={12}>
-                <FormItem label="关联流程" field="link_app">
-                  <Select
-                    placeholder="请选择流程配置"
-                    allowClear
-                    showSearch
-                    options={appOptions.map((a) => ({ label: a.name, value: a.code }))}
-                  />
-                </FormItem>
-              </Col>
+              <>
+                <Col span={12}>
+                  <FormItem label="关联流程" field="link_app">
+                    <Select
+                      placeholder="请选择流程配置"
+                      allowClear
+                      showSearch
+                      options={appOptions.map((a) => ({ label: a.name, value: a.code }))}
+                    />
+                  </FormItem>
+                </Col>
+                <Col span={12}>
+                  <FormItem label="页面状态" field="link_state">
+                    <Select
+                      placeholder="请选择页面状态"
+                      options={LINK_STATE_OPTIONS}
+                      disabled={!watchedLinkApp}
+                    />
+                  </FormItem>
+                </Col>
+              </>
             )}
             <Col span={12}>
               <FormItem label="权限标识" field="perm">

@@ -735,6 +735,12 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 		return 0, err
 	}
 
+	// 生成单号：应用配置了单号前缀时，新建即取号（幂等；未配置前缀或表缺 bill_no 列时自动跳过）
+	// 与「提交审核」共用 ensureBillNo，保证同一应用的单号格式与每日流水连续
+	if err := ensureBillNo(appID, app.TableName, id, curUserID); err != nil {
+		return 0, err
+	}
+
 	// 子表数据插入：主表 INSERT 成功后，逐子表、逐行写入
 	for subName, rows := range subData {
 		if !isValidTableName(subName) {

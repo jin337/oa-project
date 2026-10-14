@@ -8,12 +8,13 @@
   Input,
   Menu,
   Message,
+  Popconfirm,
   Popover,
   Space,
   Spin,
   Table
 } from '@arco-design/web-react'
-import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
+import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 import { SIZE_OPTIONS } from 'src/config/app'
@@ -25,7 +26,10 @@ import DynamicForm, {
   serializeTimeFields,
   TIME_ELEMENT_TYPES,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { safeSetFieldsValue, useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
+import {
+  safeSetFieldsValue,
+  useApplicationDetailData,
+} from 'src/pages/application/dynamic/useApplicationDetailData'
 
 const FormItem = Form.Item
 const MenuItem = Menu.Item
@@ -63,8 +67,9 @@ function getDisplayValue(col, value) {
  *
  * @param {object} app   流程配置对象（含 search_fields / columns / list / total 等）
  * @param {string} code  页面编码（由 DynamicPage 解析后传入，用于列表分页请求与详情跳转）
+ * @param {boolean} editable  是否可编辑（state=list-edit 时开启新增/编辑/删除；默认只读）
  */
-export default function DynamicList({ app, code }) {
+export default function DynamicList({ app, code, editable = false }) {
   const searchFields = app?.search_fields || []
   // 列定义引用稳定化：避免 `|| []` 每次渲染重建，导致下游 useMemo 依赖漂移
   const columns = useMemo(() => app?.columns || [], [app?.columns])
@@ -101,7 +106,8 @@ export default function DynamicList({ app, code }) {
     autoFetch: false,
   })
 
-  // 打开编辑/查看 Drawer：按 state 预请求流程配置（form → 编辑表单，detail → 只读详情）
+  // 打开新增/编辑/查看 Drawer：按 state 预请求流程配置
+  // （form → 新增/编辑表单，detail → 只读详情）；record 为 null 表示新增
   // 编辑模式额外加载完整数据（含子表 Form.List 数组）回填，与"查看"模式行为一致
   const openDrawer = async (record, state) => {
     setDrawerVisible(true)
@@ -114,8 +120,11 @@ export default function DynamicList({ app, code }) {
       const res = await applicationApi.getApplicationByCode(code, state)
       setDrawerApp(res.data)
       if (state === 'form') {
-        // 列表行 record 仅含主表字段；调用详情接口获取完整数据（含子表），由 hook 回填到表单
-        await fetchRecordDetail(res.data.id, record.id)
+        if (record) {
+          // 编辑：列表行 record 仅含主表字段；调用详情接口获取完整数据（含子表），由 hook 回填到表单
+          await fetchRecordDetail(res.data.id, record.id)
+        }
+        // 新增：保持 resetFields 后的空表单
         setDetailDynamicStates(undefined)
       } else {
         // 查看模式：请求完整数据（含子表）用于动态状态预计算 + 表单回填
@@ -138,9 +147,13 @@ export default function DynamicList({ app, code }) {
     }
   }
 
-  // 编辑模式提交：校验动态表单，调用数据更新接口，成功后关闭 Drawer 并刷新列表
+  // 新增：空表单（record 为 null，提交时走创建接口）
+  const openCreate = () => openDrawer(null, 'form')
+
+  // 表单提交：新增（drawerRecord 为空 → 创建）与编辑（→ 更新）共用；
+  // 校验动态表单后调用对应接口，成功后关闭 Drawer 并刷新列表
   const handleDrawerSubmit = async () => {
-    if (!drawerApp || !drawerRecord) return
+    if (!drawerApp) return
     let values
     try {
       values = await drawerForm.validate()
@@ -151,11 +164,16 @@ export default function DynamicList({ app, code }) {
     try {
       // 时间字段（date/datetime/time 等）序列化为 MySQL 兼容格式
       // （YYYY-MM-DD / YYYY-MM-DD HH:mm:ss / HH:mm:ss），避免前端 ISO 8601
-      // （如 2026-09-09T00:00:00+08:00）导致 MySQL Error 1292 更新失败
+      // （如 2026-09-09T00:00:00+08:00）导致 MySQL Error 1292 写入失败
       const layout = parseLayoutJson(drawerApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
-      await applicationApi.updateApplicationData(drawerApp.id, drawerRecord.id, payload)
-      Message.success('保存成功')
+      if (drawerRecord) {
+        await applicationApi.updateApplicationData(drawerApp.id, drawerRecord.id, payload)
+        Message.success('保存成功')
+      } else {
+        await applicationApi.createApplicationData(drawerApp.id, payload)
+        Message.success('新增成功')
+      }
       setDrawerVisible(false)
       fetchList()
     } catch (e) {
@@ -165,7 +183,19 @@ export default function DynamicList({ app, code }) {
     }
   }
 
-  // 表格列定义：序号列 + 动态字段列 + 操作列（编辑 / 查看）
+  // 删除单行数据：Popconfirm 二次确认后调用删除接口（后端按表结构选择软删/物理删），成功后刷新列表
+  const handleDelete = async (record) => {
+    if (!record) return
+    try {
+      await applicationApi.deleteApplicationData(app.id, record.id)
+      Message.success('删除成功')
+      fetchList()
+    } catch (e) {
+      Message.error('删除失败，请稍后重试')
+    }
+  }
+
+  // 表格列定义：序号列 + 动态字段列 + 操作列（查看 / 编辑 / 删除）
   const tableColumns = useMemo(
     () => [
       {
@@ -186,26 +216,31 @@ export default function DynamicList({ app, code }) {
         key: 'action',
         title: '操作',
         dataIndex: 'operation',
-        width: 60,
+        // 只读页（state=list）只保留「查看」，可编辑页（list-edit）额外提供编辑/删除
+        width: editable ? 160 : 70,
         render: (_, record) => (
           <Space>
             <Button type="text" size="small" onClick={() => openDrawer(record, 'detail')}>
               查看
             </Button>
-            {/* <Button type="text" size="small" onClick={() => openDrawer(record, 'form')}>
-              编辑
-            </Button> */}
-            {/* <Popconfirm position="lb" title="确认删除该条数据？" onOk={() => handleDelete(record)}>
-              <Button type="text" size="small" status="danger">
-                删除
+            {editable && (
+              <Button type="text" size="small" onClick={() => openDrawer(record, 'form')}>
+                编辑
               </Button>
-            </Popconfirm> */}
+            )}
+            {editable && (
+              <Popconfirm position="lb" title="确认删除该条数据？" onOk={() => handleDelete(record)}>
+                <Button type="text" size="small" status="danger">
+                  删除
+                </Button>
+              </Popconfirm>
+            )}
           </Space>
         ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [columns, code],
+    [columns, code, editable],
   )
 
   // 初始数据直接取自 app（state=list 时后端已内联返回 list/total）
@@ -320,14 +355,20 @@ export default function DynamicList({ app, code }) {
         </div>
       )}
 
-      {/* 表格工具栏：刷新 / 密度 / 列设置 */}
+      {/* 表格工具栏：新增（仅可编辑页）/ 刷新 / 密度 / 列设置 */}
       <div className="mb-3 flex items-center justify-between">
-        <div></div>
+        <div>
+          {editable && (
+            <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
+              新增
+            </Button>
+          )}
+        </div>
         <Space>
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} trigger='click' position="br">
+          <Dropdown droplist={sizeMenu} trigger="click" position="br">
             <Button size="small" icon={<IconList />}>
               密度
             </Button>
@@ -366,16 +407,18 @@ export default function DynamicList({ app, code }) {
         width="60%"
         title={
           drawerState === 'form'
-            ? `编辑 - ${drawerApp?.name || ''}`
+            ? `${drawerRecord ? '编辑' : '新增'} - ${drawerApp?.name || ''}`
             : `查看 - ${drawerApp?.name || ''}`
         }
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
-        footer={drawerState === 'detail' ? null : (
-          <Button type="primary" loading={drawerSubmitting} onClick={handleDrawerSubmit}>
-            提交
-          </Button>
-        )}
+        footer={
+          drawerState === 'detail' ? null : (
+            <Button type="primary" loading={drawerSubmitting} onClick={handleDrawerSubmit}>
+              提交
+            </Button>
+          )
+        }
         unmountOnExit
       >
         {drawerLoading ? (
