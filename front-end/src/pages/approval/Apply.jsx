@@ -603,7 +603,7 @@ export default function Apply() {
 
       {/* 动态表单 Drawer：点击申请项卡片后加载流程配置并注入动态表单组件 */}
       <Drawer
-        width="60%"
+        width="80%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
         title={drawerTitle || '申请表单'}
@@ -624,23 +624,28 @@ export default function Apply() {
             <Spin />
           </div>
         ) : drawerApp ? (
-          <>
-            <DynamicForm
-              app={drawerApp}
-              form={drawerForm}
-              pageType="form"
-              onValuesChange={setFormValues}
-            />
+          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行，两列顶部对齐 */
+          <div className="flex flex-wrap items-start gap-6">
+            <div className="min-w-0 grow shrink basis-140">
+              <DynamicForm
+                app={drawerApp}
+                form={drawerForm}
+                pageType="form"
+                onValuesChange={setFormValues}
+              />
+            </div>
             {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
-            <DynamicFlowView
-              raw={drawerApp?.approval_flow_json}
-              formData={formValues}
-              onMembersChange={(nodeId, members) => {
-                setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
-              }}
-              onReadyStateChange={setSelfSelectReady}
-            />
-          </>
+            <div className="w-100 max-w-full shrink-0">
+              <DynamicFlowView
+                raw={drawerApp?.approval_flow_json}
+                formData={formValues}
+                onMembersChange={(nodeId, members) => {
+                  setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
+                }}
+                onReadyStateChange={setSelfSelectReady}
+              />
+            </div>
+          </div>
         ) : null}
       </Drawer>
     </Card>

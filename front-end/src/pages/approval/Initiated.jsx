@@ -302,11 +302,16 @@ export default function Initiated() {
     try {
       const layout = parseLayoutJson(editApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
+      // 抽屉内本次选择/调整的自选审批人、抄送人随保存一起带上，避免与界面展示不一致
+      const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
       await approvalApi.saveDraftInstance({
         instance_id: editRecord.instance_id || editRecord.id,
         app_id: editApp.id,
         business_data_id: editRecord.data_id ?? editRecord.id,
         business_data: payload,
+        ...(Object.keys(selfSelectUserIDs).length
+          ? { approval_draft_members: selfSelectUserIDs }
+          : {}),
       })
       Message.success('保存成功，已转为草稿')
       setEditVisible(false)
@@ -331,14 +336,21 @@ export default function Initiated() {
       const layout = parseLayoutJson(editApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
       const instanceId = editRecord.instance_id || editRecord.id
+      // 抽屉内本次选择/调整的自选审批人、抄送人需随保存与提交一起带上：
+      // 后端提交时优先用请求传入的成员，未带则回退实例上的暂存值（可能是旧的或为空）
+      const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
+      const draftMembersPayload = Object.keys(selfSelectUserIDs).length
+        ? { approval_draft_members: selfSelectUserIDs }
+        : undefined
       // 先保存表单改动，再从草稿提交，保证提交的是最新内容
       await approvalApi.saveDraftInstance({
         instance_id: instanceId,
         app_id: editApp.id,
         business_data_id: editRecord.data_id ?? editRecord.id,
         business_data: payload,
+        ...(draftMembersPayload || {}),
       })
-      await approvalApi.submitDraftInstance(instanceId)
+      await approvalApi.submitDraftInstance(instanceId, draftMembersPayload)
       Message.success('已重新提交')
       setEditVisible(false)
       fetchList()
@@ -492,7 +504,7 @@ export default function Initiated() {
       {/* 编辑/副本 Drawer（共用一套表单）：副本底部为「保存草稿」+「提交审核」，关掉即不提交；
           已撤回底部为「保存草稿」+「提交审核」；已驳回底部为「重新提交」 */}
       <Drawer
-        width="60%"
+        width="80%"
         visible={editVisible}
         onCancel={closeEditDrawer}
         title={`${editApp?.item_name || editApp?.name || ''}${copyMode ? '-副本' : ''}`}
@@ -530,23 +542,28 @@ export default function Initiated() {
             <Spin />
           </div>
         ) : editApp ? (
-          <>
-            <DynamicForm
-              app={editApp}
-              form={editForm}
-              pageType="form"
-              onValuesChange={setFormValues}
-            />
-            {/* 审批流只读还原；副本可直接提交，故接上自选节点选人回调（编辑走实例已有的人选，不受影响） */}
-            <DynamicFlowView
-              raw={editApp?.approval_flow_json}
-              formData={formValues}
-              onMembersChange={(nodeId, members) => {
-                setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
-              }}
-              onReadyStateChange={setSelfSelectReady}
-            />
-          </>
+          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行，两列顶部对齐 */
+          <div className="flex flex-wrap items-start gap-6">
+            <div className="min-w-0 grow shrink basis-140">
+              <DynamicForm
+                app={editApp}
+                form={editForm}
+                pageType="form"
+                onValuesChange={setFormValues}
+              />
+            </div>
+            <div className="w-100 max-w-full shrink-0">
+              {/* 审批流只读还原；副本可直接提交，故接上自选节点选人回调（编辑走实例已有的人选，不受影响） */}
+              <DynamicFlowView
+                raw={editApp?.approval_flow_json}
+                formData={formValues}
+                onMembersChange={(nodeId, members) => {
+                  setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
+                }}
+                onReadyStateChange={setSelfSelectReady}
+              />
+            </div>
+          </div>
         ) : null}
       </Drawer>
     </Card>

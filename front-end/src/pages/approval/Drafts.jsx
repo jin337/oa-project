@@ -170,17 +170,43 @@ export default function Drafts() {
     }
   }
 
-  // 提交审核：优先调用从草稿提交接口，无实例时降级为发起审批
+  // 提交审核：先把抽屉里的表单改动与自选成员写回草稿实例，再从草稿提交发起审批
   const handleSubmit = async (record) => {
+    let values
     try {
+      values = await drawerForm.validate()
+    } catch (e) {
+      return
+    }
+    setDrawerSaving(true)
+    try {
+      // 时间字段（date/datetime/time 等）统一序列化为 MySQL 兼容格式
+      const layout = parseLayoutJson(drawerApp?.form_layout_json)
+      const payload = serializeTimeFields(values, layout?.elements || [])
+      // 抽屉内本次选择/调整的自选审批人、抄送人必须随提交一起带上：
+      // 后端会校验自选节点已选人，未带则回退草稿暂存值（可能是未选择或已被清空）
+      const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
+      const draftMembersPayload = Object.keys(selfSelectUserIDs).length
+        ? { approval_draft_members: selfSelectUserIDs }
+        : undefined
       if (record.instance_id) {
-        // 已有审批草稿实例，直接从草稿提交发起审批
-        await approvalApi.submitDraftInstance(record.instance_id)
+        // 草稿实例：先写回表单改动（提交接口只覆盖自选成员，业务数据取实例上的存量），
+        // 再提交，保证提交的是抽屉里的最新内容
+        await approvalApi.saveDraftInstance({
+          instance_id: record.instance_id,
+          app_id: drawerApp.id,
+          business_data_id: record.data_id ?? record.id,
+          business_data: payload,
+          ...(draftMembersPayload || {}),
+        })
+        await approvalApi.submitDraftInstance(record.instance_id, draftMembersPayload)
       } else {
-        // 无实例（旧草稿），走发起审批接口
+        // 无实例（旧草稿），走发起审批接口：带 business_data 时后端按 business_data_id 更新已有业务数据
         await approvalApi.createApprovalInstance({
           app_id: record.app_id,
           business_data_id: record.data_id ?? record.id,
+          business_data: payload,
+          ...(draftMembersPayload || {}),
         })
       }
       Message.success('提交成功')
@@ -292,7 +318,7 @@ export default function Drafts() {
 
       {/* 继续编辑 Drawer：注入动态表单并回填草稿数据 */}
       <Drawer
-        width="60%"
+        width="80%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
         title={`编辑 - ${drawerApp?.item_name || drawerApp?.name || ''}`}
@@ -316,22 +342,27 @@ export default function Drafts() {
             <Spin />
           </div>
         ) : drawerApp ? (
-          <>
-            <DynamicForm
-              app={drawerApp}
-              form={drawerForm}
-              pageType="form"
-              onValuesChange={setFormValues}
-            />
-            {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
-            <DynamicFlowView
-              raw={drawerApp?.approval_flow_json}
-              formData={formValues}
-              onMembersChange={(nodeId, members) => {
-                setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
-              }}
-            />
-          </>
+          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行，两列顶部对齐 */
+          <div className="flex flex-wrap items-start gap-6">
+            <div className="min-w-0 grow shrink basis-140">
+              <DynamicForm
+                app={drawerApp}
+                form={drawerForm}
+                pageType="form"
+                onValuesChange={setFormValues}
+              />
+            </div>
+            <div className="w-100 max-w-full shrink-0">
+              {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
+              <DynamicFlowView
+                raw={drawerApp?.approval_flow_json}
+                formData={formValues}
+                onMembersChange={(nodeId, members) => {
+                  setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
+                }}
+              />
+            </div>
+          </div>
         ) : null}
       </Drawer>
     </Card>

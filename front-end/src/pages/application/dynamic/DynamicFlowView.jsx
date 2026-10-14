@@ -1,16 +1,9 @@
-import { Avatar, Divider, Timeline } from '@arco-design/web-react'
-import {
-  IconBranch,
-  IconClose,
-  IconPlus,
-  IconSend,
-  IconStamp,
-  IconUser,
-} from '@arco-design/web-react/icon'
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Badge, Button, Divider, Tag, Timeline } from '@arco-design/web-react'
+import { IconBranch, IconPlus, IconSend, IconStamp, IconUser } from '@arco-design/web-react/icon'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as deptApi from 'src/api/dept'
-import * as roleApi from 'src/api/role'
 import { fetchAll } from 'src/api/fetchAll'
+import * as roleApi from 'src/api/role'
 import { OPERATOR_OPTIONS } from 'src/pages/application/constants'
 import {
   buildOrgItemMap,
@@ -26,7 +19,6 @@ import {
   loadMemberDirectory,
   resolveMemberPeople,
   resolveNodePeople,
-  splitFlatPeople,
 } from 'src/utils/flowMembers'
 
 /**
@@ -34,8 +26,9 @@ import {
  * 从 DynamicForm.jsx 抽离并迁移至 dynamic 目录：审批流配置（approval_flow_json）的
  * 可视化还原，供审批模块各 Drawer（详情 / 编辑 / 申请）在抽屉内独立渲染使用。
  * 节点类型数字枚举与 ExamineManage.jsx 保持一致。
- * 左侧使用 Arco Timeline（时间轴）组件呈现审批流走向（仿钉钉审批单），
- * 右侧成员头像区；「发起人自选」（approverType=3）节点支持点击「+」唤起 PersonSelectorModal 选择人员。
+ * 左侧使用 Arco Timeline（时间轴）组件呈现审批流走向；节点成员（审核人员组 / 角色 / 部门
+ * 展开成的人）一律用 Tag 平铺展示，**全部展示不折叠**。
+ * 「发起人自选」（approverType=3）节点以「选择审批人 / 选择抄送人」按钮唤起 PersonSelectorModal。
  */
 
 // 审批节点类型元信息（与 ExamineManage.jsx 数字枚举保持一致；bg/icon 供 Timeline 节点 dot 使用）
@@ -47,8 +40,6 @@ const APPROVAL_NODE_META = {
 }
 // 审批方式：1-依次审批 / 2-会签 / 3-或签（多选审批人摘要展示用，如「2人依次审批」）
 const STRATEGY_MAP = { 1: '依次审批', 2: '会签', 3: '或签' }
-// 审批方式连接符（渲染在右侧成员之间）：1-依次审批(>) / 2-会签(+) / 3-或签(/)
-const STRATEGY_SYMBOL = { 1: '>', 2: '+', 3: '/' }
 // 条件关系：1-且(AND) / 2-或(OR)
 const RELATION_MAP = { 1: '且（AND）', 2: '或（OR）' }
 // 逻辑运算符 value 枚举：与 constants.js 的 OPERATOR_OPTIONS 严格一致（1-大于 / 2-小于 / 3-等于 / 4-不等于 / 5-包含 / 6-不包含）
@@ -233,119 +224,83 @@ const memberDisplayName = (member, directory) => {
 }
 
 /**
- * 人员展示 chip（仿参考图右侧成员区）：一个具体的人一个头像 + 姓名。
- * name 由调用方展开成员引用后传入，因此审核人员组 / 角色 / 部门会展开成多个 chip。
+ * 人员 Tag：审批流程成员一律用 Tag 平铺展示（不再使用头像 chip，也不折叠成「等N人」）。
+ * name 由调用方展开成员引用后传入，因此审核人员组 / 角色 / 部门会展开成多个 Tag。
+ * onRemove 存在时（发起人自选节点已选成员）Tag 显示关闭按钮，点击即移除该成员。
  */
-const MemberChip = ({ name, onRemove }) => {
-  const text = name || ''
-  return (
-    <div className="flex w-11.75 flex-col items-center">
-      <div className="relative">
-        <Avatar shape="square" size={35} style={{ backgroundColor: 'rgb(var(--primary-6))' }}>
-          {text.slice(0, 1) || '?'}
-        </Avatar>
-        {onRemove && (
-          // 发起人自选运行期已选成员：右上角小 X 删除按钮，点击移除该成员
-          <span
-            className="absolute -top-1.5 -right-1.5 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-gray-200 text-gray-500 transition-colors hover:bg-red-500 hover:text-white"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRemove()
-            }}
-          >
-            <IconClose style={{ fontSize: 10 }} />
-          </span>
-        )}
-      </div>
-      <span className="w-full truncate text-center text-xs text-gray-600">{text}</span>
-    </div>
-  )
-}
-
-/** 折叠 chip：展开人数超过上限时，用「+剩余 / 等N人」收尾，悬停可看完整名单 */
-const MorePeopleChip = ({ restCount, total, names }) => (
-  <div className="flex w-11.75 flex-col items-center" title={names.join('、')}>
-    <Avatar shape="square" size={35} style={{ backgroundColor: '#e5e6eb', color: '#4e5969' }}>
-      +{restCount}
-    </Avatar>
-    <span className="w-full truncate text-center text-xs text-gray-500">等{total}人</span>
-  </div>
+const MemberTag = ({ name, onRemove }) => (
+  <Tag size='medium'
+    closable={Boolean(onRemove)}
+    onClose={
+      onRemove
+        ? (e) => {
+            e.stopPropagation()
+            onRemove()
+          }
+        : undefined
+    }
+  >
+    {name || '未知'}
+  </Tag>
 )
 
 /**
- * 节点右侧人员区：把成员引用展开为具体的人后平铺（与「指定人员」多人时的效果一致），
- * 超过上限折叠为「等N人」。展开结果与后端创建审批任务的口径一致。
+ * 节点成员区：把成员引用展开为具体的人后逐个 Tag 平铺（与「指定人员」多人时的效果一致）。
+ * 全部展示不折叠 —— 折叠成「等N人」就看不到到底是谁在等审批。
+ * 展开结果与后端创建审批任务的口径一致。
  */
 const NodePeopleArea = ({ node, directory }) => {
   const people = resolveNodePeople(node, directory)
-  const { head, restCount, total } = splitFlatPeople(people)
   if (!people.length) return null
   return (
     <>
-      {head.map((person) => (
-        <MemberChip key={person.id != null ? `u${person.id}` : `n${person.name}`} name={person.name} />
-      ))}
-      {restCount > 0 && (
-        <MorePeopleChip
-          restCount={restCount}
-          total={total}
-          names={people.map((p) => p.name)}
+      {people.map((person) => (
+        <MemberTag
+          key={person.id != null ? `u${person.id}` : `n${person.name}`}
+          name={person.name}
         />
-      )}
+      ))}
     </>
   )
 }
 
 /**
  * 审批节点行内容（不含时间轴竖线与节点 dot，由外层 Timeline.Item 承载）：
- * 左侧标题/摘要两行，右侧成员头像区；仿钉钉审批单样式。
- * 「发起人自选」（approverType=3）节点右侧提供「+」按钮，点击唤起 PersonSelectorModal 选择人员。
+ * 上方标题/摘要两行，下方成员 Tag 平铺区。
+ * 「发起人自选」（approverType=3）节点显示「选择审批人 / 选择抄送人」按钮，点击唤起 PersonSelectorModal。
  */
 const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember, directory }) => {
+  const isSelfSelect = node.approverType === 3
+  const selectedMembers = node.members || []
   return (
-    <div className="flex h-13 justify-between gap-4">
-      <div className="w-1/3">
-        <div className="text-base font-medium">
-          {node.label || APPROVAL_NODE_META[node.type]?.label}
-        </div>
-        <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node, directory)}</div>
+    <div className="flex flex-col">
+      <div className="text-base font-medium">
+        {node.label || APPROVAL_NODE_META[node.type]?.label}
       </div>
-      <div className="relative flex shrink-0 flex-wrap justify-end gap-y-1">
-        {node.approverType === 3 ? (
-          // 3-发起人自选：已选择渲染头像+姓名，未选择仅展示「+」按钮；均可点击唤起选择器
+      <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node, directory)}</div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+        {isSelfSelect ? (
+          // 3-发起人自选：已选成员用可关闭 Tag 展示，未选择时用按钮唤起选择器
           <>
-            {(node.members || []).map((m, i) => (
-              <Fragment key={m.key || `${m.type}-${m.label}-${i}`}>
-                <MemberChip
-                  name={memberDisplayName(m, directory)}
-                  // 发起人自选运行期已选成员支持删除：移除后经回调更新成员覆盖
-                  onRemove={() => {
-                    const updated = (node.members || []).filter((x) => x !== m)
-                    onRemoveMember?.(node, updated)
-                  }}
-                />
-                {node.type === 2 ? (
-                  <span className="h-8.75 leading-8.75 text-gray-400">
-                    {STRATEGY_SYMBOL[node.strategy] || '>'}
-                  </span>
-                ) : node.selfSelect === 1 ? null : (
-                  // 抄送人多选（selfSelect=2）：成员间展示分隔符，暗示可继续添加
-                  <span className="h-8.75 leading-8.75 text-gray-400">+</span>
-                )}
-              </Fragment>
+            {selectedMembers.map((m, i) => (
+              <MemberTag
+                key={m.key || `${m.type}-${m.label}-${i}`}
+                name={memberDisplayName(m, directory)}
+                // 发起人自选运行期已选成员支持删除：移除后经回调更新成员覆盖
+                onRemove={() => {
+                  onRemoveMember?.(
+                    node,
+                    selectedMembers.filter((x) => x !== m),
+                  )
+                }}
+              />
             ))}
-            {/* 单选（selfSelect=1）选中一人后隐藏「+」，多选（selfSelect=2）始终可添加 */}
-            {node.selfSelect !== 1 || !(node.members || []).length ? (
-              <Avatar shape="square" size={35} className="ml-1 cursor-pointer">
-                <IconPlus onClick={() => onSelectNode?.(node)} />
-              </Avatar>
-            ) : null}
-            {!(node.members || []).length && (
-              <span className="absolute -top-1.5 -right-0.5 text-xs text-red-500">*</span>
-            )}
+            <Badge count={9} dot>
+              <Button icon={<IconPlus />} size="small" type='outline' onClick={() => onSelectNode?.(node)} />
+            </Badge>
           </>
         ) : (
-          // 非发起人自选（1-指定人员 / 2-指定角色 / 4-审核人员组）：成员引用展开为具体的人平铺
+          // 非发起人自选（1-指定人员 / 2-指定角色 / 4-审核人员组）：成员引用展开为具体的人后 Tag 平铺
           <NodePeopleArea node={node} directory={directory} />
         )}
       </div>
@@ -354,10 +309,10 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember, directory }) => 
 }
 
 /**
- * 审批流程展示组件（左侧 Arco Timeline 时间轴 + 右侧成员区，供申请 / 编辑 / 详情抽屉渲染）。
+ * 审批流程展示组件（左侧 Arco Timeline 时间轴，节点成员一律 Tag 平铺，供申请 / 编辑抽屉渲染）。
  * 隐藏发起人节点与「流程结束」标识；条件分支（type=4）视觉穿透：按 formData 评估命中分支后
  * 扁平化展开其 children 节点链，直接衔接前后节点。传入 formData 时条件分支按规则动态评估。
- * 「发起人自选」节点支持点击「+」唤起 PersonSelectorModal 选择人员（选择结果经 onMembersChange 回调）。
+ * 「发起人自选」节点点击「选择审批人 / 选择抄送人」按钮唤起 PersonSelectorModal（选择结果经 onMembersChange 回调）。
  * @param {object} props
  * @param {string|Array} props.raw 流程配置的 approval_flow_json（JSON 字符串或节点数组）
  * @param {object} [props.formData] 实际填报的表单数据（主表字段 + 子表数组），用于条件分支命中评估

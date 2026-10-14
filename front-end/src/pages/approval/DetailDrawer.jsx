@@ -373,7 +373,7 @@ export default function DetailDrawer({
     <PersonSelectorProvider>
       <Drawer
         className={'relative'}
-        width="60%"
+        width="80%"
         title={`详情 - ${title}`}
         visible={visible}
         onCancel={onCancel}
@@ -400,22 +400,27 @@ export default function DetailDrawer({
             <Spin />
           </div>
         ) : instance ? (
-          <>
-            <DynamicForm
-              app={{ ...appFromInstance, form_layout_json: appFromInstance?.detail_layout_json }}
-              form={detailForm}
-              pageType="detail"
-              fieldPerms={instance?.field_perms}
-              editable={Boolean(currentTask) || resubmitEditing}
-              detailDynamicStates={detailDynamicStates}
-            />
-            <ApprovalTimeline
-              instanceId={record?.instance_id}
-              visible={visible}
-              initialData={instance}
-              assigneeNameMap={instance?.assignee_name_map}
-            />
-          </>
+          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行，两列顶部对齐 */
+          <div className="flex flex-wrap items-start gap-6">
+            <div className="min-w-0 grow shrink basis-140">
+              <DynamicForm
+                app={{ ...appFromInstance, form_layout_json: appFromInstance?.detail_layout_json }}
+                form={detailForm}
+                pageType="detail"
+                fieldPerms={instance?.field_perms}
+                editable={Boolean(currentTask) || resubmitEditing}
+                detailDynamicStates={detailDynamicStates}
+              />
+            </div>
+            <div className="w-100 max-w-full shrink-0">
+              <ApprovalTimeline
+                instanceId={record?.instance_id}
+                visible={visible}
+                initialData={instance}
+                assigneeNameMap={instance?.assignee_name_map}
+              />
+            </div>
+          </div>
         ) : !record?.instance_id ? (
           loadError ? (
             <Empty description="数据加载失败" />
