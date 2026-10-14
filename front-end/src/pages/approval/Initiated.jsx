@@ -348,7 +348,7 @@ export default function Initiated() {
         width="60%"
         visible={editVisible}
         onCancel={() => setEditVisible(false)}
-        title={`编辑 - ${editApp?.item_name || editApp?.name || ''}`}
+        title={`${editApp?.item_name || editApp?.name || ''}`}
         unmountOnExit
         footer={
           <div className="flex justify-end gap-2">
