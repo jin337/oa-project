@@ -21,6 +21,7 @@ import {
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
+import { listApplications } from 'src/api/application'
 import * as menuApi from 'src/api/menu'
 import IconSelect, { MenuIcon } from 'src/components/icon-select'
 import { SIZE_OPTIONS } from 'src/config/app'
@@ -81,6 +82,8 @@ export default function MenuManage() {
   const [saving, setSaving] = useState(false)
   const [formType, setFormType] = useState(2)
   const [form] = Form.useForm()
+  // 流程配置列表：「关联流程」下拉选项（显示 name，提交 code）
+  const [appOptions, setAppOptions] = useState([])
 
   const fetchTree = useCallback(async () => {
     setLoading(true)
@@ -97,6 +100,13 @@ export default function MenuManage() {
   useEffect(() => {
     fetchTree()
   }, [fetchTree])
+
+  // 加载流程配置列表，供「关联流程」下拉选择
+  useEffect(() => {
+    listApplications({ page: 1, size: 1000 })
+      .then((res) => setAppOptions(res?.data?.list || []))
+      .catch(() => setAppOptions([]))
+  }, [])
 
   const openCreate = (parentId) => {
     setEditing(null)
@@ -362,7 +372,12 @@ export default function MenuManage() {
             {formType === 2 && (
               <Col span={12}>
                 <FormItem label="关联流程" field="link_app">
-                  <Input placeholder="如：app_1" />
+                  <Select
+                    placeholder="请选择流程配置"
+                    allowClear
+                    showSearch
+                    options={appOptions.map((a) => ({ label: a.name, value: a.code }))}
+                  />
                 </FormItem>
               </Col>
             )}
