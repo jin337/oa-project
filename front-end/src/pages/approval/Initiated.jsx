@@ -259,7 +259,7 @@ export default function Initiated() {
     {
       title: '操作',
       key: 'action',
-      width: 200,
+      width: 120,
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => openDetail(r)}>

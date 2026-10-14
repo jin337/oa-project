@@ -358,53 +358,24 @@ func buildApprovalRecord(inst model.ApprovalInstance, app model.Application) mod
 // fillApprovalCapabilities 回填列表记录的操作能力标记（作废/撤回/编辑/删除）。
 //
 // 判据：
-//   - 可作废：进行中（InstanceStatusRunning）且「无审批痕迹」——实例下不存在
-//     已被处理过的审批任务（已通过/已拒绝/已驳回/已转交）。一经有人处理，
-//     流程就产生了不可撤销的事实，发起人只能撤回，不能宣告作废。
-//   - 可撤回：任意进行中的实例。
+//   - 可撤回：任意进行中的实例。进行中的单据一律只能撤回，不再提供作废。
+//   - 可作废：仅「已撤回」——撤回后流程痕迹已清空，发起人此时才可宣告作废留痕。
+//     这条路径保证作废永远不会绕过审批人：走过审批的单据只能撤回，
+//     撤回后即使再作废，也已经留下了撤回这一动作的痕迹。
 //   - 可编辑：已驳回（退回修改后重新提交）与已撤回（撤回后改完再提交）。
 //   - 可删除：仅草稿，且草稿的删除在草稿箱页面处理，因此「我的发起」列表中恒为 false。
 //     已撤回若要删除，可先编辑保存（转为草稿）后到草稿箱删除。
-//
-// 「有审批痕迹的实例」按实例批量查询后回填，避免逐条查任务表造成 N+1。
 func fillApprovalCapabilities(records []model.ApprovalRecord) {
 	if len(records) == 0 {
 		return
 	}
-	// 1. 只有进行中的实例需要判断审批痕迹
-	runningIDs := make([]uint, 0, len(records))
-	for _, r := range records {
-		if r.InstanceID > 0 && r.InstanceStatus == model.InstanceStatusRunning {
-			runningIDs = append(runningIDs, r.InstanceID)
-		}
-	}
-	// 2. 批量取出「存在已处理任务」的实例 ID
-	touched := make(map[uint]struct{})
-	if len(runningIDs) > 0 {
-		var ids []uint
-		database.DB.Model(&model.ApprovalInstanceTask{}).
-			Where("instance_id IN ? AND status IN ?", runningIDs, []int{
-				model.TaskStatusApproved,
-				model.TaskStatusRejected,
-				model.TaskStatusReturned,
-				model.TaskStatusDelegated,
-			}).
-			Distinct("instance_id").
-			Pluck("instance_id", &ids)
-		for _, id := range ids {
-			touched[id] = struct{}{}
-		}
-	}
-	// 3. 回填能力标记
+	// 回填能力标记
 	for i := range records {
 		r := &records[i]
 		isRunning := r.InstanceStatus == model.InstanceStatusRunning
 		isWithdrawn := r.InstanceStatus == model.InstanceStatusWithdrawn
-		_, hasTrace := touched[r.InstanceID]
 		r.CanWithdraw = isRunning
-		// 作废：审核中且无审批痕迹（流程尚未产生结果）时可作废；
-		// 已撤回本就是被发起人中止、流程痕迹已清空的记录，允许继续作废留痕
-		r.CanVoid = (isRunning && !hasTrace) || isWithdrawn
+		r.CanVoid = isWithdrawn
 		r.CanEdit = r.InstanceStatus == model.InstanceStatusReturned || isWithdrawn
 		// 删除仅对草稿开放，而草稿不出现在「我的发起」；已撤回需先编辑转为草稿再删除
 		r.CanDelete = false

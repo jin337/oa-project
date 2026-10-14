@@ -581,34 +581,20 @@ func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.Approv
 	return &instance, nil
 }
 
-// ApprovalInstanceVoid 作废流程实例（仅发起人；「审核中且无审批痕迹」或「已撤回」可作废）：
+// ApprovalInstanceVoid 作废流程实例（仅发起人；**仅「已撤回」可作废**）：
 // 与撤回的区别在于留痕——实例保留在「我的发起」中并置为「已作废」终态，
 // 任务记录不删除（待处理任务由 finishInstance 置为「已取消」），
 // 时间线上仍能看到原定审批人，可审计「谁本该审、但单据被作废」。
-// 只要有人处理过（通过/拒绝/驳回/转交），就产生了不可撤销的审批事实，不允许作废，只能撤回。
-// 已撤回的实例其流程痕迹已被撤回清空，属于发起人主动中止的记录，允许继续作废留痕。
+//
+// 审核中的单据一律只能撤回：撤回会清空流程痕迹，此后才允许作废。
+// 这样作废永远不会绕过审批人——只要流程真的流转过，发起人就必须先撤回
+// （撤回本身也是一次有记录的主动中止），不能直接宣告作废。
 func ApprovalInstanceVoid(curUserID, instanceID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "作废",
-			model.InstanceStatusRunning, model.InstanceStatusWithdrawn)
+			model.InstanceStatusWithdrawn)
 		if err != nil {
 			return err
-		}
-
-		// 审批痕迹校验：存在已处理任务则不允许作废（改用撤回）
-		var traced int64
-		if err := tx.Model(&model.ApprovalInstanceTask{}).
-			Where("instance_id = ? AND status IN ?", instance.ID, []int{
-				model.TaskStatusApproved,
-				model.TaskStatusRejected,
-				model.TaskStatusReturned,
-				model.TaskStatusDelegated,
-			}).
-			Count(&traced).Error; err != nil {
-			return err
-		}
-		if traced > 0 {
-			return errors.New("该单据已有审批记录，不能作废，请使用撤回")
 		}
 
 		// 置为「已作废」终态：同步取消待处理任务（保留记录），不写抄送、不发结果通知

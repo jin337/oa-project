@@ -821,8 +821,8 @@ type ApprovalRecord struct {
 
 	// 实例状态原值（仅服务端内部用于推导下面的能力标记，不对外输出）
 	InstanceStatus int `json:"-"`
-	// 操作能力标记：由实例状态与审批痕迹计算，前端据此渲染「作废/撤回/编辑/删除」按钮
-	CanVoid     bool `json:"can_void"`     // 可作废：进行中且无审批痕迹
+	// 操作能力标记：由实例状态计算，前端据此渲染「作废/撤回/编辑/删除」按钮
+	CanVoid     bool `json:"can_void"`     // 可作废：仅已撤回（审核中一律只能撤回）
 	CanWithdraw bool `json:"can_withdraw"` // 可撤回：进行中
 	CanEdit     bool `json:"can_edit"`     // 可编辑：已驳回 / 已撤回
 	CanDelete   bool `json:"can_delete"`   // 可删除：已撤回（草稿在草稿箱页面处理）
