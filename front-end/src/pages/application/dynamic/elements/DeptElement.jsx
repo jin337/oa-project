@@ -1,8 +1,7 @@
 import { Input, Modal, Tree } from '@arco-design/web-react'
 import { useEffect, useMemo, useState } from 'react'
-import request from 'src/api/request'
-import { API_PREFIX } from 'src/utils/constants'
 import { findOptionByValue, getStaticOptions } from '../utils/formUtils'
+import { loadDataSourceOptions } from '../utils/optionLoader'
 import { applyScroll, markScroll } from '../utils/scrollGuard'
 
 /**
@@ -67,8 +66,10 @@ const filterTree = (nodes, keyword) => {
 /**
  * 部门选项 Hook：
  * 1. 运行时 rt 已加载选项（form 模式，DynamicForm loadOptions 提供）→ 优先使用；
- * 2. 否则 data_source.type='api' 且配置了 url → 自加载（detail 等 rt 不可用场景）；
- * 3. 最后回退静态 json 选项。
+ * 2. rt.managesOptions 为真时（form 运行时）由 DynamicForm 统一加载，此处不再自请求，
+ *    避免同一字段被两条路径各加载一次；
+ * 3. 否则 data_source.type='api' 且配置了 url → 自加载（detail 等 rt 不可用场景）；
+ * 4. 最后回退静态 json 选项。
  */
 const useDeptOptions = (el, rt) => {
   const rtOptions = rt?.getOptions?.(el)
@@ -77,29 +78,13 @@ const useDeptOptions = (el, rt) => {
   const ds = el?.data_source
 
   useEffect(() => {
-    if (hasRt || ds?.type !== 'api' || !ds?.url) return
+    if (hasRt || rt?.managesOptions || ds?.type !== 'api' || !ds?.url) return
     let alive = true
-    const load = async () => {
-      try {
-        // 引用接口管理（api_ref=1）→ 走统一分发端点 /interfaces{path}
-        const isRef = ds?.api_ref === 1 || ds?.api_ref === '1'
-        let rawUrl = ds.url
-        if (isRef) rawUrl = '/interfaces' + rawUrl
-        const url = rawUrl.startsWith(API_PREFIX) ? rawUrl.slice(API_PREFIX.length) : rawUrl
-        const method = (ds?.method || 'GET').toUpperCase()
-        const params = ds?.params && typeof ds?.params === 'object' ? ds.params : {}
-        const res = await request({
-          url,
-          method,
-          params: method === 'GET' ? params : undefined,
-          data: method === 'GET' ? undefined : params,
-        })
-        if (alive) setSelfOptions(toTreeOptions(res?.data ?? res))
-      } catch {
-        // 加载失败保留空选项，不打断表单
-      }
-    }
-    load()
+    // 走共享加载器：同一时刻相同请求（method+url+params）会合并为一次网络往返，
+    // 避免子表多行 / 多个字段引用同一接口时重复请求。失败返回 null，保留空选项。
+    loadDataSourceOptions(ds).then((data) => {
+      if (alive && data != null) setSelfOptions(toTreeOptions(data))
+    })
     return () => {
       alive = false
     }

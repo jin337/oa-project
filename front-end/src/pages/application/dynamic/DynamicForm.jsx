@@ -31,6 +31,7 @@ import {
   resolveExpr,
   resolvePath,
 } from './utils/formUtils'
+import { dataSourceRequestKey, dedupRequest } from './utils/optionLoader'
 
 // 元素渲染配置中心（基础/常规元素渲染 + 详情只读组件）独立维护于 ./elements/elementConfig.jsx
 import {
@@ -294,7 +295,14 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
     const vars = { form: allValues || {} }
     // 先解析 URL 中的 ${form.xxx} / ${item.xxx} 路径模板，避免 ${} 被请求层整体编码
     try {
-      const res = await requestDynamicApi(ds, vars)
+      // 多个字段可能引用同一接口（如付款单位 / 付款账号）：参数不含运行期模板时，
+      // 同一时刻的相同请求合并为一次网络往返；各字段仍各自拿到结果并写入自己的选项。
+      const paramsText = JSON.stringify(ds?.params || {})
+      const res = paramsText.includes('${')
+        ? await requestDynamicApi(ds, vars)
+        : await dedupRequest(dataSourceRequestKey(ds), () => requestDynamicApi(ds, vars))
+      // 请求失败（去重层返回 null）→ 保留空选项，不打断表单
+      if (res == null) return
       const options = extractOptions(res?.data ?? res, ds, vars)
       // 先同步更新 ref，保证紧随其后的补联动能取到刚加载的选项（state 提交是异步的）
       apiOptionsRef.current = { ...apiOptionsRef.current, [el.id]: options }
@@ -575,6 +583,10 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
       handleElementBlur,
       getFormValues,
       appCode: app?.code || '',
+      // 运行时（form 模式）由本 Hook 统一按 collectFieldDefs 加载全部选项型元素的动态选项，
+      // 元素组件据此不再自行请求，避免同一字段被两条路径各加载一次（重复请求）。
+      // detail 等 rt 不可用的场景不设置该标记，元素组件按原逻辑自加载。
+      managesOptions: true,
     }),
     [getOptions, handleElementBlur, getFormValues, app?.code],
   )
