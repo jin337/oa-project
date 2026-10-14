@@ -80,7 +80,7 @@ func ApprovalInstanceDetail(c *gin.Context) {
 	response.OK(c, result)
 }
 
-// ApprovalInstanceVoid PUT /{APIPrefix}/approval/instance/:id/void 作废（仅无审批痕迹时）
+// ApprovalInstanceVoid PUT /{APIPrefix}/approval/instance/:id/void 作废（仅已撤回可作废）
 func ApprovalInstanceVoid(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
