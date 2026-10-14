@@ -78,6 +78,11 @@ export function withdrawApprovalInstance(id) {
   return request.put(`/approval/instance/${id}/withdraw`)
 }
 
+// PUT /approval/instance/:id/void 作废（仅进行中且无审批痕迹时可作废）
+export function voidApprovalInstance(id) {
+  return request.put(`/approval/instance/${id}/void`)
+}
+
 // PUT /approval/instance/:id/resubmit 已驳回实例重新提交（发起人修改表单后继续审批）
 export function resubmitApprovalInstance(id, businessData) {
   return request.put(`/approval/instance/${id}/resubmit`, { business_data: businessData })

@@ -210,7 +210,8 @@ func rejectToInitiator(tx *gorm.DB, instance *model.ApprovalInstance, result str
 	return nil
 }
 
-// finishInstance 完成流程实例（通过/拒绝/撤回），同步更新实例状态并取消所有待处理任务
+// finishInstance 完成流程实例（通过/拒绝/作废），同步更新实例状态并取消所有待处理任务。
+// 作废（InstanceStatusVoided）由发起人主动终止，不产生抄送记录与结果通知。
 func finishInstance(tx *gorm.DB, instance *model.ApprovalInstance, status int, result string, curUserID uint) error {
 	now := time.Now()
 	instance.Status = status
@@ -235,6 +236,11 @@ func finishInstance(tx *gorm.DB, instance *model.ApprovalInstance, status int, r
 			"updated_by": curUserID,
 		}).Error; err != nil {
 		return err
+	}
+
+	// 作废由发起人本人主动终止，不写抄送、不发结果通知；其余终态照常处理
+	if status == model.InstanceStatusVoided {
+		return nil
 	}
 
 	// 流程终结：为 ccTiming=2（流程结束时统一抄送）的抄送节点写入抄送记录（幂等）

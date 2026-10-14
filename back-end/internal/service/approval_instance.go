@@ -192,7 +192,7 @@ func instanceStatusToBizStatus(instanceStatus int) int {
 	case model.InstanceStatusVoided:
 		return model.ApprovalStatusVoided
 	case model.InstanceStatusWithdrawn:
-		return model.ApprovalStatusDraft
+		return model.ApprovalStatusWithdrawn
 	case model.InstanceStatusDraft:
 		return model.ApprovalStatusDraft
 	default:
@@ -361,8 +361,9 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 	var instance model.ApprovalInstance
 
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. 加载草稿实例并校验归属/状态（草稿可编辑）
-		owned, err := loadOwnedInstance(tx, curUserID, req.InstanceID, "编辑", model.InstanceStatusDraft)
+		// 1. 加载草稿/已撤回实例并校验归属/状态（两者均可编辑；已撤回编辑保存后转为正式草稿）
+		owned, err := loadOwnedInstance(tx, curUserID, req.InstanceID, "编辑",
+			model.InstanceStatusDraft, model.InstanceStatusWithdrawn)
 		if err != nil {
 			return err
 		}
@@ -391,9 +392,11 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 			selfSelectJSON = string(b)
 		}
 
-		// 6. 严格更新该草稿（UPDATE ... WHERE id=? AND status=草稿），不新增记录
+		// 6. 严格更新该草稿/已撤回实例（UPDATE ... WHERE id=? AND status IN (草稿,已撤回)），不新增记录；
+		// 保存后统一落为草稿，进入草稿箱继续完善
 		res := tx.Model(&model.ApprovalInstance{}).
-			Where("id = ? AND status = ?", instance.ID, model.InstanceStatusDraft).
+			Where("id = ? AND status IN ?", instance.ID,
+				[]int{model.InstanceStatusDraft, model.InstanceStatusWithdrawn}).
 			Updates(map[string]interface{}{
 				"app_id":                   instance.AppID,
 				"business_table":           ctx.app.TableName,
@@ -430,9 +433,10 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 //  3. 校验发起人自选节点已选审批人
 //  4. 事务内原子流转（草稿→进行中），生成首个审批节点任务
 func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.ApprovalInstanceSubmitDraftReq) (*model.ApprovalInstance, error) {
-	// 1. 加载草稿实例并校验归属/状态（仅草稿可提交）
+	// 1. 加载草稿/已撤回实例并校验归属/状态（仅草稿与已撤回可提交）
 	var instance model.ApprovalInstance
-	owned, err := loadOwnedInstance(database.DB, curUserID, instanceID, "提交", model.InstanceStatusDraft)
+	owned, err := loadOwnedInstance(database.DB, curUserID, instanceID, "提交",
+		model.InstanceStatusDraft, model.InstanceStatusWithdrawn)
 	if err != nil {
 		return nil, err
 	}
@@ -466,9 +470,10 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 
 	// 7. 事务：原子状态流转（草稿→进行中）+ 更新快照/路径 + 生成首个任务
 	err = withNotify(func(tx *gorm.DB) error {
-		// 原子守卫：仅当实例仍为草稿时才更新，防止并发重复提交
+		// 原子守卫：仅当实例仍为草稿/已撤回时才更新，防止并发重复提交
 		res := tx.Model(&model.ApprovalInstance{}).
-			Where("id = ? AND status = ?", instanceID, model.InstanceStatusDraft).
+			Where("id = ? AND status IN ?", instanceID,
+				[]int{model.InstanceStatusDraft, model.InstanceStatusWithdrawn}).
 			Updates(map[string]interface{}{
 				"approval_flow_json":       string(injectedFlowBytes),
 				"execution_path":           string(execPathBytes),
@@ -576,8 +581,44 @@ func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.Approv
 	return &instance, nil
 }
 
+// ApprovalInstanceVoid 作废流程实例（仅发起人；「审核中且无审批痕迹」或「已撤回」可作废）：
+// 与撤回的区别在于留痕——实例保留在「我的发起」中并置为「已作废」终态，
+// 任务记录不删除（待处理任务由 finishInstance 置为「已取消」），
+// 时间线上仍能看到原定审批人，可审计「谁本该审、但单据被作废」。
+// 只要有人处理过（通过/拒绝/驳回/转交），就产生了不可撤销的审批事实，不允许作废，只能撤回。
+// 已撤回的实例其流程痕迹已被撤回清空，属于发起人主动中止的记录，允许继续作废留痕。
+func ApprovalInstanceVoid(curUserID, instanceID uint) error {
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "作废",
+			model.InstanceStatusRunning, model.InstanceStatusWithdrawn)
+		if err != nil {
+			return err
+		}
+
+		// 审批痕迹校验：存在已处理任务则不允许作废（改用撤回）
+		var traced int64
+		if err := tx.Model(&model.ApprovalInstanceTask{}).
+			Where("instance_id = ? AND status IN ?", instance.ID, []int{
+				model.TaskStatusApproved,
+				model.TaskStatusRejected,
+				model.TaskStatusReturned,
+				model.TaskStatusDelegated,
+			}).
+			Count(&traced).Error; err != nil {
+			return err
+		}
+		if traced > 0 {
+			return errors.New("该单据已有审批记录，不能作废，请使用撤回")
+		}
+
+		// 置为「已作废」终态：同步取消待处理任务（保留记录），不写抄送、不发结果通知
+		return finishInstance(tx, instance, model.InstanceStatusVoided, "发起人作废", curUserID)
+	})
+}
+
 // ApprovalInstanceWithdraw 撤回流程实例（仅发起人、仅进行中）：
-// 回退为草稿（草稿箱可重新编辑/提交/删除），同时取消所有待处理任务。
+// 落为「已撤回」，保留在「我的发起」列表中，同时取消所有待处理任务。
+// 已撤回实例可继续编辑（保存后转为正式草稿进草稿箱）或重新提交、删除。
 // 流程快照与发起人自选成员保留，重新提交时按当时表单数据重新评估执行路径。
 func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
@@ -600,9 +641,9 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 				draftMembersJSON = string(b)
 			}
 		}
-		// 3. 回退为草稿：重置执行游标与结果，finished_at 置空
+		// 3. 落为「已撤回」：重置执行游标与结果，finished_at 置空
 		if err := tx.Model(instance).Updates(map[string]interface{}{
-			"status":                 model.InstanceStatusDraft,
+			"status":                 model.InstanceStatusWithdrawn,
 			"current_node_idx":       0,
 			"finished_at":            nil,
 			"result":                 "",
@@ -616,13 +657,13 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 }
 
 // ApprovalInstanceDelete 删除流程实例（软删除）
-// 仅允许发起人删除已终结的实例（已拒绝/已驳回/已作废/已撤回/草稿）
+// 仅允许发起人删除「草稿」实例——从未正式发起、未产生任何审批结果的记录。
+// 已撤回需先编辑保存（转为草稿）后到草稿箱删除；已驳回/已作废/已通过/已拒绝等留有流程痕迹的记录不允许删除。
 // 同时级联软删除对应的业务表数据，并清理该实例产生的通知
 func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "删除",
-			model.InstanceStatusRejected, model.InstanceStatusReturned,
-			model.InstanceStatusVoided, model.InstanceStatusWithdrawn, model.InstanceStatusDraft)
+			model.InstanceStatusDraft)
 		if err != nil {
 			return err
 		}

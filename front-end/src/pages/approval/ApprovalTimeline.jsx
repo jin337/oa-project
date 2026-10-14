@@ -42,7 +42,8 @@ const INSTANCE_STATUS_META = {
   2: { label: '已拒绝', color: 'red' },
   3: { label: '已退回', color: 'orangered' },
   4: { label: '已作废', color: 'gray' },
-  5: { label: '已撤回', color: 'gray' },
+  5: { label: '已撤回', color: 'purple' },
+  6: { label: '草稿', color: 'gray' },
 }
 
 // 节点类型图标映射（与 flowModel.js / constants.js 保持一致）

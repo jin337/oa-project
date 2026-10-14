@@ -443,6 +443,7 @@ const (
 	ApprovalStatusReturned  = 5 // 已驳回（退回修改，可重新提交回到待审核）
 	ApprovalStatusVoided    = 6 // 已作废（终态）
 	ApprovalStatusDeleted   = 7 // 已删除（由删除接口自动置位，终态）
+	ApprovalStatusWithdrawn = 8 // 已撤回（发起人撤回，可编辑/重新提交/删除）
 )
 
 // ApplicationDataListReq 动态数据列表查询：分页 + 目标表名 + 动态搜索字段
@@ -450,7 +451,7 @@ const (
 type ApplicationDataListReq struct {
 	BaseListReq
 	TableName    string            `json:"table_name" form:"table_name" validate:"required" label:"表名"`
-	Status       *int              `json:"status" form:"status" validate:"omitempty,oneof=0 1 2 3 4 5 6 7" label:"审核状态"` // nil 表示不过滤；0 草稿 1 待审核 2 审核中 3 已通过 4 不通过 5 已驳回 6 已作废 7 已删除
+	Status       *int              `json:"status" form:"status" validate:"omitempty,oneof=0 1 2 3 4 5 6 7 8" label:"审核状态"` // nil 表示不过滤；0 草稿 1 待审核 2 审核中 3 已通过 4 不通过 5 已驳回 6 已作废 7 已删除 8 已撤回
 	ExcludeDraft bool              `json:"exclude_draft" form:"exclude_draft" label:"是否排除草稿"`                            // 为 true 时不返回草稿(0)数据（如审核人视角的已提交列表）
 	Filters      map[string]string `json:"-" form:"-"`                                                                   // 动态搜索字段（field_key → 值）
 }
@@ -817,6 +818,14 @@ type ApprovalRecord struct {
 	UpdatedAt      *time.Time             `json:"-"`                     // 底层记录更新时间（终态时作为完成时间，不对外输出）
 	CreatedAt      *time.Time             `json:"created_at"`            // 发起时间
 	Data           map[string]interface{} `json:"data,omitempty"`        // 业务数据摘要（不含系统列与审核状态）
+
+	// 实例状态原值（仅服务端内部用于推导下面的能力标记，不对外输出）
+	InstanceStatus int `json:"-"`
+	// 操作能力标记：由实例状态与审批痕迹计算，前端据此渲染「作废/撤回/编辑/删除」按钮
+	CanVoid     bool `json:"can_void"`     // 可作废：进行中且无审批痕迹
+	CanWithdraw bool `json:"can_withdraw"` // 可撤回：进行中
+	CanEdit     bool `json:"can_edit"`     // 可编辑：已驳回 / 已撤回
+	CanDelete   bool `json:"can_delete"`   // 可删除：已撤回（草稿在草稿箱页面处理）
 }
 
 // ApprovalListReq 审批列表请求（分页）

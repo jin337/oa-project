@@ -10,6 +10,7 @@ export const APPROVAL_STATUS = {
   5: '已退回',
   6: '已作废',
   7: '已删除',
+  8: '已撤回',
 }
 
 // 状态 → Tag 颜色（列表 / 详情统一视觉）
@@ -22,6 +23,7 @@ export const STATUS_TAG_COLOR = {
   5: 'orangered',
   6: 'gray',
   7: 'gray',
+  8: 'purple',
 }
 
 /** 审核状态 Tag：所有审批列表页统一使用，避免重复编写状态映射 */

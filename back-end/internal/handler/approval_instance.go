@@ -80,6 +80,19 @@ func ApprovalInstanceDetail(c *gin.Context) {
 	response.OK(c, result)
 }
 
+// ApprovalInstanceVoid PUT /{APIPrefix}/approval/instance/:id/void 作废（仅无审批痕迹时）
+func ApprovalInstanceVoid(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if err := service.ApprovalInstanceVoid(middleware.CurrentUserID(c), id); err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	response.OKMsg(c, "作废成功")
+}
+
 // ApprovalInstanceWithdraw PUT /{APIPrefix}/approval/instance/:id/withdraw 撤回
 func ApprovalInstanceWithdraw(c *gin.Context) {
 	id, ok := parseID(c)

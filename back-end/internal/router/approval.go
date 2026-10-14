@@ -34,6 +34,7 @@ func registerApprovalRoutes(api *gin.RouterGroup) {
 			instance.GET("/:id", handler.ApprovalInstanceDetail)                             // 实例详情
 			instance.PUT("/:id/submit", handler.ApprovalInstanceSubmitDraft)                 // 从草稿提交发起
 			instance.PUT("/:id/withdraw", handler.ApprovalInstanceWithdraw)                  // 撤回
+			instance.PUT("/:id/void", handler.ApprovalInstanceVoid)                          // 作废（仅无审批痕迹时）
 			instance.PUT("/:id/resubmit", handler.ApprovalInstanceResubmit)                  // 已驳回重新提交
 			instance.PUT("/:id/task/:taskId/approve", handler.ApprovalInstanceTaskApprove)   // 审批操作
 			instance.PUT("/:id/task/:taskId/add-sign", handler.ApprovalInstanceTaskAddSign)  // 加签（前/后）

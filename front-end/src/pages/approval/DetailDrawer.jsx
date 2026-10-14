@@ -352,13 +352,17 @@ export default function DetailDrawer({
     )
   }
 
-  // 审批状态映射
+  // 审批状态映射（与后端 model.InstanceStatus* 一致）
   const getStatusConfig = (status) => {
     const statusMap = {
+      // 0 审批中 / 1 通过 / 2 拒绝 / 3 退回 / 4 作废 / 5 撤回 / 6 草稿
       0: { text: '审批中', color: '#ffb400' },
       1: { text: '审批通过', color: '#00b42a' },
       2: { text: '审批拒绝', color: '#f53f3f' },
       3: { text: '审批退回', color: '#ff7d00' },
+      4: { text: '已作废', color: '#86909c' },
+      5: { text: '已撤回', color: '#722ed1' },
+      6: { text: '草稿', color: '#86909c' },
     }
     return statusMap[Number(status)] || { text: '未知状态', color: '#86909c' }
   }
