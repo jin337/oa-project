@@ -9,9 +9,14 @@ import {
   IconStamp,
   IconUser,
 } from '@arco-design/web-react/icon'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import { formatTime } from 'src/utils/format'
+import {
+  hasExpandableMember,
+  loadMemberDirectory,
+  resolveNodePeople,
+} from 'src/utils/flowMembers'
 
 /**
  * 审批流程时间线组件：展示流程实例的完整审批流转记录
@@ -79,23 +84,78 @@ function flattenFlowNodes(nodes, executionPathSet) {
   return result
 }
 
-/** 格式化成员列表为可读文本，利用 userNameMap 解析人员 key（如 user_5 → 真实姓名） */
-function formatMembers(members, nameMap) {
-  if (!members?.length) return '未配置'
-  return (
-    members
-      .map((m) => {
-        if (m.label) return m.label
-        // 人员类型 key 格式为 "user_{id}"，通过 nameMap 解析真实姓名
-        if (m.type === 1 && m.key && nameMap) {
-          const uid = m.key.replace('user_', '')
-          if (nameMap[uid]) return nameMap[uid]
-        }
-        return m.key || ''
+/**
+ * 未流转到的节点 / 抄送人的成员展示：成员引用（dept_x / role_x / group_x）展开为具体的人后
+ * 逐个用 Tag 渲染，**全部展示不折叠** —— 这类节点还没有任务记录，Tag 是唯一的成员信息，
+ * 若折叠成「等N人」就看不到到底是谁在等审批。
+ * nameMap（userId → 姓名）优先用于人员引用。
+ */
+function MemberTags({ members, nameMap, directory }) {
+  const list = members || []
+  const people = resolveNodePeople({ members: list }, directory, nameMap)
+  if (!people.length) {
+    // 目录与 label 都拿不到姓名时，退回配置里的原始引用文本
+    const raw = list.map((m) => m.label || m.key).filter(Boolean)
+    if (!raw.length) return <span className="text-xs text-gray-400">未配置</span>
+    return raw.map((text) => (
+      <Tag key={text} size="small">
+        {text}
+      </Tag>
+    ))
+  }
+  return people.map((p) => (
+    <Tag key={p.id != null ? `u${p.id}` : `n${p.name}`} size="small">
+      {p.name}
+    </Tag>
+  ))
+}
+
+/**
+ * 任务节点（如「初审」）的展示形态拆分。判据在「节点」这一层，不在「人」这一层：
+ * - 节点已流转（存在任务）→ 节点上所有人都出**任务卡片**。其中还没轮到自己的人没有任务记录，
+ *   卡片状态显示为灰色「未流转」（后端依次审批只生成当前一个人的任务，见 approval_task.go 的
+ *   `case 1: // 依次审批：只生成第一个人的任务`）
+ * - 节点尚未流转（完全没有任务）→ 节点上所有人一律用 **Tag 平铺**
+ * 另：任务的实际审批人不在展开结果里（转交对象、发起人自选成员、流程配置已变更）时补成卡片，
+ * 避免真实发生过的审批记录被漏掉。
+ * @returns {{cards: Array<{key: string, name: string|null, task?: object}>, tags: Array<{key: string, name: string}>}}
+ */
+function splitNodePeople(nodePeople, nodeTasks) {
+  // 该任务节点还没有流转过来：整节点 Tag 平铺
+  if (nodeTasks.length === 0) {
+    return { cards: [], tags: nodePeople }
+  }
+
+  const byAssignee = new Map()
+  nodeTasks.forEach((task) => {
+    const key = String(task.assignee_id)
+    if (!byAssignee.has(key)) byAssignee.set(key, [])
+    byAssignee.get(key).push(task)
+  })
+
+  const cards = []
+  const usedTaskIds = new Set()
+  nodePeople.forEach((person) => {
+    const mine = person.id != null ? byAssignee.get(String(person.id)) || [] : []
+    if (mine.length) {
+      mine.forEach((task) => {
+        usedTaskIds.add(task.id)
+        cards.push({ key: `task-${task.id}`, task, name: person.name })
       })
-      .filter(Boolean)
-      .join('、') || '未配置'
-  )
+      return
+    }
+    // person.id 为空说明成员目录还没加载完（person 只是组 / 角色 / 部门的占位名），无法定位到人：
+    // 交给下面的任务卡片兜底，避免把「财务审核组」当成一个人在卡片里显示
+    if (person.id != null) {
+      cards.push({ key: `pending-${person.id}`, name: person.name })
+    }
+  })
+
+  nodeTasks.forEach((task) => {
+    if (usedTaskIds.has(task.id)) return
+    cards.push({ key: `task-${task.id}`, task, name: null })
+  })
+  return { cards, tags: [] }
 }
 
 /** 抄送时机文本 */
@@ -112,6 +172,23 @@ export default function ApprovalTimeline({
   const [tasks, setTasks] = useState([])
   const [flowNodes, setFlowNodes] = useState([])
   const [userNameMap, setUserNameMap] = useState({})
+
+  // 成员目录（部门 / 角色 / 审核人员组 → 具体的人）：仅当流程里存在这几类引用时才加载，
+  // 加载完成前成员文本回退显示原 label，不会出现空白。
+  const [memberDirectory, setMemberDirectory] = useState(null)
+  const needsMemberDirectory = useMemo(() => hasExpandableMember(flowNodes), [flowNodes])
+  useEffect(() => {
+    if (!visible || !needsMemberDirectory) return
+    let cancelled = false
+    loadMemberDirectory()
+      .then((directory) => {
+        if (!cancelled) setMemberDirectory(directory)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [visible, needsMemberDirectory])
 
   useEffect(() => {
     if (!visible || !instanceId) return
@@ -271,6 +348,10 @@ export default function ApprovalTimeline({
             if (node.type === 2) {
               // 审批人节点
               const nodeTasks = tasksByNode[node.id] || []
+              // 未流转到该节点时按「成员引用展开后的实际人数」展示（组 / 角色可能对应多人）
+              const nodePeople = resolveNodePeople(node, memberDirectory, userNameMap)
+              // 任务节点整块决定形态：节点已流转则全员任务卡片，节点未流转则全员 Tag 平铺
+              const { cards: nodeCards, tags: nodeTags } = splitNodePeople(nodePeople, nodeTasks)
               return (
                 <Timeline.Item
                   key={node.id}
@@ -284,16 +365,38 @@ export default function ApprovalTimeline({
                   <div className="flex items-center gap-2">
                     <span className="font-medium">
                       {node.label || '审批'}：
-                      {nodeTasks.length > 0 ? nodeTasks.length : node.members?.length || 0}人（
+                      {/* 人数恒定按流程配置展开后的实际人数，不随已派发的任务条数变化 */}
+                      {nodePeople.length}人（
                       {node.strategy === 2 ? '会签' : node.strategy === 3 ? '或签' : '依次审批'}）
                     </span>
                   </div>
-                  {nodeTasks.length > 0 ? (
-                    nodeTasks.map((task) => {
+                  {nodeCards.length === 0 && nodeTags.length === 0 ? (
+                    <div className="mt-1 text-xs text-gray-400">未配置</div>
+                  ) : nodeCards.length > 0 ? (
+                    // 节点已流转：节点上所有人都出任务卡片
+                    nodeCards.map((entry) => {
+                      const { task } = entry
+                      const userName = task
+                        ? entry.name || userNameMap[task.assignee_id] || `用户#${task.assignee_id}`
+                        : entry.name
+                      // 该人还没轮到自己：没有任务记录，按「未流转」展示
+                      if (!task) {
+                        return (
+                          <div key={entry.key} className="mt-1.5 rounded-md bg-gray-100 p-2">
+                            <div className="flex min-w-0 items-center gap-1">
+                              <span className="truncate text-sm font-medium text-gray-700">
+                                {userName}
+                              </span>
+                              <Tag size="small" color="gray">
+                                未流转
+                              </Tag>
+                            </div>
+                          </div>
+                        )
+                      }
                       const meta = TASK_STATUS_META[task.status] || TASK_STATUS_META[0]
-                      const userName = userNameMap[task.assignee_id] || `用户#${task.assignee_id}`
                       return (
-                        <div key={task.id} className="mt-1.5 rounded-md bg-gray-100 p-2">
+                        <div key={entry.key} className="mt-1.5 rounded-md bg-gray-100 p-2">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-1">
                               <span className="truncate text-sm font-medium text-gray-700">
@@ -327,8 +430,13 @@ export default function ApprovalTimeline({
                       )
                     })
                   ) : (
-                    <div className="mt-1 text-xs text-gray-400">
-                      {formatMembers(node.members, userNameMap)}
+                    // 节点尚未流转：全员 Tag 平铺
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      {nodeTags.map((entry) => (
+                        <Tag key={entry.key} size="small">
+                          {entry.name}
+                        </Tag>
+                      ))}
                     </div>
                   )}
                 </Timeline.Item>
@@ -354,8 +462,12 @@ export default function ApprovalTimeline({
                       {node.ccTiming ? `（${CC_TIMING_LABEL[node.ccTiming]}）` : ''}
                     </span>
                   </div>
-                  <div className="mt-0.5 text-xs text-gray-500">
-                    <span>{formatMembers(node.members, userNameMap)}</span>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <MemberTags
+                      members={node.members}
+                      nameMap={userNameMap}
+                      directory={memberDirectory}
+                    />
                   </div>
                 </Timeline.Item>
               )

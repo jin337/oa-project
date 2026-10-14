@@ -21,6 +21,13 @@ import {
 } from 'src/pages/application/examine/flowModel'
 import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
 import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
+import {
+  hasExpandableMember,
+  loadMemberDirectory,
+  resolveMemberPeople,
+  resolveNodePeople,
+  splitFlatPeople,
+} from 'src/utils/flowMembers'
 
 /**
  * ==================== 审批流程只读展示（独立组件） ====================
@@ -164,29 +171,29 @@ const getMembersText = (members) => {
     .join('、')
 }
 
-/** 构建节点摘要文本（仿钉钉审批单样式：第二行灰色提示，如「1人审批」「抄送5人」「请选择审批人」） */
-const buildNodeSummary = (node) => {
+/**
+ * 构建节点摘要文本（仿钉钉审批单样式：第二行灰色提示，如「2人审批」「抄送10人」「请选择审批人」）。
+ * 人数一律按「成员引用展开后的实际人数」统计：一个审核人员组 / 角色 / 部门可能对应多人，
+ * 若直接数 members 条数，10 个用户的角色会被显示成「1人审批」。
+ */
+const buildNodeSummary = (node, directory) => {
   if (node.type === 1) {
     // 1-发起人
     const t = getMembersText(node.members)
     return t ? `可发起人：${t}` : '未配置可发起人'
   }
   if (node.type === 2) {
-    // 2-审批人：成员数量 + 审批人为空处理
+    // 2-审批人：实际审批人数 + 审批人为空处理
+    const peopleCount = resolveNodePeople(node, directory).length
     if (node.approverType === 3) {
       // 3-发起人自选：未选择提示「请选择审批人」；仅 1 人显示「1人审批」，多人（多选）显示「N人 + 审批方式」（如「2人依次审批」）
-      const n = (node.members || []).length
-      if (!n) return '请选择审批人'
-      if (n === 1) return '1人审批'
-      return `${n}人${STRATEGY_MAP[node.strategy] || '审批'}`
+      if (!peopleCount) return '请选择审批人'
+      if (peopleCount === 1) return '1人审批'
+      return `${peopleCount}人${STRATEGY_MAP[node.strategy] || '审批'}`
     }
-    const n = (node.members || []).length
-    // 4-审核人员组：按组数展示（如「2个审核组审批」）；其余按人数展示
     const parts = [
-      n
-        ? node.approverType === 4
-          ? `${n}个审核组审批`
-          : `${n}人审批`
+      peopleCount
+        ? `${peopleCount}人审批`
         : node.approverType === 4
           ? '请选择审核人员组'
           : '请选择审批人',
@@ -200,18 +207,10 @@ const buildNodeSummary = (node) => {
     return parts.join('，')
   }
   if (node.type === 3) {
-    // 3-抄送人：抄送数量
-    if (node.approverType === 3) {
-      // 3-发起人自选：未选择提示「请选择抄送人」；已选择显示「抄送N人」（如「抄送2人」）
-      const n = (node.members || []).length
-      return n ? `抄送${n}人` : '请选择抄送人'
-    }
-    const n = (node.members || []).length
-    // 4-审核人员组：按组数展示（如「抄送2个审核组」）；其余按人数展示
-    if (node.approverType === 4) {
-      return n ? `抄送${n}个审核组` : '请选择审核人员组'
-    }
-    return n ? `抄送${n}人` : '请选择抄送人'
+    // 3-抄送人：抄送人数（同样按展开后实际人数）
+    const peopleCount = resolveNodePeople(node, directory).length
+    if (peopleCount) return `抄送${peopleCount}人`
+    return node.approverType === 4 ? '请选择审核人员组' : '请选择抄送人'
   }
   if (node.type === 4) {
     // 4-条件分支：条件关系 + 分支数量
@@ -222,20 +221,28 @@ const buildNodeSummary = (node) => {
 }
 
 /**
- * 成员展示 chip（仿参考图右侧成员区）：
+ * 单个成员引用的展示名：人员引用取本人姓名，部门 / 角色 / 审核人员组由调用方
+ * 展开为多个人后再逐个渲染，这里只用于「发起人自选」这类成员本身就是人的节点。
  */
-const MemberChip = ({ member, onRemove }) => {
-  let name = member.label || member.name || member.title || ''
-  // 降级：label/name/title 均为空时，从 key（如 user_5）中提取用户 ID 显示
-  if (!name && member.key) {
-    const uidMatch = String(member.key).match(/^user_(\d+)$/)
-    if (uidMatch) name = `用户${uidMatch[1]}`
-  }
+const memberDisplayName = (member, directory) => {
+  const people = resolveMemberPeople(member, directory)
+  if (people[0]?.name) return people[0].name
+  // 降级：目录与 label 都拿不到姓名时，从 key（如 user_5）中提取用户 ID 显示
+  const uidMatch = String(member?.key || '').match(/^user_(\d+)$/)
+  return uidMatch ? `用户${uidMatch[1]}` : ''
+}
+
+/**
+ * 人员展示 chip（仿参考图右侧成员区）：一个具体的人一个头像 + 姓名。
+ * name 由调用方展开成员引用后传入，因此审核人员组 / 角色 / 部门会展开成多个 chip。
+ */
+const MemberChip = ({ name, onRemove }) => {
+  const text = name || ''
   return (
     <div className="flex w-11.75 flex-col items-center">
       <div className="relative">
         <Avatar shape="square" size={35} style={{ backgroundColor: 'rgb(var(--primary-6))' }}>
-          {name.slice(0, 1) || '?'}
+          {text.slice(0, 1) || '?'}
         </Avatar>
         {onRemove && (
           // 发起人自选运行期已选成员：右上角小 X 删除按钮，点击移除该成员
@@ -243,15 +250,49 @@ const MemberChip = ({ member, onRemove }) => {
             className="absolute -top-1.5 -right-1.5 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-gray-200 text-gray-500 transition-colors hover:bg-red-500 hover:text-white"
             onClick={(e) => {
               e.stopPropagation()
-              onRemove(member)
+              onRemove()
             }}
           >
             <IconClose style={{ fontSize: 10 }} />
           </span>
         )}
       </div>
-      <span className="w-full truncate text-center text-xs text-gray-600">{name}</span>
+      <span className="w-full truncate text-center text-xs text-gray-600">{text}</span>
     </div>
+  )
+}
+
+/** 折叠 chip：展开人数超过上限时，用「+剩余 / 等N人」收尾，悬停可看完整名单 */
+const MorePeopleChip = ({ restCount, total, names }) => (
+  <div className="flex w-11.75 flex-col items-center" title={names.join('、')}>
+    <Avatar shape="square" size={35} style={{ backgroundColor: '#e5e6eb', color: '#4e5969' }}>
+      +{restCount}
+    </Avatar>
+    <span className="w-full truncate text-center text-xs text-gray-500">等{total}人</span>
+  </div>
+)
+
+/**
+ * 节点右侧人员区：把成员引用展开为具体的人后平铺（与「指定人员」多人时的效果一致），
+ * 超过上限折叠为「等N人」。展开结果与后端创建审批任务的口径一致。
+ */
+const NodePeopleArea = ({ node, directory }) => {
+  const people = resolveNodePeople(node, directory)
+  const { head, restCount, total } = splitFlatPeople(people)
+  if (!people.length) return null
+  return (
+    <>
+      {head.map((person) => (
+        <MemberChip key={person.id != null ? `u${person.id}` : `n${person.name}`} name={person.name} />
+      ))}
+      {restCount > 0 && (
+        <MorePeopleChip
+          restCount={restCount}
+          total={total}
+          names={people.map((p) => p.name)}
+        />
+      )}
+    </>
   )
 }
 
@@ -260,14 +301,14 @@ const MemberChip = ({ member, onRemove }) => {
  * 左侧标题/摘要两行，右侧成员头像区；仿钉钉审批单样式。
  * 「发起人自选」（approverType=3）节点右侧提供「+」按钮，点击唤起 PersonSelectorModal 选择人员。
  */
-const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
+const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember, directory }) => {
   return (
     <div className="flex h-13 justify-between gap-4">
       <div className="w-1/3">
         <div className="text-base font-medium">
           {node.label || APPROVAL_NODE_META[node.type]?.label}
         </div>
-        <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node)}</div>
+        <div className="mt-0.5 text-xs text-gray-400">{buildNodeSummary(node, directory)}</div>
       </div>
       <div className="relative flex shrink-0 flex-wrap justify-end gap-y-1">
         {node.approverType === 3 ? (
@@ -276,7 +317,7 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
             {(node.members || []).map((m, i) => (
               <Fragment key={m.key || `${m.type}-${m.label}-${i}`}>
                 <MemberChip
-                  member={m}
+                  name={memberDisplayName(m, directory)}
                   // 发起人自选运行期已选成员支持删除：移除后经回调更新成员覆盖
                   onRemove={() => {
                     const updated = (node.members || []).filter((x) => x !== m)
@@ -304,10 +345,8 @@ const ApprovalNodeView = ({ node, onSelectNode, onRemoveMember }) => {
             )}
           </>
         ) : (
-          // 非发起人自选（1-指定人员 / 2-指定角色）：保持原有成员渲染
-          (node.members || []).map((m, i) => (
-            <MemberChip key={m.key || `${m.type}-${m.label}-${i}`} member={m} />
-          ))
+          // 非发起人自选（1-指定人员 / 2-指定角色 / 4-审核人员组）：成员引用展开为具体的人平铺
+          <NodePeopleArea node={node} directory={directory} />
         )}
       </div>
     </div>
@@ -373,6 +412,24 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
   useEffect(() => {
     onReadyStateChange?.(missingSelfSelectNodes.length === 0)
   }, [missingSelfSelectNodes, onReadyStateChange])
+  // 人员成员目录（部门 / 角色 / 审核人员组 → 具体的人）：
+  // 仅当流程里真的存在这几类引用时才加载，避免只配了人员节点的流程白拉三份数据；
+  // 加载完成前成员区回退显示 label，不会出现空白。
+  const [memberDirectory, setMemberDirectory] = useState(null)
+  const needsMemberDirectory = useMemo(() => hasExpandableMember(visibleNodes), [visibleNodes])
+  useEffect(() => {
+    if (!needsMemberDirectory) return
+    let cancelled = false
+    loadMemberDirectory()
+      .then((directory) => {
+        if (!cancelled) setMemberDirectory(directory)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [needsMemberDirectory])
+
   // 当前唤起选择器的节点
   const [selectorNode, setSelectorNode] = useState(null)
   // 对象选择器数据源（组织架构树 / 角色列表 / 派生映射），首次唤起选择器时懒加载
@@ -464,6 +521,7 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
                   node={n}
                   onSelectNode={setSelectorNode}
                   onRemoveMember={handleRemoveMember}
+                  directory={memberDirectory}
                 />
               </Timeline.Item>
             )
