@@ -7,13 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"back-end/internal/config"
 	"back-end/internal/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
-
-// UploadDir 上传文件根目录（相对后端运行目录）
-const UploadDir = "uploads"
 
 // UploadResult 单个文件上传结果
 type UploadResult struct {
@@ -42,7 +40,7 @@ func Upload(c *gin.Context) {
 		return '_'
 	}, appCode)
 
-	dir := filepath.Join(UploadDir, appCode)
+	dir := filepath.Join(config.UploadDir, appCode)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		response.Fail(c, response.CodeServerError, "创建上传目录失败")
 		return

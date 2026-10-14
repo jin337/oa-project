@@ -10,6 +10,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// UploadDir 上传文件根目录（相对后端运行目录）。
+// 上传写入（handler.Upload）、静态映射（路由 /uploads）与附件回收（service.ReclaimOrphanUploads）
+// 共用这一个来源，避免多处各自硬编码后漂移。
+const UploadDir = "uploads"
+
 // Config 顶层配置：只分两大块——服务基础配置(server)、数据库+迁移配置(mysql)
 type Config struct {
 	Server ServerConfig `yaml:"server"`

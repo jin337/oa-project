@@ -20,8 +20,8 @@ func Setup() *gin.Engine {
 	// 根路径健康检查：无需鉴权，用于验证服务与数据库是否正常
 	r.GET("/", handler.Health)
 
-	// 上传文件静态服务：直接映射磁盘 uploads 目录
-	r.Static("/uploads", handler.UploadDir)
+	// 上传文件静态服务：直接映射磁盘 uploads 目录（目录来源与上传、附件回收共用 config.UploadDir）
+	r.Static("/uploads", config.UploadDir)
 
 	// 业务路由统一注册在配置的前缀下（config.Server.APIPrefix，唯一真值见 config-*.yaml 的 server.api_prefix）
 	api := r.Group(config.Cfg.Server.APIPrefix)

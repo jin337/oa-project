@@ -803,34 +803,45 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 //  2. 删除策略：业务表有 deleted_at 列时软删除（与列表/详情查询的 deleted_at IS NULL 过滤语义一致），
 //     表无 deleted_at 列时降级为物理删除
 //  3. 级联处理子表数据（parent_id = dataId），删除策略与主表一致，避免产生孤儿数据
+//  4. 删除完成后回收这批数据里已无人引用的附件文件（判定口径见 attachment.go）
 func ApplicationDataDelete(appID, dataID uint) error {
-	return deleteBusinessData(database.DB, appID, dataID)
-}
-
-// deleteBusinessData 在指定 DB/事务句柄中删除业务数据（供审批实例删除等事务内调用）
-func deleteBusinessData(db *gorm.DB, appID, dataID uint) error {
-	app, err := ApplicationDetail(appID)
+	orphans, err := deleteBusinessData(database.DB, appID, dataID)
 	if err != nil {
 		return err
 	}
+	// 删除已落库，此时再回收附件：文件删除不可回滚，不能和 SQL 放在同一事务里
+	ReclaimOrphanUploads(orphans)
+	return nil
+}
+
+// deleteBusinessData 在指定 DB/事务句柄中删除业务数据（供审批实例删除等事务内调用）。
+// 返回这批数据引用到的本机附件地址（已去重），调用方应在事务**提交后**交给 ReclaimOrphanUploads 回收。
+func deleteBusinessData(db *gorm.DB, appID, dataID uint) ([]string, error) {
+	app, err := ApplicationDetail(appID)
+	if err != nil {
+		return nil, err
+	}
 	if !isValidTableName(app.TableName) {
-		return errors.New("非法的表名")
+		return nil, errors.New("非法的表名")
 	}
 	real := bizTableName(app.TableName)
+
+	// 删除前先收集这批数据引用到的本机附件地址（行不存在时收集为空，不影响后续校验）
+	uploadPaths := collectUploadPathsOf(db, real, "`id` = ?", dataID)
 
 	// 删除主表行：有 deleted_at 列用软删除，否则物理删除
 	mainColSet, err := queryColumnSet(real)
 	if err != nil {
-		return fmt.Errorf("查询表结构失败: %w", err)
+		return nil, fmt.Errorf("查询表结构失败: %w", err)
 	}
 	if mainColSet["deleted_at"] {
 		// 软删除：置 deleted_at
 		if err := db.Exec("UPDATE `"+real+"` SET `deleted_at` = ? WHERE `id` = ?", time.Now(), dataID).Error; err != nil {
-			return fmt.Errorf("删除数据失败: %w", err)
+			return nil, fmt.Errorf("删除数据失败: %w", err)
 		}
 	} else {
 		if err := db.Exec("DELETE FROM `"+real+"` WHERE `id` = ?", dataID).Error; err != nil {
-			return fmt.Errorf("删除数据失败: %w", err)
+			return nil, fmt.Errorf("删除数据失败: %w", err)
 		}
 	}
 
@@ -842,22 +853,23 @@ func deleteBusinessData(db *gorm.DB, appID, dataID uint) error {
 				continue
 			}
 			subReal := bizTableName(sub)
+			uploadPaths = append(uploadPaths, collectUploadPathsOf(db, subReal, "`parent_id` = ?", dataID)...)
 			subColSet, err := queryColumnSet(subReal)
 			if err != nil {
-				return fmt.Errorf("查询子表 %s 结构失败: %w", sub, err)
+				return nil, fmt.Errorf("查询子表 %s 结构失败: %w", sub, err)
 			}
 			if subColSet["deleted_at"] {
 				if err := db.Exec("UPDATE `"+subReal+"` SET `deleted_at` = ? WHERE `parent_id` = ?", time.Now(), dataID).Error; err != nil {
-					return fmt.Errorf("删除子表 %s 数据失败: %w", sub, err)
+					return nil, fmt.Errorf("删除子表 %s 数据失败: %w", sub, err)
 				}
 			} else {
 				if err := db.Exec("DELETE FROM `"+subReal+"` WHERE `parent_id` = ?", dataID).Error; err != nil {
-					return fmt.Errorf("删除子表 %s 数据失败: %w", sub, err)
+					return nil, fmt.Errorf("删除子表 %s 数据失败: %w", sub, err)
 				}
 			}
 		}
 	}
-	return nil
+	return dedupeUploadPaths(uploadPaths), nil
 }
 
 // ApplicationDataUpdate 动态业务数据更新（编辑表单提交）：

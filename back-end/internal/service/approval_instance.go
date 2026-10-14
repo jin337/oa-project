@@ -645,20 +645,23 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 // ApprovalInstanceDelete 删除流程实例（软删除）
 // 仅允许发起人删除「草稿」实例——从未正式发起、未产生任何审批结果的记录。
 // 已撤回需先编辑保存（转为草稿）后到草稿箱删除；已驳回/已作废/已通过/已拒绝等留有流程痕迹的记录不允许删除。
-// 同时级联软删除对应的业务表数据，并清理该实例产生的通知
+// 同时级联软删除对应的业务表数据，清理该实例产生的通知，并回收已无人引用的附件文件
 func ApprovalInstanceDelete(curUserID, instanceID uint) error {
-	return database.DB.Transaction(func(tx *gorm.DB) error {
+	var orphans []string
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "删除",
 			model.InstanceStatusDraft)
 		if err != nil {
 			return err
 		}
 
-		// 级联软删除业务表数据
+		// 级联软删除业务表数据，同时拿到这批数据引用到的附件地址
 		if instance.BusinessDataID > 0 {
-			if err := deleteBusinessData(tx, instance.AppID, instance.BusinessDataID); err != nil {
+			paths, err := deleteBusinessData(tx, instance.AppID, instance.BusinessDataID)
+			if err != nil {
 				return fmt.Errorf("删除业务数据失败: %w", err)
 			}
+			orphans = paths
 		}
 
 		// 清理该实例产生的通知（待办/退回/抄送/结果）：通知表无软删除字段，物理删除，
@@ -670,6 +673,12 @@ func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 		// 软删除审批实例
 		return tx.Delete(instance).Error
 	})
+	if err != nil {
+		return err
+	}
+	// 事务已提交，此时才回收附件：文件删除不可回滚，放进事务里会出现「SQL 回滚了但文件已经没了」
+	ReclaimOrphanUploads(orphans)
+	return nil
 }
 
 // ApprovalInstanceDetail 获取流程实例详情（含任务列表+业务数据+审批人姓名+详情页布局）
