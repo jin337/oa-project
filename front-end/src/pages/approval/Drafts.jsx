@@ -212,7 +212,13 @@ export default function Drafts() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { title: '模块', key: 'item_name', dataIndex: 'item_name', render: (v, r) => v || '-' },
+    {
+      title: '模块',
+      key: 'item_name',
+      dataIndex: 'item_name',
+      // 未从申请项发起（无 item_name）时回退展示流程配置名称
+      render: (v, r) => v || r?.app_name || '-',
+    },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
     {
       title: '创建时间',
