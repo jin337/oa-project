@@ -4,8 +4,8 @@ import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import * as deptApi from 'src/api/dept'
 import { listExamineGroups } from 'src/api/examineGroup'
-import * as roleApi from 'src/api/role'
 import { fetchAll } from 'src/api/fetchAll'
+import * as roleApi from 'src/api/role'
 import { ADDABLE_NODE_TYPES, MODULE_LABEL, NODE_TYPE_META } from 'src/pages/application/constants'
 import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
 import { CcEditDrawer } from 'src/pages/application/examine/CcEditDrawer'
@@ -26,7 +26,7 @@ import { useApprovalFlow } from 'src/pages/application/examine/useApprovalFlow'
 import { useTabs } from 'src/store/tab-context'
 
 /**
- * 审批流程配置管理页（/examine/:id？）：流程画布设计器。
+ * 流程审批配置管理页（/examine/:id？）：流程画布设计器。
  * 职责：数据加载（表单元素 / 组织架构 / 角色 / 审批流回显）与编排，
  * 节点树的增删改状态统一交由 useApprovalFlow 管理，画布/弹层均为独立子组件。
  */
@@ -204,7 +204,7 @@ export default function ExamineManage() {
   return (
     <SelectorDataContext.Provider value={selectorData}>
       <Card
-        title="审批流程配置"
+        title="流程审批配置"
         extra={
           <Button type="primary" loading={saving} onClick={() => saveFlow(id, nodes)}>
             保存
