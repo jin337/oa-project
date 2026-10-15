@@ -7,13 +7,13 @@ import {
   useLocation,
   useRoutes,
 } from 'react-router-dom'
-import MainLayout from 'src/components/layout.jsx'
 import { useAuth } from 'src/store/auth-context'
 import { getToken } from 'src/utils/auth'
 import { BASE_PATH } from 'src/utils/constants'
+import MainLayout from 'src/views/MainLayout.jsx'
 
 // 路由页面全部懒加载：每个页面单独分包，按需下载
-const Login = lazy(() => import('src/pages/Login.jsx'))
+const Login = lazy(() => import('src/views/Login.jsx'))
 const Dashboard = lazy(() => import('src/pages/Dashboard.jsx'))
 // 系统管理
 const UserManage = lazy(() => import('src/pages/system/UserManage.jsx'))

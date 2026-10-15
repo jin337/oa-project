@@ -1,29 +1,29 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Select,
-    Space,
-    Switch,
-    Table,
-    Tag,
-    Typography,
+  Button,
+  Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Typography,
 } from '@arco-design/web-react'
 import {
-    IconDown,
-    IconList,
-    IconPlus,
-    IconRefresh,
-    IconSettings,
+  IconDown,
+  IconList,
+  IconPlus,
+  IconRefresh,
+  IconSettings,
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -302,7 +302,7 @@ export default function ApplicationManage() {
         return (
           hasPerm('application:edit') && (
             <Space>
-              <Dropdown droplist={actionMenu} position="br">
+              <Dropdown trigger="click" droplist={actionMenu} position="br">
                 <Button size="mini" type="text">
                   更多 <IconDown />
                 </Button>

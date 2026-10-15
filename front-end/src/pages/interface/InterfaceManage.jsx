@@ -25,11 +25,11 @@ import {
 import { IconList, IconRefresh, IconSettings, IconSync } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as apiDefinitionApi from 'src/api/apiDefinition'
+import SqlEditor from 'src/components/SqlEditor'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 import { API_PREFIX } from 'src/utils/constants'
 import { formatJsonQuotes } from 'src/utils/json'
-import SqlEditor from './SqlEditor'
 
 const MenuItem = Menu.Item
 

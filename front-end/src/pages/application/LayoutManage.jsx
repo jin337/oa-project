@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import { fetchAll } from 'src/api/fetchAll'
+import JsEditor from 'src/components/JsEditor'
 import DynamicForm, {
   BASE_LAYOUT_ELEMENTS,
   DEFAULT_FORM_CONFIG,
@@ -73,7 +74,9 @@ export default function LayoutManage() {
       if (!tableKey) return
       setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: true }))
       try {
-        const res = await fetchAll((p) => applicationApi.listApplicationElements(id, { ...p, table_key: tableKey }))
+        const res = await fetchAll((p) =>
+          applicationApi.listApplicationElements(id, { ...p, table_key: tableKey }),
+        )
         const list = (res.data?.list || []).filter((f) => !tableKey || f.table_key === tableKey)
         setTableFieldsMap((prev) => ({ ...prev, [tableKey]: list }))
       } catch (e) {
@@ -140,23 +143,25 @@ export default function LayoutManage() {
   }, [id, location.pathname, addTab, updateTab, loadTableFields])
 
   // 加载左侧组件库：获取当前流程关联的表单元素并映射为可拖拽项
-  useEffect(() => {
-    let cancelled = false
+  const loadLibrary = useCallback(() => {
     setLibraryLoading(true)
-    fetchAll((p) => applicationApi.listApplicationElements(id, p))
+    return fetchAll((p) => applicationApi.listApplicationElements(id, p))
       .then((res) => {
-        if (cancelled) return
         const list = res.data?.list || []
         setLibrary(list.map((item) => ({ ...item, element_id: item.id })))
       })
       .catch(() => setLibrary([]))
-      .finally(() => {
-        if (!cancelled) setLibraryLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
+      .finally(() => setLibraryLoading(false))
   }, [id])
+
+  useEffect(() => {
+    loadLibrary()
+  }, [loadLibrary])
+
+  // 手动刷新组件库
+  const handleRefreshLibrary = () => {
+    loadLibrary().then(() => Message.success('组件库已刷新'))
+  }
 
   // 组件库按分组展示：固定"基础"分组（最前）+ 主表 / 子表 / 其他
   const libraryGroups = useMemo(() => {
@@ -398,11 +403,20 @@ export default function LayoutManage() {
   }
 
   return (
-    <div className="flex h-full items-stretch border border-gray-200 bg-white min-w-330">
+    <div className="flex h-full min-w-330 items-stretch border border-gray-200 bg-white">
       {/* ========== 左侧：组件库（按表分组，两列网格） ========== */}
       <div className="flex w-83 shrink-0 flex-col">
-        <div className="shrink-0 border-b border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-800">
-          组件库
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
+          <span className="text-sm font-medium text-gray-800">组件库</span>
+          <Button
+            type="text"
+            size="mini"
+            icon={<IconSync />}
+            loading={libraryLoading}
+            onClick={handleRefreshLibrary}
+          >
+            刷新
+          </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-3">
           {libraryLoading ? (
@@ -555,7 +569,7 @@ export default function LayoutManage() {
         <Tabs
           activeTab={panelKey}
           onChange={setActivePanel}
-          className="flex min-h-0 flex-1 flex-col py-px [&_.arco-tabs-content]:min-h-0 [&_.arco-tabs-content]:flex-1 [&_.arco-tabs-content]:overflow-y-auto [&_.arco-tabs-content]:px-3"
+          className="flex min-h-0 flex-1 flex-col py-px [&_.arco-tabs-content]:min-h-0 [&_.arco-tabs-content]:flex-1 [&_.arco-tabs-content]:overflow-y-auto! [&_.arco-tabs-content]:px-3"
         >
           {/* 表单全局设置 */}
           <TabPane key="form" title="表单设置">
@@ -596,6 +610,26 @@ export default function LayoutManage() {
                 <div className="mb-1 font-medium text-gray-600">表单配置说明：</div>
                 <div>· 垂直布局：标签显示在控件上方</div>
                 <div>· 水平布局：标签显示在控件左侧，可调整标签宽度与对齐</div>
+              </div>
+              <div>
+                <div className="mb-2 text-sm text-gray-600">表单提交前事件</div>
+                <JsEditor
+                  value={formConfig.onSubmitBefore || ''}
+                  onChange={(v) => updateFormConfig({ onSubmitBefore: v })}
+                  placeholder={'// 提交前执行的 JS，可 return false 阻止提交\n// (form) => { ... }'}
+                  minRows={6}
+                  maxRows={12}
+                />
+              </div>
+              <div>
+                <div className="mb-2 text-sm text-gray-600">表单提交后事件</div>
+                <JsEditor
+                  value={formConfig.onSubmitAfter || ''}
+                  onChange={(v) => updateFormConfig({ onSubmitAfter: v })}
+                  placeholder={'// 提交成功后执行的 JS\n// (form, result) => { ... }'}
+                  minRows={6}
+                  maxRows={12}
+                />
               </div>
             </div>
           </TabPane>

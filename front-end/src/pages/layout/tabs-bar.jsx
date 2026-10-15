@@ -2,7 +2,7 @@ import { Dropdown, Menu, Tabs } from '@arco-design/web-react'
 import { IconMore } from '@arco-design/web-react/icon'
 import { useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useTabs } from '../store/tab-context'
+import { useTabs } from 'src/store/tab-context'
 
 const TabPane = Tabs.TabPane
 const MenuItem = Menu.Item
