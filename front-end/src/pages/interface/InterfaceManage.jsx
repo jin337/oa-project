@@ -93,6 +93,115 @@ function formatDebugResult(debugResult) {
   return JSON.stringify(raw, null, 2)
 }
 
+// 独立调试弹窗：行内「调试」按钮打开，与编辑抽屉内嵌试调同一后端接口
+function DebugModal({ record, onClose }) {
+  const [params, setParams] = useState('')
+  const [result, setResult] = useState(null) // { raw } | { error }
+  const [loading, setLoading] = useState(false)
+
+  if (!record) return null
+
+  const run = async () => {
+    if (!record) return
+    const p = jsonToObj(params)
+    if (p === undefined) {
+      setResult({ error: '试调参数不是合法的 JSON' })
+      return
+    }
+    setLoading(true)
+    setResult(null)
+    try {
+      const res = await apiDefinitionApi.debugApiDefinition({ id: record.id, params: p })
+      if (res.code !== 0) {
+        setResult({ error: res.msg || '试调失败' })
+        return
+      }
+      setResult(res.data)
+    } catch (e) {
+      setResult({ error: e?.message || '试调失败' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const isHttp = record.type === 'http'
+  const warningTitle =
+    isHttp && record.method !== 'GET'
+      ? 'HTTP 转发为非 GET 方法，会产生真实副作用（新增、修改、删除数据），请谨慎操作'
+      : '仅发起一次只读请求，不会修改数据'
+
+  return (
+    <Modal
+      title={`调试接口：${record.name}`}
+      visible={!!record}
+      onCancel={onClose}
+      style={{ width: 720 }}
+      footer={
+        <>
+          <Button onClick={onClose}>关闭</Button>
+          <Button type="primary" status="warning" loading={loading} onClick={run}>
+            发起试调
+          </Button>
+        </>
+      }
+    >
+      <div className="mb-3 flex items-center gap-2 rounded bg-gray-50 px-3 py-2 text-xs text-gray-600">
+        <Tag color={METHOD_COLOR[record.method] || 'arcoblue'}>{record.method}</Tag>
+        <span className="font-mono">{record.path}</span>
+        <span className="ml-auto text-gray-400">{isHttp ? 'HTTP 转发' : 'SQL 直查'}</span>
+      </div>
+      <Alert
+        className="mb-3"
+        type="warning"
+        title={warningTitle}
+        content={
+          isHttp
+            ? 'HTTP 转发：试调以当前账号身份真实执行；'
+            : 'SQL 直查：调试的数据权限由模板内静态条件决定，所有账号看到同一份数据'
+        }
+      />
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-sm font-medium">
+          试调参数（JSON，作为 {'${form.xxx}'} 求值上下文）
+        </span>
+        <Button type="text" size="mini" onClick={() => setParams(formatJsonQuotes(params))}>
+          格式化
+        </Button>
+      </div>
+      <Input.TextArea
+        autoSize={{ minRows: 2, maxRows: 6 }}
+        value={params}
+        onChange={setParams}
+        placeholder='{"keyword": "研发"}'
+        style={{ fontFamily: 'monospace' }}
+      />
+      <div className="my-2 flex items-center gap-2">
+        {result && (
+          <Tag color={result.error ? 'red' : 'green'}>
+            {result.error ? '试调失败' : '试调成功'}
+          </Tag>
+        )}
+      </div>
+      <div>
+        <div className="mb-2 text-sm font-medium text-gray-500">试调结果</div>
+        {result ? (
+          <pre
+            className={`max-h-60 overflow-auto rounded p-3 text-xs ${
+              result.error ? 'bg-red-50 text-red-600' : 'bg-gray-50'
+            }`}
+          >
+            {formatDebugResult(result)}
+          </pre>
+        ) : (
+          <div className="rounded bg-gray-50 p-3 text-xs text-gray-400">
+            填写试调参数后点击「发起试调」查看结果
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
 const EMPTY_FORM = {
   name: '',
   category: '',
@@ -145,6 +254,9 @@ export default function InterfaceManage() {
   const [debugParams, setDebugParams] = useState('')
   const [debugging, setDebugging] = useState(false)
   const [debugResult, setDebugResult] = useState(null) // { raw, error }
+
+  // 行内「调试」独立弹窗（record 为 null 时关闭）
+  const [debugTarget, setDebugTarget] = useState(null)
 
   const fetchList = useCallback(async () => {
     setLoading(true)
@@ -353,7 +465,7 @@ export default function InterfaceManage() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { key: 'name', title: '接口名称', dataIndex: 'name', width: 160 },
+    { key: 'name', title: '接口名称', dataIndex: 'name' },
     {
       key: 'category',
       title: '分类',
@@ -373,7 +485,7 @@ export default function InterfaceManage() {
       key: 'type',
       title: '定义方式',
       dataIndex: 'type',
-      width: 100,
+      width: 90,
       render: (t) =>
         t === 'http' ? <Tag color="purple">HTTP 转发</Tag> : <Tag color="arcoblue">SQL 直查</Tag>,
     },
@@ -423,10 +535,13 @@ export default function InterfaceManage() {
     {
       key: 'action',
       title: '操作',
-      width: 150,
+      width: 120,
       render: (_, record) =>
         canEdit ? (
           <Space>
+            <Button size="mini" onClick={() => setDebugTarget(record)}>
+              调试
+            </Button>
             <Button size="mini" onClick={() => openEdit(record)}>
               编辑
             </Button>
@@ -838,6 +953,8 @@ export default function InterfaceManage() {
           </div>
         )}
       </Drawer>
+      {/* 行内「调试」独立弹窗 */}
+      <DebugModal record={debugTarget} onClose={() => setDebugTarget(null)} />
     </Card>
   )
 }

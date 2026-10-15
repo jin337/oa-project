@@ -1,6 +1,34 @@
 import { Button, Modal, Space } from '@arco-design/web-react'
-import { IconCode, IconFullscreen, IconFullscreenExit } from '@arco-design/web-react/icon'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { IconCode, IconFullscreen, IconFullscreenExit, IconMinus, IconPlus } from '@arco-design/web-react/icon'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+
+// ──────────────────────────────── 字号（模块级，localStorage 持久化） ────────────────────────────────
+// 多个 SqlEditor 实例共享同一份字号：改一处，其它实例下次挂载 / 运行时事件同步。
+const FONT_SIZE_KEY = 'sql-editor:font-size'
+const FONT_SIZE_DEFAULT = 14
+const FONT_SIZE_MIN = 11
+const FONT_SIZE_MAX = 22
+const FONT_SIZE_EVENT = 'sql-editor:font-size-change'
+
+function readFontSize() {
+  try {
+    const v = parseInt(localStorage.getItem(FONT_SIZE_KEY), 10)
+    if (Number.isFinite(v) && v >= FONT_SIZE_MIN && v <= FONT_SIZE_MAX) return v
+  } catch {
+    // 隐私模式等场景读取失败时回退默认值
+  }
+  return FONT_SIZE_DEFAULT
+}
+
+function changeFontSize(delta) {
+  const next = Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, readFontSize() + delta))
+  try {
+    localStorage.setItem(FONT_SIZE_KEY, String(next))
+  } catch {
+    // 写失败不影响本会话使用
+  }
+  window.dispatchEvent(new CustomEvent(FONT_SIZE_EVENT))
+}
 
 // ──────────────────────────────── SQL 工具 ────────────────────────────────
 // SQL 模板美化：关键字大写；SELECT/FROM/WHERE 等子句关键字独占一行（顶格），
@@ -428,7 +456,7 @@ function compactSql(text) {
 // 高亮层与 textarea 同宽同字体同折行规则，关键字（KW 集合）蓝色加粗；
 // textarea 文字透明仅保留光标/选择，负责输入与滚动；滚动时高亮层/行号列同步。
 // 每逻辑行折行段数通过高亮层测量，折行段行号补空白行，行号与视觉行严格对齐。
-function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRows, maxRows, id,full }) {
+function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRows, maxRows, id, full, fontSize = FONT_SIZE_DEFAULT }) {
   const gutterRef = useRef(null)
   const highlightRef = useRef(null)
   const taRef = useRef(null)
@@ -440,14 +468,15 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
   const [activeIdx, setActiveIdx] = useState(0)
   const [caretPos, setCaretPos] = useState({ top: 0, left: 0 })
   const lines = value ? value.split('\n') : ['']
-  const ROW_H = 20
+  // 行高随行号字号联动：与默认 13px/20px 的比例一致（≈1.54）
+  const ROW_H = Math.max(16, Math.round(fontSize * 1.54))
   // 总视觉行数 = 各逻辑行折行段数之和（未测量时按逻辑行数估算）
   const totalLines = wrapSegs.length ? wrapSegs.reduce((a, b) => a + b, 0) : lines.length
   const rows = Math.max(minRows, Math.min(maxRows, totalLines))
   const height = rows * ROW_H + 8
   const fontStyle = {
     fontFamily: 'ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace',
-    fontSize: 13,
+    fontSize,
     lineHeight: `${ROW_H}px`,
   }
   const padStyle = { padding: '4px 8px' }
@@ -459,7 +488,7 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
       Math.max(1, Math.round(el.offsetHeight / ROW_H)),
     )
     setWrapSegs(segs)
-  }, [value, minRows, maxRows])
+  }, [value, minRows, maxRows, fontSize, ROW_H])
 
   // 滚动同步：行号列（纵向）+ 高亮层（纵/横向）
   const syncScroll = (e) => {
@@ -643,9 +672,10 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
               <div
                 key={s}
                 className={
-                  'flex cursor-pointer items-center px-2 py-0.5 text-[13px] leading-5 ' +
+                  'flex cursor-pointer items-center px-2 py-0.5 ' +
                   (i === activeIdx ? 'bg-blue-50 text-blue-600' : 'text-gray-700')
                 }
+                style={{ fontSize, lineHeight: `${Math.max(16, Math.round(fontSize * 1.6))}px` }}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   applySuggestion(s)
@@ -670,6 +700,13 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
 export default function SqlEditor(props) {
   const { value = '', onChange, id, placeholder, maxLength = 8000 } = props
   const [fullscreen, setFullscreen] = useState(false)
+  // 字号：初始读 localStorage；其它实例改动时通过自定义事件同步刷新
+  const [fontSize, setFontSize] = useState(readFontSize)
+  useEffect(() => {
+    const handler = () => setFontSize(readFontSize())
+    window.addEventListener(FONT_SIZE_EVENT, handler)
+    return () => window.removeEventListener(FONT_SIZE_EVENT, handler)
+  }, [])
 
   const handleChange = (v) => {
     onChange?.(v)
@@ -690,17 +727,33 @@ export default function SqlEditor(props) {
   const renderEditor = (toolbarAction, textareaProps) => (
     <>
       <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-2 py-1">
-        <Space>
+        <Space size={0}>
           <Button type="text" size="mini" onClick={handleFormat}>
             美化
           </Button>
           <Button type="text" size="mini" onClick={handleCompact}>
             简化
           </Button>
+          <span className="mx-1 inline-block h-3 w-px bg-gray-300" />
+          <Button
+            type="text"
+            size="mini"
+            icon={<IconMinus />}
+            disabled={fontSize <= FONT_SIZE_MIN}
+            onClick={() => changeFontSize(-1)}
+          />
+          <span className="min-w-7 text-center text-xs text-gray-500">{fontSize}</span>
+          <Button
+            type="text"
+            size="mini"
+            icon={<IconPlus />}
+            disabled={fontSize >= FONT_SIZE_MAX}
+            onClick={() => changeFontSize(1)}
+          />
         </Space>
         {toolbarAction}
       </div>
-      <LineTextarea {...textareaProps} />
+      <LineTextarea {...textareaProps} fontSize={fontSize} />
     </>
   )
 
@@ -719,7 +772,7 @@ export default function SqlEditor(props) {
             onChange: handleChange,
             placeholder,
             maxLength,
-            minRows: 4,
+            minRows: 10,
             maxRows: 10,
           },
         )}
