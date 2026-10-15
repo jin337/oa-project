@@ -13,7 +13,7 @@ import {
   transformRoleList,
 } from 'src/pages/application/examine/flowModel'
 import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
-import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
+import { SelectorDataContext, useSelectorData } from 'src/pages/application/examine/selector-context'
 import {
   hasExpandableMember,
   loadMemberDirectory,
@@ -396,13 +396,21 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
     userDeptMap: {},
     loading: false,
   })
+  // 父级已注入选择器数据源（如审批详情 Drawer 统一加载）：直接复用，不再独立请求
+  const externalData = useSelectorData()
+  const hasExternal = Boolean(
+    externalData && (externalData.loading || (externalData.orgTree && externalData.orgTree.length)),
+  )
 
-  // 懒加载选择器数据源：与 ExamineManage 一致（depts/users + roles 分页列表），挂载到 Context 供 PersonSelectorModal 使用
+  // 懒加载选择器数据源：父级已提供数据时跳过（避免重复请求）
   useEffect(() => {
-    if (!selectorNode) return
+    if (!selectorNode || hasExternal) return
     let cancelled = false
     setSelectorData((d) => ({ ...d, loading: true }))
-    Promise.all([deptApi.getDeptUsersTree(), fetchAll(roleApi.listRoles)])
+    Promise.all([
+      deptApi.getDeptUsersTree({ status: 1 }),
+      fetchAll(roleApi.listRoles, { status: 1 }),
+    ])
       .then(([deptRes, roleRes]) => {
         if (cancelled) return
         const orgTree = transformDeptTree(deptRes.data?.list || deptRes.data || [])
@@ -422,7 +430,7 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
     return () => {
       cancelled = true
     }
-  }, [selectorNode])
+  }, [selectorNode, hasExternal])
 
   // 发起人自选成员删除：更新节点成员覆盖并回调父组件
   const handleRemoveMember = useCallback(
@@ -483,9 +491,9 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
           })}
         </Timeline>
       </div>
-      {/* 发起人自选成员选择弹层：复用 PersonSelectorModal（组织架构 + 角色，仅可勾选人员） */}
-      {selectorNode && (
-        <SelectorDataContext.Provider value={selectorData}>
+      {/* 发起人自选成员选择弹层：父级已注入数据时直接复用 Context，不再包 Provider */}
+      {selectorNode &&
+        (hasExternal ? (
           <PersonSelectorModal
             title={`选择${selectorNode.type === 2 ? '审批人' : '抄送人'}`}
             value={selectorNode.members || []}
@@ -494,8 +502,18 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
             onChange={handleMembersChange}
             onCancel={() => setSelectorNode(null)}
           />
-        </SelectorDataContext.Provider>
-      )}
+        ) : (
+          <SelectorDataContext.Provider value={selectorData}>
+            <PersonSelectorModal
+              title={`选择${selectorNode.type === 2 ? '审批人' : '抄送人'}`}
+              value={selectorNode.members || []}
+              modes={[1, 2]} // 1-组织架构 / 2-角色
+              selectMode={selectorNode.selfSelect || 2} // 发起人自选：1-单选 / 2-多选（默认多选）
+              onChange={handleMembersChange}
+              onCancel={() => setSelectorNode(null)}
+            />
+          </SelectorDataContext.Provider>
+        ))}
     </>
   )
 }

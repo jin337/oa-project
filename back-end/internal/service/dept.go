@@ -86,15 +86,24 @@ func fillDeptLeaderNames(depts []*model.Dept) {	var all []*model.Dept
 //   - 节点以 Type 区分：dept 部门 / user 用户
 //   - 子部门在前、用户在后；部门按 sort ASC, id ASC，用户按 id ASC
 //   - 仅挂载归属部门树内用户的用户（dept_id 无效/无部门的用户不返回）
-func DeptUsers() ([]*model.OrgNode, error) {
+// DeptUsers 部门树 + 部门下用户。onlyEnabled=true 时仅返回启用的部门与用户（状态=1），用于选人弹窗等数据源
+func DeptUsers(onlyEnabled bool) ([]*model.OrgNode, error) {
 	var list []*model.Dept
-	if err := database.DB.Order("sort ASC, id ASC").Find(&list).Error; err != nil {
+	deptDB := database.DB.Order("sort ASC, id ASC")
+	if onlyEnabled {
+		deptDB = deptDB.Where("status = 1")
+	}
+	if err := deptDB.Find(&list).Error; err != nil {
 		return nil, err
 	}
 	deptTree := buildDeptTree(list, 0)
 
 	var users []model.User
-	if err := database.DB.Preload("Profile").Order("id ASC").Find(&users).Error; err != nil {
+	userDB := database.DB.Preload("Profile").Order("id ASC")
+	if onlyEnabled {
+		userDB = userDB.Where("status = 1")
+	}
+	if err := userDB.Find(&users).Error; err != nil {
 		return nil, err
 	}
 	userMap := map[uint]model.User{}

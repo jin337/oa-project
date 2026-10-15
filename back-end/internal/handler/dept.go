@@ -26,8 +26,10 @@ func DeptTree(c *gin.Context) {
 }
 
 // DeptUsers GET /{APIPrefix}/depts/users 所有部门树 + 每个部门下的用户列表
+// 带 ?status=1 时仅返回启用的部门与用户（选人弹窗数据源）
 func DeptUsers(c *gin.Context) {
-	tree, err := service.DeptUsers()
+	onlyEnabled := c.Query("status") == "1"
+	tree, err := service.DeptUsers(onlyEnabled)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, "查询部门及用户失败")
 		return

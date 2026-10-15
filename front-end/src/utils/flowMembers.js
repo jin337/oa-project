@@ -79,9 +79,9 @@ export function loadMemberDirectory() {
   if (directoryPromise) return directoryPromise
 
   directoryPromise = Promise.all([
-    deptApi.getDeptUsersTree().catch(() => null),
+    deptApi.getDeptUsersTree({ status: 1 }).catch(() => null),
     roleApi.getRoleUsers().catch(() => null),
-    fetchAll(examineGroupApi.listExamineGroups).catch(() => null),
+    fetchAll(examineGroupApi.listExamineGroups, { status: 1 }).catch(() => null),
   ]).then(([deptRes, roleRes, groupRes]) => {
     const deptMap = new Map()
     const roleMap = new Map()

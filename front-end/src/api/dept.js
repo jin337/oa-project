@@ -6,8 +6,9 @@ export function getDeptTree() {
 }
 
 // GET /depts/users 部门树（含部门下员工，组织架构选择器数据源）
-export function getDeptUsersTree() {
-  return request.get('/depts/users')
+// 传 {status:1} 时仅返回启用的部门与用户
+export function getDeptUsersTree(params) {
+  return request.get('/depts/users', { params })
 }
 
 // GET /depts/:id 详情

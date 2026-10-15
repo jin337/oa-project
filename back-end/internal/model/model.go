@@ -308,7 +308,8 @@ type RoleUpdateReq struct {
 
 type RoleListReq struct {
 	BaseListReq
-	Name string `json:"name" form:"name" validate:"omitempty" label:"角色名称"`
+	Name   string `json:"name" form:"name" validate:"omitempty" label:"角色名称"`
+	Status *int   `json:"status" form:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 }
 
 type AssignMenusReq struct {
@@ -337,7 +338,8 @@ type ExamineGroupUpdateReq struct {
 
 type ExamineGroupListReq struct {
 	BaseListReq
-	Name string `json:"name" form:"name" validate:"omitempty" label:"审核人员组名称"`
+	Name   string `json:"name" form:"name" validate:"omitempty" label:"审核人员组名称"`
+	Status *int   `json:"status" form:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 }
 
 type MenuCreateReq struct {

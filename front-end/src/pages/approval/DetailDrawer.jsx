@@ -11,6 +11,9 @@
 } from '@arco-design/web-react'
 import { useEffect, useMemo, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
+import * as deptApi from 'src/api/dept'
+import { fetchAll } from 'src/api/fetchAll'
+import * as roleApi from 'src/api/role'
 import DynamicForm, {
   evaluateDynamicStates,
   parseLayoutJson,
@@ -18,8 +21,15 @@ import DynamicForm, {
 } from 'src/pages/application/dynamic/DynamicForm'
 import { safeSetFieldsValue } from 'src/pages/application/dynamic/useApplicationDetailData'
 import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
-import PersonSelectorProvider from 'src/pages/application/examine/PersonSelectorProvider'
-import { userIdFromKey } from 'src/pages/application/examine/flowModel'
+import {
+  buildOrgItemMap,
+  buildRoleItemMap,
+  buildUserDeptMap,
+  transformDeptTree,
+  transformRoleList,
+  userIdFromKey,
+} from 'src/pages/application/examine/flowModel'
+import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
 import ApprovalTimeline from 'src/pages/approval/ApprovalTimeline.jsx'
 
 /**
@@ -59,6 +69,42 @@ export default function DetailDrawer({
   const [addSignerVisible, setAddSignerVisible] = useState(false)
   // 加签类型：1-前加签（加签人先审，通过后本人再审） 2-后加签（本人通过后加签人再审）
   const [addSignType, setAddSignType] = useState(2)
+
+  // 选择器数据源：抽屉打开时统一加载一次（组织架构 + 角色，仅启用），
+  // 供 DynamicFlowView 自选节点弹层、转交/加签弹层共用，避免各自重复请求
+  const [selectorData, setSelectorData] = useState({
+    orgTree: [],
+    roleList: [],
+    orgItemMap: {},
+    roleItemMap: {},
+    userDeptMap: {},
+    loading: false,
+  })
+  useEffect(() => {
+    if (!visible) return undefined
+    let cancelled = false
+    setSelectorData((d) => ({ ...d, loading: true }))
+    Promise.all([deptApi.getDeptUsersTree({ status: 1 }), fetchAll(roleApi.listRoles, { status: 1 })])
+      .then(([deptRes, roleRes]) => {
+        if (cancelled) return
+        const orgTree = transformDeptTree(deptRes.data?.list || deptRes.data || [])
+        const roleList = transformRoleList(roleRes.data?.list || roleRes.data || [])
+        setSelectorData({
+          orgTree,
+          roleList,
+          orgItemMap: buildOrgItemMap(orgTree),
+          roleItemMap: buildRoleItemMap(roleList),
+          userDeptMap: buildUserDeptMap(orgTree),
+          loading: false,
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setSelectorData((d) => ({ ...d, loading: false }))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [visible])
 
   useEffect(() => {
     if (!visible || !record) return
@@ -370,7 +416,7 @@ export default function DetailDrawer({
   const statusConfig = getStatusConfig(instance?.status)
 
   return (
-    <PersonSelectorProvider>
+    <SelectorDataContext.Provider value={selectorData}>
       <Drawer
         className={'relative'}
         width="80%"
@@ -475,6 +521,6 @@ export default function DetailDrawer({
           onCancel={() => setAddSignerVisible(false)}
         />
       )}
-    </PersonSelectorProvider>
+    </SelectorDataContext.Provider>
   )
 }

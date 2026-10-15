@@ -72,6 +72,9 @@ func RoleList(req *model.RoleListReq) ([]model.Role, int64, error) {
 	if req.Name != "" {
 		db = db.Where("name LIKE ?", "%"+req.Name+"%")
 	}
+	if req.Status != nil {
+		db = db.Where("status = ?", *req.Status)
+	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err

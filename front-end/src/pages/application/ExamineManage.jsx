@@ -95,7 +95,11 @@ export default function ExamineManage() {
   useEffect(() => {
     let cancelled = false
     setSelectorLoading(true)
-    Promise.all([deptApi.getDeptUsersTree(), fetchAll(roleApi.listRoles), fetchAll(listExamineGroups)])
+    Promise.all([
+      deptApi.getDeptUsersTree({ status: 1 }),
+      fetchAll(roleApi.listRoles, { status: 1 }),
+      fetchAll(listExamineGroups, { status: 1 }),
+    ])
       .then(([deptRes, roleRes, groupRes]) => {
         if (cancelled) return
         setOrgTree(transformDeptTree(deptRes.data?.list || deptRes.data || []))
