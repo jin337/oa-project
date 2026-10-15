@@ -7,7 +7,7 @@ import { applyScroll, markScroll } from '../utils/scrollGuard'
 /**
  * 部门选择元素（deptselect）
  *
- * 呈现方式参考流程审批配置中"发起人选择"：已选标签 + 「选择部门」按钮唤起弹窗，弹窗内部门树单选（支持搜索）。
+ * 呈现方式参考审批流配置中"发起人选择"：已选标签 + 「选择部门」按钮唤起弹窗，弹窗内部门树单选（支持搜索）。
  *
  * 数据源支持（与 select/treeselect 一致）：
  *   - data_source.type='api'  动态接口（如接口管理的部门树 GET /depts）。

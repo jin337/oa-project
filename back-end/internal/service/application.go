@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -1193,6 +1194,10 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 		effectiveName = *req.Name
 	}
 
+	// 收集所有表改名对，最后统一按「旧名长度从长到短」顺序替换 JSON
+	// （子表名通常包含主表名作为前缀，必须先替换子表，否则主表替换会把 cswd123_detail 改成 cswd12_detail）
+	var renames [][2]string
+
 	// 1. 主表名变化：物理重命名 + 同步新主表注释
 	if tableChanged {
 		if !isValidTableName(*req.TableName) {
@@ -1210,10 +1215,7 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 		if err := alterTableComment(newReal, effectiveName); err != nil {
 			return nil, fmt.Errorf("更新主表注释失败: %w", err)
 		}
-		// 同步元素元数据与布局/详情/流程 JSON 中的旧主表引用，避免提交时按旧 table_key 找不到字段
-		if err := syncTableKeyReferences(app.ID, app.TableName, *req.TableName); err != nil {
-			return nil, fmt.Errorf("同步主表引用失败: %w", err)
-		}
+		renames = append(renames, [2]string{app.TableName, *req.TableName})
 	}
 
 	// 2. 子表名变化：新增子表建表（带注释），被移除的子表物理删除
@@ -1252,9 +1254,7 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 			if err := alterTableComment(newReal, effectiveName+"子表"); err != nil {
 				return nil, fmt.Errorf("更新子表注释失败: %w", err)
 			}
-			if err := syncTableKeyReferences(app.ID, oldName, newName); err != nil {
-				return nil, fmt.Errorf("同步子表引用失败: %w", err)
-			}
+			renames = append(renames, [2]string{oldName, newName})
 		} else {
 			// 被移除的子表：DROP TABLE IF EXISTS 物理删除
 			for _, s := range removed {
@@ -1342,6 +1342,20 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 	if req.Status != nil {
 		app.Status = *req.Status
 	}
+
+	// 4. 统一应用表改名引用同步：按旧名长度从长到短排序，
+	//    保证子表名（含主表前缀）先于主表名被替换，避免主表替换把子表引用改坏
+	if len(renames) > 0 {
+		sort.SliceStable(renames, func(i, j int) bool {
+			return len(renames[i][0]) > len(renames[j][0])
+		})
+		for _, p := range renames {
+			if err := syncTableKeyReferences(&app, p[0], p[1]); err != nil {
+				return nil, fmt.Errorf("同步表引用 %s→%s 失败: %w", p[0], p[1], err)
+			}
+		}
+	}
+
 	app.UpdatedBy = curUserID
 	if err := database.DB.Save(&app).Error; err != nil {
 		return nil, err
@@ -1380,27 +1394,24 @@ func alterTableComment(realTableName, comment string) error {
 	return database.DB.Exec(sql).Error
 }
 
-// syncTableKeyReferences 表改名后同步引用：
-//  1. oa_application_elements.table_key：旧 key → 新 key（同一 app 下）
-//  2. 应用配置的 FormLayoutJSON / DetailLayoutJSON / ApprovalFlowJSON 中旧表名字符串 → 新表名
+// syncTableKeyReferences 表改名后同步引用（直接修改传入的 app 内存对象，由调用方统一 Save）：
+//  1. oa_application_elements.table_key：旧 key → 新 key（同一 app 下，直接 UPDATE DB）
+//  2. 应用的 FormLayoutJSON / DetailLayoutJSON / ApprovalFlowJSON 中旧表名字符串 → 新表名
 // 主表与子表改名共用此函数，避免提交时按旧 table_key 找不到字段
-func syncTableKeyReferences(appID uint, oldKey, newKey string) error {
-	if oldKey == "" || newKey == "" || oldKey == newKey {
+func syncTableKeyReferences(app *model.Application, oldKey, newKey string) error {
+	if app == nil || oldKey == "" || newKey == "" || oldKey == newKey {
 		return nil
 	}
 	if !isValidTableName(oldKey) || !isValidTableName(newKey) {
 		return errors.New("非法的表名引用")
 	}
 	if err := database.DB.Model(&model.ApplicationElement{}).
-		Where("app_id = ? AND table_key = ?", appID, oldKey).
+		Where("app_id = ? AND table_key = ?", app.ID, oldKey).
 		Update("table_key", newKey).Error; err != nil {
 		return err
 	}
-	var app model.Application
-	if err := database.DB.First(&app, appID).Error; err != nil {
-		return err
-	}
-	// 布局/流程 JSON 为结构化字段：序列化后字符串替换旧表名，再反序列化回写
+	// 布局/流程 JSON 为结构化字段：序列化后按「带双引号的完整字符串值」替换旧表名，
+	// 避免裸字符串替换把子表名/主表名互为子串时互相踩坏（如 main=add_22, sub=add_2）
 	replaceJSON := func(v interface{}) (interface{}, error) {
 		if v == nil {
 			return v, nil
@@ -1409,7 +1420,9 @@ func syncTableKeyReferences(appID uint, oldKey, newKey string) error {
 		if err != nil {
 			return nil, err
 		}
-		s := strings.ReplaceAll(string(b), oldKey, newKey)
+		oldQ := `"` + oldKey + `"`
+		newQ := `"` + newKey + `"`
+		s := strings.ReplaceAll(string(b), oldQ, newQ)
 		var out interface{}
 		if err := json.Unmarshal([]byte(s), &out); err != nil {
 			return nil, err
@@ -1429,7 +1442,7 @@ func syncTableKeyReferences(appID uint, oldKey, newKey string) error {
 	if v, err := replaceJSON(app.ApprovalFlowJSON); err == nil && v != nil {
 		app.ApprovalFlowJSON = v
 	}
-	return database.DB.Save(&app).Error
+	return nil
 }
 
 // ApplicationDelete 删除页面配置（软删除），并级联物理删除关联的业务数据表：

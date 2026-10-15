@@ -413,7 +413,7 @@ export default function ApplicationManage() {
       />
 
       <Modal
-        title={editing ? '编辑配置' : '新增配置'}
+        title={editing ? '编辑流程' : '新增流程'}
         visible={modalVisible}
         onOk={handleSave}
         confirmLoading={saving}
@@ -452,7 +452,13 @@ export default function ApplicationManage() {
               <FormItem
                 label="对应表"
                 field="table_name"
-                rules={[{ required: true, message: '请输入对应表' }]}
+                rules={[
+                  { required: true, message: '请输入对应表' },
+                  {
+                    match: /^[a-zA-Z][a-zA-Z0-9_]*$/,
+                    message: '只能使用英文字母开头，包含英文字母、数字和下划线',
+                  },
+                ]}
               >
                 <Input placeholder="如：order" />
               </FormItem>
@@ -461,13 +467,28 @@ export default function ApplicationManage() {
               <FormItem
                 label="单号前缀"
                 field="bill_prefix"
-                rules={[{ maxLength: 32, message: '最长 32 个字符' }]}
+                rules={[
+                  { maxLength: 10, message: '最长 10 个字符' },
+                  {
+                    match: /^$|^[A-Z]+$/,
+                    message: '只能使用英文大写字母',
+                  },
+                ]}
               >
                 <Input placeholder="如：CC（用于生成单据编号）" />
               </FormItem>
             </Col>
             <Col span={14}>
-              <FormItem label="子表" field="sub_table_name">
+              <FormItem
+                label="子表"
+                field="sub_table_name"
+                rules={[
+                  {
+                    match: /^$|^[a-zA-Z][a-zA-Z0-9_]*([,，][a-zA-Z][a-zA-Z0-9_]*)*$/,
+                    message: '只能使用英文字母开头，包含英文字母、数字和下划线，多个用逗号隔开',
+                  },
+                ]}
+              >
                 <Input placeholder="多个子表用逗号隔开，如：order_item,order_detail" />
               </FormItem>
             </Col>
