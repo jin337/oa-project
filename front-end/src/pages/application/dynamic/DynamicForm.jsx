@@ -701,6 +701,7 @@ export const renderFormItemElement = (el, ctx) => {
           dataSource={el.data_source}
           el={el}
           rt={ctx.runtime}
+          pageType={pageType}
         />
       )
     }

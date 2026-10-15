@@ -57,11 +57,11 @@ const READONLY_RENDERERS = {
  * 缺失时专属组件会退化为自加载接口。el 缺失时用 dataSource 兜底构造最小 el，
  * 保证表格列（只透传 dataSource）也能反查展示名。
  */
-export const ReadonlyValue = ({ value, elementType, dataSource, el, rt }) => {
+export const ReadonlyValue = ({ value, elementType, dataSource, el, rt, pageType }) => {
   // 专属只读组件分派（upload/deptselect/userselect 等注册类型）
   const Renderer = READONLY_RENDERERS[elementType]
   if (Renderer) {
-    return <Renderer value={value} el={el || { data_source: dataSource }} rt={rt} />
+    return <Renderer value={value} el={el || { data_source: dataSource }} rt={rt} pageType={pageType} />
   }
   let text
   if (value == null || value === '') {

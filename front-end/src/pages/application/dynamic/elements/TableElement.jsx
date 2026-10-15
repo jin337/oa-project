@@ -252,6 +252,7 @@ export const TableElementField = ({
                       dataSource={col.data_source}
                       el={col}
                       rt={rt}
+                      pageType={pageType}
                     />
                   ) : (
                     renderFn(col, undefined, rt)
@@ -280,6 +281,7 @@ export const TableElementField = ({
                         dataSource={col.data_source}
                         el={col}
                         rt={rt}
+                        pageType={pageType}
                       />
                     ) : (
                       renderFn(col, undefined, rt)

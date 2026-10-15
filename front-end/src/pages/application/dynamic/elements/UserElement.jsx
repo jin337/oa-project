@@ -65,14 +65,17 @@ const filterOptions = (options, keyword) => {
  * 3. 否则 data_source.type='api' 且配置了 url → 自加载（detail 等 rt 不可用场景）；
  * 4. 最后回退静态 json 选项。
  */
-const useUserOptions = (el, rt) => {
+const useUserOptions = (el, rt, pageType) => {
   const rtOptions = rt?.getOptions?.(el)
   const hasRt = Array.isArray(rtOptions) && rtOptions.length > 0
   const [selfOptions, setSelfOptions] = useState([])
   const ds = el?.data_source
 
+  // 画布预览（move-form / move-detail）一律走静态默认数据，不请求接口
+  const isPreview = pageType === 'move-form' || pageType === 'move-detail'
+
   useEffect(() => {
-    if (hasRt || rt?.managesOptions || ds?.type !== 'api' || !ds?.url) return
+    if (isPreview || hasRt || rt?.managesOptions || ds?.type !== 'api' || !ds?.url) return
     let alive = true
     // 走共享加载器：同一时刻相同请求（method+url+params）会合并为一次网络往返，
     // 避免子表多行 / 多个字段引用同一接口时重复请求。失败返回 null，保留空选项。
@@ -83,7 +86,7 @@ const useUserOptions = (el, rt) => {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [el?.id, ds?.type, ds?.url, hasRt])
+  }, [el?.id, ds?.type, ds?.url, hasRt, isPreview])
 
   const options = hasRt ? rtOptions : selfOptions.length ? selfOptions : getStaticOptions(el)
   return options
@@ -182,8 +185,8 @@ function UserPicker({ value, onChange, options, placeholder, label, disabled }) 
 // ==================== 只读展示 ====================
 
 /** 详情只读：显示已选人员名（数据源自加载反查），空值显示 '-' */
-export function UserReadOnly({ value, el, rt }) {
-  const options = useUserOptions(el, rt)
+export function UserReadOnly({ value, el, rt, pageType }) {
+  const options = useUserOptions(el, rt, pageType)
   if (value == null || value === '') {
     return <span className="break-all whitespace-pre-wrap">-</span>
   }
@@ -198,7 +201,7 @@ export function UserReadOnly({ value, el, rt }) {
  * 作为 renderPreview 渲染时接收 el/pageType/rt；作为 FormItem 子元素时额外接收 value/onChange/disabled。
  */
 export function UserSelect({ el, pageType, rt, value, onChange, disabled }) {
-  const options = useUserOptions(el, rt)
+  const options = useUserOptions(el, rt, pageType)
 
   // 画布表单占位（move-form）：只读输入框 + 禁用的「选择」按钮
   if (pageType === 'move-form') {
@@ -207,7 +210,7 @@ export function UserSelect({ el, pageType, rt, value, onChange, disabled }) {
 
   // detail 只读：展示已选人员名
   if (pageType === 'detail') {
-    return <UserReadOnly value={value} el={el} rt={rt} />
+    return <UserReadOnly value={value} el={el} rt={rt} pageType={pageType} />
   }
 
   // form / 可编辑：弹窗单选
