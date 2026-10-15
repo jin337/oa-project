@@ -60,6 +60,14 @@ var migrations = []migration{
 		},
 		Seed: seedInitData,
 	},
+	{
+		Version: 2,
+		Name:    "api_definition_add_category",
+		// 接口定义加「分类」列：AutoMigrate 只增列，不影响既有数据
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.ApiDefinition{})
+		},
+	},
 }
 
 // migrateLogger 迁移日志（可开关、可自定义路径）

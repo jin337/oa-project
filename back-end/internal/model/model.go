@@ -89,6 +89,7 @@ type ApiDefinition struct {
 	Status      int                    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	Sort        int                    `gorm:"default:1;comment:排序" json:"sort"`
 	Remark      string                 `gorm:"size:255;comment:备注" json:"remark"`
+	Category    string                 `gorm:"size:64;index;comment:分类（来自 router.go 注册行注释，如 通知/工具）" json:"category"`
 	Referenced  int                    `gorm:"-" json:"referenced"` // 被表单元素引用次数（运行时统计，不入库）
 }
 
@@ -103,6 +104,7 @@ type ApiDefinitionCreateReq struct {
 	Status      int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	Sort        int                    `json:"sort" validate:"omitempty" label:"排序"`
 	Remark      string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
+	Category    string                 `json:"category" validate:"omitempty,max=64" label:"分类"`
 }
 
 type ApiDefinitionUpdateReq struct {
@@ -116,13 +118,15 @@ type ApiDefinitionUpdateReq struct {
 	Status      int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	Sort        int                    `json:"sort" validate:"omitempty" label:"排序"`
 	Remark      string                 `json:"remark" validate:"omitempty,max=255" label:"备注"`
+	Category    string                 `json:"category" validate:"omitempty,max=64" label:"分类"`
 }
 
 type ApiDefinitionListReq struct {
 	BaseListReq
-	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键字"`
-	Method  string `json:"method" form:"method" validate:"omitempty" label:"请求方法"`
-	Type    string `json:"type" form:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
+	Keyword  string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键字"`
+	Method   string `json:"method" form:"method" validate:"omitempty" label:"请求方法"`
+	Type     string `json:"type" form:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
+	Category string `json:"category" form:"category" validate:"omitempty" label:"分类"`
 }
 
 // ApiDefinitionDebugReq 接口试调：按接口 ID 加载定义执行，params 作为 ${form.xxx} 求值的上下文

@@ -163,6 +163,13 @@ func ApiDefinitionListRoutes(c *gin.Context) {
 	response.OK(c, filterBackendRoutes())
 }
 
+// ApiDefinitionCategories GET /{APIPrefix}/api-definitions/categories
+// 返回接口分类候选项（已有定义出现过的分类 + router 注册行注释定义的模块分类），
+// 供列表筛选下拉与抽屉分类下拉使用
+func ApiDefinitionCategories(c *gin.Context) {
+	response.OK(c, service.ApiDefinitionCategories())
+}
+
 // ApiDefinitionImportRoutes POST /{APIPrefix}/api-definitions/backend/import
 // 一键导入后端全部业务路由为 HTTP 转发定义，返回本次导入数量
 func ApiDefinitionImportRoutes(c *gin.Context) {

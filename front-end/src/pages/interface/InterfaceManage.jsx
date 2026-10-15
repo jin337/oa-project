@@ -36,6 +36,7 @@ const MenuItem = Menu.Item
 const ALL_COL_KEYS = [
   'index',
   'name',
+  'category',
   'method',
   'path',
   'type',
@@ -94,6 +95,7 @@ function formatDebugResult(debugResult) {
 
 const EMPTY_FORM = {
   name: '',
+  category: '',
   method: 'GET',
   path: '',
   type: 'sql',
@@ -118,9 +120,14 @@ export default function InterfaceManage() {
   const [keyword, setKeyword] = useState('')
   const [keywordMethod, setKeywordMethod] = useState('')
   const [keywordType, setKeywordType] = useState('')
+  const [keywordCategory, setKeywordCategory] = useState('')
   const [appliedKeyword, setAppliedKeyword] = useState('')
   const [appliedMethod, setAppliedMethod] = useState('')
   const [appliedType, setAppliedType] = useState('')
+  const [appliedCategory, setAppliedCategory] = useState('')
+
+  // 分类候选项（已有分类 + router 注释模块分类）
+  const [categoryOptions, setCategoryOptions] = useState([])
 
   // 表格密度 & 列可见性
   const [tableSize, setTableSize] = useState('default')
@@ -146,6 +153,7 @@ export default function InterfaceManage() {
       if (appliedKeyword) params.keyword = appliedKeyword
       if (appliedMethod) params.method = appliedMethod
       if (appliedType) params.type = appliedType
+      if (appliedCategory) params.category = appliedCategory
       const res = await apiDefinitionApi.listApiDefinitions(params)
       setList(res.data.list || [])
       setTotal(res.data.total || 0)
@@ -154,11 +162,22 @@ export default function InterfaceManage() {
     } finally {
       setLoading(false)
     }
-  }, [page, size, appliedKeyword, appliedMethod, appliedType])
+  }, [page, size, appliedKeyword, appliedMethod, appliedType, appliedCategory])
+
+  // 分类候选项：抽屉下拉与列表筛选共用
+  const fetchCategories = useCallback(async () => {
+    try {
+      const res = await apiDefinitionApi.listApiDefinitionCategories()
+      setCategoryOptions((res.data || []).map((c) => ({ label: c, value: c })))
+    } catch (e) {
+      // 错误已在请求层提示
+    }
+  }, [])
 
   useEffect(() => {
     fetchList()
-  }, [page, size, fetchList])
+    fetchCategories()
+  }, [page, size, fetchList, fetchCategories])
 
   // 一键导入后端全部业务路由为 HTTP 转发定义
   const handleImportRoutes = () => {
@@ -180,6 +199,7 @@ export default function InterfaceManage() {
     setAppliedKeyword(keyword)
     setAppliedMethod(keywordMethod)
     setAppliedType(keywordType)
+    setAppliedCategory(keywordCategory)
     setPage(1)
   }
 
@@ -187,9 +207,11 @@ export default function InterfaceManage() {
     setKeyword('')
     setKeywordMethod('')
     setKeywordType('')
+    setKeywordCategory('')
     setAppliedKeyword('')
     setAppliedMethod('')
     setAppliedType('')
+    setAppliedCategory('')
     setPage(1)
   }
 
@@ -197,6 +219,7 @@ export default function InterfaceManage() {
   const fillForm = (record) => {
     form.setFieldsValue({
       name: record.name || '',
+      category: record.category || '',
       method: record.method || 'GET',
       path: record.path || '',
       type: record.type || 'sql',
@@ -237,6 +260,7 @@ export default function InterfaceManage() {
     }
     return {
       name: values.name,
+      category: values.category || '',
       method: values.method || 'GET',
       path: values.path || '',
       type: values.type || 'sql',
@@ -330,6 +354,14 @@ export default function InterfaceManage() {
       render: (_, __, index) => index + 1,
     },
     { key: 'name', title: '接口名称', dataIndex: 'name', width: 160 },
+    {
+      key: 'category',
+      title: '分类',
+      dataIndex: 'category',
+      width: 100,
+      align: 'center',
+      render: (v) => (v ? <Tag color="cyan">{v}</Tag> : <Tag gray>-</Tag>),
+    },
     {
       key: 'method',
       title: '方法',
@@ -488,6 +520,15 @@ export default function InterfaceManage() {
             onChange={(v) => setKeywordType(v || '')}
             options={TYPE_OPTIONS}
           />
+          <Select
+            className="w-28!"
+            placeholder="分类"
+            allowClear
+            showSearch
+            value={keywordCategory || undefined}
+            onChange={(v) => setKeywordCategory(v || '')}
+            options={categoryOptions}
+          />
           <Button type="primary" onClick={handleSearch}>
             搜索
           </Button>
@@ -610,12 +651,22 @@ export default function InterfaceManage() {
             </Col>
           </Row>
           <Row gutter={20}>
-            <Col span={12}>
+            <Col span={8}>
+              <FormItem label="分类" field="category" extra="取自 router.go 注册行注释">
+                <Select allowCreate
+                  allowClear
+                  showSearch
+                  placeholder="如：通知 / 工具"
+                  options={categoryOptions}
+                />
+              </FormItem>
+            </Col>
+            <Col span={8}>
               <FormItem label="排序" field="sort" triggerPropName="value">
                 <InputNumber min={1} placeholder="数字越小越靠前" className="w-full!" />
               </FormItem>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <FormItem label="状态" field="status" triggerPropName="value">
                 <Select>
                   <Select.Option value={1}>启用</Select.Option>

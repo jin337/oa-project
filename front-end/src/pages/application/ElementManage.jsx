@@ -153,10 +153,12 @@ const CONFIG_HELP_CONTENT = (
         子表），决定数据写入哪张表；
       </li>
       <li>
-        <b className="text-gray-700">对应字段</b>{'：'}表中的具体列，决定数据存到哪个字段；切换数据表后需要重新选择；
+        <b className="text-gray-700">对应字段</b>
+        {'：'}表中的具体列，决定数据存到哪个字段；切换数据表后需要重新选择；
       </li>
       <li>
-        <b className="text-gray-700">名称</b>{'：'}表单上显示的标签；选择字段后自动带出字段注释，可手动修改；
+        <b className="text-gray-700">名称</b>
+        {'：'}表单上显示的标签；选择字段后自动带出字段注释，可手动修改；
       </li>
       <li>
         <b className="text-gray-700">元素类型</b>：决定渲染成什么控件
@@ -170,7 +172,8 @@ const CONFIG_HELP_CONTENT = (
         </div>
       </li>
       <li>
-        <b className="text-gray-700">默认值</b>：新增表单时仅当该字段为空才填充（已有值不会被覆盖）。
+        <b className="text-gray-700">默认值</b>
+        ：新增表单时仅当该字段为空才填充（已有值不会被覆盖）。
         <div>输入类填文本；下拉 / 单选填选项的「提交值」；</div>
         <div>多选类（多选框、树选择多选）填 JSON 数组 {'["a","b"]'} 或逗号分隔 a,b；</div>
         <div>
@@ -189,7 +192,8 @@ const CONFIG_HELP_CONTENT = (
         <div>如需按其它字段动态生成，请用下方「事件驱动与联动」的「初始化触发 + 直接赋值」；</div>
       </li>
       <li>
-        <b className="text-gray-700">占位提示</b>{'：'}控件内的灰色提示文字；文件上传元素中作为上传区的提示语；
+        <b className="text-gray-700">占位提示</b>
+        {'：'}控件内的灰色提示文字；文件上传元素中作为上传区的提示语；
       </li>
     </ul>
 
@@ -241,7 +245,8 @@ const CONFIG_HELP_CONTENT = (
         <div>{'${form.user_id} === ""'}（未选择用户时禁用）；</div>
       </li>
       <li>
-        留空时：动态显隐默认显示、动态禁用默认不禁用；但表达式写错或求值失败按 false 处理，动态显隐会因此把元素隐藏；
+        留空时：动态显隐默认显示、动态禁用默认不禁用；但表达式写错或求值失败按 false
+        处理，动态显隐会因此把元素隐藏；
       </li>
       <li>
         判断字段值注意类型：数字 {'0'} 直接写 {'${form.字段}'}{' '}
@@ -253,7 +258,8 @@ const CONFIG_HELP_CONTENT = (
     <div className="mb-1 font-medium text-gray-800">四、数据源配置</div>
     <ul className="mb-3 list-disc pl-4">
       <li>
-        <b className="text-gray-700">静态数据</b>{'：'}手动添加选项，「显示标签」是界面文案，「提交值」是实际存库的值；
+        <b className="text-gray-700">静态数据</b>
+        {'：'}手动添加选项，「显示标签」是界面文案，「提交值」是实际存库的值；
       </li>
       <li>
         <b className="text-gray-700">动态接口</b>：
@@ -319,7 +325,8 @@ const CONFIG_HELP_CONTENT = (
           ；
         </div>
         <div>
-          同样支持「引用接口」（回填并禁用地址 / 方法，同时把该接口的「转发参数模板」填充为请求参数初值）；
+          同样支持「引用接口」（回填并禁用地址 /
+          方法，同时把该接口的「转发参数模板」填充为请求参数初值）；
           填充后可手工修改，请求参数右侧「格式化」按钮可补键值双引号；运行时以实际请求参数为准；
         </div>
         <div>目标字段的来源是「接口响应里的字段路径」（点路径），如 {'user.city_name'}；</div>
@@ -328,8 +335,8 @@ const CONFIG_HELP_CONTENT = (
           <li className="mt-1">
             <b className="text-gray-700">{'number_to_upper'}</b>：数字转大写金额，请求{' '}
             {'{"type":"number_to_upper","value":100000}'} → 返回 {'{"result":"壹拾万元整"}'}；
-            金额为空（不传 / null / 空串 / 纯空白）时返回 {'{"result":""}'}，不报错；{'0'} 返回「零元整」；
-            非数字内容（如 {'"abc"'}）仍报错；
+            金额为空（不传 / null / 空串 / 纯空白）时返回 {'{"result":""}'}，不报错；{'0'}{' '}
+            返回「零元整」； 非数字内容（如 {'"abc"'}）仍报错；
           </li>
           <li>
             <b className="text-gray-700">{'calc'}</b>：表达式计算（支持加减乘除取模和括号），请求{' '}
@@ -339,20 +346,22 @@ const CONFIG_HELP_CONTENT = (
             <b className="text-gray-700">{'calc'}</b>：日期相减，请求{' '}
             {'{"type":"calc","value":"2026-10-13-2026-10-12"}'} → 返回 {'{"result":1}'}；
             形如「日期(时间) - 日期(时间)」时按绝对时间差返回<b className="text-gray-700">天</b>
-            （保留 2 位小数、允许负数；如 {'2026-10-13 12:00:00 - 2026-10-12 06:00:00'} → {'1.25'}）；
-            任一侧为空（如 {'2026-10-13-'} / {'-2026-10-13'}）按空值计算，返回 {'0'}；
+            （保留 2 位小数、允许负数；如 {'2026-10-13 12:00:00 - 2026-10-12 06:00:00'} → {'1.25'}
+            ）； 任一侧为空（如 {'2026-10-13-'} / {'-2026-10-13'}）按空值计算，返回 {'0'}；
           </li>
           <li>支持的运算：+、-、*、/、%、()；支持小数、负数，空格自动忽略；</li>
         </ul>
       </li>
       <li>
-        <b className="text-gray-700">子表汇总</b>：把某张子表某一列的合计写回当前元素（仅当流程配置了子表时可选）；
+        <b className="text-gray-700">子表汇总</b>
+        ：把某张子表某一列的合计写回当前元素（仅当流程配置了子表时可选）；
         <div className="mt-1">
           来源子表 / 来源列：选择参与合计的子表及其列，如 {'clfbx_detail'} 的 {'fymoney'}；
         </div>
         <div>目标字段就是当前正在配置的这个元素自身，因此只配来源，不用再选目标；</div>
         <div>
-          触发时机与「初始化 / 值改变 / 失焦」无关：只要该子表数据变化就重算，改金额、添加行、删除行都会覆盖；
+          触发时机与「初始化 / 值改变 /
+          失焦」无关：只要该子表数据变化就重算，改金额、添加行、删除行都会覆盖；
         </div>
         <div>
           合计值等于当前值时不重复写入；写入后本元素的「值改变触发」照常执行，可继续下一步（如算出总金额后自动生成大写金额）；
@@ -1051,7 +1060,8 @@ export default function ElementManage() {
                 field="field_key"
                 rules={[{ required: true, message: '请选择对应字段' }]}
               >
-                <Select showSearch
+                <Select
+                  showSearch
                   placeholder="请选择字段"
                   loading={loadingFields}
                   onChange={handleFieldChange}
@@ -1381,7 +1391,8 @@ export default function ElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Select showSearch
+                                            <Select
+                                              showSearch
                                               placeholder="请选择字段"
                                               loading={loadingFields}
                                             >
@@ -1518,7 +1529,8 @@ export default function ElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Select showSearch
+                                            <Select
+                                              showSearch
                                               placeholder="请选择字段"
                                               loading={loadingFields}
                                             >
@@ -1659,6 +1671,8 @@ function ApiRefModal({ visible, onCancel, onSelect }) {
   const [loading, setLoading] = useState(false)
   const [keyword, setKeyword] = useState('')
   const [method, setMethod] = useState('')
+  const [category, setCategory] = useState('')
+  const [categoryOptions, setCategoryOptions] = useState([])
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
@@ -1666,16 +1680,23 @@ function ApiRefModal({ visible, onCancel, onSelect }) {
     setLoading(true)
     setKeyword('')
     setMethod('')
+    setCategory('')
     setSelected(null)
-    apiDefinitionApi
-      .listApiDefinitions({ page: 1, size: 500 })
-      .then((res) => setDefs(res.data?.list || []))
+    Promise.all([
+      apiDefinitionApi.listApiDefinitions({ page: 1, size: 500 }),
+      apiDefinitionApi.listApiDefinitionCategories().catch(() => ({ data: [] })),
+    ])
+      .then(([res, cats]) => {
+        setDefs(res.data?.list || [])
+        setCategoryOptions((cats.data || []).map((c) => ({ label: c, value: c })))
+      })
       .catch(() => setDefs([]))
       .finally(() => setLoading(false))
   }, [visible])
 
   const filtered = defs.filter((d) => {
     if (method && d.method !== method) return false
+    if (category && d.category !== category) return false
     if (keyword) {
       const kw = keyword.toLowerCase()
       return (d.name || '').toLowerCase().includes(kw) || (d.path || '').toLowerCase().includes(kw)
@@ -1684,6 +1705,13 @@ function ApiRefModal({ visible, onCancel, onSelect }) {
   })
 
   const columns = [
+    {
+      key: 'category',
+      title: '分类',
+      dataIndex: 'category',
+      width: 90,
+      render: (c) => c || '-'
+    },
     {
       key: 'method',
       title: '方法',
@@ -1720,10 +1748,19 @@ function ApiRefModal({ visible, onCancel, onSelect }) {
       <div className="mb-2 flex gap-2">
         <Input placeholder="搜索接口名称 / 路径" value={keyword} onChange={setKeyword} allowClear />
         <Select
+          placeholder="分类"
+          value={category || undefined}
+          onChange={(v) => setCategory(v || '')}
+          style={{ width: 200 }}
+          allowClear
+          showSearch
+          options={categoryOptions}
+        />
+        <Select
           placeholder="方法"
-          value={method}
-          onChange={setMethod}
-          style={{ width: 120 }}
+          value={method || undefined}
+          onChange={(v) => setMethod(v || '')}
+          style={{ width: 130 }}
           allowClear
         >
           <Select.Option value="GET">GET</Select.Option>

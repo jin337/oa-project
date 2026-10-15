@@ -17,6 +17,7 @@ func registerApiDefinitionRoutes(api *gin.RouterGroup) {
 		apiDefinitions.POST("/debug", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionDebug) // 试调接口
 		apiDefinitions.GET("/backend/routes", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionListRoutes) // 后端路由列表
 		apiDefinitions.POST("/backend/import", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionImportRoutes) // 导入后端路由
+		apiDefinitions.GET("/categories", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionCategories) // 分类候选项
 		apiDefinitions.GET("/:id", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionDetail) // 接口详情
 		apiDefinitions.PUT("/:id", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionUpdate) // 修改接口
 		apiDefinitions.DELETE("/:id", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionDelete) // 删除接口

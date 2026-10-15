@@ -75,6 +75,9 @@ func ApiDefinitionList(req *model.ApiDefinitionListReq) ([]model.ApiDefinition, 
 	if req.Type != "" {
 		db = db.Where("type = ?", req.Type)
 	}
+	if req.Category != "" {
+		db = db.Where("category = ?", req.Category)
+	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -233,6 +236,7 @@ func ApiDefinitionCreate(curUserID uint, req *model.ApiDefinitionCreateReq) (*mo
 		Status:       status,
 		Sort:         req.Sort,
 		Remark:       req.Remark,
+		Category:     strings.TrimSpace(req.Category),
 	}
 	def.CreatedBy, def.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&def).Error; err != nil {
@@ -303,6 +307,7 @@ func ApiDefinitionUpdate(curUserID, id uint, req *model.ApiDefinitionUpdateReq) 
 	}
 	def.Sort = req.Sort
 	def.Remark = req.Remark
+	def.Category = strings.TrimSpace(req.Category)
 	def.UpdatedBy = curUserID
 	if err := database.DB.Save(&def).Error; err != nil {
 		return nil, err
@@ -669,6 +674,32 @@ func ApiDefinitionExecute(bearerToken, method, path string, params map[string]in
 	return result, http.StatusOK, err
 }
 
+// ApiDefinitionCategories 分类候选项：已有定义中出现过的分类（去重排序）
+// 并入 router.go 注册行注释定义的模块分类（通知/工具 等），供前端筛选与下拉选择
+func ApiDefinitionCategories() []string {
+	set := map[string]bool{}
+	var rows []string
+	if err := database.DB.Model(&model.ApiDefinition{}).
+		Where("category <> ''").Distinct("category").Pluck("category", &rows).Error; err == nil {
+		for _, c := range rows {
+			if t := strings.TrimSpace(c); t != "" {
+				set[t] = true
+			}
+		}
+	}
+	for _, c := range LoadRouteModuleCategories() {
+		if t := strings.TrimSpace(c); t != "" {
+			set[t] = true
+		}
+	}
+	out := make([]string, 0, len(set))
+	for c := range set {
+		out = append(out, c)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // ============================================================
 // 后端路由一键导入
 // ============================================================
@@ -705,6 +736,7 @@ func ImportBackendRoutes(curUserID uint, routes []RouteDef) (int, error) {
 	imported := 0
 	commentNames := LoadRouteComments()
 	routeOrder := LoadRouteOrder()
+	routeCats := LoadRouteCategories()
 	var existingNames []string
 	if err := database.DB.Model(&model.ApiDefinition{}).Pluck("name", &existingNames).Error; err != nil {
 		return imported, err
@@ -756,6 +788,12 @@ func ImportBackendRoutes(curUserID uint, routes []RouteDef) (int, error) {
 				return err
 			}
 			if cnt > 0 {
+				// 已存在：不重复导入；仅当分类为空时回填本次解析到的模块分类，不覆盖人工设置
+				if cat, ok := routeCats[method+" "+path]; ok && cat != "" {
+					tx.Model(&model.ApiDefinition{}).
+						Where("method = ? AND path = ? AND (category IS NULL OR category = '')", method, path).
+						Update("category", cat)
+				}
 				continue
 			}
 			if seenNames[displayName] {
@@ -776,6 +814,7 @@ func ImportBackendRoutes(curUserID uint, routes []RouteDef) (int, error) {
 				Status:       1,
 				Sort:         1,
 				Remark:       "后端路由自动导入",
+				Category:     routeCats[method+" "+path],
 			}
 			def.CreatedBy = curUserID
 			if err := tx.Create(&def).Error; err != nil {

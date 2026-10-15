@@ -270,3 +270,111 @@ func joinRoutePath(parent, path string) string {
 	}
 	return full
 }
+
+// LoadRouteModuleCategories 解析 router/router.go 的 Setup()，读取 registerXxxRoutes(api) // 分类
+// 行尾注释，返回 注册函数名 → 分类名（如 registerUtilRoutes → "工具"、registerNotificationRoutes → "通知"）。
+// 未写行尾注释的模块不在结果中（其下接口分类留空）。
+func LoadRouteModuleCategories() map[string]string {
+	cats := make(map[string]string)
+	dir := routerSourceDir()
+	path := dir + "/router.go"
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return cats
+	}
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, src, parser.ParseComments)
+	if err != nil {
+		return cats
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		var name string
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+			name = sel.Sel.Name
+		} else if id, ok := call.Fun.(*ast.Ident); ok {
+			name = id.Name
+		}
+		if !strings.HasPrefix(name, "register") {
+			return true
+		}
+		if c := inlineRouteComment(fset, f.Comments, call); c != "" {
+			cats[name] = c
+		}
+		return true
+	})
+	return cats
+}
+
+// LoadRouteCategories 解析 router 源码，返回每条路由（key = "METHOD path"，path 不含 {APIPrefix}）
+// 所属分类名。分类归属 = 该路由注册所在的 registerXxxRoutes 函数，其在 Setup() 调用行尾注释的文本。
+func LoadRouteCategories() map[string]string {
+	cats := make(map[string]string)
+	moduleCats := LoadRouteModuleCategories()
+	dir := routerSourceDir()
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)
+	if err != nil {
+		return cats
+	}
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			prefixes := map[string]string{"api": ""}
+			collectGroupPrefixes(file, prefixes)
+			ast.Inspect(file, func(n ast.Node) bool {
+				fd, ok := n.(*ast.FuncDecl)
+				if !ok {
+					return true
+				}
+				category, ok := moduleCats[fd.Name.Name]
+				if !ok || category == "" {
+					return true
+				}
+				collectRouteCategoriesInto(fset, fd, prefixes, category, cats)
+				return true
+			})
+		}
+	}
+	return cats
+}
+
+// collectRouteCategoriesInto 收集 FuncDecl 内全部路由注册行的分类（模块级常量，覆盖该函数内所有路由）
+func collectRouteCategoriesInto(fset *token.FileSet, fd *ast.FuncDecl, prefixes map[string]string, category string, out map[string]string) {
+	ast.Inspect(fd, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		method := strings.ToUpper(sel.Sel.Name)
+		switch method {
+		case "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "ANY":
+		default:
+			return true
+		}
+		recv, ok := sel.X.(*ast.Ident)
+		if !ok || len(call.Args) < 1 {
+			return true
+		}
+		lit, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		routePath, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			return true
+		}
+		full := joinRoutePath(prefixes[recv.Name], routePath)
+		key := method + " " + full
+		if _, exists := out[key]; !exists {
+			out[key] = category
+		}
+		return true
+	})
+}

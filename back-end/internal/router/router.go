@@ -26,18 +26,18 @@ func Setup() *gin.Engine {
 	// 业务路由统一注册在配置的前缀下（config.Server.APIPrefix，唯一真值见 config-*.yaml 的 server.api_prefix）
 	api := r.Group(config.Cfg.Server.APIPrefix)
 
-	registerAuthRoutes(api)
-	registerUserRoutes(api)
-	registerRoleRoutes(api)
-	registerMenuRoutes(api)
-	registerDeptRoutes(api)
-	registerExamineGroupRoutes(api)
-	registerApiDefinitionRoutes(api)
-	registerApplicationRoutes(api)
-	registerApprovalRoutes(api)
-	registerUploadRoutes(api)
-	registerUtilRoutes(api)
-	registerNotificationRoutes(api)
+	registerAuthRoutes(api)              // 认证
+	registerUserRoutes(api)              // 用户
+	registerRoleRoutes(api)              // 角色
+	registerMenuRoutes(api)              // 菜单
+	registerDeptRoutes(api)              // 部门
+	registerExamineGroupRoutes(api)      // 审核人员组
+	registerApiDefinitionRoutes(api)     // 接口管理
+	registerApplicationRoutes(api)       // 流程配置
+	registerApprovalRoutes(api)          // 审批
+	registerUploadRoutes(api)            // 上传
+	registerUtilRoutes(api)              // 工具
+	registerNotificationRoutes(api)     // 通知
 
 	// 注入运行时路由快照（供接口管理一键导入后端路由）
 	middleware.SetRouteSnapshot(r.Routes())

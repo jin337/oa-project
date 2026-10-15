@@ -39,3 +39,8 @@ export function listBackendRoutes() {
 export function importBackendRoutes() {
   return request.post('/api-definitions/backend/import')
 }
+
+// GET /api-definitions/categories 分类候选项（已有分类 + router 注释定义的模块分类）
+export function listApiDefinitionCategories() {
+  return request.get('/api-definitions/categories')
+}
