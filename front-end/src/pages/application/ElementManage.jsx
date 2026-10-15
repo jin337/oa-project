@@ -1683,7 +1683,8 @@ function ApiRefModal({ visible, onCancel, onSelect }) {
     setCategory('')
     setSelected(null)
     Promise.all([
-      apiDefinitionApi.listApiDefinitions({ page: 1, size: 500 }),
+      // 只列出启用状态的接口：停用的接口不可在表单元素中引用
+      apiDefinitionApi.listApiDefinitions({ page: 1, size: 500, status: 1 }),
       apiDefinitionApi.listApiDefinitionCategories().catch(() => ({ data: [] })),
     ])
       .then(([res, cats]) => {

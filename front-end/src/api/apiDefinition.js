@@ -25,6 +25,11 @@ export function deleteApiDefinition(id) {
   return request.delete(`/api-definitions/${id}`)
 }
 
+// PATCH /api-definitions/:id/status 列表 Switch 切换启用状态（只改 status）
+export function updateApiDefinitionStatus(id, status) {
+  return request.patch(`/api-definitions/${id}/status`, { status })
+}
+
 // POST /api-definitions/debug 试调（以当前用户身份真实请求目标内部接口）
 export function debugApiDefinition(data) {
   return request.post('/api-definitions/debug', data)

@@ -78,6 +78,9 @@ func ApiDefinitionList(req *model.ApiDefinitionListReq) ([]model.ApiDefinition, 
 	if req.Category != "" {
 		db = db.Where("category = ?", req.Category)
 	}
+	if req.Status != nil {
+		db = db.Where("status = ?", *req.Status)
+	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -322,6 +325,21 @@ func ApiDefinitionDelete(id uint) error {
 		return errors.New("接口不存在")
 	}
 	return database.DB.Delete(&model.ApiDefinition{}, id).Error
+}
+
+// ApiDefinitionUpdateStatus 仅切换启用状态（列表 Switch 专用），不动其它字段
+func ApiDefinitionUpdateStatus(curUserID, id uint, status int) error {
+	if status != 0 && status != 1 {
+		return errors.New("状态值非法")
+	}
+	var def model.ApiDefinition
+	if err := database.DB.First(&def, id).Error; err != nil {
+		return errors.New("接口不存在")
+	}
+	return database.DB.Model(&def).Updates(map[string]interface{}{
+		"status":     status,
+		"updated_by": curUserID,
+	}).Error
 }
 
 // ============================================================

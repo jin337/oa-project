@@ -21,6 +21,7 @@ func registerApiDefinitionRoutes(api *gin.RouterGroup) {
 		apiDefinitions.GET("/:id", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionDetail) // 接口详情
 		apiDefinitions.PUT("/:id", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionUpdate) // 修改接口
 		apiDefinitions.DELETE("/:id", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionDelete) // 删除接口
+		apiDefinitions.PATCH("/:id/status", middleware.RequirePermission("interface:edit"), handler.ApiDefinitionUpdateStatus) // 切换启用状态
 	}
 
 	// 统一分发：对外以 method+path 暴露接口（GET/POST/PUT/DELETE /interfaces/*path）

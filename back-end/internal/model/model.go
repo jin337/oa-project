@@ -127,6 +127,7 @@ type ApiDefinitionListReq struct {
 	Method   string `json:"method" form:"method" validate:"omitempty" label:"请求方法"`
 	Type     string `json:"type" form:"type" validate:"omitempty,oneof=sql http" label:"定义方式"`
 	Category string `json:"category" form:"category" validate:"omitempty" label:"分类"`
+	Status   *int   `json:"status" form:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 }
 
 // ApiDefinitionDebugReq 接口试调：按接口 ID 加载定义执行，params 作为 ${form.xxx} 求值的上下文

@@ -93,6 +93,27 @@ func ApiDefinitionDelete(c *gin.Context) {
 	response.OKMsg(c, "删除成功")
 }
 
+// ApiDefinitionUpdateStatus PATCH /{APIPrefix}/api-definitions/:id/status
+// 列表页 Switch 切换启用状态：只改 status，不动名称/模板等其它字段
+func ApiDefinitionUpdateStatus(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Status int `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeParamError, "状态参数错误")
+		return
+	}
+	if err := service.ApiDefinitionUpdateStatus(middleware.CurrentUserID(c), id, req.Status); err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OKMsg(c, "状态已更新")
+}
+
 // ApiDefinitionDebug POST /{APIPrefix}/api-definitions/debug
 // 按接口 ID 加载定义执行（SQL 直查 / HTTP 转发），透传当前用户 token
 func ApiDefinitionDebug(c *gin.Context) {

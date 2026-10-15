@@ -17,6 +17,7 @@ import {
   Popover,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   Typography,
@@ -230,10 +231,12 @@ export default function InterfaceManage() {
   const [keywordMethod, setKeywordMethod] = useState('')
   const [keywordType, setKeywordType] = useState('')
   const [keywordCategory, setKeywordCategory] = useState('')
+  const [keywordStatus, setKeywordStatus] = useState(undefined)
   const [appliedKeyword, setAppliedKeyword] = useState('')
   const [appliedMethod, setAppliedMethod] = useState('')
   const [appliedType, setAppliedType] = useState('')
   const [appliedCategory, setAppliedCategory] = useState('')
+  const [appliedStatus, setAppliedStatus] = useState(undefined)
 
   // 分类候选项（已有分类 + router 注释模块分类）
   const [categoryOptions, setCategoryOptions] = useState([])
@@ -266,6 +269,7 @@ export default function InterfaceManage() {
       if (appliedMethod) params.method = appliedMethod
       if (appliedType) params.type = appliedType
       if (appliedCategory) params.category = appliedCategory
+      if (appliedStatus !== undefined) params.status = appliedStatus
       const res = await apiDefinitionApi.listApiDefinitions(params)
       setList(res.data.list || [])
       setTotal(res.data.total || 0)
@@ -274,7 +278,7 @@ export default function InterfaceManage() {
     } finally {
       setLoading(false)
     }
-  }, [page, size, appliedKeyword, appliedMethod, appliedType, appliedCategory])
+  }, [page, size, appliedKeyword, appliedMethod, appliedType, appliedCategory, appliedStatus])
 
   // 分类候选项：抽屉下拉与列表筛选共用
   const fetchCategories = useCallback(async () => {
@@ -312,6 +316,7 @@ export default function InterfaceManage() {
     setAppliedMethod(keywordMethod)
     setAppliedType(keywordType)
     setAppliedCategory(keywordCategory)
+    setAppliedStatus(keywordStatus)
     setPage(1)
   }
 
@@ -320,10 +325,12 @@ export default function InterfaceManage() {
     setKeywordMethod('')
     setKeywordType('')
     setKeywordCategory('')
+    setKeywordStatus(undefined)
     setAppliedKeyword('')
     setAppliedMethod('')
     setAppliedType('')
     setAppliedCategory('')
+    setAppliedStatus(undefined)
     setPage(1)
   }
 
@@ -456,6 +463,21 @@ export default function InterfaceManage() {
     }
   }
 
+  // 列表 Switch 切换启用状态：走轻量端点，只改 status
+  const [togglingId, setTogglingId] = useState(null)
+  const handleToggleStatus = async (record, checked) => {
+    setTogglingId(record.id)
+    try {
+      await apiDefinitionApi.updateApiDefinitionStatus(record.id, checked ? 1 : 0)
+      Message.success(checked ? '已启用' : '已停用')
+      fetchList()
+    } catch (e) {
+      // 错误已在请求层提示
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
   const columns = [
     {
       key: 'index',
@@ -529,8 +551,19 @@ export default function InterfaceManage() {
       dataIndex: 'status',
       width: 80,
       align: 'center',
-      render: (status) =>
-        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
+      render: (status, record) =>
+        canEdit ? (
+          <Switch
+            size="small"
+            checked={status === 1}
+            loading={togglingId === record.id}
+            onChange={(checked) => handleToggleStatus(record, checked)}
+          />
+        ) : status === 1 ? (
+          <Tag color="green">启用</Tag>
+        ) : (
+          <Tag color="red">停用</Tag>
+        ),
     },
     {
       key: 'action',
@@ -643,6 +676,17 @@ export default function InterfaceManage() {
             value={keywordCategory || undefined}
             onChange={(v) => setKeywordCategory(v || '')}
             options={categoryOptions}
+          />
+          <Select
+            className="w-24!"
+            placeholder="状态"
+            allowClear
+            value={keywordStatus}
+            onChange={(v) => setKeywordStatus(v)}
+            options={[
+              { label: '启用', value: 1 },
+              { label: '停用', value: 0 },
+            ]}
           />
           <Button type="primary" onClick={handleSearch}>
             搜索
