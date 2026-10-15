@@ -40,7 +40,7 @@ export const LOGIN_CONFIG = {
 
 // —— 表单元素类型配置 ——
 // value: 唯一标识；label: 下拉展示名；needDataSource: 是否需要配置数据源；
-// mockDetailValue: 布局管理"详情页"画布预览的示例值（与元素类型一一对应）
+// mockDetailValue: 表单设置布局"详情页"画布预览的示例值（与元素类型一一对应）
 export const ELEMENT_TYPE_OPTIONS = [
   { value: 'input', label: '单行输入', needDataSource: false, mockDetailValue: '示例文本' },
   { value: 'textarea', label: '多行文本', needDataSource: false, mockDetailValue: '示例多行文本' },

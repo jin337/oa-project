@@ -1,29 +1,29 @@
 import {
-  Button,
-  Card,
-  Checkbox,
-  Dropdown,
-  Form,
-  Grid,
-  Input,
-  Menu,
-  Message,
-  Modal,
-  Popconfirm,
-  Popover,
-  Select,
-  Space,
-  Switch,
-  Table,
-  Tag,
-  Typography,
+    Button,
+    Card,
+    Checkbox,
+    Dropdown,
+    Form,
+    Grid,
+    Input,
+    Menu,
+    Message,
+    Modal,
+    Popconfirm,
+    Popover,
+    Select,
+    Space,
+    Switch,
+    Table,
+    Tag,
+    Typography,
 } from '@arco-design/web-react'
 import {
-  IconDown,
-  IconList,
-  IconPlus,
-  IconRefresh,
-  IconSettings,
+    IconDown,
+    IconList,
+    IconPlus,
+    IconRefresh,
+    IconSettings,
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -211,7 +211,7 @@ export default function ApplicationManage() {
     } else if (key === 'elements') {
       openSubPage(record, 'elements', '表单元素')
     } else if (key === 'layout') {
-      openSubPage(record, 'layout', '布局管理')
+      openSubPage(record, 'layout', '表单设置布局')
     } else if (key === 'examine') {
       openSubPage(record, 'examine', '审批配置')
     }
@@ -295,7 +295,7 @@ export default function ApplicationManage() {
           <Menu onClickMenuItem={(key) => handleActionMenu(key, record)}>
             <MenuItem key="tables">表管理</MenuItem>
             <MenuItem key="elements">表单元素管理</MenuItem>
-            <MenuItem key="layout">布局管理</MenuItem>
+            <MenuItem key="layout">表单设置布局</MenuItem>
             <MenuItem key="examine">审批管理</MenuItem>
           </Menu>
         )

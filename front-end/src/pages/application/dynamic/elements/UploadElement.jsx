@@ -19,7 +19,7 @@ import { RuntimeFormContext } from '../DynamicForm'
  *   - renderUploadPreview   ELEMENT_RENDER_CONFIG 注册入口
  *   - UploadReadOnly        只读展示（READONLY_RENDERERS 注册）
  *   - UploadMockValue       模拟值生成器（MOCK_GENERATORS 注册，按 multiple 派生 1/2 条）
- *   - renderUploadSettings  布局管理右侧属性面板（renderCommonSettings 追加项）
+ *   - renderUploadSettings  表单设置布局右侧属性面板（renderCommonSettings 追加项）
  */
 
 // ==================== 数据工具 ====================
@@ -205,7 +205,7 @@ export const UploadMockValue = (el) => {
 // ==================== 配置面板 ====================
 
 /**
- * upload 元素专属属性配置（布局管理右侧面板，作为通用配置 renderCommonSettings 的追加项）：
+ * upload 元素专属属性配置（表单设置布局右侧面板，作为通用配置 renderCommonSettings 的追加项）：
  * 按钮文字、上传模式、允许文件类型。
  * 通用三项（元素类型 / 字段名称 / 宽度占比）由 renderElementSettings 组合 renderCommonSettings 渲染。
  */

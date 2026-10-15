@@ -23,7 +23,7 @@ import { useTabs } from 'src/store/tab-context'
 
 const TabPane = Tabs.TabPane
 
-const MODULE_LABEL = '布局管理'
+const MODULE_LABEL = '表单设置布局'
 
 const LAYOUT_OPTIONS = [
   { label: '垂直布局', value: 'vertical' },
@@ -432,18 +432,31 @@ export default function LayoutManage() {
                           },
                         }
 
+                    // 画布中选中的元素与库卡片通过 key + field_key 对应，库中同步高亮
+                    const isActive =
+                      !!selectedElement &&
+                      item.key === selectedElement.key &&
+                      (item.field_key || '') === (selectedElement.field_key || '')
+
                     const itemNode = (
                       <div
                         key={item.key + '_' + item.field_key}
                         {...dragProps}
-                        title={item.label}
-                        className={`flex items-center justify-center rounded border px-1 py-2 text-center text-xs transition-colors ${
-                          isSubTableItem
-                            ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-400'
-                            : 'cursor-grab border-gray-200 bg-gray-50 text-gray-700 hover:border-[rgb(var(--arcoblue-6))] hover:bg-[rgb(var(--arcoblue-1))]'
+                        title={item.field_key ? `${item.label}（${item.field_key}）` : item.label}
+                        className={`flex flex-col items-center justify-center rounded border px-1 py-1.5 text-center transition-colors ${
+                          isActive
+                            ? 'border-[rgb(var(--arcoblue-6))] bg-[rgb(var(--arcoblue-1))] text-[rgb(var(--arcoblue-6))]'
+                            : isSubTableItem
+                              ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-400'
+                              : 'cursor-grab border-gray-200 bg-gray-50 text-gray-700 hover:border-[rgb(var(--arcoblue-6))] hover:bg-[rgb(var(--arcoblue-1))]'
                         }`}
                       >
-                        <span className="w-full truncate">{item.label}</span>
+                        <span className="w-full truncate text-xs">{item.label}</span>
+                        {item.field_key && (
+                          <span className="mt-0.5 w-full truncate text-[10px] leading-tight text-gray-400">
+                            {item.field_key}
+                          </span>
+                        )}
                       </div>
                     )
                     return isSubTableItem ? (

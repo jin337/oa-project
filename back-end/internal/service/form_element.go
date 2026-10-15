@@ -20,6 +20,26 @@ func checkApplicationElementTableKey(appID uint, tableKey string) error {
 	return nil
 }
 
+// checkApplicationElementUniqueField 同一页面配置下，同一字段分类(table_key)内字段标识(field_key)唯一
+func checkApplicationElementUniqueField(appID uint, tableKey, fieldKey string, excludeID uint) error {
+	if tableKey == "" || fieldKey == "" {
+		return nil
+	}
+	q := database.DB.Model(&model.ApplicationElement{}).
+		Where("app_id = ? AND table_key = ? AND field_key = ?", appID, tableKey, fieldKey)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("该分类下字段标识已存在：" + fieldKey)
+	}
+	return nil
+}
+
 // ApplicationElementList 表单元素分页列表：keyword 模糊匹配 label 或 field_key
 // 返回 ApplicationElementListItem（不含 created_at/created_by/updated_at/updated_by 审计字段）
 func ApplicationElementList(appID uint, req *model.ApplicationElementListReq) ([]model.ApplicationElementListItem, int64, error) {
@@ -100,6 +120,9 @@ func ApplicationElementCreate(curUserID, appID uint, req *model.ApplicationEleme
 	if err := checkApplicationElementTableKey(appID, req.TableKey); err != nil {
 		return nil, err
 	}
+	if err := checkApplicationElementUniqueField(appID, req.TableKey, req.FieldKey, 0); err != nil {
+		return nil, err
+	}
 	el := model.ApplicationElement{
 		AppID:          appID,
 		Label:          req.Label,
@@ -161,6 +184,17 @@ func ApplicationElementUpdate(curUserID, appID, id uint, req *model.ApplicationE
 	}
 	if req.Actions != nil {
 		el.Actions = req.Actions
+	}
+	// field_key 或 table_key 变化时校验组合唯一（以变更后的最终值为准）
+	finalFieldKey, finalTableKey := el.FieldKey, el.TableKey
+	if req.FieldKey != "" {
+		finalFieldKey = req.FieldKey
+	}
+	if req.TableKey != "" {
+		finalTableKey = req.TableKey
+	}
+	if err := checkApplicationElementUniqueField(appID, finalTableKey, finalFieldKey, el.ID); err != nil {
+		return nil, err
 	}
 	el.UpdatedBy = curUserID
 	if err := database.DB.Save(&el).Error; err != nil {
