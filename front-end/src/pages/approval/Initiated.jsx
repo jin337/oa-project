@@ -509,6 +509,7 @@ export default function Initiated() {
         onCancel={closeEditDrawer}
         title={`${editApp?.item_name || editApp?.name || ''}${copyMode ? '-副本' : ''}`}
         unmountOnExit
+        maskClosable={false}
         footer={
           <div className="flex justify-end gap-2">
             {copyMode ? (

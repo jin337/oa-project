@@ -608,6 +608,7 @@ export default function Apply() {
         onCancel={() => setDrawerVisible(false)}
         title={drawerTitle || '申请表单'}
         unmountOnExit
+        maskClosable={false}
         footer={
           <div className="flex justify-end gap-2">
             <Button loading={drawerSaving} onClick={handleSaveDraft}>

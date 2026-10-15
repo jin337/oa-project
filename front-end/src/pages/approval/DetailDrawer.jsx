@@ -379,6 +379,7 @@ export default function DetailDrawer({
         onCancel={onCancel}
         footer={renderActions() || null}
         unmountOnExit
+        maskClosable={false}
       >
         {/* 审批状态印章：显示在标题栏右上角 */}
         {instance && (

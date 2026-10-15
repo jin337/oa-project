@@ -451,7 +451,7 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
       <Divider orientation="left">
         <span className="text-sm font-medium text-gray-700">审批流程</span>
       </Divider>
-      <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+      <div className="p-1.5">
         <Timeline>
           {flattenedNodes.map((n, i) => {
             const meta = APPROVAL_NODE_META[n.type] || {

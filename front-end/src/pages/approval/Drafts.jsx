@@ -323,6 +323,7 @@ export default function Drafts() {
         onCancel={() => setDrawerVisible(false)}
         title={`编辑 - ${drawerApp?.item_name || drawerApp?.name || ''}`}
         unmountOnExit
+        maskClosable={false}
         footer={
           <div className="flex justify-between gap-2">
             <Button type="primary" loading={drawerSaving} onClick={() => handleSubmit(draftRecord)}>
