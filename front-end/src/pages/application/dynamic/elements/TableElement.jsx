@@ -244,7 +244,7 @@ export const TableElementField = ({
                 const main = !field ? (
                   // 行未注册到 Form store（如画布空态）：可编辑渲染可交互控件，详情渲染纯文本
                   cellEditable ? (
-                    renderFn(col, 'form', rt)
+                    renderFn(col, pageType, rt)
                   ) : isReadonlyText ? (
                     <ReadonlyValueCmp
                       value={cellValue}
@@ -274,7 +274,7 @@ export const TableElementField = ({
                     }
                   >
                     {cellEditable ? (
-                      renderFn(col, 'form', rt)
+                      renderFn(col, pageType, rt)
                     ) : isReadonlyText ? (
                       <ReadonlyValueCmp
                         elementType={col.element_type}
