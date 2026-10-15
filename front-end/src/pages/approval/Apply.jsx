@@ -150,7 +150,8 @@ export default function Apply() {
   // 加载流程配置列表（申请项名称的可选项）
   const fetchApplications = useCallback(async () => {
     try {
-      const res = await fetchAll(applicationApi.listApplications)
+      // 通过接口参数只取启用的流程配置，停用的不可申请
+      const res = await fetchAll(applicationApi.listApplications, { status: 1 })
       setAppOptions(res.data?.list || [])
     } catch (e) {
       // 错误已在请求层提示

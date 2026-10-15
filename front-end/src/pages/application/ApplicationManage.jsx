@@ -13,6 +13,7 @@ import {
   Popover,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   Typography,
@@ -170,6 +171,22 @@ export default function ApplicationManage() {
     }
   }
 
+  // 列表 Switch 切换启用状态：后端 Update 为指针式部分更新，只传 status 不动其它字段
+  // 状态语义：1=启用，0=停用
+  const [togglingId, setTogglingId] = useState(null)
+  const handleToggleStatus = async (record, checked) => {
+    setTogglingId(record.id)
+    try {
+      await applicationApi.updateApplication(record.id, { status: checked ? 1 : 0 })
+      Message.success(checked ? '已启用' : '已停用')
+      fetchList()
+    } catch (e) {
+      // 错误已在请求层提示
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
   // 打开子页面：预添加独立页签并跳转，通过 state 传递流程名称
   const openSubPage = (record, module, label) => {
     const path = `/application/${record.id}/${module}`
@@ -254,8 +271,19 @@ export default function ApplicationManage() {
       dataIndex: 'status',
       width: 80,
       align: 'center',
-      render: (status) =>
-        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
+      render: (status, record) =>
+        hasPerm('application:edit') ? (
+          <Switch
+            size="small"
+            checked={status === 1}
+            loading={togglingId === record.id}
+            onChange={(checked) => handleToggleStatus(record, checked)}
+          />
+        ) : status === 1 ? (
+          <Tag color="green">启用</Tag>
+        ) : (
+          <Tag color="red">停用</Tag>
+        ),
     },
     {
       key: 'action',
@@ -416,7 +444,7 @@ export default function ApplicationManage() {
               <FormItem label="状态" field="status" triggerPropName="value">
                 <Select>
                   <Select.Option value={1}>启用</Select.Option>
-                  <Select.Option value={2}>停用</Select.Option>
+                  <Select.Option value={0}>停用</Select.Option>
                 </Select>
               </FormItem>
             </Col>

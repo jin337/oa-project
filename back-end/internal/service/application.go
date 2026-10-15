@@ -38,6 +38,9 @@ func ApplicationList(req *model.ApplicationListReq) ([]model.Application, int64,
 		kw := "%" + req.Keyword + "%"
 		db = db.Where("name LIKE ? OR code LIKE ?", kw, kw)
 	}
+	if req.Status != nil {
+		db = db.Where("status = ?", *req.Status)
+	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -1146,7 +1149,7 @@ func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.
 		return nil, err
 	}
 	status := req.Status
-	if status == 0 {
+	if status != 0 && status != 1 {
 		status = 1
 	}
 	app := model.Application{
@@ -1304,7 +1307,7 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 	if req.ApprovalFlowJSON != nil {
 		app.ApprovalFlowJSON = *req.ApprovalFlowJSON
 	}
-	if req.Status == 1 || req.Status == 2 {
+	if req.Status == 0 || req.Status == 1 {
 		app.Status = req.Status
 	}
 	app.UpdatedBy = curUserID

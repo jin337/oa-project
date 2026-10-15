@@ -14,6 +14,7 @@ import {
     Popover,
     Select,
     Space,
+    Switch,
     Table,
     Tag,
 } from '@arco-design/web-react'
@@ -175,6 +176,21 @@ export default function ExamineGroupManage() {
     }
   }
 
+  // 列表 Switch 切换启用状态：后端 Update 为字段守卫式部分更新，只传 status
+  const [togglingId, setTogglingId] = useState(null)
+  const handleToggleStatus = async (record, checked) => {
+    setTogglingId(record.id)
+    try {
+      await examineGroupApi.updateExamineGroup(record.id, { status: checked ? 1 : 0 })
+      Message.success(checked ? '已启用' : '已停用')
+      fetchList()
+    } catch (e) {
+      // 错误已在请求层提示
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
   // 表格密度下拉
   const sizeMenu = (
     <Menu onClickMenuItem={(key) => setTableSize(key)}>
@@ -229,8 +245,14 @@ export default function ExamineGroupManage() {
       dataIndex: 'status',
       width: 80,
       align: 'center',
-      render: (status) =>
-        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
+      render: (status, record) => (
+        <Switch
+          size="small"
+          checked={status === 1}
+          loading={togglingId === record.id}
+          onChange={(checked) => handleToggleStatus(record, checked)}
+        />
+      ),
     },
     {
       key: 'action',

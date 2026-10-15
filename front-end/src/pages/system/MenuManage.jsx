@@ -14,6 +14,7 @@ import {
   Popover,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   Tooltip,
@@ -115,7 +116,8 @@ export default function MenuManage() {
 
   // 加载流程配置列表，供「关联流程」下拉选择
   useEffect(() => {
-    listApplications({ page: 1, size: 1000 })
+    listApplications({ page: 1, size: 1000, status: 1 })
+      // 通过接口参数只取启用的流程配置，停用的不可被关联
       .then((res) => setAppOptions(res?.data?.list || []))
       .catch(() => setAppOptions([]))
   }, [])
@@ -181,6 +183,21 @@ export default function MenuManage() {
       fetchTree()
     } catch (e) {
       // 错误已在请求层提示
+    }
+  }
+
+  // 列表 Switch 切换启用状态：后端 Update 为字段守卫式部分更新，只传 status
+  const [togglingId, setTogglingId] = useState(null)
+  const handleToggleStatus = async (record, checked) => {
+    setTogglingId(record.id)
+    try {
+      await menuApi.updateMenu(record.id, { status: checked ? 1 : 0 })
+      Message.success(checked ? '已启用' : '已停用')
+      fetchTree()
+    } catch (e) {
+      // 错误已在请求层提示
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -255,8 +272,14 @@ export default function MenuManage() {
       dataIndex: 'status',
       align: 'center',
       width: 80,
-      render: (status) =>
-        status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>,
+      render: (status, record) => (
+        <Switch
+          size="small"
+          checked={status === 1}
+          loading={togglingId === record.id}
+          onChange={(checked) => handleToggleStatus(record, checked)}
+        />
+      ),
     },
     {
       key: 'action',
