@@ -11,12 +11,12 @@ import {
 } from '@arco-design/web-react/icon'
 import { useEffect, useMemo, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
-import { formatTime } from 'src/utils/format'
 import {
   hasExpandableMember,
   loadMemberDirectory,
   resolveNodePeople,
 } from 'src/utils/flowMembers'
+import { formatTime } from 'src/utils/format'
 
 /**
  * 审批流程时间线组件：展示流程实例的完整审批流转记录
@@ -38,6 +38,7 @@ const TASK_STATUS_META = {
   3: { label: '已退回', color: 'orangered', icon: IconCloseCircle },
   4: { label: '已转交', color: 'blue', icon: IconRedo },
   5: { label: '已取消', color: 'gray', icon: IconCloseCircle },
+  6: { label: '待处理', color: 'orange', icon: IconClockCircle },
 }
 
 // 实例状态元信息
@@ -151,8 +152,40 @@ function splitNodePeople(nodePeople, nodeTasks) {
     }
   })
 
-  nodeTasks.forEach((task) => {
-    if (usedTaskIds.has(task.id)) return
+  // 转交 / 加签衍生任务（来源人不在流程配置里，前面未被消费）：按来源任务就近插入，
+  // 而不是堆到节点末尾。规则：
+  //   - 转交（delegated_from）：紧跟来源任务之后
+  //   - 后加签（add_sign_type=2，我通过后加签人继续）：紧跟来源任务之后
+  //   - 前加签（add_sign_type=1，加签人先审、通过后我再审批）：插到来源任务之前
+  // 按任务创建顺序处理：同一来源的多次衍生，越新越靠近来源（splice 在 srcIdx+1 处不断顶入）。
+  // 链式衍生（如转交后再加签）在同一轮内即可收敛；来源暂时找不到的下一轮再试。
+  let pending = nodeTasks.filter((task) => !usedTaskIds.has(task.id))
+  let guard = 0
+  while (pending.length && guard++ < 100) {
+    let advanced = false
+    const next = []
+    for (const task of pending) {
+      const srcId = task.delegated_from > 0 ? task.delegated_from : task.add_sign_from
+      const srcIdx = cards.findIndex((c) => c.task && c.task.id === srcId)
+      if (srcIdx < 0) {
+        next.push(task)
+        continue
+      }
+      advanced = true
+      usedTaskIds.add(task.id)
+      const entry = { key: `task-${task.id}`, task, name: null }
+      if (task.delegated_from > 0 || task.add_sign_type === 2) {
+        cards.splice(srcIdx + 1, 0, entry)
+      } else {
+        cards.splice(srcIdx, 0, entry)
+      }
+    }
+    pending = next
+    if (!advanced) break
+  }
+  // 来源永远找不到的兜底（理论上不发生）：追加到末尾
+  pending.forEach((task) => {
+    usedTaskIds.add(task.id)
     cards.push({ key: `task-${task.id}`, task, name: null })
   })
   return { cards, tags: [] }
@@ -225,10 +258,12 @@ export default function ApprovalTimeline({
       if (externalNameMap) {
         if (!cancelled) setUserNameMap(externalNameMap)
       } else {
-        // 收集所有涉及的用户 ID（tasks + 成员引用）
+        // 收集所有涉及的用户 ID（tasks 审批人 + 加签发起人 + 节点成员引用）
         const userIds = new Set()
         ;(data.approval_flow_tasks || []).forEach((t) => {
           if (t.assignee_id) userIds.add(t.assignee_id)
+          // 加签任务的 created_by 是发起加签的人，时间线需要显示「由XX加签」
+          if (t.add_sign_from > 0 && t.created_by) userIds.add(t.created_by)
         })
         if (data.created_by) userIds.add(data.created_by)
         // 从节点 members 中提取人员引用（approverType=3 自选节点注入的 key 格式为 user_{id}）
@@ -418,6 +453,13 @@ export default function ApprovalTimeline({
                                   </span>
                                 )
                               })()}
+                              {task.add_sign_from > 0 && (
+                                <span className="text-purple-500">
+                                  （由{task.created_by
+                                    ? userNameMap[task.created_by] || `用户#${task.created_by}`
+                                    : '他人'}加签）
+                                </span>
+                              )}
                               {task.operated_at && (
                                 <span>{formatTime(task.operated_at)}</span>
                               )}

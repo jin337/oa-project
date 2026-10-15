@@ -764,6 +764,7 @@ func toTaskResults(tasks []model.ApprovalInstanceTask) []model.ApprovalInstanceT
 			DelegatedFrom: t.DelegatedFrom,
 			AddSignFrom:   t.AddSignFrom,
 			AddSignType:   t.AddSignType,
+			CreatedBy:     t.CreatedBy,
 		}
 	}
 	return results
@@ -947,6 +948,10 @@ func buildAssigneeNameMap(tasks []model.ApprovalInstanceTask, creatorID uint) ma
 		// 转交来源任务（delegated_from 存的是来源任务ID，时间线“由XX转交”需要其原审批人姓名）
 		if t.DelegatedFrom > 0 {
 			fromTaskIDs = append(fromTaskIDs, t.DelegatedFrom)
+		}
+		// 加签任务（add_sign_from>0）：CreatedBy 是发起加签的人，时间线“由XX加签”需要其姓名
+		if t.AddSignFrom > 0 && t.CreatedBy > 0 {
+			uidSet[t.CreatedBy] = true
 		}
 	}
 	if len(fromTaskIDs) > 0 {

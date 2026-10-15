@@ -782,6 +782,8 @@ type ApprovalInstanceTaskResult struct {
 	DelegatedFrom uint       `json:"delegated_from"`
 	AddSignFrom   uint       `json:"add_sign_from"`
 	AddSignType   int        `json:"add_sign_type"`
+	// CreatedBy 加签发起人（add_sign_from>0 时记录是谁发起的加签）；普通任务为审批人本人
+	CreatedBy     uint       `json:"created_by"`
 }
 
 // ApprovalInstanceDetailResult 实例详情响应（含任务列表+审批记录）
