@@ -543,8 +543,9 @@ export default function Initiated() {
             <Spin />
           </div>
         ) : editApp ? (
-          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行，两列顶部对齐 */
-          <div className="flex flex-wrap items-start gap-6">
+          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
+             空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
+          <div className="@container flex flex-wrap items-start gap-6">
             <div className="min-w-0 grow shrink basis-140">
               <DynamicForm
                 app={editApp}
@@ -553,7 +554,7 @@ export default function Initiated() {
                 onValuesChange={setFormValues}
               />
             </div>
-            <div className="w-100 max-w-full shrink-0">
+            <div className="w-full shrink-0 @min-[985px]:w-100">
               {/* 审批流只读还原；副本可直接提交，故接上自选节点选人回调（编辑走实例已有的人选，不受影响） */}
               <DynamicFlowView
                 raw={editApp?.approval_flow_json}

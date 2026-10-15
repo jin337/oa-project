@@ -625,8 +625,9 @@ export default function Apply() {
             <Spin />
           </div>
         ) : drawerApp ? (
-          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行，两列顶部对齐 */
-          <div className="flex flex-wrap items-start gap-6">
+          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
+             空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
+          <div className="@container flex flex-wrap items-start gap-6">
             <div className="min-w-0 grow shrink basis-140">
               <DynamicForm
                 app={drawerApp}
@@ -636,7 +637,7 @@ export default function Apply() {
               />
             </div>
             {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
-            <div className="w-100 max-w-full shrink-0">
+            <div className="w-full shrink-0 @min-[985px]:w-100">
               <DynamicFlowView
                 raw={drawerApp?.approval_flow_json}
                 formData={formValues}

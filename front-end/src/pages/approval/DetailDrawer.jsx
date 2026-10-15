@@ -401,8 +401,9 @@ export default function DetailDrawer({
             <Spin />
           </div>
         ) : instance ? (
-          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行，两列顶部对齐 */
-          <div className="flex flex-wrap items-start gap-6">
+          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
+             空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
+          <div className="@container flex flex-wrap items-start gap-6">
             <div className="min-w-0 grow shrink basis-140">
               <DynamicForm
                 app={{ ...appFromInstance, form_layout_json: appFromInstance?.detail_layout_json }}
@@ -413,7 +414,7 @@ export default function DetailDrawer({
                 detailDynamicStates={detailDynamicStates}
               />
             </div>
-            <div className="w-100 max-w-full shrink-0">
+            <div className="w-full shrink-0 @min-[985px]:w-100">
               <ApprovalTimeline
                 instanceId={record?.instance_id}
                 visible={visible}
