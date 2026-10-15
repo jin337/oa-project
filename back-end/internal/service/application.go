@@ -1210,6 +1210,10 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 		if err := alterTableComment(newReal, effectiveName); err != nil {
 			return nil, fmt.Errorf("更新主表注释失败: %w", err)
 		}
+		// 同步元素元数据与布局/详情/流程 JSON 中的旧主表引用，避免提交时按旧 table_key 找不到字段
+		if err := syncTableKeyReferences(app.ID, app.TableName, *req.TableName); err != nil {
+			return nil, fmt.Errorf("同步主表引用失败: %w", err)
+		}
 	}
 
 	// 2. 子表名变化：新增子表建表（带注释），被移除的子表物理删除
@@ -1219,30 +1223,58 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 		oldSet := tableNameSet(oldSubs)
 		newSet := tableNameSet(newSubs)
 
-		// 被移除的子表：DROP TABLE IF EXISTS 物理删除
+		// 被移除的子表 / 新增的子表
+		var removed, added []string
 		for _, s := range oldSubs {
-			if newSet[s] {
-				continue
+			if !newSet[s] {
+				removed = append(removed, s)
 			}
-			if !isValidTableName(s) {
-				return nil, fmt.Errorf("非法的子表名: %q", s)
-			}
-			real := bizTableName(s)
-			if !isValidTableName(real) {
-				return nil, fmt.Errorf("子表名附加前缀后不合法: %q", real)
-			}
-			if err := database.DB.Exec("DROP TABLE IF EXISTS `" + real + "`").Error; err != nil {
-				return nil, fmt.Errorf("删除子表 %s 失败: %w", s, err)
+		}
+		for _, s := range newSubs {
+			if !oldSet[s] {
+				added = append(added, s)
 			}
 		}
 
-		// 新增的子表：CREATE TABLE（带注释）
-		for _, s := range newSubs {
-			if oldSet[s] {
-				continue
+		// 单删单增视为「子表改名」：物理 RENAME + 同步引用，避免丢数据与元素 table_key 失效
+		if len(removed) == 1 && len(added) == 1 {
+			oldName, newName := removed[0], added[1-1]
+			if !isValidTableName(oldName) || !isValidTableName(newName) {
+				return nil, fmt.Errorf("非法的子表名: %q", oldName)
 			}
-			if err := createBizTable(s, true, effectiveName+"子表"); err != nil {
-				return nil, fmt.Errorf("创建子表 %s 失败: %w", s, err)
+			oldReal, newReal := bizTableName(oldName), bizTableName(newName)
+			if !isValidTableName(oldReal) || !isValidTableName(newReal) {
+				return nil, errors.New("子表名附加前缀后不合法")
+			}
+			if err := database.DB.Exec("RENAME TABLE `" + oldReal + "` TO `" + newReal + "`").Error; err != nil {
+				return nil, fmt.Errorf("重命名子表 %s 失败: %w", oldName, err)
+			}
+			if err := alterTableComment(newReal, effectiveName+"子表"); err != nil {
+				return nil, fmt.Errorf("更新子表注释失败: %w", err)
+			}
+			if err := syncTableKeyReferences(app.ID, oldName, newName); err != nil {
+				return nil, fmt.Errorf("同步子表引用失败: %w", err)
+			}
+		} else {
+			// 被移除的子表：DROP TABLE IF EXISTS 物理删除
+			for _, s := range removed {
+				if !isValidTableName(s) {
+					return nil, fmt.Errorf("非法的子表名: %q", s)
+				}
+				real := bizTableName(s)
+				if !isValidTableName(real) {
+					return nil, fmt.Errorf("子表名附加前缀后不合法: %q", real)
+				}
+				if err := database.DB.Exec("DROP TABLE IF EXISTS `" + real + "`").Error; err != nil {
+					return nil, fmt.Errorf("删除子表 %s 失败: %w", s, err)
+				}
+			}
+
+			// 新增的子表：CREATE TABLE（带注释）
+			for _, s := range added {
+				if err := createBizTable(s, true, effectiveName+"子表"); err != nil {
+					return nil, fmt.Errorf("创建子表 %s 失败: %w", s, err)
+				}
 			}
 		}
 	}
@@ -1307,8 +1339,8 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 	if req.ApprovalFlowJSON != nil {
 		app.ApprovalFlowJSON = *req.ApprovalFlowJSON
 	}
-	if req.Status == 0 || req.Status == 1 {
-		app.Status = req.Status
+	if req.Status != nil {
+		app.Status = *req.Status
 	}
 	app.UpdatedBy = curUserID
 	if err := database.DB.Save(&app).Error; err != nil {
@@ -1346,6 +1378,58 @@ func alterTableComment(realTableName, comment string) error {
 	escaped := strings.ReplaceAll(comment, "'", "''")
 	sql := "ALTER TABLE `" + realTableName + "` COMMENT = '" + escaped + "'"
 	return database.DB.Exec(sql).Error
+}
+
+// syncTableKeyReferences 表改名后同步引用：
+//  1. oa_application_elements.table_key：旧 key → 新 key（同一 app 下）
+//  2. 应用配置的 FormLayoutJSON / DetailLayoutJSON / ApprovalFlowJSON 中旧表名字符串 → 新表名
+// 主表与子表改名共用此函数，避免提交时按旧 table_key 找不到字段
+func syncTableKeyReferences(appID uint, oldKey, newKey string) error {
+	if oldKey == "" || newKey == "" || oldKey == newKey {
+		return nil
+	}
+	if !isValidTableName(oldKey) || !isValidTableName(newKey) {
+		return errors.New("非法的表名引用")
+	}
+	if err := database.DB.Model(&model.ApplicationElement{}).
+		Where("app_id = ? AND table_key = ?", appID, oldKey).
+		Update("table_key", newKey).Error; err != nil {
+		return err
+	}
+	var app model.Application
+	if err := database.DB.First(&app, appID).Error; err != nil {
+		return err
+	}
+	// 布局/流程 JSON 为结构化字段：序列化后字符串替换旧表名，再反序列化回写
+	replaceJSON := func(v interface{}) (interface{}, error) {
+		if v == nil {
+			return v, nil
+		}
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		s := strings.ReplaceAll(string(b), oldKey, newKey)
+		var out interface{}
+		if err := json.Unmarshal([]byte(s), &out); err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
+	if v, err := replaceJSON(app.FormLayoutJSON); err == nil && v != nil {
+		if m, ok := v.(map[string]interface{}); ok {
+			app.FormLayoutJSON = m
+		}
+	}
+	if v, err := replaceJSON(app.DetailLayoutJSON); err == nil && v != nil {
+		if m, ok := v.(map[string]interface{}); ok {
+			app.DetailLayoutJSON = m
+		}
+	}
+	if v, err := replaceJSON(app.ApprovalFlowJSON); err == nil && v != nil {
+		app.ApprovalFlowJSON = v
+	}
+	return database.DB.Save(&app).Error
 }
 
 // ApplicationDelete 删除页面配置（软删除），并级联物理删除关联的业务数据表：

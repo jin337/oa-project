@@ -154,8 +154,8 @@ func ExamineGroupUpdate(curUserID, id uint, req *model.ExamineGroupUpdateReq) (*
 	if req.Sort > 0 {
 		group.Sort = req.Sort
 	}
-	if req.Status == 0 || req.Status == 1 {
-		group.Status = req.Status
+	if req.Status != nil {
+		group.Status = *req.Status
 	}
 	group.UpdatedBy = curUserID
 	if err := database.DB.Save(&group).Error; err != nil {

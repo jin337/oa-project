@@ -301,7 +301,7 @@ type RoleUpdateReq struct {
 	Name      string `json:"name" validate:"omitempty,min=2,max=64" label:"角色名称"`
 	Code      string `json:"code" validate:"omitempty,min=2,max=64" label:"角色编码"`
 	Sort      int    `json:"sort" validate:"omitempty" label:"排序"`
-	Status    int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Status    *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	DataScope int    `json:"data_scope" validate:"omitempty,oneof=1 2 3 4 5" label:"数据范围"`
 	Remark    string `json:"remark" validate:"omitempty,max=255" label:"备注"`
 }
@@ -333,7 +333,7 @@ type ExamineGroupUpdateReq struct {
 	Code        string `json:"code" validate:"omitempty,min=1,max=64" label:"编号"`
 	ApproverIDs []uint `json:"approver_ids" validate:"omitempty,dive,gt=0" label:"审核人"`
 	Sort        int    `json:"sort" validate:"omitempty" label:"排序"`
-	Status      int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Status      *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 }
 
 type ExamineGroupListReq struct {
@@ -364,7 +364,7 @@ type MenuUpdateReq struct {
 	LinkApp  string `json:"link_app" validate:"omitempty,max=64" label:"关联应用"`
 	Icon     string `json:"icon" validate:"omitempty,max=64" label:"图标"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
-	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Status   *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	Hidden   int    `json:"hidden" validate:"omitempty,oneof=0 1" label:"是否隐藏"`
 }
 
@@ -381,7 +381,7 @@ type DeptUpdateReq struct {
 	Name     string `json:"name" validate:"omitempty,min=1,max=64" label:"部门名称"`
 	Leader   *uint  `json:"leader" validate:"omitempty" label:"负责人"`
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
-	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Status   *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 }
 
 type DeptListReq struct {
@@ -420,7 +420,7 @@ type ApplicationUpdateReq struct {
 	TableName        *string                 `json:"table_name" validate:"omitempty,max=128" label:"对应表"`
 	BillPrefix       *string                 `json:"bill_prefix" validate:"omitempty,max=32" label:"单号前缀"`
 	SubTableName     *string                 `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
-	Status           int                     `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	Status           *int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	FormLayoutJSON   *map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
 	DetailLayoutJSON *map[string]interface{} `json:"detail_layout_json" validate:"omitempty" label:"详情页布局"`
 	ApprovalFlowJSON *any                    `json:"approval_flow_json" validate:"omitempty" label:"审批流配置"`

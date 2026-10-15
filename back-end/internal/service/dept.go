@@ -227,8 +227,8 @@ func DeptUpdate(curUserID, id uint, req *model.DeptUpdateReq) (*model.Dept, erro
 	if req.Sort > 0 {
 		dept.Sort = req.Sort
 	}
-	if req.Status == 0 || req.Status == 1 {
-		dept.Status = req.Status
+	if req.Status != nil {
+		dept.Status = *req.Status
 	}
 	dept.UpdatedBy = curUserID
 	if err := database.DB.Save(&dept).Error; err != nil {

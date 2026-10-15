@@ -91,8 +91,8 @@ func MenuUpdate(curUserID, id uint, req *model.MenuUpdateReq) (*model.Menu, erro
 	if req.Sort > 0 {
 		menu.Sort = req.Sort
 	}
-	if req.Status == 0 || req.Status == 1 {
-		menu.Status = req.Status
+	if req.Status != nil {
+		menu.Status = *req.Status
 	}
 	if req.Hidden == 0 || req.Hidden == 1 {
 		menu.Hidden = req.Hidden
