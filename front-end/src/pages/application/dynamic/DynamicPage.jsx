@@ -6,7 +6,7 @@ import DynamicForm, { evaluateDynamicStates } from 'src/pages/application/dynami
 import DynamicList from 'src/pages/application/dynamic/DynamicList'
 import { useApplicationData } from 'src/pages/application/dynamic/useApplicationData'
 import { safeSetFieldsValue, useApplicationDetailData } from 'src/pages/application/dynamic/useApplicationDetailData'
-import NotFound from 'src/pages/error/NotFound'
+import NotFound from 'src/error/NotFound'
 import { useAuth } from 'src/store/auth-context'
 
 // 合法页面状态与默认降级状态

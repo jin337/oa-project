@@ -36,7 +36,7 @@ const ExamineManage = lazy(() => import('src/pages/application/ExamineManage.jsx
 const DynamicPage = lazy(() => import('src/pages/application/dynamic/DynamicPage.jsx'))
 
 // 错误页面
-const Forbidden = lazy(() => import('src/pages/error/Forbidden.jsx'))
+const Forbidden = lazy(() => import('src/error/Forbidden.jsx'))
 
 // 审批申请页：分类 + 申请项管理
 const ApprovalApply = lazy(() => import('src/pages/approval/Apply.jsx'))
