@@ -379,6 +379,12 @@ export default function DetailDrawer({
           {showApproveButtons && (
             <Space>
               <Button
+                size="small"
+                onClick={onCancel}
+              >
+                关闭
+              </Button>
+              <Button
                 status="danger"
                 size="small"
                 loading={operating}
