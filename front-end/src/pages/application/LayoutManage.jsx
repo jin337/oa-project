@@ -494,6 +494,7 @@ export default function LayoutManage() {
           <div className="w-60 text-sm font-medium text-gray-800">预览画布</div>
           {/* 表单页 / 详情页切换 */}
           <Radio.Group
+            className="whitespace-nowrap"
             type="button"
             size="mini"
             value={activePage}
