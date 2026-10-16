@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
 import { Button, Drawer, Input, Radio, Select } from '@arco-design/web-react'
 import { IconClose, IconPlus } from '@arco-design/web-react/icon'
+import { useMemo, useState } from 'react'
 import { OPERATOR_OPTIONS, RELATION_OPTIONS } from 'src/pages/application/constants'
 
 /**
@@ -46,12 +46,21 @@ export function ConditionEditDrawer({
   const updateRule = (index, key, v) =>
     setRules(rules.map((r, i) => (i === index ? { ...r, [key]: v } : r)))
 
+  // 子表聚合方式：row-单行（默认）/ sum-列合计 / avg-平均值
+  const AGG_OPTIONS = [
+    { value: 'row', label: '单行' },
+    { value: 'sum', label: '列合计' },
+    { value: 'avg', label: '平均值' },
+  ]
+
   // 字段选择：同步更新 field 与对应 table_key（选中字段后自动带入其所属表）
   const updateRuleField = (index, fieldKey) => {
     const f = formFields.find((x) => x.field_key === fieldKey)
     setRules(
       rules.map((r, i) =>
-        i === index ? { ...r, field: fieldKey, table_key: f?.table_key || '' } : r,
+        i === index
+          ? { ...r, field: fieldKey, table_key: f?.table_key || '', agg: 'row' }
+          : r,
       ),
     )
   }
@@ -79,7 +88,7 @@ export function ConditionEditDrawer({
 
   return (
     <Drawer
-      width={600}
+      width={"50%"}
       title={`编辑条件 - ${branch.isDefault ? '默认分支' : branch.label}`}
       visible
       onCancel={onCancel}
@@ -113,10 +122,12 @@ export function ConditionEditDrawer({
             </div>
           ) : (
             <>
-              {rules.map((r, i) => (
+              {rules.map((r, i) => {
+                const isSubTable = Boolean(r.table_key) && r.table_key !== mainTable
+                return (
                 <div key={i} className="mb-2 flex items-center gap-2">
                   <Select
-                    style={{ width: 160 }}
+                    style={{ flex: 1 }}
                     value={r.field}
                     placeholder="选择字段"
                     onChange={(v) => updateRuleField(i, v)}
@@ -125,14 +136,27 @@ export function ConditionEditDrawer({
                       <Select.OptGroup key={g.tableKey || 'other'} label={groupLabel(g.tableKey)}>
                         {g.fields.map((f) => (
                           <Select.Option key={f.field_key} value={f.field_key}>
-                            {f.label || f.field_key}
+                            {f.label}（{f.field_key}）
                           </Select.Option>
                         ))}
                       </Select.OptGroup>
                     ))}
                   </Select>
+                  {isSubTable && (
+                    <Select
+                      style={{ width: 110 }}
+                      value={r.agg || 'row'}
+                      onChange={(v) => updateRule(i, 'agg', v)}
+                    >
+                      {AGG_OPTIONS.map((o) => (
+                        <Select.Option key={o.value} value={o.value}>
+                          {o.label}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  )}
                   <Select
-                    style={{ width: 110 }}
+                    style={{ width: 100 }}
                     value={r.operator}
                     onChange={(v) => updateRule(i, 'operator', v)}
                   >
@@ -153,14 +177,15 @@ export function ConditionEditDrawer({
                     onClick={() => setRules(rules.filter((_, x) => x !== i))}
                   />
                 </div>
-              ))}
+                )
+              })}
               <Button
                 size="small"
                 icon={<IconPlus />}
                 onClick={() =>
                   setRules([
                     ...rules,
-                    { field: defaultField, table_key: defaultTable, operator: 3, value: '' }, // 3-等于
+                    { field: defaultField, table_key: defaultTable, operator: 3, value: '', agg: 'row' }, // 3-等于
                   ])
                 }
               >

@@ -2,6 +2,7 @@ import {
   Button,
   Form,
   Input,
+  InputNumber,
   Select,
   Switch,
   Table,
@@ -11,12 +12,12 @@ import { IconDelete, IconPlus } from '@arco-design/web-react/icon'
 import { useCallback, useContext, useEffect, useMemo } from 'react'
 import { useAuth } from 'src/store/auth-context'
 
+import { evalDynamicExpr } from '../utils/evalExpression'
 import {
   buildValidationRules,
   extractFormDeps,
   parseDefaultValue,
 } from '../utils/formUtils'
-import { evalDynamicExpr } from '../utils/evalExpression'
 import { RuntimeFormContext } from './runtimeContext'
 
 /**
@@ -210,6 +211,8 @@ export const TableElementField = ({
                 </>
               ) || `列${i + 1}`,
             dataIndex: colKey,
+            align: col.align || undefined,
+            width: col.width || undefined,
             // 按列配置的 element_type 从 renderPreviewConfig 映射渲染表单控件；
             // 行内控件由 FormItem 绑定嵌套字段路径（table_key[index].colKey）自动注入 value/onChange/disabled；
             // 注意：field 必须为单层字符串路径（Arco Form.List 的 getItemKey 会对 field 调用字符串 replace，
@@ -411,7 +414,10 @@ export const TableElementField = ({
                         ...columns.map((col) => (
                           <SummaryCell
                             key={col.dataIndex || col.field_key || col.key || 'col'}
-                            style={cellStyle}
+                            style={{
+                              ...cellStyle,
+                              textAlign: col.align || 'center',
+                            }}
                           >
                             {values[col.dataIndex ?? col.field_key] ?? ''}
                           </SummaryCell>
@@ -473,27 +479,69 @@ export const renderTableSettings = ({
       options={appTables.subTables.map((tb) => ({ label: tb, value: tb }))}
     />
     <div className="text-sm text-gray-600">列配置</div>
-    {(selectedElement.columns || []).map((col, idx) => (
-      <div key={col.id || `col_${idx}`} className="flex items-center justify-between gap-1">
-        <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
+    <div>
+      {(selectedElement.columns || []).map((col, idx) => (
+      <div key={col.id || `col_${idx}`} className="mb-2 rounded border border-gray-200 p-2">
+        <div className="mb-1 flex items-center justify-between">
+          <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
+          <Button
+            size="mini"
+            status="danger"
+            icon={<IconDelete />}
+            onClick={() => removeColumn(updateSelectedElementColumns, col.id)}
+          />
+        </div>
         <Select
+          className="mb-1 w-full"
           placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
           value={col.dataIndex || undefined}
           disabled={!selectedElement.table_key}
           loading={Boolean(fieldLoadingKeys[selectedElement.table_key])}
-          options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => ({
-            label: f.label || f.name || f.field_key,
-            value: f.field_key || f.name || String(f.id),
-          }))}
+          options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => {
+            const fk = f.field_key || f.name || String(f.id)
+            return {
+              label: `${f.label || f.name || f.field_key}（${fk}）`,
+              value: fk,
+            }
+          })}
           onChange={(v) => handleColumnFieldChange(col.id, selectedElement.table_key, v)}
         />
-        <Button
-          status="danger"
-          icon={<IconDelete />}
-          onClick={() => removeColumn(updateSelectedElementColumns, col.id)}
-        />
+        <div className="flex items-center gap-2">
+          <Select
+            className="flex-1"
+            size="mini"
+            value={col.align || undefined}
+            placeholder="对齐"
+            options={[
+              { label: '左对齐', value: 'left' },
+              { label: '居中', value: 'center' },
+              { label: '右对齐', value: 'right' },
+            ]}
+            onChange={(v) =>
+              updateSelectedElementColumns(
+                (cols) =>
+                  cols.map((c, i) => (i === idx ? { ...c, align: v } : c)),
+              )
+            }
+          />
+          <InputNumber
+            className="flex-1"
+            size="mini"
+            min={40}
+            max={600}
+            placeholder="列宽"
+            value={col.width || undefined}
+            onChange={(v) =>
+              updateSelectedElementColumns(
+                (cols) =>
+                  cols.map((c, i) => (i === idx ? { ...c, width: v || undefined } : c)),
+              )
+            }
+          />
+        </div>
       </div>
     ))}
+    </div>
     <Button
       icon={<IconPlus />}
       disabled={!selectedElement.table_key}
@@ -501,13 +549,17 @@ export const renderTableSettings = ({
     >
       添加列
     </Button>
-    <div className="flex justify-between">
-      <div className="text-sm text-gray-600">开启合计</div>
-      <Switch
-        checked={Boolean(selectedElement.showSummary)}
-        onChange={(v) => updateSelectedElement({ showSummary: v })}
-      />
-    </div>
+    {(selectedElement.columns || []).some(
+      (c) => (c.dataIndex || c.field_key) && c.element_type === 'number',
+    ) && (
+      <div className="flex justify-between">
+        <div className="text-sm text-gray-600">开启合计</div>
+        <Switch
+          checked={Boolean(selectedElement.showSummary)}
+          onChange={(v) => updateSelectedElement({ showSummary: v })}
+        />
+      </div>
+    )}
     {selectedElement.showSummary && (
       <>
         <div className="text-sm text-gray-600">列合计配置</div>
@@ -517,11 +569,14 @@ export const renderTableSettings = ({
               placeholder="选择参与合计的表格列"
               value={rule.colKey || undefined}
               options={(selectedElement.columns || [])
-                .filter((c) => c.dataIndex || c.field_key)
-                .map((c) => ({
-                  label: c.title || c.dataIndex || c.field_key,
-                  value: c.dataIndex || c.field_key,
-                }))}
+                .filter((c) => (c.dataIndex || c.field_key) && c.element_type === 'number')
+                .map((c) => {
+                  const fk = c.dataIndex || c.field_key
+                  return {
+                    label: `${c.title || fk}（${fk}）`,
+                    value: fk,
+                  }
+                })}
               onChange={(v) =>
                 updateSelectedElement({
                   summaryRules: (selectedElement.summaryRules || []).map((r, i) =>

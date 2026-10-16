@@ -26,18 +26,33 @@ import { RuntimeFormContext } from '../DynamicForm'
 
 /** 将受控值归一为文件数组（真实存储可能是 JSON 字符串 / 数组 / 单个对象） */
 function normalizeValue(val) {
-  if (!val) return []
+  if (val == null || val === '') return []
+  // 数据库里可能是 JSON 字符串：'[{...}]' 或 '{...}'
+  if (typeof val === 'string') {
+    const s = val.trim()
+    if (s.startsWith('[') || s.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(s)
+        return normalizeValue(parsed)
+      } catch (e) {
+        // 不是合法 JSON，按普通字符串路径处理
+      }
+    }
+    return [normalizeOne(val)]
+  }
   if (Array.isArray(val)) return val.map(normalizeOne)
   return [normalizeOne(val)]
 }
 
-/** 单个文件对象归一：兼容 {name,url,uid} 与 {filename,path} 两种形态 */
-function normalizeOne(item) {
-  if (typeof item === 'string') return { name: item, url: item }
+/** 单个文件对象归一：兼容 {name,url,uid,size} 与 {filename,path} 两种形态，缺省补 uid */
+function normalizeOne(item, i) {
+  if (item == null) return { name: '', url: '', uid: `f_${i}_${Date.now()}` }
+  if (typeof item === 'string') return { name: item, url: item, uid: `f_${i}_${Date.now()}` }
   return {
     name: item.name || item.filename || '文件',
     url: item.url || item.path || '',
-    uid: item.uid || '',
+    uid: item.uid || item.uid === 0 ? item.uid : `f_${i}_${item.url || item.name || Math.random().toString(36).slice(2)}`,
+    size: item.size || 0,
   }
 }
 
@@ -48,11 +63,13 @@ export function UploadElement({ el, pageType, value, onChange }) {
   const fileList = normalizeValue(value)
   const rt = useContext(RuntimeFormContext)
 
-  // detail：只读展示
-  if (pageType === 'detail') {
+  // move-detail（画布详情预览）：只读展示
+  if (pageType === 'move-detail') {
     return <UploadReadOnly value={fileList} el={el} />
   }
 
+  // detail：审批待办 perm=2 时由上游直接走本渲染入口（否则统一拦截为 ReadonlyValue），
+  // 这里渲染可交互上传控件；form / detail 可编辑共用下方 Upload
   // form / move-form：可交互上传
   const token = localStorage.getItem('rbac_token') || ''
   const appCode = rt?.appCode || 'common'
@@ -97,7 +114,7 @@ export function UploadElement({ el, pageType, value, onChange }) {
       headers={{ Authorization: `Bearer ${token}` }}
       data={{ app_code: appCode }}
       tip={renderTip()}
-      defaultFileList={fileList}
+      fileList={fileList}
       onChange={handleChange}
       multiple={el?.multiple !== false}
       accept={el?.accept || undefined}

@@ -59,6 +59,7 @@ type flowRule struct {
 	TableKey string `json:"table_key"` // 关联物理表（子表字段时有值）
 	Operator int    `json:"operator"`  // 1-大于 2-小于 3-等于 4-不等于 5-包含 6-不包含
 	Value    string `json:"value"`     // 条件值
+	Agg      string `json:"agg"`       // 子表聚合方式：row-单行(默认) / sum-列合计 / avg-平均值；主表字段忽略
 }
 
 // parseFlowNodes 解析 approval_flow_json 为节点数组（兼容 JSON 字符串与已解析结构）
@@ -157,6 +158,10 @@ func injectSelfSelectIntoNodes(nodes []flowNode, selfSelectMembers map[string][]
 // ============================================================
 
 // resolveFieldValue 获取规则字段在表单数据中的实际值（与前端 resolveFieldValue 一致）
+// 子表字段按 rule.Agg 聚合：
+//   - row（默认）：返回该字段全部非空行值组成的切片，由 evaluateRule 按"任一行命中"判定
+//   - sum：返回数值列合计
+//   - avg：返回数值列平均值
 func resolveFieldValue(rule flowRule, formData map[string]interface{}) interface{} {
 	if formData == nil {
 		return nil
@@ -165,31 +170,39 @@ func resolveFieldValue(rule flowRule, formData map[string]interface{}) interface
 	if tk != "" {
 		if tableData, ok := formData[tk]; ok {
 			if rows, ok := tableData.([]interface{}); ok && len(rows) > 0 {
-				// 子表字段：多行按合计（数值）或首行值参与判断
-				var values []interface{}
+				var nums []float64
+				var raw []interface{}
 				for _, row := range rows {
 					if rowMap, ok := row.(map[string]interface{}); ok {
 						if v, exists := rowMap[rule.Field]; exists && v != nil && v != "" {
-							values = append(values, v)
+							raw = append(raw, v)
+							if n, ok := toFloat64(v); ok {
+								nums = append(nums, n)
+							}
 						}
 					}
 				}
-				if len(values) > 0 {
-					// 尝试数值合计
-					sum := float64(0)
-					allNum := true
-					for _, v := range values {
-						if n, ok := toFloat64(v); ok {
+				switch rule.Agg {
+				case "sum":
+					if len(nums) > 0 {
+						sum := float64(0)
+						for _, n := range nums {
 							sum += n
-						} else {
-							allNum = false
-							break
 						}
-					}
-					if allNum {
 						return sum
 					}
-					return values
+					return raw
+				case "avg":
+					if len(nums) > 0 {
+						sum := float64(0)
+						for _, n := range nums {
+							sum += n
+						}
+						return sum / float64(len(nums))
+					}
+					return raw
+				default: // row 或空：返回全部行值，由 evaluateRule 任一行命中
+					return raw
 				}
 			}
 		}
@@ -260,25 +273,17 @@ func compareEqual(a, b interface{}) bool {
 	return sa == sb
 }
 
-// evaluateRule 单条规则评估（operator: 1-大于 2-小于 3-等于 4-不等于 5-包含 6-不包含）
-func evaluateRule(rule flowRule, formData map[string]interface{}) bool {
-	actual := resolveFieldValue(rule, formData)
-	cond := rule.Value
-	switch rule.Operator {
+// matchScalar 单值按 operator 比较（operator: 1-大于 2-小于 3-等于 4-不等于 5-包含 6-不包含）
+func matchScalar(actual, cond interface{}, op int) bool {
+	switch op {
 	case 1: // 大于
 		na, oka := toFloat64(actual)
 		nc, okc := toFloat64(cond)
-		if oka && okc {
-			return na > nc
-		}
-		return false
+		return oka && okc && na > nc
 	case 2: // 小于
 		na, oka := toFloat64(actual)
 		nc, okc := toFloat64(cond)
-		if oka && okc {
-			return na < nc
-		}
-		return false
+		return oka && okc && na < nc
 	case 3: // 等于
 		return compareEqual(actual, cond)
 	case 4: // 不等于
@@ -287,9 +292,24 @@ func evaluateRule(rule flowRule, formData map[string]interface{}) bool {
 		return strings.Contains(toStr(actual), toStr(cond))
 	case 6: // 不包含
 		return !strings.Contains(toStr(actual), toStr(cond))
-	default:
+	}
+	return false
+}
+
+// evaluateRule 单条规则评估。子表 row 模式下 actual 为多值切片：任一行命中即满足。
+func evaluateRule(rule flowRule, formData map[string]interface{}) bool {
+	actual := resolveFieldValue(rule, formData)
+	cond := rule.Value
+	// 子表「单行」模式：任一非空行满足条件即命中
+	if arr, ok := actual.([]interface{}); ok && len(arr) > 0 {
+		for _, v := range arr {
+			if matchScalar(v, cond, rule.Operator) {
+				return true
+			}
+		}
 		return false
 	}
+	return matchScalar(actual, cond, rule.Operator)
 }
 
 // evaluateBranch 分支命中评估：无条件（默认）分支视为命中；

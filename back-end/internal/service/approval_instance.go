@@ -739,7 +739,16 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	assigneeNameMap := buildAssigneeNameMap(tasks, instance.CreatedBy)
 
 	// 当前执行节点的表单字段权限（审批详情页按权限隐藏/可编辑字段）
+	// 优先使用应用最新流程配置中的节点权限（ExamineManage 修改后即时生效），
+	// 最新流程不可用时回退到实例冻结快照，保证历史实例仍能正常打开
 	fieldPerms := currentNodeFieldPerms(instance)
+	if latestNodes, err := parseFlowNodes(latestFlowJSON); err == nil && len(latestNodes) > 0 {
+		if pathNodeIDs := instance.ExecutionPath; instance.CurrentNodeIdx >= 0 && instance.CurrentNodeIdx < len(pathNodeIDs) {
+			if node := findNodeByID(latestNodes, pathNodeIDs[instance.CurrentNodeIdx]); node != nil {
+				fieldPerms = node.FieldPerms
+			}
+		}
+	}
 
 	result := &model.ApprovalInstanceDetailResult{
 		ApprovalInstance: instance,

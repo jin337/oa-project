@@ -58,7 +58,8 @@ const compareEqual = (a, b) => {
 
 /**
  * 获取规则字段在表单数据中的实际值：
- * - 子表字段（rule.table_key 对应 formData 中为数组）按子表逻辑取值
+ * - 子表字段（rule.table_key 对应 formData 中为数组）按 rule.agg 聚合：
+ *   row（默认）返回全部非空行值数组，由 evaluateRule 任一行命中；sum 合计；avg 平均
  * - 主表字段（无 table_key 或 table_key 对应数据非数组）直接取 formData[field]
  */
 const resolveFieldValue = (rule, formData) => {
@@ -66,25 +67,45 @@ const resolveFieldValue = (rule, formData) => {
   const tk = rule.table_key
   if (tk) {
     const tableData = formData[tk]
-    // 子表字段：table_key 对应数据为数组（如 cgsq_detail: [...]）
     if (Array.isArray(tableData) && tableData.length) {
       const values = tableData
         .map((row) => row[rule.field])
         .filter((v) => v !== undefined && v !== null && v !== '')
-      if (values.length) {
-        // 数值字段：子表多行按合计参与条件判断（如明细金额合计 > 阈值）
-        const nums = values.map(Number)
-        if (nums.every((n) => !Number.isNaN(n))) {
-          return nums.reduce((a, b) => a + b, 0)
-        }
-        // 非数值字段（如状态/文本）：取首行值
-        return values[0]
+      if (!values.length) return undefined
+      const nums = values.map(Number)
+      const allNum = nums.every((n) => !Number.isNaN(n))
+      switch (rule.agg) {
+        case 'sum':
+          return allNum ? nums.reduce((a, b) => a + b, 0) : values
+        case 'avg':
+          return allNum ? nums.reduce((a, b) => a + b, 0) / nums.length : values
+        default: // row
+          return values
       }
     }
-    // 主表字段：table_key 对应数据非数组（formData 平铺主表字段），直接按字段名取值
     return formData[rule.field]
   }
   return formData[rule.field]
+}
+
+/** 单值按 operator 比较 */
+const matchScalar = (actual, cond, op) => {
+  switch (op) {
+    case OP_GREATER:
+      return Number(actual) > Number(cond)
+    case OP_LESS:
+      return Number(actual) < Number(cond)
+    case OP_EQUAL:
+      return compareEqual(actual, cond)
+    case OP_NOT_EQUAL:
+      return !compareEqual(actual, cond)
+    case OP_CONTAINS:
+      return String(actual ?? '').includes(String(cond ?? ''))
+    case OP_NOT_CONTAINS:
+      return !String(actual ?? '').includes(String(cond ?? ''))
+    default:
+      return false
+  }
 }
 
 /** 单条规则评估：operator 为数字枚举（1-大于 / 2-小于 / 3-等于 / 4-不等于 / 5-包含 / 6-不包含） */
@@ -92,22 +113,11 @@ const evaluateRule = (rule, formData) => {
   if (!rule) return false
   const actual = resolveFieldValue(rule, formData)
   const cond = rule.value
-  switch (rule.operator) {
-    case OP_GREATER: // 1-大于
-      return Number(actual) > Number(cond)
-    case OP_LESS: // 2-小于
-      return Number(actual) < Number(cond)
-    case OP_EQUAL: // 3-等于
-      return compareEqual(actual, cond)
-    case OP_NOT_EQUAL: // 4-不等于
-      return !compareEqual(actual, cond)
-    case OP_CONTAINS: // 5-包含
-      return String(actual ?? '').includes(String(cond ?? ''))
-    case OP_NOT_CONTAINS: // 6-不包含
-      return !String(actual ?? '').includes(String(cond ?? ''))
-    default:
-      return false
+  // 子表「单行」模式：任一行命中即满足
+  if (Array.isArray(actual)) {
+    return actual.some((v) => matchScalar(v, cond, rule.operator))
   }
+  return matchScalar(actual, cond, rule.operator)
 }
 
 /**

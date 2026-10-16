@@ -208,12 +208,13 @@ export function UserSelect({ el, pageType, rt, value, onChange, disabled }) {
     return <Input.Search placeholder={el.placeholder || undefined} searchButton="选择" disabled />
   }
 
-  // detail 只读：展示已选人员名
-  if (pageType === 'detail') {
+  // move-detail（画布详情预览）：纯文本回显
+  if (pageType === 'move-detail') {
     return <UserReadOnly value={value} el={el} rt={rt} pageType={pageType} />
   }
 
-  // form / 可编辑：弹窗单选
+  // detail：审批待办 perm=2 时由上游直接走本渲染入口，渲染可交互选择控件
+  // form / detail 可编辑：弹窗单选
   return (
     <UserPicker
       value={value}

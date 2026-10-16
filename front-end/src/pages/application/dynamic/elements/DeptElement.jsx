@@ -226,12 +226,14 @@ export function DeptSelect({ el, pageType, rt, value, onChange, disabled }) {
     )
   }
 
-  // detail 只读：展示已选部门名
-  if (pageType === 'detail') {
+  // move-detail（画布详情预览）：纯文本回显
+  if (pageType === 'move-detail') {
     return <DeptReadOnly value={value} el={el} rt={rt} />
   }
 
-  // form / 可编辑：弹窗单选
+  // detail：审批待办 perm=2 时由上游 renderFormItemElement 直接走本渲染入口（否则会统一拦截为 ReadonlyValue），
+  // 这里渲染可交互选择控件；FormItem 注入的 disabled 由全局 Form 上下文控制
+  // form / detail 可编辑：弹窗单选
   return (
     <DeptPicker
       value={value}
