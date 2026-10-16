@@ -78,6 +78,15 @@ const ALL_COL_KEYS = [
   'approval_status',
 ]
 
+// 撤回时间窗：提交后 30 分钟内可撤回（与后端 ApprovalInstanceWithdraw 校验一致）
+const WITHDRAW_WINDOW_MS = 30 * 60 * 1000
+function isWithinWithdrawWindow(record) {
+  if (!record?.created_at) return true
+  const t = new Date(record.created_at).getTime()
+  if (Number.isNaN(t)) return true
+  return Date.now() - t <= WITHDRAW_WINDOW_MS
+}
+
 /** 我的发起：展示当前用户发起的所有审批记录（排除草稿），支持查看详情、作废、撤回、已驳回/已撤回编辑 */
 export default function Initiated() {
   const {
@@ -102,6 +111,31 @@ export default function Initiated() {
     sizeMenu,
   } = useApprovalList('initiated', { title: PAGE_TITLE, colKeys: ALL_COL_KEYS })
 
+  // 将草稿暂存的自选成员（nodeId -> [{ type, key, label }]）注入审批流节点 members，供 DynamicFlowView 展示已选人
+  const injectDraftMembers = (flowSnapshot, membersMap) => {
+    let nodes = flowSnapshot
+    if (typeof flowSnapshot === 'string' && flowSnapshot) {
+      try {
+        nodes = JSON.parse(flowSnapshot)
+      } catch {
+        return flowSnapshot
+      }
+    }
+    if (!Array.isArray(nodes)) return flowSnapshot
+    const walk = (list) =>
+      (list || []).map((n) => {
+        const node = { ...n }
+        if (membersMap[node.id]) {
+          node.members = [...membersMap[node.id]]
+        }
+        if (n.type === 4 && Array.isArray(n.branches)) {
+          node.branches = n.branches.map((b) => ({ ...b, children: walk(b && b.children) }))
+        }
+        return node
+      })
+    return walk(nodes)
+  }
+
   // 已驳回编辑 Drawer（仿草稿箱编辑）：打开完整动态表单 + 审批流，底部"重新提交"
   const [editVisible, setEditVisible] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
@@ -125,22 +159,38 @@ export default function Initiated() {
     setSelfSelectReady(true)
   }
 
-  // 打开已驳回编辑 Drawer：加载实例详情回填动态表单（参考草稿箱 openDraftEdit）
+  // 打开已驳回/已撤回编辑 Drawer：加载实例详情回填动态表单，
+  // 并从 approval_draft_members 恢复发起人自选审批人/抄送人（已撤回后由后端回写），
+  // 避免抽屉打开即丢失已选人员、保存时被清空。
   const openRejectedEdit = async (record) => {
     setCopyMode(false)
     setEditRecord(record)
     setEditVisible(true)
     setEditLoading(true)
     setEditApp(null)
+    setSelfSelectMembers({})
+    setSelfSelectReady(true)
     editForm.resetFields()
     try {
       const res = await approvalApi.getApprovalInstanceDetail(record.instance_id || record.id)
       const inst = res.data
+      // 从草稿暂存恢复自选成员：nodeId -> [userId] -> nodeId -> [{type,key,label}]
+      const draftMembers = inst.approval_draft_members || {}
+      const nameMap = inst.assignee_name_map || {}
+      const selfSel = {}
+      Object.entries(draftMembers).forEach(([nodeId, ids]) => {
+        selfSel[nodeId] = (Array.isArray(ids) ? ids : []).map((uid) => ({
+          type: 1,
+          key: `user_${uid}`,
+          label: nameMap[String(uid)] || `用户${uid}`,
+        }))
+      })
+      setSelfSelectMembers(selfSel)
       setEditApp({
         id: inst.app_id,
         name: inst.app_name,
         form_layout_json: inst.form_layout_json,
-        approval_flow_json: inst.approval_flow_json,
+        approval_flow_json: injectDraftMembers(inst.approval_flow_json, selfSel),
       })
       const bizData = inst.business_data || {}
       editForm.setFieldsValue(bizData)
@@ -323,8 +373,12 @@ export default function Initiated() {
     }
   }
 
-  // 已撤回编辑：直接提交审核（后端支持从「已撤回」提交）
+  // 已撤回编辑：直接提交审核（一步完成，不再先调 /draft 落库）
   const handleSubmitWithdrawn = async () => {
+    if (!selfSelectReady) {
+      Message.error('请先为自选的审批人/抄送人节点选择人员后再提交')
+      return
+    }
     let values
     try {
       values = await editForm.validate()
@@ -336,21 +390,13 @@ export default function Initiated() {
       const layout = parseLayoutJson(editApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
       const instanceId = editRecord.instance_id || editRecord.id
-      // 抽屉内本次选择/调整的自选审批人、抄送人需随保存与提交一起带上：
-      // 后端提交时优先用请求传入的成员，未带则回退实例上的暂存值（可能是旧的或为空）
       const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
-      const draftMembersPayload = Object.keys(selfSelectUserIDs).length
-        ? { approval_draft_members: selfSelectUserIDs }
-        : undefined
-      // 先保存表单改动，再从草稿提交，保证提交的是最新内容
-      await approvalApi.saveDraftInstance({
-        instance_id: instanceId,
-        app_id: editApp.id,
-        business_data_id: editRecord.data_id ?? editRecord.id,
+      await approvalApi.submitDraftInstance(instanceId, {
         business_data: payload,
-        ...(draftMembersPayload || {}),
+        ...(Object.keys(selfSelectUserIDs).length
+          ? { approval_draft_members: selfSelectUserIDs }
+          : {}),
       })
-      await approvalApi.submitDraftInstance(instanceId, draftMembersPayload)
       Message.success('已重新提交')
       setEditVisible(false)
       fetchList()
@@ -419,8 +465,8 @@ export default function Initiated() {
           <Button type="text" size="small" onClick={() => openDetail(r)}>
             详情
           </Button>
-          {/* 撤回：进行中即可（已有审批痕迹时也允许，落为「已撤回」保留在我发起） */}
-          {r.can_withdraw && (
+          {/* 撤回：进行中且提交后 30 分钟内可撤回（与后端 Withdraw 时间窗一致） */}
+          {r.can_withdraw && isWithinWithdrawWindow(r) && (
             <Popconfirm
               position="lb"
               title="撤回后该申请将标记为已撤回，可继续编辑或重新提交，确定撤回？"

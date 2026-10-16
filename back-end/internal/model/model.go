@@ -738,6 +738,7 @@ type ApprovalInstanceCreateReq struct {
 // 允许覆盖草稿暂存的发起人自选审批人；其余配置（流程快照/表单数据/执行路径）在提交时重新评估
 type ApprovalInstanceSubmitDraftReq struct {
 	ApprovalDraftMembers map[string][]uint `json:"approval_draft_members" validate:"omitempty" label:"发起人自选审批人"` // nodeId -> 用户ID列表，覆盖草稿暂存值
+	BusinessData         map[string]interface{} `json:"business_data" validate:"omitempty" label:"业务数据"` // 发起人在编辑抽屉中修改后的表单数据，可选
 }
 
 // ApprovalInstanceResubmitReq 已驳回实例重新提交请求（发起人修改表单数据后从驳回节点继续审批）

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"back-end/internal/database"
 	"back-end/internal/model"
@@ -448,6 +449,13 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		selfSelectMembers = req.ApprovalDraftMembers
 	}
 
+	// 2.5 同步编辑抽屉中修改的表单数据（一步提交，不再先调 /draft 落库）
+	if len(req.BusinessData) > 0 {
+		if err := ApplicationDataUpdateWithDB(database.DB, instance.AppID, instance.BusinessDataID, curUserID, req.BusinessData); err != nil {
+			return nil, fmt.Errorf("更新业务数据失败: %w", err)
+		}
+	}
+
 	// 3. 准备流程上下文（重新评估执行路径）
 	ctx, err := prepareApprovalContext(instance.AppID, instance.BusinessDataID, selfSelectMembers)
 	if err != nil {
@@ -480,6 +488,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 				"current_node_idx":         0,
 				"status":                   model.InstanceStatusRunning,
 				"approval_draft_members":   nil, // 草稿暂存提交后清空（成员已注入快照；撤回时由 Withdraw 写回）
+				"created_at":               time.Now(), // 重新提交时刷新申请时间，撤回 30 分钟窗口随之重新起算
 				"updated_by":               curUserID,
 			})
 		if res.Error != nil {
@@ -611,6 +620,10 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "撤回", model.InstanceStatusRunning)
 		if err != nil {
 			return err
+		}
+		// 撤回时间窗口：提交后 30 分钟内允许撤回，超过不允许
+		if instance.CreatedAt.Add(30 * time.Minute).Before(time.Now()) {
+			return errors.New("提交已超过 30 分钟，不允许撤回")
 		}
 		// 1. 删除当前实例的全部审批任务（对齐钉钉：撤回=整条流程重来，
 		// 重新提交时从首节点全新生成任务，当前流程视图不再堆叠历史"已取消"任务）
