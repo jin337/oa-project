@@ -565,7 +565,7 @@ export default function LayoutManage() {
       </div>
 
       {/* ========== 右侧：属性配置面板（Tabs 作为顶部导航） ========== */}
-      <div className="flex w-83 shrink-0 flex-col overflow-hidden">
+      <div className="flex w-100 shrink-0 flex-col overflow-hidden">
         <Tabs
           activeTab={panelKey}
           onChange={setActivePanel}
@@ -611,26 +611,32 @@ export default function LayoutManage() {
                 <div>· 垂直布局：标签显示在控件上方</div>
                 <div>· 水平布局：标签显示在控件左侧，可调整标签宽度与对齐</div>
               </div>
-              <div>
-                <div className="mb-2 text-sm text-gray-600">表单提交前事件</div>
-                <JsEditor
-                  value={formConfig.onSubmitBefore || ''}
-                  onChange={(v) => updateFormConfig({ onSubmitBefore: v })}
-                  placeholder={'// 提交前执行的 JS，可 return false 阻止提交\n// (form) => { ... }'}
-                  minRows={6}
-                  maxRows={12}
-                />
-              </div>
-              <div>
-                <div className="mb-2 text-sm text-gray-600">表单提交后事件</div>
-                <JsEditor
-                  value={formConfig.onSubmitAfter || ''}
-                  onChange={(v) => updateFormConfig({ onSubmitAfter: v })}
-                  placeholder={'// 提交成功后执行的 JS\n// (form, result) => { ... }'}
-                  minRows={6}
-                  maxRows={12}
-                />
-              </div>
+              {activePage === 'form' && (
+                <>
+                  <div>
+                    <div className="mb-2 text-sm text-gray-600">表单提交前事件</div>
+                    <JsEditor
+                      value={formConfig.onSubmitBefore || ''}
+                      onChange={(v) => updateFormConfig({ onSubmitBefore: v })}
+                      placeholder={
+                        '// 提交前执行的 JS，可 return false 阻止提交\n// (form) => { ... }'
+                      }
+                      minRows={6}
+                      maxRows={12}
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-2 text-sm text-gray-600">表单提交后事件</div>
+                    <JsEditor
+                      value={formConfig.onSubmitAfter || ''}
+                      onChange={(v) => updateFormConfig({ onSubmitAfter: v })}
+                      placeholder={'// 提交成功后执行的 JS\n// (form, result) => { ... }'}
+                      minRows={6}
+                      maxRows={12}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </TabPane>
 
