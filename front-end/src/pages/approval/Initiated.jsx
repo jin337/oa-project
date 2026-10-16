@@ -253,7 +253,9 @@ export default function Initiated() {
       await approvalApi.saveDraftInstance({
         app_id: editApp.id,
         business_data: payload,
-        approval_draft_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+        approval_draft_members: Object.keys(selfSelectUserIDs).length
+          ? selfSelectUserIDs
+          : undefined,
       })
       Message.success('草稿保存成功，可在草稿箱继续编辑')
       closeEditDrawer()
@@ -285,7 +287,9 @@ export default function Initiated() {
       await approvalApi.createApprovalInstance({
         app_id: editApp.id,
         business_data: payload,
-        approval_draft_members: Object.keys(selfSelectUserIDs).length ? selfSelectUserIDs : undefined,
+        approval_draft_members: Object.keys(selfSelectUserIDs).length
+          ? selfSelectUserIDs
+          : undefined,
       })
       Message.success('提交成功')
       closeEditDrawer()
@@ -571,6 +575,7 @@ export default function Initiated() {
           <div className="flex justify-end gap-2">
             {copyMode ? (
               <>
+                <Button onClick={closeEditDrawer}>关闭</Button>
                 <Button loading={editSaving} onClick={handleCopySaveDraft}>
                   保存草稿
                 </Button>
@@ -580,6 +585,7 @@ export default function Initiated() {
               </>
             ) : Number(editRecord?.approval_status) === WITHDRAWN_STATUS ? (
               <>
+              <Button onClick={closeEditDrawer}>关闭</Button>
                 <Button loading={editSaving} onClick={handleSaveWithdrawn}>
                   保存草稿
                 </Button>
@@ -603,7 +609,7 @@ export default function Initiated() {
           /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
              空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
           <div className="@container flex flex-wrap items-start gap-6">
-            <div className="min-w-0 grow shrink basis-140">
+            <div className="min-w-0 shrink grow basis-140">
               <DynamicForm
                 app={editApp}
                 form={editForm}

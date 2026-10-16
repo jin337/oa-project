@@ -49,3 +49,8 @@ export function importBackendRoutes() {
 export function listApiDefinitionCategories() {
   return request.get('/api-definitions/categories')
 }
+
+// GET /api-definitions/tablename 当前连接库（oa_test）下全部表名（SqlEditor 自动补全提示词）
+export function listApiDefinitionDatabases() {
+  return request.get('/api-definitions/tablename')
+}

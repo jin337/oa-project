@@ -240,6 +240,8 @@ export default function InterfaceManage() {
 
   // 分类候选项（已有分类 + router 注释模块分类）
   const [categoryOptions, setCategoryOptions] = useState([])
+  // 数据库名列表：作为 SqlEditor 的自定义补全提示词
+  const [dbNames, setDbNames] = useState([])
 
   // 表格密度 & 列可见性
   const [tableSize, setTableSize] = useState('default')
@@ -293,6 +295,9 @@ export default function InterfaceManage() {
   useEffect(() => {
     fetchList()
     fetchCategories()
+    apiDefinitionApi.listApiDefinitionDatabases()
+      .then((res) => setDbNames(res.data || []))
+      .catch(() => {})
   }, [page, size, fetchList, fetchCategories])
 
   // 一键导入后端全部业务路由为 HTTP 转发定义
@@ -859,6 +864,7 @@ export default function InterfaceManage() {
               >
                 <SqlEditor
                   maxLength={8000}
+                  extraSuggestions={dbNames}
                   placeholder={
                     'SELECT * FROM oa_depts WHERE name LIKE ? /* 不要写注释 */\n示例：SELECT id, name FROM oa_depts WHERE name LIKE ${form.keyword}'
                   }

@@ -165,6 +165,14 @@ const SUGGEST_POOL = Array.from(
   ]),
 ).sort((a, b) => a.length - b.length || a.localeCompare(b))
 
+// 合并外部自定义提示词（如数据库名、表名）：保留默认排序，外部词追加到末尾
+const buildSuggestPool = (extra) => {
+  if (!Array.isArray(extra) || !extra.length) return SUGGEST_POOL
+  const extras = extra.filter(Boolean).map(String)
+  if (!extras.length) return SUGGEST_POOL
+  return Array.from(new Set([...SUGGEST_POOL, ...extras]))
+}
+
 function tokenize(src) {
   const toks = []
   let i = 0
@@ -456,7 +464,7 @@ function compactSql(text) {
 // 高亮层与 textarea 同宽同字体同折行规则，关键字（KW 集合）蓝色加粗；
 // textarea 文字透明仅保留光标/选择，负责输入与滚动；滚动时高亮层/行号列同步。
 // 每逻辑行折行段数通过高亮层测量，折行段行号补空白行，行号与视觉行严格对齐。
-function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRows, maxRows, id, full, fontSize = FONT_SIZE_DEFAULT }) {
+function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRows, maxRows, id, full, fontSize = FONT_SIZE_DEFAULT, extraSuggestions }) {
   const gutterRef = useRef(null)
   const highlightRef = useRef(null)
   const taRef = useRef(null)
@@ -517,7 +525,8 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
       return
     }
     const pre = m[1].toLowerCase()
-    const hits = SUGGEST_POOL.filter((s) => s.toLowerCase().startsWith(pre))
+    const pool = buildSuggestPool(extraSuggestions)
+    const hits = pool.filter((s) => s.toLowerCase().startsWith(pre))
     setSuggestions(hits)
     setActiveIdx(0)
   }
@@ -698,7 +707,7 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
  * 受控组件，可直接作为 Arco FormItem 的 children（透传 value/onChange/id）。
  */
 export default function SqlEditor(props) {
-  const { value = '', onChange, id, placeholder, maxLength = 8000 } = props
+  const { value = '', onChange, id, placeholder, maxLength = 8000, extraSuggestions } = props
   const [fullscreen, setFullscreen] = useState(false)
   // 字号：初始读 localStorage；其它实例改动时通过自定义事件同步刷新
   const [fontSize, setFontSize] = useState(readFontSize)
@@ -774,6 +783,7 @@ export default function SqlEditor(props) {
             maxLength,
             minRows: 10,
             maxRows: 10,
+            extraSuggestions,
           },
         )}
 
@@ -798,6 +808,7 @@ export default function SqlEditor(props) {
               placeholder,
               maxLength,
               full: true,
+              extraSuggestions,
             },
           )}
         </Modal>

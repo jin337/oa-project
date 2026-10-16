@@ -84,7 +84,10 @@ export default function DetailDrawer({
     if (!visible) return undefined
     let cancelled = false
     setSelectorData((d) => ({ ...d, loading: true }))
-    Promise.all([deptApi.getDeptUsersTree({ status: 1 }), fetchAll(roleApi.listRoles, { status: 1 })])
+    Promise.all([
+      deptApi.getDeptUsersTree({ status: 1 }),
+      fetchAll(roleApi.listRoles, { status: 1 }),
+    ])
       .then(([deptRes, roleRes]) => {
         if (cancelled) return
         const orgTree = transformDeptTree(deptRes.data?.list || deptRes.data || [])
@@ -423,7 +426,13 @@ export default function DetailDrawer({
         title={`详情 - ${title}`}
         visible={visible}
         onCancel={onCancel}
-        footer={renderActions() || null}
+        footer={
+          renderActions() || (
+            <Button size="small" onClick={onCancel}>
+              关闭
+            </Button>
+          )
+        }
         unmountOnExit
         maskClosable={false}
       >
@@ -431,7 +440,7 @@ export default function DetailDrawer({
         {instance && (
           <div className="absolute top-5 right-6 z-10">
             <span
-              className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full text-base font-bold bg-white"
+              className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full bg-white text-base font-bold"
               style={{
                 border: `2px solid ${statusConfig.color}`,
                 color: statusConfig.color,
@@ -450,7 +459,7 @@ export default function DetailDrawer({
           /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
              空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
           <div className="@container flex flex-wrap items-start gap-6">
-            <div className="min-w-0 grow shrink basis-140">
+            <div className="min-w-0 shrink grow basis-140">
               <DynamicForm
                 app={{ ...appFromInstance, form_layout_json: appFromInstance?.detail_layout_json }}
                 form={detailForm}

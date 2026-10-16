@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"back-end/internal/config"
+	"back-end/internal/database"
 	"back-end/internal/middleware"
 	"back-end/internal/model"
 	"back-end/internal/pkg/response"
@@ -189,6 +190,25 @@ func ApiDefinitionListRoutes(c *gin.Context) {
 // 供列表筛选下拉与抽屉分类下拉使用
 func ApiDefinitionCategories(c *gin.Context) {
 	response.OK(c, service.ApiDefinitionCategories())
+}
+
+// ApiDefinitionDatabases GET /{APIPrefix}/api-definitions/databases
+// 返回当前连接数据库（oa_test）下的全部表名，供 SqlEditor 作为自动补全提示词
+func ApiDefinitionDatabases(c *gin.Context) {
+	rows, err := database.DB.Raw("SHOW TABLES").Rows()
+	if err != nil {
+		response.Fail(c, response.CodeServerError, "查询表列表失败")
+		return
+	}
+	defer rows.Close()
+	names := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil {
+			names = append(names, name)
+		}
+	}
+	response.OK(c, names)
 }
 
 // ApiDefinitionImportRoutes POST /{APIPrefix}/api-definitions/backend/import
