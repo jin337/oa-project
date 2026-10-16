@@ -14,6 +14,8 @@ import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
   parseLayoutJson,
+  runOnSubmitAfter,
+  runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
@@ -183,6 +185,15 @@ export default function Drafts() {
       // 时间字段（date/datetime/time 等）统一序列化为 MySQL 兼容格式
       const layout = parseLayoutJson(drawerApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
+      const formConfig = layout?.formConfig || {}
+      // 提交前事件
+      const ok = await runOnSubmitBefore(formConfig, payload)
+      if (!ok) {
+        Message.info('表单提交前事件已拦截本次提交')
+        setDrawerSaving(false)
+        return
+      }
+      let submitResult
       // 抽屉内本次选择/调整的自选审批人、抄送人必须随提交一起带上：
       // 后端会校验自选节点已选人，未带则回退草稿暂存值（可能是未选择或已被清空）
       const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
@@ -199,16 +210,18 @@ export default function Drafts() {
           business_data: payload,
           ...(draftMembersPayload || {}),
         })
-        await approvalApi.submitDraftInstance(record.instance_id, draftMembersPayload)
+        submitResult = await approvalApi.submitDraftInstance(record.instance_id, draftMembersPayload)
       } else {
         // 无实例（旧草稿），走发起审批接口：带 business_data 时后端按 business_data_id 更新已有业务数据
-        await approvalApi.createApprovalInstance({
+        submitResult = await approvalApi.createApprovalInstance({
           app_id: record.app_id,
           business_data_id: record.data_id ?? record.id,
           business_data: payload,
           ...(draftMembersPayload || {}),
         })
       }
+      // 提交成功后事件
+      await runOnSubmitAfter(formConfig, payload, submitResult?.data)
       Message.success('提交成功')
       setDrawerVisible(false)
       fetchList()

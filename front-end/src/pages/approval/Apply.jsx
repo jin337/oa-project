@@ -23,6 +23,8 @@ import { fetchAll } from 'src/api/fetchAll'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView.jsx'
 import DynamicForm, {
   parseLayoutJson,
+  runOnSubmitAfter,
+  runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
@@ -360,14 +362,24 @@ export default function Apply() {
     try {
       const payload = await validateAndBuildPayload()
       if (!payload) return
+      // 提交前事件：return false 阻止提交
+      const layout = parseLayoutJson(drawerApp?.form_layout_json)
+      const formConfig = layout?.formConfig || {}
+      const ok = await runOnSubmitBefore(formConfig, payload)
+      if (!ok) {
+        Message.info('表单提交前事件已拦截本次提交')
+        return
+      }
       const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
-      await approvalApi.createApprovalInstance({
+      const res = await approvalApi.createApprovalInstance({
         app_id: drawerApp.id,
         business_data: payload,
         approval_draft_members: Object.keys(selfSelectUserIDs).length
           ? selfSelectUserIDs
           : undefined,
       })
+      // 提交成功后事件
+      await runOnSubmitAfter(formConfig, payload, res?.data)
       Message.success('提交成功')
       setDrawerVisible(false)
       setSelfSelectMembers({})

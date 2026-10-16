@@ -397,3 +397,64 @@ export function serializeTimeFields(values, elements) {
   }
   return next
 }
+
+// ==================== 表单提交前后事件钩子 ====================
+
+/**
+ * 安全执行用户在「表单设置布局」里填写的提交事件 JS。
+ * 配置形如：  (form) => { ... return false; }
+ * 支持字符串直接作为函数体（缺省包装为 async function）。
+ * - onSubmitBefore：返回 false（或 throw）阻止提交；返回其他值/void 继续。
+ * - onSubmitAfter：提交成功后调用；异常仅打日志，不影响主流程。
+ */
+const compileHook = (source) => {
+  if (!source || typeof source !== 'string') return null
+  const src = source.trim()
+  if (!src) return null
+  try {
+    // 用户既可能写完整箭头函数，也可能只写函数体；统一包成 async function
+    if (/^\(/.test(src) || /^function/.test(src) || /^async/.test(src)) {
+      // eslint-disable-next-line no-new-func
+      return new Function(`return (${src})`)()
+    }
+    // eslint-disable-next-line no-new-func
+    return new Function(`form`, `result`, `"use strict";\n${src}`)
+  } catch (e) {
+    console.warn('[form-hook] 编译失败:', e)
+    return null
+  }
+}
+
+/**
+ * 执行提交前钩子：返回 false 表示阻止提交。
+ * @param {object} formConfig layout.formConfig
+ * @param {object} formValues 表单当前值
+ * @returns {Promise<boolean>} true=继续提交，false=阻止
+ */
+export const runOnSubmitBefore = async (formConfig, formValues) => {
+  const fn = compileHook(formConfig?.onSubmitBefore)
+  if (!fn) return true
+  try {
+    const ret = await fn(formValues)
+    return ret !== false
+  } catch (e) {
+    console.error('[onSubmitBefore] 执行异常:', e)
+    return false
+  }
+}
+
+/**
+ * 执行提交后钩子：提交成功后调用，异常仅打日志。
+ * @param {object} formConfig
+ * @param {object} formValues
+ * @param {*} result 接口返回数据
+ */
+export const runOnSubmitAfter = async (formConfig, formValues, result) => {
+  const fn = compileHook(formConfig?.onSubmitAfter)
+  if (!fn) return
+  try {
+    await fn(formValues, result)
+  } catch (e) {
+    console.error('[onSubmitAfter] 执行异常:', e)
+  }
+}

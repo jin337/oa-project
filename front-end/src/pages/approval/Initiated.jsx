@@ -14,6 +14,8 @@ import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
   parseLayoutJson,
+  runOnSubmitAfter,
+  runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
@@ -389,14 +391,23 @@ export default function Initiated() {
     try {
       const layout = parseLayoutJson(editApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
+      const formConfig = layout?.formConfig || {}
+      // 提交前事件
+      const ok = await runOnSubmitBefore(formConfig, payload)
+      if (!ok) {
+        Message.info('表单提交前事件已拦截本次提交')
+        return
+      }
       const instanceId = editRecord.instance_id || editRecord.id
       const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
-      await approvalApi.submitDraftInstance(instanceId, {
+      const res = await approvalApi.submitDraftInstance(instanceId, {
         business_data: payload,
         ...(Object.keys(selfSelectUserIDs).length
           ? { approval_draft_members: selfSelectUserIDs }
           : {}),
       })
+      // 提交成功后事件
+      await runOnSubmitAfter(formConfig, payload, res?.data)
       Message.success('已重新提交')
       setEditVisible(false)
       fetchList()
