@@ -1,4 +1,4 @@
-import { NODE_TYPE_META } from 'src/pages/application/constants'
+import { NODE_TYPE_META } from 'src/pages/application/design/constants'
 
 /**
  * ==================== 审批流数据模型 ====================
@@ -284,4 +284,3 @@ export const buildSelfSelectUserIDs = (selfSelectMembers) => {
   }
   return result
 }
-

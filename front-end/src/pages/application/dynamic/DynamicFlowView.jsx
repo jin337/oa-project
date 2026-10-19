@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import { fetchAll } from 'src/api/fetchAll'
 import * as roleApi from 'src/api/role'
-import { OPERATOR_OPTIONS } from 'src/pages/application/constants'
+import { OPERATOR_OPTIONS } from 'src/pages/application/design/constants'
 import {
   buildOrgItemMap,
   buildRoleItemMap,

@@ -1,5 +1,4 @@
 import { useCallback, useReducer } from 'react'
-import { Message } from '@arco-design/web-react'
 import * as applicationApi from 'src/api/application'
 import { createBranch, createNode, updateNodeInTree } from 'src/pages/application/examine/flowModel'
 
@@ -237,7 +236,6 @@ export function useApprovalFlow() {
     dispatch({ type: 'SET_SAVING', saving: true })
     try {
       await applicationApi.updateApplication(id, { approval_flow_json: nodes })
-      Message.success('保存成功')
     } catch {
       // 错误已在请求层统一提示
     } finally {

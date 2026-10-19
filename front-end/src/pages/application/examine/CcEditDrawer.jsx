@@ -1,6 +1,6 @@
 import { Button, Drawer, Radio } from '@arco-design/web-react'
 import { useState } from 'react'
-import { APPROVER_TYPE_OPTIONS, CC_TIMING_OPTIONS, SELF_SELECT_OPTIONS } from 'src/pages/application/constants'
+import { APPROVER_TYPE_OPTIONS, CC_TIMING_OPTIONS, SELF_SELECT_OPTIONS } from 'src/pages/application/design/constants'
 import { normalizeMembers } from 'src/pages/application/examine/flowModel'
 import { PersonPicker } from 'src/pages/application/examine/PersonSelectorModal'
 

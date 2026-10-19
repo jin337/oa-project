@@ -8,11 +8,9 @@ import {
   Tabs,
   Tooltip,
 } from '@arco-design/web-react'
-import { IconDelete, IconSave, IconSync } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { IconDelete, IconSync } from '@arco-design/web-react/icon'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import * as applicationApi from 'src/api/application'
-import { fetchAll } from 'src/api/fetchAll'
 import JsEditor from 'src/components/JsEditor'
 import DynamicForm, {
   BASE_LAYOUT_ELEMENTS,
@@ -20,11 +18,8 @@ import DynamicForm, {
   parseLayoutJson,
   renderElementSettings,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { useTabs } from 'src/store/tab-context'
 
 const TabPane = Tabs.TabPane
-
-const MODULE_LABEL = '表单设置布局'
 
 const LAYOUT_OPTIONS = [
   { label: '垂直布局', value: 'vertical' },
@@ -44,16 +39,25 @@ const PAGE_OPTIONS = [
 
 const genId = () => `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
-export default function LayoutManage() {
-  const location = useLocation()
-  const { id } = useParams()
-  const { addTab, updateTab } = useTabs()
-
-  // 左侧组件库（来自当前流程的表单元素接口）
-  const [library, setLibrary] = useState([])
-  const [libraryLoading, setLibraryLoading] = useState(false)
+/**
+ * 表单设置布局组件（嵌入 DesignManage）：
+ * 数据由父级统一请求（app / elements），这里只负责画布编排与本地布局状态。
+ */
+const LayoutManage = forwardRef(function LayoutManage({ id, app = null, elements = [], onRefreshElements }, ref) {
+  // 左侧组件库（来自父级传入的表单元素）
+  const library = useMemo(
+    () => (elements || []).map((item) => ({ ...item, element_id: item.id })),
+    [elements],
+  )
+  const libraryLoading = false
   // 流程的主表 / 子表信息（用于组件库分组）
-  const [appTables, setAppTables] = useState({ tableName: '', subTables: [] })
+  const appTables = useMemo(() => {
+    const subTables = (app?.sub_table_name || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    return { tableName: app?.table_name || '', subTables }
+  }, [app])
 
   // 布局数据：按页面类型（表单页 / 详情页）分别缓存两套布局配置
   const [activePage, setActivePage] = useState('form') // 'form' | 'detail'
@@ -63,39 +67,27 @@ export default function LayoutManage() {
   })
 
   // 当前激活页的派生数据（画布渲染与右侧属性面板均基于此）
-  const { formConfig, elements } = layouts[activePage]
+  const { formConfig, elements: layoutElements } = layouts[activePage]
 
   const updateLayout = (patch) =>
     setLayouts((prev) => ({ ...prev, [activePage]: { ...prev[activePage], ...patch } }))
 
-  // 加载指定表下的字段列表（表单元素接口，按 table_key 过滤），并缓存
-  const loadTableFields = useCallback(
-    async (tableKey) => {
-      if (!tableKey) return
-      setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: true }))
-      try {
-        const res = await fetchAll((p) =>
-          applicationApi.listApplicationElements(id, { ...p, table_key: tableKey }),
-        )
-        const list = (res.data?.list || []).filter((f) => !tableKey || f.table_key === tableKey)
-        setTableFieldsMap((prev) => ({ ...prev, [tableKey]: list }))
-      } catch (e) {
-        setTableFieldsMap((prev) => ({ ...prev, [tableKey]: [] }))
-      } finally {
-        setFieldLoadingKeys((prev) => ({ ...prev, [tableKey]: false }))
-      }
-    },
-    [id],
-  )
+  // 子表字段缓存：直接按 table_key 从父级传入的 elements 分组，不再发请求
+  const tableFieldsMap = useMemo(() => {
+    const map = {}
+    for (const el of elements || []) {
+      if (!el.table_key) continue
+      if (!map[el.table_key]) map[el.table_key] = []
+      map[el.table_key].push(el)
+    }
+    return map
+  }, [elements])
+  const fieldLoadingKeys = useMemo(() => ({}), [])
 
   // 选中与面板
   const [selectedId, setSelectedId] = useState(null)
   const [activePanel, setActivePanel] = useState('form')
   const [saving, setSaving] = useState(false)
-
-  // 子表字段缓存（表格列级联选择）：{ [tableKey]: fields[] } + 各表加载中状态
-  const [tableFieldsMap, setTableFieldsMap] = useState({})
-  const [fieldLoadingKeys, setFieldLoadingKeys] = useState({})
 
   // 拖拽状态
   const dragType = useRef(null) // 'new' | 'move'
@@ -103,64 +95,22 @@ export default function LayoutManage() {
   const dragSourceId = useRef(null)
   const [dragOverIndex, setDragOverIndex] = useState(null)
 
-  // 挂载：确保页签存在、获取流程名更新标题、加载已有布局配置
+  // app 变化时回填表单页 / 详情页布局配置
   useEffect(() => {
-    addTab({ path: location.pathname, title: MODULE_LABEL })
-    let cancelled = false
-    applicationApi
-      .getApplication(id)
-      .then((res) => {
-        if (cancelled) return
-        const data = res.data
-        if (data?.name) {
-          updateTab(location.pathname, { title: `${data.name} - ${MODULE_LABEL}` })
-        }
-        // 解析主表 / 子表（子表可能为逗号分隔字符串）
-        const subTables = (data?.sub_table_name || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-        setAppTables({ tableName: data?.table_name || '', subTables })
-        // 分别回填表单页 / 详情页的布局配置
-        const formLayout = parseLayoutJson(data?.form_layout_json)
-        const detailLayout = parseLayoutJson(data?.detail_layout_json)
-        setLayouts((prev) => ({
-          form: formLayout || prev.form,
-          detail: detailLayout || prev.detail,
-        }))
-        // 收集所有表格组件已配置的关联子表，自动加载字段缓存（保证重进/刷新后列配置可回显）
-        const tableKeys = [...(formLayout?.elements || []), ...(detailLayout?.elements || [])]
-          .filter((el) => el.type === 'table' && el.table_key)
-          .map((el) => el.table_key)
-        new Set(tableKeys).forEach((tk) => {
-          if (tk) loadTableFields(tk)
-        })
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [id, location.pathname, addTab, updateTab, loadTableFields])
+    if (!app) return
+    const formLayout = parseLayoutJson(app?.form_layout_json)
+    const detailLayout = parseLayoutJson(app?.detail_layout_json)
+    setLayouts((prev) => ({
+      form: formLayout || prev.form,
+      detail: detailLayout || prev.detail,
+    }))
+  }, [app])
 
-  // 加载左侧组件库：获取当前流程关联的表单元素并映射为可拖拽项
-  const loadLibrary = useCallback(() => {
-    setLibraryLoading(true)
-    return fetchAll((p) => applicationApi.listApplicationElements(id, p))
-      .then((res) => {
-        const list = res.data?.list || []
-        setLibrary(list.map((item) => ({ ...item, element_id: item.id })))
-      })
-      .catch(() => setLibrary([]))
-      .finally(() => setLibraryLoading(false))
-  }, [id])
-
-  useEffect(() => {
-    loadLibrary()
-  }, [loadLibrary])
-
-  // 手动刷新组件库
+  // 手动刷新组件库：委托父级重新拉取元素列表
   const handleRefreshLibrary = () => {
-    loadLibrary().then(() => Message.success('组件库已刷新'))
+    if (onRefreshElements) {
+      onRefreshElements().then(() => Message.success('组件库已刷新'))
+    }
   }
 
   // 组件库按分组展示：固定"基础"分组（最前）+ 主表 / 子表 / 其他
@@ -187,7 +137,7 @@ export default function LayoutManage() {
     return groups
   }, [library, appTables])
 
-  const selectedElement = elements.find((e) => e.id === selectedId) || null
+  const selectedElement = layoutElements.find((e) => e.id === selectedId) || null
   const panelKey = selectedElement ? activePanel : 'form'
 
   // ==================== 画布操作 ====================
@@ -325,26 +275,10 @@ export default function LayoutManage() {
     })
   }
 
-  // 全局关联子表：保存到表格元素层级，并联动加载字段缓存
+  // 全局关联子表：保存到表格元素层级（字段缓存已由父级 elements 全量派生，无需再请求）
   const handleTableKeyChange = (tableKey) => {
     updateSelectedElement({ table_key: tableKey })
-    if (tableKey && !tableFieldsMap[tableKey]) {
-      loadTableFields(tableKey)
-    }
   }
-
-  // 选中表格元素时：若关联子表字段未缓存则自动加载（兜底，覆盖初始化回填后的懒加载场景）
-  useEffect(() => {
-    const tk = selectedElement?.table_key
-    if (selectedElement?.element_type === 'table' && tk && !tableFieldsMap[tk]) {
-      loadTableFields(tk)
-    }
-    // 表格"合计"配置需要主表字段选项：确保主表字段缓存也已加载
-    const mainKey = appTables?.tableName
-    if (selectedElement?.element_type === 'table' && mainKey && !tableFieldsMap[mainKey]) {
-      loadTableFields(mainKey)
-    }
-  }, [selectedElement, tableFieldsMap, appTables?.tableName, loadTableFields])
 
   // 选择字段：自动将字段的 label 赋给 title、field_key 赋给 dataIndex
   const handleColumnFieldChange = (colId, tableKey, fieldKey) => {
@@ -378,9 +312,8 @@ export default function LayoutManage() {
     setSaving(true)
     try {
       const key = activePage === 'form' ? 'form_layout_json' : 'detail_layout_json'
-      const layoutData = { formConfig, elements }
+      const layoutData = { formConfig, elements: layoutElements }
       await applicationApi.updateApplication(id, { [key]: layoutData })
-      Message.success(`${activePage === 'form' ? '表单页' : '详情页'}布局配置已保存`)
     } catch (e) {
       Message.error('保存失败，请稍后重试')
     } finally {
@@ -389,6 +322,9 @@ export default function LayoutManage() {
   }
 
   const isHorizontal = formConfig.layout === 'horizontal'
+
+  // 对外暴露保存方法，供外层 DesignManage 的「保存」按钮调用
+  useImperativeHandle(ref, () => ({ save: handleSave }), [])
 
   // 注入基础组件属性面板的上下文（组件级状态 + 回调，由配置中心的 renderSettings 按需取用）
   const settingsCtx = {
@@ -513,15 +449,6 @@ export default function LayoutManage() {
                 清空
               </Button>
             </Popconfirm>
-            <Button
-              size="mini"
-              type="primary"
-              icon={<IconSave />}
-              loading={saving}
-              onClick={handleSave}
-            >
-              保存
-            </Button>
           </div>
         </div>
 
@@ -653,4 +580,6 @@ export default function LayoutManage() {
       </div>
     </div>
   )
-}
+})
+
+export default LayoutManage

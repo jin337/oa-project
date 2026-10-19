@@ -2,13 +2,13 @@ import { Button, Checkbox, Drawer, Radio, Select } from '@arco-design/web-react'
 import { IconClose, IconPlus } from '@arco-design/web-react/icon'
 import { useMemo, useState } from 'react'
 import {
-  APPROVER_TYPE_OPTIONS,
-  EMPTY_HANDLER_OPTIONS,
-  FIELD_PERM_OPTIONS,
-  PERMISSION_OPTIONS,
-  SELF_SELECT_OPTIONS,
-  STRATEGY_OPTIONS,
-} from 'src/pages/application/constants'
+    APPROVER_TYPE_OPTIONS,
+    EMPTY_HANDLER_OPTIONS,
+    FIELD_PERM_OPTIONS,
+    PERMISSION_OPTIONS,
+    SELF_SELECT_OPTIONS,
+    STRATEGY_OPTIONS,
+} from 'src/pages/application/design/constants'
 import { normalizeMembers } from 'src/pages/application/examine/flowModel'
 import { PersonPicker } from 'src/pages/application/examine/PersonSelectorModal'
 
