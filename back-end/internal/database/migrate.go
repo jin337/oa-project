@@ -45,7 +45,6 @@ var migrations = []migration{
 				&model.Role{},
 				&model.Menu{},
 				&model.Dept{},
-				&MigrateVersion{},
 				&model.Application{},
 				&model.ApplicationElement{},
 				&model.ApprovalCategory{},
@@ -56,6 +55,7 @@ var migrations = []migration{
 				&model.Notification{},
 				&model.ExamineGroup{},
 				&model.ApiDefinition{},
+				&MigrateVersion{},
 			)
 		},
 		Seed: seedInitData,
