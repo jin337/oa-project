@@ -56,7 +56,6 @@ const EMPTY_FORM = {
   sub_table_name: '',
 }
 
-
 export default function ApplicationManage() {
   const navigate = useNavigate()
   const { addTab } = useTabs()
@@ -80,8 +79,6 @@ export default function ApplicationManage() {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
-
-
 
   const fetchList = useCallback(
     async (p = page, s = size) => {
@@ -207,13 +204,15 @@ export default function ApplicationManage() {
   // 操作列「更多」下拉菜单分发：仅含配置类子页面入口，编辑/删除为平铺按钮
   const handleActionMenu = (key, record) => {
     if (key === 'tables') {
-      openSubPage(record, 'tables', '表管理')
+      openSubPage(record, 'tables', '表字段管理')
     } else if (key === 'elements') {
       openSubPage(record, 'elements', '表单元素')
     } else if (key === 'layout') {
       openSubPage(record, 'layout', '表单设置布局')
     } else if (key === 'examine') {
       openSubPage(record, 'examine', '审批配置')
+    } else if (key === 'design') {
+      openSubPage(record, 'design', '表单设计')
     }
   }
 
@@ -244,7 +243,16 @@ export default function ApplicationManage() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { key: 'name', title: '名称', dataIndex: 'name' },
+    {
+      key: 'name',
+      title: '名称',
+      dataIndex: 'name',
+      render: (v, record) => (
+        <Typography.Text type="primary" className="cursor-pointer" onClick={() => openEdit(record)}>
+          {v}
+        </Typography.Text>
+      ),
+    },
     {
       key: 'code',
       title: '编码',
@@ -269,7 +277,7 @@ export default function ApplicationManage() {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
-      width: 80,
+      width: 70,
       align: 'center',
       render: (status, record) =>
         hasPerm('application:edit') ? (
@@ -293,10 +301,11 @@ export default function ApplicationManage() {
         // 「更多」下拉菜单：仅子页面入口；编辑 / 删除保持平铺展示
         const actionMenu = (
           <Menu onClickMenuItem={(key) => handleActionMenu(key, record)}>
-            <MenuItem key="tables">表管理</MenuItem>
+            <MenuItem key="tables">表字段管理</MenuItem>
             <MenuItem key="elements">表单元素管理</MenuItem>
-            <MenuItem key="layout">表单设置布局</MenuItem>
-            <MenuItem key="examine">审批管理</MenuItem>
+            {/* <MenuItem key="layout">表单设置布局</MenuItem>
+            <MenuItem key="examine">审批管理</MenuItem> */}
+            <MenuItem key="design">表单设计</MenuItem>
           </Menu>
         )
         return (
@@ -304,26 +313,27 @@ export default function ApplicationManage() {
             <Space>
               <Dropdown trigger="click" droplist={actionMenu} position="br">
                 <Button size="mini" type="text">
-                  更多 <IconDown />
+                  配置
+                  <IconDown />
                 </Button>
               </Dropdown>
               <Button size="mini" onClick={() => openListPage(record)}>
-                列表页
+                数据
               </Button>
-              <Button size="mini" onClick={() => openEdit(record)}>
-                编辑
-              </Button>
-              <Popconfirm
-                position="lb"
-                focusLock
-                title="确认删除该流程配置？"
-                content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
-                onOk={() => handleDelete(record)}
-              >
-                <Button size="mini" status="danger">
-                  删除
-                </Button>
-              </Popconfirm>
+              {record.status !== 1 && (
+                <Popconfirm
+                  disabled={record.status === 1}
+                  position="lb"
+                  focusLock
+                  title="确认删除该流程配置？"
+                  content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
+                  onOk={() => handleDelete(record)}
+                >
+                  <Button size="mini" status="danger">
+                    删除
+                  </Button>
+                </Popconfirm>
+              )}
             </Space>
           )
         )
@@ -380,7 +390,7 @@ export default function ApplicationManage() {
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} trigger='click' position="br">
+          <Dropdown droplist={sizeMenu} trigger="click" position="br">
             <Button size="small" icon={<IconList />}>
               密度
             </Button>

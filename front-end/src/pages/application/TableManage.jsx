@@ -1,22 +1,22 @@
 import {
-  Button,
-  Card,
-  Checkbox,
-  Dropdown,
-  Empty,
-  Form,
-  Input,
-  Menu,
-  Message,
-  Modal,
-  Popconfirm,
-  Popover,
-  Select,
-  Space,
-  Switch,
-  Table,
-  Tabs,
-  Tooltip,
+    Button,
+    Card,
+    Checkbox,
+    Dropdown,
+    Empty,
+    Form,
+    Input,
+    Menu,
+    Message,
+    Modal,
+    Popconfirm,
+    Popover,
+    Select,
+    Space,
+    Switch,
+    Table,
+    Tabs,
+    Tooltip,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -29,7 +29,7 @@ const FormItem = Form.Item
 const MenuItem = Menu.Item
 const TabPane = Tabs.TabPane
 
-const MODULE_LABEL = '表管理'
+const MODULE_LABEL = '表字段管理'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = ['index', 'name', 'type', 'length', 'not_null', 'default_value', 'comment']
@@ -94,7 +94,7 @@ export default function TableManage() {
   const { id } = useParams()
   const { tabs, activeTab, addTab, updateTab } = useTabs()
 
-  // 多表管理：所有表名列表 + 当前选中表
+  // 多表字段管理：所有表名列表 + 当前选中表
   const [tables, setTables] = useState([])
   const [currentTable, setCurrentTable] = useState('')
 

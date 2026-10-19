@@ -213,7 +213,7 @@ const CONFIG_HELP_CONTENT = (
         <b className="text-gray-700">是否必填</b>：为空时拦截提交（详情 / 审批只读场景不生效）；
       </li>
       <li>
-        <b className="text-gray-700">列表列显示</b>：勾选后该字段作为列表页的一列；
+        <b className="text-gray-700">列表项显示</b>：勾选后该字段作为列表页的一列；
       </li>
       <li>
         <b className="text-gray-700">搜索项显示</b>：勾选后该字段作为列表页的搜索条件；
@@ -451,6 +451,8 @@ export default function ElementManage() {
   // 草稿筛选条件 + 已生效条件（禁止自动触发，手动搜索）
   const [keyword, setKeyword] = useState('')
   const [appliedKeyword, setAppliedKeyword] = useState('')
+  const [tableKey, setTableKey] = useState('')
+  const [appliedTableKey, setAppliedTableKey] = useState('')
 
   // 表格密度 & 列可见性
   const [tableSize, setTableSize] = useState('default')
@@ -558,6 +560,7 @@ export default function ElementManage() {
       try {
         const params = { page: p, size: s }
         if (appliedKeyword) params.keyword = appliedKeyword
+        if (appliedTableKey) params.table_key = appliedTableKey
         const res = await applicationApi.listApplicationElements(id, params)
         setList(res.data.list || [])
         setTotal(res.data.total || 0)
@@ -567,7 +570,7 @@ export default function ElementManage() {
         setLoading(false)
       }
     },
-    [id, page, size, appliedKeyword],
+    [id, page, size, appliedKeyword, appliedTableKey],
   )
 
   useEffect(() => {
@@ -577,6 +580,7 @@ export default function ElementManage() {
   // 搜索：生效当前草稿条件，回到第一页
   const handleSearch = () => {
     setAppliedKeyword(keyword)
+    setAppliedTableKey(tableKey)
     setPage(1)
   }
 
@@ -584,6 +588,8 @@ export default function ElementManage() {
   const handleReset = () => {
     setKeyword('')
     setAppliedKeyword('')
+    setTableKey('')
+    setAppliedTableKey('')
     setPage(1)
   }
 
@@ -845,7 +851,7 @@ export default function ElementManage() {
     { key: 'field_key', title: '对应字段', dataIndex: 'field_key' },
     {
       key: 'table_key',
-      title: '字段分类',
+      title: '表分类',
       dataIndex: 'table_key',
       render: (v) => (v ? <Tag color="arcoblue">{v}</Tag> : '-'),
     },
@@ -874,7 +880,7 @@ export default function ElementManage() {
     },
     {
       key: 'vis_list',
-      title: '列表列',
+      title: '列表项',
       dataIndex: 'visibility',
       width: 90,
       align: 'center',
@@ -941,6 +947,15 @@ export default function ElementManage() {
             value={keyword}
             onChange={setKeyword}
             onPressEnter={handleSearch}
+          />
+          <Select
+            className="w-55!"
+            placeholder="表分类（主表/子表）"
+            allowClear
+            showSearch
+            value={tableKey || undefined}
+            onChange={(v) => setTableKey(v || '')}
+            options={tableOptions}
           />
           <Button type="primary" onClick={handleSearch}>
             搜索
@@ -1123,7 +1138,7 @@ export default function ElementManage() {
                 <Checkbox>是否必填</Checkbox>
               </FormItem>
               <FormItem field="vis_list" triggerPropName="checked" noStyle>
-                <Checkbox>列表列显示</Checkbox>
+                <Checkbox>列表项显示</Checkbox>
               </FormItem>
               <FormItem field="vis_search" triggerPropName="checked" noStyle>
                 <Checkbox>搜索项显示</Checkbox>

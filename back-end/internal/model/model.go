@@ -596,7 +596,8 @@ type ApplicationElementUpdateReq struct {
 
 type ApplicationElementListReq struct {
 	BaseListReq
-	Keyword string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
+	Keyword  string `json:"keyword" form:"keyword" validate:"omitempty" label:"关键词"`
+	TableKey string `json:"table_key" form:"table_key" validate:"omitempty" label:"表分类"`
 }
 
 // ============================================================

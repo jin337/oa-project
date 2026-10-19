@@ -60,7 +60,7 @@ export function TabProvider({ children }) {
   // 解析路由对应的页签元信息：标题 + 面包屑层级（title 取层级末项）。
   // 数据源统一为后端菜单树：
   // - 精确匹配：breadcrumbs = 菜单链（非 '/' 节点）名称数组，如 /system/user → ['系统管理','用户管理']
-  // - 动态子路由（前缀匹配）：父级链名称 + 段级匹配的子项名称，如 /application/10/tables → ['流程配置','表管理']
+  // - 动态子路由（前缀匹配）：父级链名称 + 段级匹配的子项名称，如 /application/10/tables → ['流程配置','表字段管理']
   // - 完全未命中：回退为路径段
   const resolveTabMeta = useCallback(
     (path) => {

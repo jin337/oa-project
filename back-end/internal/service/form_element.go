@@ -52,6 +52,9 @@ func ApplicationElementList(appID uint, req *model.ApplicationElementListReq) ([
 		kw := "%" + req.Keyword + "%"
 		db = db.Where("(label LIKE ? OR field_key LIKE ?)", kw, kw)
 	}
+	if req.TableKey != "" {
+		db = db.Where("table_key = ?", req.TableKey)
+	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
