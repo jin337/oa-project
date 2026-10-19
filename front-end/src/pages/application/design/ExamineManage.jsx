@@ -1,4 +1,4 @@
-import { Button, Spin } from '@arco-design/web-react'
+import { Button } from '@arco-design/web-react'
 import { forwardRef, useEffect, useImperativeHandle, useMemo } from 'react'
 import { ADDABLE_NODE_TYPES, NODE_TYPE_META } from 'src/pages/application/design/constants'
 import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
@@ -22,17 +22,14 @@ import { useApprovalFlow } from 'src/pages/application/examine/useApprovalFlow'
  * 这里只负责画布编排与节点树状态。
  */
 const ExamineManage = forwardRef(function ExamineManage(
-  { id, app = null, formFields = [], orgTree = [], roleList = [], examineGroups = [] },
+  { app = null, formFields = [], orgTree = [], roleList = [], examineGroups = [] },
   ref,
 ) {
-  // 审批流状态（节点树 + 编辑态 + 保存/加载态 + 全部节点操作）
+  // 审批流状态（节点树 + 编辑态 + 全部节点操作）
   const {
     nodes,
     editing,
-    saving,
-    flowLoading,
     setNodes,
-    setFlowLoading,
     insertNodeAt,
     removeNode,
     renameNode,
@@ -43,19 +40,15 @@ const ExamineManage = forwardRef(function ExamineManage(
     closeEdit,
     saveNode,
     saveBranch,
-    saveFlow,
   } = useApprovalFlow()
 
   // 流程主表名（table_name）：供条件编辑抽屉区分主表 / 子表字段分组
   const mainTable = app?.table_name || ''
 
-  // 审批流数据回显：app 变化时解析 approval_flow_json 还原画布；
-  // 空、不存在或解析失败时降级保持默认「发起人」节点
+  // 审批流数据回显：app 变化时解析 approval_flow_json 还原画布
   useEffect(() => {
     if (!app) return
-    let cancelled = false
-    setFlowLoading(true)
-    const raw = app?.approval_flow_json
+    const raw = app.approval_flow_json
     let parsed = null
     if (Array.isArray(raw)) parsed = raw
     else if (typeof raw === 'string' && raw) {
@@ -65,22 +58,16 @@ const ExamineManage = forwardRef(function ExamineManage(
         parsed = null
       }
     }
-    // 有效节点数组才还原；空 / 无效保持默认
     if (Array.isArray(parsed) && parsed.length) setNodes(parsed)
-    setFlowLoading(false)
-    return () => {
-      cancelled = true
-    }
-  }, [app, setFlowLoading, setNodes])
+  }, [app, setNodes])
 
-  // 选择器派生映射（随动态数据更新）
+  // 选择器派生映射
   const orgItemMap = useMemo(() => buildOrgItemMap(orgTree), [orgTree])
   const roleItemMap = useMemo(() => buildRoleItemMap(roleList), [roleList])
   const userDeptMap = useMemo(() => buildUserDeptMap(orgTree), [orgTree])
-  // 部门 → 后代节点映射（发起人卡片按部门折叠展示用）
   const deptDescMap = useMemo(() => buildDeptDescMap(orgTree), [orgTree])
 
-  // 注入 Context：各弹层统一读取，避免多层 props 透传
+  // 注入 Context：各弹层统一读取
   const selectorData = useMemo(
     () => ({
       orgTree,
@@ -89,16 +76,12 @@ const ExamineManage = forwardRef(function ExamineManage(
       orgItemMap,
       roleItemMap,
       userDeptMap,
-      loading: false,
     }),
     [orgTree, roleList, examineGroups, orgItemMap, roleItemMap, userDeptMap],
   )
 
-  // 对外暴露保存方法与 loading，供外层 DesignManage 的「保存」按钮调用
-  useImperativeHandle(ref, () => ({
-    save: () => saveFlow(id, nodes),
-    saving,
-  }), [id, nodes, saving, saveFlow])
+  // 对外暴露：返回当前审批流节点（供外层合并保存）
+  useImperativeHandle(ref, () => ({ getNodes: () => nodes }), [nodes])
 
   // 节点点击编辑：1-发起人 跳过中间弹窗直接唤起人员选择器（确认即保存 members），其余进入节点编辑
   const handleNodeEdit = (node) => {
@@ -132,31 +115,29 @@ const ExamineManage = forwardRef(function ExamineManage(
 
   return (
     <SelectorDataContext.Provider value={selectorData}>
-        {/* 流程画布：加载期间 Spin 遮罩，底部固定「流程结束」标识 */}
-        <Spin loading={flowLoading} className="w-full">
-          <div className="flex w-fit min-w-full flex-col items-center">
-            <div className="flex flex-col items-center">
-              {nodes.map((node, i) => (
-                <FlowNode
-                  key={node.id}
-                  node={node}
-                  addMenu={buildAddMenu((type) => insertNodeAt(i + 1, type))}
-                  userDeptMap={userDeptMap}
-                  deptDescMap={deptDescMap}
-                  onRemove={removeNode}
-                  onEdit={handleNodeEdit}
-                  onEditBranch={handleBranchEdit}
-                  onAddBranch={addBranch}
-                  onRemoveBranch={removeBranch}
-                  onRemoveNode={removeNode}
-                  onRename={renameNode}
-                  buildBranchAddMenu={buildBranchAddMenu}
-                />
-              ))}
-            </div>
-            <div className="text-gray-400">流程结束</div>
-          </div>
-        </Spin>
+      {/* 流程画布 */}
+      <div className="flex w-fit min-w-full flex-col items-center">
+        <div className="flex flex-col items-center">
+          {nodes.map((node, i) => (
+            <FlowNode
+              key={node.id}
+              node={node}
+              addMenu={buildAddMenu((type) => insertNodeAt(i + 1, type))}
+              userDeptMap={userDeptMap}
+              deptDescMap={deptDescMap}
+              onRemove={removeNode}
+              onEdit={handleNodeEdit}
+              onEditBranch={handleBranchEdit}
+              onAddBranch={addBranch}
+              onRemoveBranch={removeBranch}
+              onRemoveNode={removeNode}
+              onRename={renameNode}
+              buildBranchAddMenu={buildBranchAddMenu}
+            />
+          ))}
+        </div>
+        <div className="text-gray-400">流程结束</div>
+      </div>
         {/* 节点/条件编辑弹层：发起人直接唤起人员选择器，审批人/抄送人/条件分支用 Drawer */}
         {editing?.kind === 'initiator' && (
           <PersonSelectorModal

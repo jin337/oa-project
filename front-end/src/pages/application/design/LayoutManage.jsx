@@ -10,7 +10,6 @@ import {
 } from '@arco-design/web-react'
 import { IconDelete, IconSync } from '@arco-design/web-react/icon'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import * as applicationApi from 'src/api/application'
 import JsEditor from 'src/components/JsEditor'
 import DynamicForm, {
   BASE_LAYOUT_ELEMENTS,
@@ -43,13 +42,12 @@ const genId = () => `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
  * 表单设置布局组件（嵌入 DesignManage）：
  * 数据由父级统一请求（app / elements），这里只负责画布编排与本地布局状态。
  */
-const LayoutManage = forwardRef(function LayoutManage({ id, app = null, elements = [], onRefreshElements }, ref) {
+const LayoutManage = forwardRef(function LayoutManage({ app = null, elements = [], onRefreshElements }, ref) {
   // 左侧组件库（来自父级传入的表单元素）
   const library = useMemo(
     () => (elements || []).map((item) => ({ ...item, element_id: item.id })),
     [elements],
   )
-  const libraryLoading = false
   // 流程的主表 / 子表信息（用于组件库分组）
   const appTables = useMemo(() => {
     const subTables = (app?.sub_table_name || '')
@@ -72,7 +70,7 @@ const LayoutManage = forwardRef(function LayoutManage({ id, app = null, elements
   const updateLayout = (patch) =>
     setLayouts((prev) => ({ ...prev, [activePage]: { ...prev[activePage], ...patch } }))
 
-  // 子表字段缓存：直接按 table_key 从父级传入的 elements 分组，不再发请求
+  // 子表字段缓存：直接按 table_key 从父级传入的 elements 分组
   const tableFieldsMap = useMemo(() => {
     const map = {}
     for (const el of elements || []) {
@@ -82,12 +80,10 @@ const LayoutManage = forwardRef(function LayoutManage({ id, app = null, elements
     }
     return map
   }, [elements])
-  const fieldLoadingKeys = useMemo(() => ({}), [])
 
   // 选中与面板
   const [selectedId, setSelectedId] = useState(null)
   const [activePanel, setActivePanel] = useState('form')
-  const [saving, setSaving] = useState(false)
 
   // 拖拽状态
   const dragType = useRef(null) // 'new' | 'move'
@@ -98,19 +94,15 @@ const LayoutManage = forwardRef(function LayoutManage({ id, app = null, elements
   // app 变化时回填表单页 / 详情页布局配置
   useEffect(() => {
     if (!app) return
-    const formLayout = parseLayoutJson(app?.form_layout_json)
-    const detailLayout = parseLayoutJson(app?.detail_layout_json)
     setLayouts((prev) => ({
-      form: formLayout || prev.form,
-      detail: detailLayout || prev.detail,
+      form: parseLayoutJson(app?.form_layout_json) || prev.form,
+      detail: parseLayoutJson(app?.detail_layout_json) || prev.detail,
     }))
   }, [app])
 
   // 手动刷新组件库：委托父级重新拉取元素列表
   const handleRefreshLibrary = () => {
-    if (onRefreshElements) {
-      onRefreshElements().then(() => Message.success('组件库已刷新'))
-    }
+    onRefreshElements?.().then(() => Message.success('组件库已刷新'))
   }
 
   // 组件库按分组展示：固定"基础"分组（最前）+ 主表 / 子表 / 其他
@@ -307,31 +299,33 @@ const LayoutManage = forwardRef(function LayoutManage({ id, app = null, elements
   }
 
   // ==================== 保存 ====================
-
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      const key = activePage === 'form' ? 'form_layout_json' : 'detail_layout_json'
-      const layoutData = { formConfig, elements: layoutElements }
-      await applicationApi.updateApplication(id, { [key]: layoutData })
-    } catch (e) {
-      Message.error('保存失败，请稍后重试')
-    } finally {
-      setSaving(false)
-    }
-  }
+  // 布局数据由外层 DesignManage 统一收集，与审批流合并为一次请求提交
 
   const isHorizontal = formConfig.layout === 'horizontal'
 
-  // 对外暴露保存方法，供外层 DesignManage 的「保存」按钮调用
-  useImperativeHandle(ref, () => ({ save: handleSave }), [])
+  // 对外暴露：返回当前表单页 + 详情页布局数据（供外层合并保存）
+  useImperativeHandle(
+    ref,
+    () => ({
+      getLayoutPayload: () => ({
+        form_layout_json: {
+          formConfig: layouts.form.formConfig,
+          elements: layouts.form.elements,
+        },
+        detail_layout_json: {
+          formConfig: layouts.detail.formConfig,
+          elements: layouts.detail.elements,
+        },
+      }),
+    }),
+    [layouts],
+  )
 
   // 注入基础组件属性面板的上下文（组件级状态 + 回调，由配置中心的 renderSettings 按需取用）
   const settingsCtx = {
     selectedElement,
     appTables,
     tableFieldsMap,
-    fieldLoadingKeys,
     updateSelectedElement,
     handleTableKeyChange,
     handleColumnFieldChange,
@@ -339,7 +333,7 @@ const LayoutManage = forwardRef(function LayoutManage({ id, app = null, elements
   }
 
   return (
-    <div className="flex h-full min-w-330 items-stretch border border-gray-200 bg-white">
+    <div className="flex h-full min-w-330 items-stretch">
       {/* ========== 左侧：组件库（按表分组，两列网格） ========== */}
       <div className="flex w-83 shrink-0 flex-col">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
@@ -348,15 +342,14 @@ const LayoutManage = forwardRef(function LayoutManage({ id, app = null, elements
             type="text"
             size="mini"
             icon={<IconSync />}
-            loading={libraryLoading}
             onClick={handleRefreshLibrary}
           >
             刷新
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-3">
-          {libraryLoading ? (
-            <Empty description="加载中..." />
+          {libraryGroups.length === 0 ? (
+            <Empty description="暂无元素" />
           ) : (
             libraryGroups?.map((group) => (
               <div key={group.title} className="mb-3 last:mb-0">
@@ -454,7 +447,7 @@ const LayoutManage = forwardRef(function LayoutManage({ id, app = null, elements
 
         {/* 中间画布：渲染逻辑与拖拽/选中/删除交互统一由 DynamicForm（move-* 模式）承载 */}
         <DynamicForm
-          app={{ form_layout_json: { formConfig, elements } }}
+          app={{ form_layout_json: { formConfig, elements: layoutElements } }}
           pageType={activePage === 'form' ? 'move-form' : 'move-detail'}
           selectedId={selectedId}
           dragOverIndex={dragOverIndex}

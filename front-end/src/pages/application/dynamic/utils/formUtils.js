@@ -20,12 +20,18 @@ export const DEFAULT_FORM_CONFIG = {
 }
 
 // 解析后端布局 JSON（form_layout_json / detail_layout_json 均为 { formConfig, elements } 结构）
+// 后端可能返回字符串或已解析对象，这里兼容两种情况
 export const parseLayoutJson = (raw) => {
   if (!raw) return null
   try {
+    let data = raw
+    if (typeof raw === 'string') {
+      data = raw ? JSON.parse(raw) : null
+    }
+    if (!data || typeof data !== 'object') return null
     return {
-      formConfig: { ...DEFAULT_FORM_CONFIG, ...(raw.formConfig || {}) },
-      elements: Array.isArray(raw.elements) ? raw.elements : [],
+      formConfig: { ...DEFAULT_FORM_CONFIG, ...(data.formConfig || {}) },
+      elements: Array.isArray(data.elements) ? data.elements : [],
     }
   } catch (e) {
     return null

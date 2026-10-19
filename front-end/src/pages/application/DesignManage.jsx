@@ -15,7 +15,7 @@ const TabPane = Tabs.TabPane
 /**
  * 表单设计统一入口：
  * - 外层 Card 标题「流程名 - 表单设计」，右上角「保存 / 发布」；
- * - Tabs 居中，区分「表单设置布局」与「审批管理」；
+ * - Tabs 居中，区分「表单设置布局」与「审批流程」；
  * - 所有接口请求（流程详情 / 表单元素 / 组织架构 / 角色 / 审核人员组）统一在此发起，
  *   下发给两个子组件，子组件不再各自请求。
  */
@@ -33,59 +33,43 @@ export default function DesignManage() {
   // 拉取表单元素列表（子组件共用）
   const loadElements = useCallback(async () => {
     const res = await fetchAll((p) => applicationApi.listApplicationElements(id, p))
-    const list = res.data?.list || []
-    setElements(list)
-    return list
+    setElements(res.data?.list || [])
   }, [id])
 
-  // 流程详情
+  // 流程详情 + 表单元素
   useEffect(() => {
     if (!id) return
-    let cancelled = false
     applicationApi
       .getApplication(id)
-      .then((res) => {
-        if (!cancelled) setApp(res.data)
-      })
+      .then((res) => setApp(res.data))
       .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [id])
-
-  // 表单元素
-  useEffect(() => {
-    if (!id) return
     loadElements().catch(() => {})
   }, [id, loadElements])
 
   // 组织架构 / 角色 / 审核人员组（审批选择器共用，全局只需一次）
   useEffect(() => {
-    let cancelled = false
     Promise.all([
       deptApi.getDeptUsersTree({ status: 1 }),
       fetchAll(roleApi.listRoles, { status: 1 }),
       fetchAll(listExamineGroups, { status: 1 }),
     ])
       .then(([deptRes, roleRes, groupRes]) => {
-        if (cancelled) return
         setOrgTree(transformDeptTree(deptRes.data?.list || deptRes.data || []))
         setRoleList(transformRoleList(roleRes.data?.list || roleRes.data || []))
-        const groupList = groupRes.data?.list || groupRes.data || []
-        setExamineGroups(Array.isArray(groupList) ? groupList : [])
+        setExamineGroups(groupRes.data?.list || groupRes.data || [])
       })
       .catch(() => {})
-    return () => {
-      cancelled = true
-    }
   }, [])
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      // 依次保存布局与审批流；任一失败都会抛错，由请求层提示
-      await layoutRef.current?.save()
-      await examineRef.current?.save()
+      const layoutPayload = layoutRef.current?.getLayoutPayload?.() || {}
+      const nodes = examineRef.current?.getNodes?.() || []
+      await applicationApi.updateApplication(id, {
+        ...layoutPayload,
+        approval_flow_json: nodes,
+      })
       Message.success('保存成功')
     } catch (e) {
       // 错误已在请求层提示
@@ -100,6 +84,7 @@ export default function DesignManage() {
 
   return (
     <Card
+      className="h-full overflow-y-hidden" bodyStyle={{padding: 0, height: 'calc(100% - 40px)' }}
       title={`${app?.name ? app.name + ' - ' : ''}表单设计`}
       extra={
         <Space>
@@ -111,26 +96,19 @@ export default function DesignManage() {
           </Button>
         </Space>
       }
-      bordered={false}
     >
-      <Tabs
-        defaultActiveKey="layout"
-        type="line"
-        className="design-tabs [&_.arco-tabs-header-nav]:justify-center"
-      >
-        <TabPane key="layout" title="表单设置布局">
+      <Tabs type="line" justify>
+        <TabPane key="layout" title="表单设置布局" forceRender>
           <LayoutManage
             ref={layoutRef}
-            id={id}
             app={app}
             elements={elements}
             onRefreshElements={loadElements}
           />
         </TabPane>
-        <TabPane key="examine" title="审批管理">
+        <TabPane key="examine" title="审批流程" forceRender>
           <ExamineManage
             ref={examineRef}
-            id={id}
             app={app}
             formFields={elements}
             orgTree={orgTree}

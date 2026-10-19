@@ -303,8 +303,6 @@ export default function ApplicationManage() {
           <Menu onClickMenuItem={(key) => handleActionMenu(key, record)}>
             <MenuItem key="tables">表字段管理</MenuItem>
             <MenuItem key="elements">表单元素管理</MenuItem>
-            {/* <MenuItem key="layout">表单设置布局</MenuItem>
-            <MenuItem key="examine">审批管理</MenuItem> */}
             <MenuItem key="design">表单设计</MenuItem>
           </Menu>
         )
