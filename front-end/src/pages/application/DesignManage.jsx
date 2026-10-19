@@ -84,7 +84,8 @@ export default function DesignManage() {
 
   return (
     <Card
-      className="h-full overflow-y-hidden" bodyStyle={{padding: 0, height: 'calc(100% - 40px)' }}
+      className="h-full overflow-y-hidden"
+      bodyStyle={{ padding: 0, height: 'calc(100% - 46px)' }}
       title={`${app?.name ? app.name + ' - ' : ''}表单设计`}
       extra={
         <Space>
@@ -97,8 +98,8 @@ export default function DesignManage() {
         </Space>
       }
     >
-      <Tabs type="line" justify>
-        <TabPane key="layout" title="表单设置布局" forceRender>
+      <Tabs type="line" justify className="[&_.arco-tabs-content]:p-0!">
+        <TabPane key="layout" title="表单设置布局">
           <LayoutManage
             ref={layoutRef}
             app={app}
@@ -106,7 +107,7 @@ export default function DesignManage() {
             onRefreshElements={loadElements}
           />
         </TabPane>
-        <TabPane key="examine" title="审批流程" forceRender>
+        <TabPane key="examine" title="审批流程" className="p-3 overflow-y-auto">
           <ExamineManage
             ref={examineRef}
             app={app}

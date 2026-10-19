@@ -42,7 +42,10 @@ const genId = () => `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
  * 表单设置布局组件（嵌入 DesignManage）：
  * 数据由父级统一请求（app / elements），这里只负责画布编排与本地布局状态。
  */
-const LayoutManage = forwardRef(function LayoutManage({ app = null, elements = [], onRefreshElements }, ref) {
+const LayoutManage = forwardRef(function LayoutManage(
+  { app = null, elements = [], onRefreshElements },
+  ref,
+) {
   // 左侧组件库（来自父级传入的表单元素）
   const library = useMemo(
     () => (elements || []).map((item) => ({ ...item, element_id: item.id })),
@@ -333,17 +336,12 @@ const LayoutManage = forwardRef(function LayoutManage({ app = null, elements = [
   }
 
   return (
-    <div className="flex h-full min-w-330 items-stretch">
+    <div className="flex h-full items-stretch">
       {/* ========== 左侧：组件库（按表分组，两列网格） ========== */}
       <div className="flex w-83 shrink-0 flex-col">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
           <span className="text-sm font-medium text-gray-800">组件库</span>
-          <Button
-            type="text"
-            size="mini"
-            icon={<IconSync />}
-            onClick={handleRefreshLibrary}
-          >
+          <Button type="text" size="mini" icon={<IconSync />} onClick={handleRefreshLibrary}>
             刷新
           </Button>
         </div>
@@ -419,7 +417,7 @@ const LayoutManage = forwardRef(function LayoutManage({ app = null, elements = [
 
       {/* ========== 中间：预览画布（自定义 Header，标题靠左 / 按钮靠右） ========== */}
       <div className="flex min-w-0 flex-1 flex-col border-x border-gray-200">
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 py-2 px-3">
           <div className="w-60 text-sm font-medium text-gray-800">预览画布</div>
           {/* 表单页 / 详情页切换 */}
           <Radio.Group
@@ -445,44 +443,48 @@ const LayoutManage = forwardRef(function LayoutManage({ app = null, elements = [
           </div>
         </div>
 
-        {/* 中间画布：渲染逻辑与拖拽/选中/删除交互统一由 DynamicForm（move-* 模式）承载 */}
-        <DynamicForm
-          app={{ form_layout_json: { formConfig, elements: layoutElements } }}
-          pageType={activePage === 'form' ? 'move-form' : 'move-detail'}
-          selectedId={selectedId}
-          dragOverIndex={dragOverIndex}
-          onSelectElement={(el) => {
-            setSelectedId(el.id)
-            setActivePanel('element')
-          }}
-          onRemoveElement={removeElement}
-          onElementDragStart={(e, el) => {
-            dragType.current = 'move'
-            dragSourceId.current = el.id
-            e.dataTransfer.effectAllowed = 'move'
-            e.stopPropagation()
-          }}
-          onElementDragOver={(e, index) => {
-            e.preventDefault()
-            e.stopPropagation()
-            setDragOverIndex(index)
-          }}
-          onElementDrop={(e, index) => handleCanvasDrop(e, index)}
-          onDragEnd={() => {
-            dragType.current = null
-            dragSourceId.current = null
-            setDragOverIndex(null)
-          }}
-          onCanvasDragOver={(e) => {
-            e.preventDefault()
-            e.dataTransfer.dropEffect = dragType.current === 'move' ? 'move' : 'copy'
-          }}
-          onCanvasDrop={(e) => handleCanvasDrop(e, -1)}
-          onCanvasClick={() => {
-            setSelectedId(null)
-            setActivePanel('form')
-          }}
-        />
+        {/* 中间画布：宽度小于 750px 时出现横向滚动条 */}
+        <div className="flex-1 overflow-x-auto overflow-y-auto">
+          <div className="min-w-188">
+            <DynamicForm
+              app={{ form_layout_json: { formConfig, elements: layoutElements } }}
+              pageType={activePage === 'form' ? 'move-form' : 'move-detail'}
+              selectedId={selectedId}
+              dragOverIndex={dragOverIndex}
+              onSelectElement={(el) => {
+                setSelectedId(el.id)
+                setActivePanel('element')
+              }}
+              onRemoveElement={removeElement}
+              onElementDragStart={(e, el) => {
+                dragType.current = 'move'
+                dragSourceId.current = el.id
+                e.dataTransfer.effectAllowed = 'move'
+                e.stopPropagation()
+              }}
+              onElementDragOver={(e, index) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setDragOverIndex(index)
+              }}
+              onElementDrop={(e, index) => handleCanvasDrop(e, index)}
+              onDragEnd={() => {
+                dragType.current = null
+                dragSourceId.current = null
+                setDragOverIndex(null)
+              }}
+              onCanvasDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = dragType.current === 'move' ? 'move' : 'copy'
+              }}
+              onCanvasDrop={(e) => handleCanvasDrop(e, -1)}
+              onCanvasClick={() => {
+                setSelectedId(null)
+                setActivePanel('form')
+              }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* ========== 右侧：属性配置面板（Tabs 作为顶部导航） ========== */}
@@ -490,11 +492,11 @@ const LayoutManage = forwardRef(function LayoutManage({ app = null, elements = [
         <Tabs
           activeTab={panelKey}
           onChange={setActivePanel}
-          className="flex min-h-0 flex-1 flex-col py-px [&_.arco-tabs-content]:min-h-0 [&_.arco-tabs-content]:flex-1 [&_.arco-tabs-content]:overflow-y-auto! [&_.arco-tabs-content]:px-3"
+          className="flex min-h-0 flex-1 flex-col py-px [&_.arco-tabs-pane]:overflow-y-auto"
         >
           {/* 表单全局设置 */}
           <TabPane key="form" title="表单设置">
-            <div className="flex flex-col gap-4 py-2">
+            <div className="flex flex-col gap-4 p-3 py-2">
               <div>
                 <div className="mb-2 text-sm text-gray-600">布局方式</div>
                 <Radio.Group
@@ -564,7 +566,7 @@ const LayoutManage = forwardRef(function LayoutManage({ app = null, elements = [
           {/* 元素属性设置：未选中元素时不渲染该 Tab，内容统一由配置中心分发（常规控件通用面板 + 基础组件专属面板） */}
           {selectedElement && (
             <TabPane key="element" title="元素属性">
-              <div className="flex flex-col gap-4 py-2">
+              <div className="flex flex-col gap-4 p-3">
                 {renderElementSettings(selectedElement, settingsCtx)}
               </div>
             </TabPane>

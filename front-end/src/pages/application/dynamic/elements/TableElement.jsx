@@ -458,7 +458,6 @@ export const renderTableSettings = ({
   selectedElement,
   appTables,
   tableFieldsMap,
-  fieldLoadingKeys,
   handleTableKeyChange,
   handleColumnFieldChange,
   updateSelectedElement,
@@ -496,7 +495,6 @@ export const renderTableSettings = ({
           placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
           value={col.dataIndex || undefined}
           disabled={!selectedElement.table_key}
-          loading={Boolean(fieldLoadingKeys[selectedElement.table_key])}
           options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => {
             const fk = f.field_key || f.name || String(f.id)
             return {
