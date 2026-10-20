@@ -70,6 +70,24 @@ func main() {
 		}
 	}()
 
+	// 6.1 每分钟检查一次：到了生效时间的流程版本自动激活
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		if n, err := service.ActivateScheduledVersions(); err != nil {
+			logger.Errorf("版本定时激活失败: %v", err)
+		} else if n > 0 {
+			logger.Infof("版本定时激活 %d 个", n)
+		}
+		for range ticker.C {
+			if n, err := service.ActivateScheduledVersions(); err != nil {
+				logger.Errorf("版本定时激活失败: %v", err)
+			} else if n > 0 {
+				logger.Infof("版本定时激活 %d 个", n)
+			}
+		}
+	}()
+
 	// 7. 优雅停机
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

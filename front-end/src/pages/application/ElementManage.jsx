@@ -538,7 +538,7 @@ export default function ElementManage() {
     let cancelled = false
     loadTableOptions().then((cached) => {
       if (!cancelled && cached?.app?.name) {
-        updateTab(location.pathname, { title: `${cached.app.name} - ${MODULE_LABEL}` })
+        updateTab(location.pathname, { title: `${MODULE_LABEL} - ${cached.app.name}` })
       }
     })
     return () => {

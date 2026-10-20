@@ -3,6 +3,7 @@ package handler
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"back-end/internal/middleware"
 	"back-end/internal/model"
@@ -200,6 +201,136 @@ func ApplicationDelete(c *gin.Context) {
 		return
 	}
 	if err := service.ApplicationDelete(id); err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OKMsg(c, "删除成功")
+}
+
+// ApplicationVersionList GET /{APIPrefix}/application/:id/versions 版本列表
+func ApplicationVersionList(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	list, err := service.ApplicationVersionList(id)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, "查询版本列表失败")
+		return
+	}
+	response.OK(c, list)
+}
+
+// ApplicationVersionPublish POST /{APIPrefix}/application/:id/versions/publish 发布新版本
+func ApplicationVersionPublish(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req service.ApplicationVersionPublishReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeParamError, "请求体格式错误")
+		return
+	}
+	ver, err := service.PublishApplicationVersion(id, middleware.CurrentUserID(c), &req)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, ver)
+}
+
+// ApplicationVersionUpdateEffectiveAt PUT /{APIPrefix}/application/:id/versions/:versionId/effective_at 修改待生效版本的生效时间
+func ApplicationVersionUpdateEffectiveAt(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	versionID, err := strconv.ParseUint(c.Param("versionId"), 10, 64)
+	if err != nil || versionID == 0 {
+		response.Fail(c, response.CodeParamError, "版本 ID 非法")
+		return
+	}
+	var body struct {
+		EffectiveAt *time.Time `json:"effective_at"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.EffectiveAt == nil {
+		response.Fail(c, response.CodeParamError, "effective_at 不能为空")
+		return
+	}
+	if err := service.UpdateApplicationVersionEffectiveAt(id, uint(versionID), *body.EffectiveAt); err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OKMsg(c, "更新成功")
+}
+
+// ApplicationVersionUpdate PUT /{APIPrefix}/application/:id/versions/:versionId 保存版本的三个 json 快照
+func ApplicationVersionUpdate(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	versionID, err := strconv.ParseUint(c.Param("versionId"), 10, 64)
+	if err != nil || versionID == 0 {
+		response.Fail(c, response.CodeParamError, "版本 ID 非法")
+		return
+	}
+	var body struct {
+		FormLayoutJSON   interface{} `json:"form_layout_json"`
+		DetailLayoutJSON interface{} `json:"detail_layout_json"`
+		ApprovalFlowJSON interface{} `json:"approval_flow_json"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.Fail(c, response.CodeParamError, "请求体格式错误")
+		return
+	}
+	if err := service.UpdateApplicationVersionSnapshot(id, uint(versionID), body.FormLayoutJSON, body.DetailLayoutJSON, body.ApprovalFlowJSON); err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OKMsg(c, "保存成功")
+}
+
+// ApplicationVersionRepublish PUT /{APIPrefix}/application/:id/versions/:versionId/publish 基于已有版本再次发布
+func ApplicationVersionRepublish(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	versionID, err := strconv.ParseUint(c.Param("versionId"), 10, 64)
+	if err != nil || versionID == 0 {
+		response.Fail(c, response.CodeParamError, "版本 ID 非法")
+		return
+	}
+	var body struct {
+		Remark      string     `json:"remark"`
+		EffectiveAt *time.Time `json:"effective_at"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.Fail(c, response.CodeParamError, "请求体格式错误")
+		return
+	}
+	ver, err := service.RepublishApplicationVersion(id, uint(versionID), body.Remark, body.EffectiveAt)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, ver)
+}
+
+// ApplicationVersionDelete DELETE /{APIPrefix}/application/:id/versions/:versionId 删除待生效版本
+func ApplicationVersionDelete(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	versionID, err := strconv.ParseUint(c.Param("versionId"), 10, 64)
+	if err != nil || versionID == 0 {
+		response.Fail(c, response.CodeParamError, "版本 ID 非法")
+		return
+	}
+	if err := service.DeleteApplicationVersion(id, uint(versionID)); err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}

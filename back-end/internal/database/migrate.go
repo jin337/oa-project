@@ -47,6 +47,7 @@ var migrations = []migration{
 				&model.Dept{},
 				&model.Application{},
 				&model.ApplicationElement{},
+				&model.ApplicationVersion{},
 				&model.ApprovalCategory{},
 				&model.ApprovalCategoryItem{},
 				&model.ApprovalInstance{},
@@ -59,6 +60,23 @@ var migrations = []migration{
 			)
 		},
 		Seed: seedInitData,
+	},
+	{
+		Version: 2,
+		Name:    "add_application_version",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(
+				&model.ApplicationVersion{},
+				&model.Application{},
+			)
+		},
+	},
+	{
+		Version: 3,
+		Name:    "add_instance_layout_snapshot",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.ApprovalInstance{})
+		},
 	},
 }
 

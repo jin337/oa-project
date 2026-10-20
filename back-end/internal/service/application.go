@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"reflect"
 	"regexp"
 	"sort"
@@ -60,7 +61,49 @@ func ApplicationDetail(id uint) (*model.Application, error) {
 	// 布局存增量：完整数据从表单元素管理补全（修改元素设置无需回布局重配）
 	app.FormLayoutJSON = mergeLayoutJSON(app.FormLayoutJSON, app.ID)
 	app.DetailLayoutJSON = mergeLayoutJSON(app.DetailLayoutJSON, app.ID)
+	// 草稿为空时，以当前已生效版本作为设计页的起点（避免进入设计页看到空白）
+	if app.CurrentVersionID > 0 && isEmptyLayout(app.FormLayoutJSON) && isEmptyLayout(app.DetailLayoutJSON) {
+		var ver model.ApplicationVersion
+		if err := database.DB.Where("id = ? AND status = ?", app.CurrentVersionID, model.AppVersionStatusActive).First(&ver).Error; err == nil {
+			if isEmptyLayout(app.FormLayoutJSON) {
+				app.FormLayoutJSON = mergeLayoutJSON(ver.FormLayoutJSON, app.ID)
+			}
+			if isEmptyLayout(app.DetailLayoutJSON) {
+				app.DetailLayoutJSON = mergeLayoutJSON(ver.DetailLayoutJSON, app.ID)
+			}
+			if app.ApprovalFlowJSON == nil {
+				app.ApprovalFlowJSON = ver.ApprovalFlowJSON
+			}
+		}
+	}
 	return &app, nil
+}
+
+func isEmptyLayout(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	elements, _ := m["elements"].([]interface{})
+	return len(elements) == 0
+}
+
+// ApplyActiveVersionSnapshot 运行时把 app 上的三个 json 替换成当前 active 版本快照；
+// 若没有 active 版本则保持草稿不变。编辑页（ApplicationDetail）不调用本函数。
+func ApplyActiveVersionSnapshot(app *model.Application) {
+	if app == nil || app.CurrentVersionID == 0 {
+		return
+	}
+	var ver model.ApplicationVersion
+	if err := database.DB.Where("id = ? AND status = ?", app.CurrentVersionID, model.AppVersionStatusActive).First(&ver).Error; err != nil {
+		return
+	}
+	app.FormLayoutJSON = ver.FormLayoutJSON
+	app.DetailLayoutJSON = ver.DetailLayoutJSON
+	app.ApprovalFlowJSON = ver.ApprovalFlowJSON
 }
 
 // visibilityFlag 判断 ApplicationElement.Visibility 中指定开关是否为真（list/search），兼容 JSON 反序列化后的数字类型
@@ -401,6 +444,8 @@ func ApplicationByCode(code, state string, page, size int, filters map[string]st
 	if err := database.DB.Where("code = ?", code).First(&app).Error; err != nil {
 		return nil, errors.New("页面配置不存在")
 	}
+	// 运行时读取当前生效版本的快照；若没有生效版本则回退到草稿
+	ApplyActiveVersionSnapshot(&app)
 	result := &model.ApplicationByCodeResult{Application: app}
 
 	switch state {
@@ -1487,4 +1532,261 @@ func ApplicationDelete(id uint) error {
 
 	// 物理表全部删除成功后，再软删除配置记录
 	return database.DB.Delete(&model.Application{}, id).Error
+}
+
+// ==================== 流程版本管理 ====================
+
+// ApplicationVersionPublishReq 发布版本请求
+type ApplicationVersionPublishReq struct {
+	Remark      string     `json:"remark"`
+	EffectiveAt *time.Time `json:"effective_at"` // 不传=立即生效
+}
+
+// publishNextVersionNo 生成应用内下一个版本号 v1/v2...
+// 重用空缺号：取 v1..vN 中第一个未被占用的编号（含软删除行，避免撞唯一索引）
+func publishNextVersionNo(appID uint) string {
+	var rows []model.ApplicationVersion
+	database.DB.Unscoped().Where("application_id = ?", appID).Find(&rows)
+	used := map[int]bool{}
+	maxN := 0
+	for _, r := range rows {
+		var n int
+		if _, err := fmt.Sscanf(r.VersionNo, "v%d", &n); err == nil && n > 0 {
+			used[n] = true
+			if n > maxN {
+				maxN = n
+			}
+		}
+	}
+	for i := 1; i <= maxN+1; i++ {
+		if !used[i] {
+			return fmt.Sprintf("v%d", i)
+		}
+	}
+	return "v1"
+}
+
+// PublishApplicationVersion 把当前草稿（application 上的三个 json）快照成新版本：
+// - EffectiveAt 为空或 <= now：立即生效（事务内替换当前版本）
+// - EffectiveAt 在未来：置为待生效，由定时任务到时切换
+func PublishApplicationVersion(appID uint, curUserID uint, req *ApplicationVersionPublishReq) (*model.ApplicationVersion, error) {
+	var app model.Application
+	if err := database.DB.First(&app, appID).Error; err != nil {
+		return nil, errors.New("页面配置不存在")
+	}
+	effectiveAt := time.Now()
+	if req.EffectiveAt != nil && req.EffectiveAt.After(effectiveAt) {
+		effectiveAt = *req.EffectiveAt
+	} else if req.EffectiveAt != nil && !req.EffectiveAt.After(time.Now()) {
+		return nil, errors.New("生效时间不能早于当前时间")
+	}
+	// 定时生效时，校验同一应用下没有其他待生效版本占用该分钟
+	if effectiveAt.After(time.Now()) {
+		if err := checkScheduledTimeConflict(app.ID, effectiveAt, 0); err != nil {
+			return nil, err
+		}
+	}
+	now := time.Now()
+	ver := model.ApplicationVersion{
+		ApplicationID:    app.ID,
+		VersionNo:        publishNextVersionNo(app.ID),
+		Remark:           req.Remark,
+		FormLayoutJSON:   app.FormLayoutJSON,
+		DetailLayoutJSON: app.DetailLayoutJSON,
+		ApprovalFlowJSON: app.ApprovalFlowJSON,
+		Status:           model.AppVersionStatusScheduled,
+		EffectiveAt:      effectiveAt,
+		CreatedBy:        curUserID,
+	}
+
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// 行锁：避免并发发布同时激活多个版本
+		var lockedApp model.Application
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lockedApp, app.ID).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&ver).Error; err != nil {
+			return err
+		}
+		// 立即生效：替换当前版本
+		if !effectiveAt.After(now) {
+			if err := activateVersion(tx, &ver); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ver, nil
+}
+
+// activateVersion 在事务内把指定版本置为 active，并把同应用旧 active 置为 expired，回写 application 当前版本
+func activateVersion(tx *gorm.DB, ver *model.ApplicationVersion) error {
+	now := time.Now()
+	// 锁应用行，避免与手动立即发布并发
+	var lockedApp model.Application
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lockedApp, ver.ApplicationID).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&model.ApplicationVersion{}).
+		Where("application_id = ? AND status = ?", ver.ApplicationID, model.AppVersionStatusActive).
+		Updates(map[string]interface{}{"status": model.AppVersionStatusExpired, "expired_at": now}).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(ver).Update("status", model.AppVersionStatusActive).Error; err != nil {
+		return err
+	}
+	return tx.Model(&model.Application{}).Where("id = ?", ver.ApplicationID).
+		Updates(map[string]interface{}{"current_version_id": ver.ID, "current_version_no": ver.VersionNo}).Error
+}
+
+// ApplicationVersionList 版本列表（倒序）
+func ApplicationVersionList(appID uint) ([]model.ApplicationVersion, error) {
+	var list []model.ApplicationVersion
+	err := database.DB.Where("application_id = ?", appID).Order("id DESC").Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	// 版本快照存的是 compact（仅 element_id + 覆盖项），返回前按表单元素管理合并补全 label 等基础信息
+	for i := range list {
+		list[i].FormLayoutJSON = mergeLayoutJSON(list[i].FormLayoutJSON, appID)
+		list[i].DetailLayoutJSON = mergeLayoutJSON(list[i].DetailLayoutJSON, appID)
+	}
+	return list, nil
+}
+
+// ActivateScheduledVersions 定时任务：把已到生效时间的待生效版本激活
+func ActivateScheduledVersions() (int, error) {
+	var due []model.ApplicationVersion
+	if err := database.DB.Where("status = ? AND effective_at <= ?", model.AppVersionStatusScheduled, time.Now()).
+		Find(&due).Error; err != nil {
+		return 0, err
+	}
+	count := 0
+	for i := range due {
+		err := database.DB.Transaction(func(tx *gorm.DB) error {
+			return activateVersion(tx, &due[i])
+		})
+		if err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, nil
+}
+
+// checkScheduledTimeConflict 同一应用下，不允许其他「待生效」版本占用完全相同的生效时间（精确到秒）
+func checkScheduledTimeConflict(appID uint, effectiveAt time.Time, excludeVersionID uint) error {
+	var cnt int64
+	q := database.DB.Model(&model.ApplicationVersion{}).
+		Where("application_id = ? AND status = ? AND effective_at = ?",
+			appID, model.AppVersionStatusScheduled, effectiveAt)
+	if excludeVersionID > 0 {
+		q = q.Where("id <> ?", excludeVersionID)
+	}
+	if err := q.Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt > 0 {
+		return errors.New("该生效时间已被其他待生效版本占用，请调整时间")
+	}
+	return nil
+}
+
+// UpdateApplicationVersionEffectiveAt 仅允许修改「待生效」版本的生效时间
+func UpdateApplicationVersionEffectiveAt(appID, versionID uint, effectiveAt time.Time) error {
+	var ver model.ApplicationVersion
+	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&ver).Error; err != nil {
+		return errors.New("版本不存在")
+	}
+	if ver.Status != model.AppVersionStatusScheduled {
+		return errors.New("仅待生效版本可修改生效时间")
+	}
+	if !effectiveAt.After(time.Now()) {
+		return errors.New("生效时间不能早于当前时间")
+	}
+	if err := checkScheduledTimeConflict(appID, effectiveAt, versionID); err != nil {
+		return err
+	}
+	return database.DB.Model(&ver).Update("effective_at", effectiveAt).Error
+}
+
+// UpdateApplicationVersionSnapshot 预览某版本时直接保存该版本的三个 json 快照
+func UpdateApplicationVersionSnapshot(appID, versionID uint, formLayout, detailLayout, approvalFlow interface{}) error {
+	var ver model.ApplicationVersion
+	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&ver).Error; err != nil {
+		return errors.New("版本不存在")
+	}
+	if m, ok := formLayout.(map[string]interface{}); ok {
+		ver.FormLayoutJSON = m
+	}
+	if m, ok := detailLayout.(map[string]interface{}); ok {
+		ver.DetailLayoutJSON = m
+	}
+	ver.ApprovalFlowJSON = approvalFlow
+	return database.DB.Model(&ver).Select("form_layout_json", "detail_layout_json", "approval_flow_json").Updates(ver).Error
+}
+
+// DeleteApplicationVersion 仅允许删除「待生效」版本（物理删除，避免软删除行占唯一索引）
+func DeleteApplicationVersion(appID, versionID uint) error {
+	var ver model.ApplicationVersion
+	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&ver).Error; err != nil {
+		return errors.New("版本不存在")
+	}
+	if ver.Status != model.AppVersionStatusScheduled {
+		return errors.New("仅待生效版本可删除")
+	}
+	return database.DB.Unscoped().Delete(&ver).Error
+}
+
+// RepublishApplicationVersion 基于已有版本再次发布：更新 json / remark，按 effective_at 决定立即激活或保持定时
+func RepublishApplicationVersion(appID, versionID uint, remark string, effectiveAt *time.Time) (*model.ApplicationVersion, error) {
+	var ver model.ApplicationVersion
+	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&ver).Error; err != nil {
+		return nil, errors.New("版本不存在")
+	}
+	now := time.Now()
+	eff := now
+	if effectiveAt != nil {
+		if !effectiveAt.After(now) {
+			return nil, errors.New("生效时间不能早于当前时间")
+		}
+		eff = *effectiveAt
+	}
+	if eff.After(now) {
+		if err := checkScheduledTimeConflict(appID, eff, ver.ID); err != nil {
+			return nil, err
+		}
+	}
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		var lockedApp model.Application
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lockedApp, appID).Error; err != nil {
+			return err
+		}
+		updates := map[string]interface{}{
+			"remark":       remark,
+			"effective_at": eff,
+		}
+		if eff.Sub(now).Seconds() <= 0 {
+			updates["status"] = model.AppVersionStatusActive
+		} else {
+			updates["status"] = model.AppVersionStatusScheduled
+		}
+		if err := tx.Model(&ver).Updates(updates).Error; err != nil {
+			return err
+		}
+		if eff.Sub(now).Seconds() <= 0 {
+			if err := activateVersion(tx, &ver); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	database.DB.First(&ver, ver.ID)
+	return &ver, nil
 }

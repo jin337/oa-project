@@ -95,12 +95,16 @@ const LayoutManage = forwardRef(function LayoutManage(
   const [dragOverIndex, setDragOverIndex] = useState(null)
 
   // app 变化时回填表单页 / 详情页布局配置
+  // 仅在首次拿到 app 或 key（预览版本切换）变化时初始化一次；
+  // 不在每次 app prop 引用变化时重置，否则保存后 reloadApp 会把未提交到版本快照的新元素清空
+  const initializedRef = useRef(false)
   useEffect(() => {
-    if (!app) return
-    setLayouts((prev) => ({
-      form: parseLayoutJson(app?.form_layout_json) || prev.form,
-      detail: parseLayoutJson(app?.detail_layout_json) || prev.detail,
-    }))
+    if (!app || initializedRef.current) return
+    initializedRef.current = true
+    setLayouts({
+      form: parseLayoutJson(app?.form_layout_json) || { formConfig: { ...DEFAULT_FORM_CONFIG }, elements: [] },
+      detail: parseLayoutJson(app?.detail_layout_json) || { formConfig: { ...DEFAULT_FORM_CONFIG }, elements: [] },
+    })
   }, [app])
 
   // 手动刷新组件库：委托父级重新拉取元素列表

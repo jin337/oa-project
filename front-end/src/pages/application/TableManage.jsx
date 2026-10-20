@@ -129,7 +129,7 @@ export default function TableManage() {
         if (cancelled) return
         const app = res.data
         if (app?.name) {
-          updateTab(location.pathname, { title: `${app.name} - ${MODULE_LABEL}` })
+          updateTab(location.pathname, { title: `${MODULE_LABEL} - ${app.name}` })
         }
         const parsed = parseTables(app)
         setTables(parsed)

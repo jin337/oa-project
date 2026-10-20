@@ -33,5 +33,12 @@ func registerApplicationRoutes(api *gin.RouterGroup) {
 		applications.GET("/:id/data/:dataId", middleware.RequirePermission("application:edit"), handler.ApplicationDataDetail) // 流程数据详情
 		applications.PUT("/:id/data/:dataId", middleware.RequirePermission("application:edit"), handler.ApplicationDataUpdate) // 修改流程数据
 		applications.DELETE("/:id/data/:dataId", middleware.RequirePermission("application:edit"), handler.ApplicationDataDelete) // 删除流程数据
+		// 版本管理
+		applications.GET("/:id/versions", middleware.RequirePermission("application:edit"), handler.ApplicationVersionList) // 版本列表
+		applications.POST("/:id/versions/publish", middleware.RequirePermission("application:edit"), handler.ApplicationVersionPublish) // 发布新版本
+		applications.PUT("/:id/versions/:versionId/effective_at", middleware.RequirePermission("application:edit"), handler.ApplicationVersionUpdateEffectiveAt) // 修改待生效版本生效时间
+		applications.PUT("/:id/versions/:versionId", middleware.RequirePermission("application:edit"), handler.ApplicationVersionUpdate) // 保存版本快照
+		applications.PUT("/:id/versions/:versionId/publish", middleware.RequirePermission("application:edit"), handler.ApplicationVersionRepublish) // 基于已有版本再次发布
+		applications.DELETE("/:id/versions/:versionId", middleware.RequirePermission("application:edit"), handler.ApplicationVersionDelete) // 删除待生效版本
 	}
 }

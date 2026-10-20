@@ -2,6 +2,7 @@ import {
   Button,
   Card,
   Checkbox,
+  DatePicker,
   Dropdown,
   Form,
   Grid,
@@ -45,6 +46,7 @@ const ALL_COL_KEYS = [
   'table_name',
   'sub_table_name',
   'bill_prefix',
+  'current_version_no',
   'status',
 ]
 const EMPTY_FORM = {
@@ -79,6 +81,14 @@ export default function ApplicationManage() {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
+
+  // 版本列表弹窗
+  const [versionVisible, setVersionVisible] = useState(false)
+  const [versionLoading, setVersionLoading] = useState(false)
+  const [versionList, setVersionList] = useState([])
+  const [versionApp, setVersionApp] = useState(null)
+  const [editingVersion, setEditingVersion] = useState(null)
+  const [editingEffectiveAt, setEditingEffectiveAt] = useState(null)
 
   const fetchList = useCallback(
     async (p = page, s = size) => {
@@ -187,7 +197,7 @@ export default function ApplicationManage() {
   // 打开子页面：预添加独立页签并跳转，通过 state 传递流程名称
   const openSubPage = (record, module, label) => {
     const path = `/application/${record.id}/${module}`
-    addTab({ path, title: `${record.name} - ${label}` })
+    addTab({ path, title: `${label} - ${record.name}` })
     navigate(path)
   }
 
@@ -197,8 +207,101 @@ export default function ApplicationManage() {
     const path = '/application/list'
     const linkApp = `${record.code}:list`
     sessionStorage.setItem(`link_app:${path}`, linkApp)
-    addTab({ path, title: `${record.name} - 列表页` })
+    addTab({ path, title: `列表页 - ${record.name}` })
     navigate(path, { state: { link_app: linkApp } })
+  }
+
+  // 打开版本列表弹窗
+  const openVersions = async (record) => {
+    setVersionApp(record)
+    setVersionVisible(true)
+    setEditingVersion(null)
+    setVersionLoading(true)
+    try {
+      const res = await applicationApi.listApplicationVersions(record.id)
+      setVersionList(res.data || [])
+    } catch (e) {
+      setVersionList([])
+    } finally {
+      setVersionLoading(false)
+    }
+  }
+
+  const saveEditVersion = async () => {
+    if (!versionApp || !editingVersion || !editingEffectiveAt) return
+    try {
+      await applicationApi.updateApplicationVersionEffectiveAt(
+        versionApp.id,
+        editingVersion.id,
+        new Date(editingEffectiveAt).toISOString(),
+      )
+      Message.success('生效时间已更新')
+      setEditingVersion(null)
+      const res = await applicationApi.listApplicationVersions(versionApp.id)
+      setVersionList(res.data || [])
+    } catch (e) {
+      // 错误已在请求层提示
+    }
+  }
+
+  const deleteVersion = async (record) => {
+    try {
+      await applicationApi.deleteApplicationVersion(versionApp.id, record.id)
+      Message.success('已删除')
+      const res = await applicationApi.listApplicationVersions(versionApp.id)
+      setVersionList(res.data || [])
+    } catch (e) {
+      // 错误已在请求层提示
+    }
+  }
+
+  const formatTime = (v) => {
+    if (!v) return '-'
+    const d = new Date(v)
+    if (Number.isNaN(d.getTime())) return v
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const VERSION_STATUS = {
+    0: { label: '待生效', color: 'orange' },
+    1: { label: '已生效', color: 'green' },
+    2: { label: '已失效', color: 'gray' },
+  }
+
+  // 禁止选择当前时间之前的日期/时间
+  const toJsDate = (v) => {
+    if (!v) return null
+    if (v instanceof Date) return v
+    if (typeof v.toDate === 'function') return v.toDate()
+    return new Date(v)
+  }
+  const disablePastDate = (current) => {
+    const d = toJsDate(current)
+    if (!d) return false
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return d < today
+  }
+  const disablePastTime = (current) => {
+    const empty = { disabledHours: () => [], disabledMinutes: () => [], disabledSeconds: () => [] }
+    const d = toJsDate(current)
+    if (!d) return empty
+    const now = new Date()
+    const isToday =
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    if (!isToday) return empty
+    return {
+      disabledHours: () => Array.from({ length: now.getHours() }, (_, i) => i),
+      disabledMinutes: (h) =>
+        h === now.getHours() ? Array.from({ length: now.getMinutes() }, (_, i) => i) : [],
+      disabledSeconds: (h, m) =>
+        h === now.getHours() && m === now.getMinutes()
+          ? Array.from({ length: now.getSeconds() }, (_, i) => i)
+          : [],
+    }
   }
 
   // 操作列「更多」下拉菜单分发：仅含配置类子页面入口，编辑/删除为平铺按钮
@@ -272,6 +375,25 @@ export default function ApplicationManage() {
       dataIndex: 'bill_prefix',
       width: 110,
       render: (v) => v || '-',
+    },
+    {
+      key: 'current_version_no',
+      title: '当前版本号',
+      dataIndex: 'current_version_no',
+      align: 'center',
+      width: 110,
+      render: (v, record) =>
+        v ? (
+          <Typography.Text
+            type="primary"
+            className="cursor-pointer"
+            onClick={() => openVersions(record)}
+          >
+            {v}
+          </Typography.Text>
+        ) : (
+          '-'
+        ),
     },
     {
       key: 'status',
@@ -502,6 +624,96 @@ export default function ApplicationManage() {
             </Col>
           </Row>
         </Form>
+      </Modal>
+
+      <Modal
+        title={versionApp ? `${versionApp.name} - 版本列表` : '版本列表'}
+        visible={versionVisible}
+        footer={null}
+        autoFocus={false}
+        onCancel={() => {
+          setVersionVisible(false)
+          setEditingVersion(null)
+        }}
+        unmountOnExit
+        className="w-240! max-w-[90vw] [&_.arco-modal-content]:max-h-[60vh] [&_.arco-modal-content]:overflow-y-auto"
+      >
+        <Table
+          rowKey="id"
+          loading={versionLoading}
+          data={versionList}
+          pagination={false}
+          columns={[
+            { title: '版本号', dataIndex: 'version_no', width: 80, align: 'center' },
+            {
+              title: '状态',
+              dataIndex: 'status',
+              width: 90,
+              render: (s) => {
+                const cfg = VERSION_STATUS[s] || { label: String(s), color: 'gray' }
+                return <Tag color={cfg.color}>{cfg.label}</Tag>
+              },
+            },
+            {
+              title: '生效时间',
+              dataIndex: 'effective_at',
+              width: 220,
+              render: (v, record) =>
+                editingVersion?.id === record.id ? (
+                  <DatePicker
+                    showTime
+                    size="mini"
+                    style={{ width: '100%' }}
+                    disabledDate={disablePastDate}
+                    disabledTime={disablePastTime}
+                    value={editingEffectiveAt}
+                    onChange={(val) => setEditingEffectiveAt(val)}
+                  />
+                ) : (
+                  formatTime(v)
+                ),
+            },
+            { title: '失效时间', dataIndex: 'expired_at', width: 160, render: formatTime },
+            { title: '版本说明', dataIndex: 'remark', render: (v) => v || '-' },
+            {
+              title: '操作',
+              width: 130,
+              render: (_, record) => {
+                if (record.status !== 0) return '-'
+                if (editingVersion?.id === record.id) {
+                  return (
+                    <Space size="small">
+                      <Button size="mini" type="primary" onClick={saveEditVersion}>
+                        保存
+                      </Button>
+                      <Button size="mini" onClick={() => setEditingVersion(null)}>
+                        取消
+                      </Button>
+                    </Space>
+                  )
+                }
+                return (
+                  <Space size="small">
+                    <Button
+                      size="mini"
+                      onClick={() => {
+                        setEditingVersion(record)
+                        setEditingEffectiveAt(record.effective_at)
+                      }}
+                    >
+                      编辑
+                    </Button>
+                    <Popconfirm title="确认删除该待生效版本？" onOk={() => deleteVersion(record)}>
+                      <Button size="mini" status="danger">
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                )
+              },
+            },
+          ]}
+        />
       </Modal>
     </Card>
   )

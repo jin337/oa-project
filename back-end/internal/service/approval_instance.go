@@ -73,6 +73,8 @@ func prepareApprovalContext(appID, businessDataID uint, selfSelectMembers map[st
 	if err != nil {
 		return nil, err
 	}
+	// 运行时使用当前 active 版本快照发起审批
+	ApplyActiveVersionSnapshot(app)
 	if !isValidTableName(app.TableName) {
 		return nil, errors.New("非法的表名")
 	}
@@ -280,9 +282,11 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 			BusinessTable:         ctx.app.TableName,
 			BusinessDataID:        req.BusinessDataID,
 			ApprovalFlowJSON:      ctx.injectedNodes, // 直接传入结构化数据，由 GORM serializer:json 统一序列化
+			FormLayoutJSON:        ctx.app.FormLayoutJSON,
+			DetailLayoutJSON:      ctx.app.DetailLayoutJSON,
 			ExecutionPath:         ctx.execPath,
 			CurrentNodeIdx:        0,
-			Status: model.InstanceStatusRunning,
+			Status:                model.InstanceStatusRunning,
 			DeptID:                creator.DeptID,
 			// 提交即进入审批流转，不持久化草稿暂存（approval_draft_members 仅草稿专用）；
 			// 撤回回退草稿时由 ApprovalInstanceWithdraw 从快照自选节点写回暂存
@@ -341,8 +345,10 @@ func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		BusinessTable:         ctx.app.TableName,
 		BusinessDataID:        req.BusinessDataID,
 		ApprovalFlowJSON:      ctx.injectedNodes,
+		FormLayoutJSON:        ctx.app.FormLayoutJSON,
+		DetailLayoutJSON:      ctx.app.DetailLayoutJSON,
 		ExecutionPath:         ctx.execPath,
-		CurrentNodeIdx:        0,
+		CurrentNodeIdx:       0,
 		Status:                model.InstanceStatusDraft,
 		ApprovalDraftMembers: req.ApprovalDraftMembers,
 		DeptID:                creator.DeptID,
@@ -385,6 +391,8 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		// 4. 序列化快照（Updates map 不走 serializer，需手动序列化）
 		injectedFlowBytes, _ := json.Marshal(ctx.injectedNodes)
 		execPathBytes, _ := json.Marshal(ctx.execPath)
+		formLayoutBytes, _ := json.Marshal(ctx.app.FormLayoutJSON)
+		detailLayoutBytes, _ := json.Marshal(ctx.app.DetailLayoutJSON)
 
 		// 5. 自选成员：本次未传（nil）视为清空暂存，传了则覆盖暂存
 		selfSelectJSON := "null"
@@ -403,6 +411,8 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 				"business_table":           ctx.app.TableName,
 				"business_data_id":         req.BusinessDataID,
 				"approval_flow_json":       string(injectedFlowBytes),
+				"form_layout_json":         string(formLayoutBytes),
+				"detail_layout_json":        string(detailLayoutBytes),
 				"execution_path":           string(execPathBytes),
 				"current_node_idx":         0,
 				"status":                   model.InstanceStatusDraft,
@@ -475,6 +485,8 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 	// 6. 序列化快照（Updates map 不走 serializer，需手动序列化）
 	injectedFlowBytes, _ := json.Marshal(ctx.injectedNodes)
 	execPathBytes, _ := json.Marshal(ctx.execPath)
+	formLayoutBytes, _ := json.Marshal(ctx.app.FormLayoutJSON)
+	detailLayoutBytes, _ := json.Marshal(ctx.app.DetailLayoutJSON)
 
 	// 7. 事务：原子状态流转（草稿→进行中）+ 更新快照/路径 + 生成首个任务
 	err = withNotify(func(tx *gorm.DB) error {
@@ -484,6 +496,8 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 				[]int{model.InstanceStatusDraft, model.InstanceStatusWithdrawn}).
 			Updates(map[string]interface{}{
 				"approval_flow_json":       string(injectedFlowBytes),
+				"form_layout_json":         string(formLayoutBytes),
+				"detail_layout_json":        string(detailLayoutBytes),
 				"execution_path":           string(execPathBytes),
 				"current_node_idx":         0,
 				"status":                   model.InstanceStatusRunning,
@@ -705,6 +719,8 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	// 布局采用增量存储（compact）：detail_layout_json 仅存布局自身字段 + 覆盖项，
 	// 读取时按 element_id 从表单元素管理合并补全（与 form_layout_json 一致），
 	// 保证修改表单元素设置后详情页即时生效、无需回布局管理重新拖拽
+	// 历史实例：优先使用 instance 上提交时冻结的 form/detail 布局快照；
+	// 老数据没有快照时回退到当前应用配置
 	var app model.Application
 	appName := ""
 	var detailLayoutJSON any
@@ -712,8 +728,24 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	var latestFlowJSON any // 审批流展示用应用最新配置（与 detail_layout_json 一致，读取时合并）
 	if err := database.DB.First(&app, instance.AppID).Error; err == nil {
 		appName = app.Name
-		detailLayoutJSON = mergeLayoutJSON(app.DetailLayoutJSON, instance.AppID)
-		formLayoutJSON = mergeLayoutJSON(app.FormLayoutJSON, instance.AppID)
+		if instance.DetailLayoutJSON != nil {
+			if m, ok := instance.DetailLayoutJSON.(map[string]interface{}); ok {
+				detailLayoutJSON = mergeLayoutJSON(m, instance.AppID)
+			} else {
+				detailLayoutJSON = instance.DetailLayoutJSON
+			}
+		} else {
+			detailLayoutJSON = mergeLayoutJSON(app.DetailLayoutJSON, instance.AppID)
+		}
+		if instance.FormLayoutJSON != nil {
+			if m, ok := instance.FormLayoutJSON.(map[string]interface{}); ok {
+				formLayoutJSON = mergeLayoutJSON(m, instance.AppID)
+			} else {
+				formLayoutJSON = instance.FormLayoutJSON
+			}
+		} else {
+			formLayoutJSON = mergeLayoutJSON(app.FormLayoutJSON, instance.AppID)
+		}
 		// 审批流展示应用最新配置；自选节点（approverType=3）的运行时成员从实例快照取（提交时注入），
 		// 避免详情/时间线丢失发起人已选的审批人、抄送人
 		latestFlowJSON = mergeFlowRuntimeMembers(app.ApprovalFlowJSON, instance.ApprovalFlowJSON)
