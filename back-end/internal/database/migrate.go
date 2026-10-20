@@ -61,23 +61,6 @@ var migrations = []migration{
 		},
 		Seed: seedInitData,
 	},
-	{
-		Version: 2,
-		Name:    "add_application_version",
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(
-				&model.ApplicationVersion{},
-				&model.Application{},
-			)
-		},
-	},
-	{
-		Version: 3,
-		Name:    "add_instance_layout_snapshot",
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(&model.ApprovalInstance{})
-		},
-	},
 }
 
 // migrateLogger 迁移日志（可开关、可自定义路径）

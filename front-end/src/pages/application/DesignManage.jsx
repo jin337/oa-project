@@ -14,7 +14,7 @@ import {
   Tag,
   Typography,
 } from '@arco-design/web-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
 import * as deptApi from 'src/api/dept'
@@ -26,6 +26,66 @@ import LayoutManage from 'src/pages/application/design/LayoutManage.jsx'
 import { transformDeptTree, transformRoleList } from 'src/pages/application/examine/flowModel'
 
 const TabPane = Tabs.TabPane
+
+const VERSION_STATUS = {
+  0: { label: '待生效', color: 'orange' },
+  1: { label: '已生效', color: 'green' },
+  2: { label: '已失效', color: 'gray' },
+}
+
+const parseJson = (v) => {
+  if (v == null || v === '') return null
+  if (typeof v === 'object') return v
+  try {
+    return JSON.parse(v)
+  } catch {
+    return null
+  }
+}
+
+const formatTime = (v) => {
+  if (!v) return '-'
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return v
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const toJsDate = (v) => {
+  if (!v) return null
+  if (v instanceof Date) return v
+  if (typeof v.toDate === 'function') return v.toDate()
+  return new Date(v)
+}
+
+const disablePastDate = (current) => {
+  const d = toJsDate(current)
+  if (!d) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return d < today
+}
+
+const disablePastTime = (current) => {
+  const empty = { disabledHours: () => [], disabledMinutes: () => [], disabledSeconds: () => [] }
+  const d = toJsDate(current)
+  if (!d) return empty
+  const now = new Date()
+  const isToday =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  if (!isToday) return empty
+  return {
+    disabledHours: () => Array.from({ length: now.getHours() }, (_, i) => i),
+    disabledMinutes: (h) =>
+      h === now.getHours() ? Array.from({ length: now.getMinutes() }, (_, i) => i) : [],
+    disabledSeconds: (h, m) =>
+      h === now.getHours() && m === now.getMinutes()
+        ? Array.from({ length: now.getSeconds() }, (_, i) => i)
+        : [],
+  }
+}
 
 /**
  * 表单设计统一入口：
@@ -53,7 +113,6 @@ export default function DesignManage() {
   const layoutRef = useRef(null)
   const examineRef = useRef(null)
 
-  // 拉取表单元素列表（子组件共用）
   const loadElements = useCallback(async () => {
     const res = await fetchAll((p) => applicationApi.listApplicationElements(id, p))
     setElements(res.data?.list || [])
@@ -64,7 +123,6 @@ export default function DesignManage() {
     setApp(res.data)
   }, [id])
 
-  // 流程详情 + 表单元素
   useEffect(() => {
     if (!id) return
     reloadApp().catch(() => {})
@@ -98,11 +156,9 @@ export default function DesignManage() {
         savedFlow = []
       }
     }
-    const approvalFlowJson =
-      Array.isArray(liveNodes) && liveNodes.length ? liveNodes : savedFlow || []
     return {
       ...layoutPayload,
-      approval_flow_json: approvalFlowJson,
+      approval_flow_json: Array.isArray(liveNodes) && liveNodes.length ? liveNodes : savedFlow || [],
     }
   }, [app])
 
@@ -113,12 +169,7 @@ export default function DesignManage() {
       if (previewVersion) {
         // 预览版本时，保存直接写回该版本快照，同时本地同步 previewVersion 避免切 tab 后用旧快照重挂载
         await applicationApi.updateApplicationVersion(id, previewVersion.id, payload)
-        setPreviewVersion((prev) => ({
-          ...prev,
-          form_layout_json: payload.form_layout_json,
-          detail_layout_json: payload.detail_layout_json,
-          approval_flow_json: payload.approval_flow_json,
-        }))
+        setPreviewVersion((prev) => ({ ...prev, ...payload }))
       } else {
         await applicationApi.updateApplication(id, payload)
       }
@@ -132,7 +183,6 @@ export default function DesignManage() {
 
   const openPublish = async () => {
     setPublishVisible(true)
-    // 拉一次版本列表，用于预填当前 active 版本的说明/生效时间
     let list = versionList
     try {
       const res = await applicationApi.listApplicationVersions(id)
@@ -158,12 +208,10 @@ export default function DesignManage() {
         reqPayload.effective_at = new Date(publishForm.effectiveAt).toISOString()
       }
       if (previewVersion) {
-        // 基于已有版本：先更新 json 快照，再设置生效时间/备注
         await applicationApi.updateApplicationVersion(id, previewVersion.id, payload)
         const republished = await applicationApi.republishApplicationVersion(id, previewVersion.id, reqPayload)
         setPreviewVersion(republished.data)
       } else {
-        // 新发布：先落草稿，再生成新版本
         await applicationApi.updateApplication(id, payload)
         const created = await applicationApi.publishApplicationVersion(id, reqPayload)
         setPreviewVersion(created.data)
@@ -227,82 +275,25 @@ export default function DesignManage() {
     }
   }
 
-  const formatTime = (v) => {
-    if (!v) return '-'
-    const d = new Date(v)
-    if (Number.isNaN(d.getTime())) return v
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-  }
-
-  const VERSION_STATUS = {
-    0: { label: '待生效', color: 'orange' },
-    1: { label: '已生效', color: 'green' },
-    2: { label: '已失效', color: 'gray' },
-  }
-
-  // 把版本快照中的 json 字段（可能是字符串或对象）解析成对象，供子组件渲染
-  const parseJsonField = (v) => {
-    if (v == null || v === '') return null
-    if (typeof v === 'object') return v
-    try {
-      return JSON.parse(v)
-    } catch {
-      return null
-    }
-  }
-
-  // 预览某版本：把表单布局 / 详情布局 / 审批流替换成该版本快照
   const switchPreview = (record) => {
     setPreviewVersion(record)
     setVersionVisible(false)
     setEditingVersion(null)
   }
 
-  // 当前传给子组件的 app：预览模式下用快照覆盖三个 json 字段
-  const effectiveApp = previewVersion
-    ? {
-        ...(app || {}),
-        form_layout_json: parseJsonField(previewVersion.form_layout_json),
-        detail_layout_json: parseJsonField(previewVersion.detail_layout_json),
-        approval_flow_json: parseJsonField(previewVersion.approval_flow_json),
-      }
-    : app
-
-  // 禁止选择当前时间之前的日期/时间
-  const toJsDate = (v) => {
-    if (!v) return null
-    if (v instanceof Date) return v
-    if (typeof v.toDate === 'function') return v.toDate()
-    return new Date(v)
-  }
-  const disablePastDate = (current) => {
-    const d = toJsDate(current)
-    if (!d) return false
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return d < today
-  }
-  const disablePastTime = (current) => {
-    const empty = { disabledHours: () => [], disabledMinutes: () => [], disabledSeconds: () => [] }
-    const d = toJsDate(current)
-    if (!d) return empty
-    const now = new Date()
-    const isToday =
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate()
-    if (!isToday) return empty
-    return {
-      disabledHours: () => Array.from({ length: now.getHours() }, (_, i) => i),
-      disabledMinutes: (h) =>
-        h === now.getHours() ? Array.from({ length: now.getMinutes() }, (_, i) => i) : [],
-      disabledSeconds: (h, m) =>
-        h === now.getHours() && m === now.getMinutes()
-          ? Array.from({ length: now.getSeconds() }, (_, i) => i)
-          : [],
-    }
-  }
+  // 预览模式下用快照覆盖三个 json 字段
+  const effectiveApp = useMemo(
+    () =>
+      previewVersion
+        ? {
+            ...(app || {}),
+            form_layout_json: parseJson(previewVersion.form_layout_json),
+            detail_layout_json: parseJson(previewVersion.detail_layout_json),
+            approval_flow_json: parseJson(previewVersion.approval_flow_json),
+          }
+        : app,
+    [app, previewVersion],
+  )
 
   return (
     <Card

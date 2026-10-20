@@ -627,7 +627,7 @@ export default function ApplicationManage() {
       </Modal>
 
       <Modal
-        title={versionApp ? `${versionApp.name} - 版本列表` : '版本列表'}
+        title={versionApp ? `版本列表 - ${versionApp.name}` : '版本列表'}
         visible={versionVisible}
         footer={null}
         autoFocus={false}
