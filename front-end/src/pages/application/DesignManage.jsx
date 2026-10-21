@@ -371,6 +371,7 @@ export default function DesignManage() {
               <DatePicker
                 showTime
                 style={{ width: '100%' }}
+                getPopupContainer={(node) => document.body}
                 disabledDate={disablePastDate}
                 disabledTime={disablePastTime}
                 value={publishForm.effectiveAt}
@@ -426,6 +427,7 @@ export default function DesignManage() {
                     size="mini"
                     showTime
                     style={{ width: '100%' }}
+                    getPopupContainer={(node) => document.body}
                     disabledDate={disablePastDate}
                     disabledTime={disablePastTime}
                     value={editingEffectiveAt}

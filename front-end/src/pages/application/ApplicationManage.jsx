@@ -664,6 +664,7 @@ export default function ApplicationManage() {
                     showTime
                     size="mini"
                     style={{ width: '100%' }}
+                    getPopupContainer={(node) => document.body}
                     disabledDate={disablePastDate}
                     disabledTime={disablePastTime}
                     value={editingEffectiveAt}
