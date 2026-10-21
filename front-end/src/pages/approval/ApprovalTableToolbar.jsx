@@ -28,7 +28,7 @@ export default function ApprovalTableToolbar({
   setVisibleCols,
   columns,
   colKeys,
-  placeholder = '按模块 / 申请人搜索',
+  placeholder = '按单号 / 模块 / 申请人搜索',
 }) {
   // 列设置弹层内容
   const colSettingsPopover = (
