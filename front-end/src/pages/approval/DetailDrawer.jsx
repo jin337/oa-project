@@ -375,7 +375,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   return (
     <SelectorDataContext.Provider value={selectorData}>
       <Drawer
-        className={'relative [&_.arco-drawer-content]:p-0!'}
+        className={'[&_.arco-drawer-content]:p-0!'}
         width="80%"
         title={`详情 - ${title}`}
         visible={visible}
@@ -384,30 +384,13 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         unmountOnExit
         maskClosable={false}
       >
-        {/* 审批状态印章：显示在标题栏右上角 */}
-        {instance && (
-          <div className={`absolute right-6 z-10 ${!showApproveButtons && !showDelegateButtons? 'top-5' : 'top-29'}`}>
-            <span
-              className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full bg-white text-base font-bold"
-              style={{
-                border: `2px solid ${statusConfig.color}`,
-                color: statusConfig.color,
-              }}
-            >
-              {statusConfig.text}
-            </span>
-          </div>
-        )}
-
         {loading ? (
-          <div className="flex h-40 items-center justify-center">
+          <div className="flex h-40 w-full items-center justify-center">
             <Spin />
           </div>
         ) : instance ? (
-          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
-             空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
-          <div className="@container flex h-full flex-wrap items-start">
-            <div className="h-full min-w-0 shrink grow basis-140 overflow-y-auto px-4 py-3">
+          <div className="flex h-full flex-nowrap items-start">
+            <div className="m-auto h-full min-w-187.5 shrink grow overflow-auto px-4 py-3">
               <DynamicForm
                 app={{ ...appFromInstance, form_layout_json: appFromInstance?.detail_layout_json }}
                 form={detailForm}
@@ -417,14 +400,30 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
                 detailDynamicStates={detailDynamicStates}
               />
             </div>
-            <div className="h-full w-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 @min-[985px]:w-100">
+            <div className="h-full w-100 shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3">
               {renderActions()}
-              <ApprovalTimeline
-                instanceId={record?.instance_id}
-                visible={visible}
-                initialData={instance}
-                assigneeNameMap={instance?.assignee_name_map}
-              />
+              {/* 审批状态印章：显示在标题栏右上角 */}
+              <div className="relative">
+                {instance && (
+                  <div className={`absolute -top-3 right-6 z-10`}>
+                    <span
+                      className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full bg-white text-base font-bold"
+                      style={{
+                        border: `2px solid ${statusConfig.color}`,
+                        color: statusConfig.color,
+                      }}
+                    >
+                      {statusConfig.text}
+                    </span>
+                  </div>
+                )}
+                <ApprovalTimeline
+                  instanceId={record?.instance_id}
+                  visible={visible}
+                  initialData={instance}
+                  assigneeNameMap={instance?.assignee_name_map}
+                />
+              </div>
             </div>
           </div>
         ) : !record?.instance_id ? (
