@@ -218,22 +218,22 @@ export const ELEMENT_RENDER_CONFIG = {
   },
   date: {
     renderPreview: (el) => (
-      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} getPopupContainer={(node) => document.body} />
     ),
   },
   datepicker: {
     renderPreview: (el) => (
-      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} getPopupContainer={(node) => document.body} />
     ),
   },
   time: {
     renderPreview: (el) => (
-      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} getPopupContainer={(node) => document.body} />
     ),
   },
   timepicker: {
     renderPreview: (el) => (
-      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} />
+      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} getPopupContainer={(node) => document.body} />
     ),
   },
   switch: {

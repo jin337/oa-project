@@ -44,13 +44,7 @@ import ApprovalTimeline from 'src/pages/approval/ApprovalTimeline.jsx'
  * @param {object} props.currentTask   当前用户的待办任务（含 id / instance_id），传入时显示同意/拒绝按钮
  * @param {function} props.onAction    操作成功后的回调（通知父组件刷新列表）
  */
-export default function DetailDrawer({
-  record,
-  visible,
-  onCancel,
-  currentTask,
-  onAction,
-}) {
+export default function DetailDrawer({ record, visible, onCancel, currentTask, onAction }) {
   const [loading, setLoading] = useState(false)
   const [instance, setInstance] = useState(null)
   const [loadError, setLoadError] = useState(false)
@@ -386,15 +380,13 @@ export default function DetailDrawer({
         title={`详情 - ${title}`}
         visible={visible}
         onCancel={onCancel}
-        footer={
-          renderActions()
-        }
+        footer={null}
         unmountOnExit
         maskClosable={false}
       >
         {/* 审批状态印章：显示在标题栏右上角 */}
         {instance && (
-          <div className="absolute top-3 right-6 z-10">
+          <div className={`absolute right-6 z-10 ${!showApproveButtons && !showDelegateButtons? 'top-5' : 'top-29'}`}>
             <span
               className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full bg-white text-base font-bold"
               style={{
@@ -414,8 +406,8 @@ export default function DetailDrawer({
         ) : instance ? (
           /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
              空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
-          <div className="@container flex flex-wrap items-start h-full">
-            <div className="min-w-0 shrink grow basis-140 px-4 py-3 h-full overflow-y-auto">
+          <div className="@container flex h-full flex-wrap items-start">
+            <div className="h-full min-w-0 shrink grow basis-140 overflow-y-auto px-4 py-3">
               <DynamicForm
                 app={{ ...appFromInstance, form_layout_json: appFromInstance?.detail_layout_json }}
                 form={detailForm}
@@ -425,7 +417,8 @@ export default function DetailDrawer({
                 detailDynamicStates={detailDynamicStates}
               />
             </div>
-            <div className="w-full shrink-0 @min-[985px]:w-100 border-l border-(--color-neutral-3) px-4 py-3 h-full overflow-y-auto">
+            <div className="h-full w-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 @min-[985px]:w-100">
+              {renderActions()}
               <ApprovalTimeline
                 instanceId={record?.instance_id}
                 visible={visible}
