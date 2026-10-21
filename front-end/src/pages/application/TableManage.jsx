@@ -127,7 +127,7 @@ export default function TableManage() {
       .getApplication(id)
       .then((res) => {
         if (cancelled) return
-        const app = res.data
+        const app = res.data?.application || res.data
         if (app?.name) {
           updateTab(location.pathname, { title: `${MODULE_LABEL} - ${app.name}` })
         }

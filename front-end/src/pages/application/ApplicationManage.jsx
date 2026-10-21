@@ -219,7 +219,7 @@ export default function ApplicationManage() {
     setVersionLoading(true)
     try {
       const res = await applicationApi.listApplicationVersions(record.id)
-      setVersionList(res.data || [])
+      setVersionList((res.data || []).filter((v) => v.status !== 3))
     } catch (e) {
       setVersionList([])
     } finally {
@@ -238,7 +238,7 @@ export default function ApplicationManage() {
       Message.success('生效时间已更新')
       setEditingVersion(null)
       const res = await applicationApi.listApplicationVersions(versionApp.id)
-      setVersionList(res.data || [])
+      setVersionList((res.data || []).filter((v) => v.status !== 3))
     } catch (e) {
       // 错误已在请求层提示
     }
@@ -249,7 +249,7 @@ export default function ApplicationManage() {
       await applicationApi.deleteApplicationVersion(versionApp.id, record.id)
       Message.success('已删除')
       const res = await applicationApi.listApplicationVersions(versionApp.id)
-      setVersionList(res.data || [])
+      setVersionList((res.data || []).filter((v) => v.status !== 3))
     } catch (e) {
       // 错误已在请求层提示
     }
@@ -378,7 +378,7 @@ export default function ApplicationManage() {
     },
     {
       key: 'current_version_no',
-      title: '当前版本号',
+      title: '当前版本',
       dataIndex: 'current_version_no',
       align: 'center',
       width: 110,

@@ -48,35 +48,78 @@ func ApplicationList(req *model.ApplicationListReq) ([]model.Application, int64,
 		return nil, 0, err
 	}
 	var list []model.Application
-	err := db.Order("id ASC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
+	err := db.Order("id ASC").Offset(req.Offset()).Limit(req.Limit()).
+		Omit("form_layout_json", "detail_layout_json", "approval_flow_json").
+		Find(&list).Error
 	return list, total, err
 }
 
-// ApplicationDetail 页面配置详情
-func ApplicationDetail(id uint) (*model.Application, error) {
+// GetOrCreateDraftVersion 返回该应用当前「设计中」版本（每个应用有且仅有一条）。
+// 若不存在，则从当前 active 版本克隆一条；若没有 active，建空行。
+// 通过锁应用行避免并发首次进入时同时建出两行撞唯一索引。
+func GetOrCreateDraftVersion(appID uint) (*model.ApplicationVersion, error) {
+	var draft model.ApplicationVersion
+	err := database.DB.Where("application_id = ? AND status = ?", appID, model.AppVersionStatusDraft).First(&draft).Error
+	if err == nil {
+		return &draft, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	// 加锁串行化首次创建
+	tx := database.DB.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	defer func() {
+		if tx.Rollback().Error != nil {
+			// ignore
+		}
+	}()
+	var app model.Application
+	if e := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&app, appID).Error; e != nil {
+		return nil, e
+	}
+	// 二次检查，避免在锁等待期间其他事务已经建好
+	if e := tx.Where("application_id = ? AND status = ?", appID, model.AppVersionStatusDraft).First(&draft).Error; e == nil {
+		tx.Commit()
+		return &draft, nil
+	}
+	ver := model.ApplicationVersion{
+		ApplicationID: appID,
+		VersionNo:     publishNextVersionNo(appID),
+		Status:        model.AppVersionStatusDraft,
+		EffectiveAt:   time.Now(),
+	}
+	var active model.ApplicationVersion
+	if e := tx.Where("application_id = ? AND status = ?", appID, model.AppVersionStatusActive).First(&active).Error; e == nil {
+		ver.FormLayoutJSON = active.FormLayoutJSON
+		ver.DetailLayoutJSON = active.DetailLayoutJSON
+		ver.ApprovalFlowJSON = active.ApprovalFlowJSON
+	}
+	if e := tx.Create(&ver).Error; e != nil {
+		return nil, e
+	}
+	if e := tx.Commit().Error; e != nil {
+		return nil, e
+	}
+	return &ver, nil
+}
+
+// ApplicationDetail 页面配置详情：设计页读的是「设计中」版本的 json
+func ApplicationDetail(id uint) (*model.Application, *model.ApplicationVersion, error) {
 	var app model.Application
 	if err := database.DB.First(&app, id).Error; err != nil {
-		return nil, errors.New("页面配置不存在")
+		return nil, nil, errors.New("页面配置不存在")
 	}
-	// 布局存增量：完整数据从表单元素管理补全（修改元素设置无需回布局重配）
-	app.FormLayoutJSON = mergeLayoutJSON(app.FormLayoutJSON, app.ID)
-	app.DetailLayoutJSON = mergeLayoutJSON(app.DetailLayoutJSON, app.ID)
-	// 草稿为空时，以当前已生效版本作为设计页的起点（避免进入设计页看到空白）
-	if app.CurrentVersionID > 0 && isEmptyLayout(app.FormLayoutJSON) && isEmptyLayout(app.DetailLayoutJSON) {
-		var ver model.ApplicationVersion
-		if err := database.DB.Where("id = ? AND status = ?", app.CurrentVersionID, model.AppVersionStatusActive).First(&ver).Error; err == nil {
-			if isEmptyLayout(app.FormLayoutJSON) {
-				app.FormLayoutJSON = mergeLayoutJSON(ver.FormLayoutJSON, app.ID)
-			}
-			if isEmptyLayout(app.DetailLayoutJSON) {
-				app.DetailLayoutJSON = mergeLayoutJSON(ver.DetailLayoutJSON, app.ID)
-			}
-			if app.ApprovalFlowJSON == nil {
-				app.ApprovalFlowJSON = ver.ApprovalFlowJSON
-			}
-		}
+	draft, err := GetOrCreateDraftVersion(id)
+	if err != nil {
+		return nil, nil, err
 	}
-	return &app, nil
+	app.FormLayoutJSON = mergeLayoutJSON(draft.FormLayoutJSON, id)
+	app.DetailLayoutJSON = mergeLayoutJSON(draft.DetailLayoutJSON, id)
+	app.ApprovalFlowJSON = draft.ApprovalFlowJSON
+	return &app, draft, nil
 }
 
 func isEmptyLayout(v interface{}) bool {
@@ -92,7 +135,7 @@ func isEmptyLayout(v interface{}) bool {
 }
 
 // ApplyActiveVersionSnapshot 运行时把 app 上的三个 json 替换成当前 active 版本快照；
-// 若没有 active 版本则保持草稿不变。编辑页（ApplicationDetail）不调用本函数。
+// 若没有 active 版本则保持原样。编辑页（ApplicationDetail）不调用本函数。
 func ApplyActiveVersionSnapshot(app *model.Application) {
 	if app == nil || app.CurrentVersionID == 0 {
 		return
@@ -101,8 +144,8 @@ func ApplyActiveVersionSnapshot(app *model.Application) {
 	if err := database.DB.Where("id = ? AND status = ?", app.CurrentVersionID, model.AppVersionStatusActive).First(&ver).Error; err != nil {
 		return
 	}
-	app.FormLayoutJSON = ver.FormLayoutJSON
-	app.DetailLayoutJSON = ver.DetailLayoutJSON
+	app.FormLayoutJSON = mergeLayoutJSON(ver.FormLayoutJSON, app.ID)
+	app.DetailLayoutJSON = mergeLayoutJSON(ver.DetailLayoutJSON, app.ID)
 	app.ApprovalFlowJSON = ver.ApprovalFlowJSON
 }
 
@@ -630,7 +673,7 @@ func buildDataPermissionConds(userID uint, colSet map[string]bool) ([]string, []
 //  4. 返回前统一剥离审计字段（deleted_at/created_at/created_by/updated_at/updated_by），
 //     覆盖主表行与每一条子表行，避免内部字段传递给前端（与 ApprovalInstanceDetail 口径一致）
 func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailReq) (map[string]interface{}, error) {
-	app, err := ApplicationDetail(appID)
+	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return nil, err
 	}
@@ -698,7 +741,7 @@ var appSystemCols = systemCols("id")
 //  4. 主表 INSERT 成功后获取自增主键 ID
 //  5. 遍历子表数据，为每行填充 parent_id（= 主表 ID）及审计字段，校验列合法性后逐行 INSERT
 func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface{}) (uint, error) {
-	app, err := ApplicationDetail(appID)
+	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return 0, err
 	}
@@ -866,7 +909,7 @@ func ApplicationDataDelete(appID, dataID uint) error {
 // deleteBusinessData 在指定 DB/事务句柄中删除业务数据（供审批实例删除等事务内调用）。
 // 返回这批数据引用到的本机附件地址（已去重），调用方应在事务**提交后**交给 ReclaimOrphanUploads 回收。
 func deleteBusinessData(db *gorm.DB, appID, dataID uint) ([]string, error) {
-	app, err := ApplicationDetail(appID)
+	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return nil, err
 	}
@@ -934,7 +977,7 @@ func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]i
 // ApplicationDataUpdateWithDB 与 ApplicationDataUpdate 逻辑一致，但允许传入指定 DB 句柄
 // （审批流转等事务场景传 tx，保证业务数据更新与流程状态流转在同一事务内提交/回滚）。
 func ApplicationDataUpdateWithDB(db *gorm.DB, appID, dataID uint, curUserID uint, data map[string]interface{}) error {
-	app, err := ApplicationDetail(appID)
+	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return err
 	}
@@ -1374,15 +1417,24 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 	if req.SubTableName != nil {
 		app.SubTableName = *req.SubTableName
 	}
-	if req.FormLayoutJSON != nil {
-		// 布局只存增量：布局自身字段 + 与表单元素不同的覆盖项
-		app.FormLayoutJSON = compactLayoutJSON(*req.FormLayoutJSON, app.ID)
-	}
-	if req.DetailLayoutJSON != nil {
-		app.DetailLayoutJSON = compactLayoutJSON(*req.DetailLayoutJSON, app.ID)
-	}
-	if req.ApprovalFlowJSON != nil {
-		app.ApprovalFlowJSON = *req.ApprovalFlowJSON
+	if req.FormLayoutJSON != nil || req.DetailLayoutJSON != nil || req.ApprovalFlowJSON != nil {
+		// 布局/审批流写「设计中」版本，不写 application 主表
+		draft, err := GetOrCreateDraftVersion(app.ID)
+		if err != nil {
+			return nil, err
+		}
+		if req.FormLayoutJSON != nil {
+			draft.FormLayoutJSON = compactLayoutJSON(*req.FormLayoutJSON, app.ID)
+		}
+		if req.DetailLayoutJSON != nil {
+			draft.DetailLayoutJSON = compactLayoutJSON(*req.DetailLayoutJSON, app.ID)
+		}
+		if req.ApprovalFlowJSON != nil {
+			draft.ApprovalFlowJSON = *req.ApprovalFlowJSON
+		}
+		if err := database.DB.Model(draft).Select("form_layout_json", "detail_layout_json", "approval_flow_json").Updates(draft).Error; err != nil {
+			return nil, err
+		}
 	}
 	if req.Status != nil {
 		app.Status = *req.Status
@@ -1566,13 +1618,18 @@ func publishNextVersionNo(appID uint) string {
 	return "v1"
 }
 
-// PublishApplicationVersion 把当前草稿（application 上的三个 json）快照成新版本：
+// PublishApplicationVersion 把「设计中」版本发布为 scheduled/active：
 // - EffectiveAt 为空或 <= now：立即生效（事务内替换当前版本）
 // - EffectiveAt 在未来：置为待生效，由定时任务到时切换
+// 发布后从「旧 active 版本」克隆一条新的设计中行，作为下一轮编辑起点。
 func PublishApplicationVersion(appID uint, curUserID uint, req *ApplicationVersionPublishReq) (*model.ApplicationVersion, error) {
 	var app model.Application
 	if err := database.DB.First(&app, appID).Error; err != nil {
 		return nil, errors.New("页面配置不存在")
+	}
+	draft, err := GetOrCreateDraftVersion(appID)
+	if err != nil {
+		return nil, err
 	}
 	effectiveAt := time.Now()
 	if req.EffectiveAt != nil && req.EffectiveAt.After(effectiveAt) {
@@ -1580,46 +1637,70 @@ func PublishApplicationVersion(appID uint, curUserID uint, req *ApplicationVersi
 	} else if req.EffectiveAt != nil && !req.EffectiveAt.After(time.Now()) {
 		return nil, errors.New("生效时间不能早于当前时间")
 	}
-	// 定时生效时，校验同一应用下没有其他待生效版本占用该分钟
 	if effectiveAt.After(time.Now()) {
 		if err := checkScheduledTimeConflict(app.ID, effectiveAt, 0); err != nil {
 			return nil, err
 		}
 	}
-	now := time.Now()
-	ver := model.ApplicationVersion{
-		ApplicationID:    app.ID,
-		VersionNo:        publishNextVersionNo(app.ID),
-		Remark:           req.Remark,
-		FormLayoutJSON:   app.FormLayoutJSON,
-		DetailLayoutJSON: app.DetailLayoutJSON,
-		ApprovalFlowJSON: app.ApprovalFlowJSON,
-		Status:           model.AppVersionStatusScheduled,
-		EffectiveAt:      effectiveAt,
-		CreatedBy:        curUserID,
+
+	var oldActive model.ApplicationVersion
+	hasOldActive := false
+	if app.CurrentVersionID > 0 {
+		if e := database.DB.Where("id = ? AND status = ?", app.CurrentVersionID, model.AppVersionStatusActive).First(&oldActive).Error; e == nil {
+			hasOldActive = true
+		}
 	}
 
-	err := database.DB.Transaction(func(tx *gorm.DB) error {
-		// 行锁：避免并发发布同时激活多个版本
+	now := time.Now()
+	newStatus := model.AppVersionStatusScheduled
+	if !effectiveAt.After(now) {
+		newStatus = model.AppVersionStatusActive
+	}
+
+	published := *draft
+	published.Status = newStatus
+	published.EffectiveAt = effectiveAt
+
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
 		var lockedApp model.Application
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lockedApp, app.ID).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&ver).Error; err != nil {
+		if err := tx.Model(draft).Updates(map[string]interface{}{
+			"status":       newStatus,
+			"remark":       req.Remark,
+			"effective_at": effectiveAt,
+			"expired_at":   nil,
+		}).Error; err != nil {
 			return err
 		}
-		// 立即生效：替换当前版本
-		if !effectiveAt.After(now) {
-			if err := activateVersion(tx, &ver); err != nil {
+		if newStatus == model.AppVersionStatusActive {
+			if err := activateVersion(tx, &published); err != nil {
 				return err
 			}
 		}
-		return nil
+		newDraft := model.ApplicationVersion{
+			ApplicationID: app.ID,
+			VersionNo:     publishNextVersionNo(app.ID),
+			Status:        model.AppVersionStatusDraft,
+			EffectiveAt:   time.Now(),
+		}
+		if hasOldActive {
+			newDraft.FormLayoutJSON = oldActive.FormLayoutJSON
+			newDraft.DetailLayoutJSON = oldActive.DetailLayoutJSON
+			newDraft.ApprovalFlowJSON = oldActive.ApprovalFlowJSON
+		} else {
+			newDraft.FormLayoutJSON = draft.FormLayoutJSON
+			newDraft.DetailLayoutJSON = draft.DetailLayoutJSON
+			newDraft.ApprovalFlowJSON = draft.ApprovalFlowJSON
+		}
+		return tx.Create(&newDraft).Error
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &ver, nil
+	database.DB.First(&published, published.ID)
+	return &published, nil
 }
 
 // activateVersion 在事务内把指定版本置为 active，并把同应用旧 active 置为 expired，回写 application 当前版本
@@ -1713,11 +1794,14 @@ func UpdateApplicationVersionEffectiveAt(appID, versionID uint, effectiveAt time
 	return database.DB.Model(&ver).Update("effective_at", effectiveAt).Error
 }
 
-// UpdateApplicationVersionSnapshot 预览某版本时直接保存该版本的三个 json 快照
+// UpdateApplicationVersionSnapshot 保存「设计中」版本的三个 json 快照
 func UpdateApplicationVersionSnapshot(appID, versionID uint, formLayout, detailLayout, approvalFlow interface{}) error {
 	var ver model.ApplicationVersion
 	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&ver).Error; err != nil {
 		return errors.New("版本不存在")
+	}
+	if ver.Status != model.AppVersionStatusDraft {
+		return errors.New("仅设计中版本可保存")
 	}
 	if m, ok := formLayout.(map[string]interface{}); ok {
 		ver.FormLayoutJSON = m

@@ -35,12 +35,15 @@ func ApplicationDetail(c *gin.Context) {
 	if !ok {
 		return
 	}
-	app, err := service.ApplicationDetail(id)
+	app, draft, err := service.ApplicationDetail(id)
 	if err != nil {
 		response.Fail(c, response.CodeNotFound, err.Error())
 		return
 	}
-	response.OK(c, app)
+	response.OK(c, gin.H{
+		"application":       app,
+		"in_design_version": draft,
+	})
 }
 
 // ApplicationByCode GET /{APIPrefix}/application/by-code/:code 按页面编码查询详情

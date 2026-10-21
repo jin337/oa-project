@@ -69,7 +69,7 @@ func resolveBusinessDataID(curUserID uint, req *model.ApprovalInstanceCreateReq)
 // 发起审批与提交草稿共用：两者都会重新评估执行路径（业务数据可能已修改）。
 func prepareApprovalContext(appID, businessDataID uint, selfSelectMembers map[string][]uint) (*approvalContext, error) {
 	// 1. 校验应用配置
-	app, err := ApplicationDetail(appID)
+	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return nil, err
 	}

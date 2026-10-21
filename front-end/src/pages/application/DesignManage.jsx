@@ -12,8 +12,8 @@ import {
   Table,
   Tabs,
   Tag,
-  Typography,
 } from '@arco-design/web-react'
+import { IconSwap } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import * as applicationApi from 'src/api/application'
@@ -31,6 +31,7 @@ const VERSION_STATUS = {
   0: { label: '待生效', color: 'orange' },
   1: { label: '已生效', color: 'green' },
   2: { label: '已失效', color: 'gray' },
+  3: { label: '设计中', color: 'blue' },
 }
 
 const parseJson = (v) => {
@@ -88,10 +89,10 @@ const disablePastTime = (current) => {
 }
 
 /**
- * 表单设计统一入口：
- * - 外层 Card 标题「流程名 - 表单设计」，右上角「保存 / 发布」；
- * - 保存：一次合并 form_layout_json / detail_layout_json / approval_flow_json 草稿；
- * - 发布：把当前草稿快照成新版本，支持立即生效或定时生效。
+ * 表单设计统一入口（钉钉式模型）：
+ * - 每个应用只有一条「设计中」版本，保存直接写它；
+ * - 发布 = 把设计中版本转成 scheduled/active，并从旧 active 克隆新的设计中行；
+ * - 历史版本只读，可预览查看但不能编辑。
  */
 export default function DesignManage() {
   const { id } = useParams()
@@ -110,6 +111,7 @@ export default function DesignManage() {
   const [editingVersion, setEditingVersion] = useState(null)
   const [editingEffectiveAt, setEditingEffectiveAt] = useState(null)
   const [previewVersion, setPreviewVersion] = useState(null)
+  const [draftVersion, setDraftVersion] = useState(null)
   const layoutRef = useRef(null)
   const examineRef = useRef(null)
 
@@ -120,7 +122,9 @@ export default function DesignManage() {
 
   const reloadApp = useCallback(async () => {
     const res = await applicationApi.getApplication(id)
-    setApp(res.data)
+    // 返回结构：{ application, in_design_version }
+    setApp(res.data?.application || res.data)
+    setDraftVersion(res.data?.in_design_version || null)
   }, [id])
 
   useEffect(() => {
@@ -129,7 +133,6 @@ export default function DesignManage() {
     loadElements().catch(() => {})
   }, [id, reloadApp, loadElements])
 
-  // 组织架构 / 角色 / 审核人员组（审批选择器共用，全局只需一次）
   useEffect(() => {
     Promise.all([
       deptApi.getDeptUsersTree({ status: 1 }),
@@ -144,7 +147,6 @@ export default function DesignManage() {
       .catch(() => {})
   }, [])
 
-  // 收集当前编辑器中的三个 json
   const collectPayload = useCallback(() => {
     const layoutPayload = layoutRef.current?.getLayoutPayload?.() || {}
     const liveNodes = examineRef.current?.getNodes?.()
@@ -158,7 +160,8 @@ export default function DesignManage() {
     }
     return {
       ...layoutPayload,
-      approval_flow_json: Array.isArray(liveNodes) && liveNodes.length ? liveNodes : savedFlow || [],
+      approval_flow_json:
+        Array.isArray(liveNodes) && liveNodes.length ? liveNodes : savedFlow || [],
     }
   }, [app])
 
@@ -166,13 +169,8 @@ export default function DesignManage() {
     setSaving(true)
     try {
       const payload = collectPayload()
-      if (previewVersion) {
-        // 预览版本时，保存直接写回该版本快照，同时本地同步 previewVersion 避免切 tab 后用旧快照重挂载
-        await applicationApi.updateApplicationVersion(id, previewVersion.id, payload)
-        setPreviewVersion((prev) => ({ ...prev, ...payload }))
-      } else {
-        await applicationApi.updateApplication(id, payload)
-      }
+      // 后端自动把 json 写到「设计中」版本行
+      await applicationApi.updateApplication(id, payload)
       Message.success('保存成功')
     } catch (e) {
       // 错误已在请求层提示
@@ -183,39 +181,32 @@ export default function DesignManage() {
 
   const openPublish = async () => {
     setPublishVisible(true)
-    let list = versionList
     try {
       const res = await applicationApi.listApplicationVersions(id)
-      list = res.data || []
+      const list = (res.data || []).filter((v) => v.status !== 3)
       setVersionList(list)
+      const src = list.find((v) => v.status === 1)
+      setPublishForm({
+        remark: src?.remark || '',
+        mode: src?.effective_at ? 'timer' : 'now',
+        effectiveAt: src?.effective_at ? new Date(src.effective_at) : null,
+      })
     } catch (e) {
-      // 忽略，用已有 list
+      // 用默认空
     }
-    const src = previewVersion || list.find((v) => v.status === 1)
-    setPublishForm({
-      remark: src?.remark || '',
-      mode: src?.effective_at ? 'timer' : 'now',
-      effectiveAt: src?.effective_at ? new Date(src.effective_at) : null,
-    })
   }
 
   const handlePublishOk = async () => {
     setPublishing(true)
     try {
       const payload = collectPayload()
+      // 先把编辑器里的最新内容保存到设计中行
+      await applicationApi.updateApplication(id, payload)
       const reqPayload = { remark: publishForm.remark || '' }
       if (publishForm.mode === 'timer' && publishForm.effectiveAt) {
         reqPayload.effective_at = new Date(publishForm.effectiveAt).toISOString()
       }
-      if (previewVersion) {
-        await applicationApi.updateApplicationVersion(id, previewVersion.id, payload)
-        const republished = await applicationApi.republishApplicationVersion(id, previewVersion.id, reqPayload)
-        setPreviewVersion(republished.data)
-      } else {
-        await applicationApi.updateApplication(id, payload)
-        const created = await applicationApi.publishApplicationVersion(id, reqPayload)
-        setPreviewVersion(created.data)
-      }
+      await applicationApi.publishApplicationVersion(id, reqPayload)
       Message.success(publishForm.mode === 'now' ? '已发布并立即生效' : '已发布，到时间自动生效')
       setPublishVisible(false)
       await reloadApp()
@@ -230,7 +221,8 @@ export default function DesignManage() {
     setVersionLoading(true)
     try {
       const res = await applicationApi.listApplicationVersions(id)
-      setVersionList(res.data || [])
+      // 不展示当前「设计中」行
+      setVersionList((res.data || []).filter((v) => v.status !== 3))
     } catch (e) {
       setVersionList([])
     } finally {
@@ -268,7 +260,6 @@ export default function DesignManage() {
     try {
       await applicationApi.deleteApplicationVersion(id, record.id)
       Message.success('已删除')
-      if (previewVersion?.id === record.id) setPreviewVersion(null)
       await loadVersions()
     } catch (e) {
       // 错误已在请求层提示
@@ -281,7 +272,6 @@ export default function DesignManage() {
     setEditingVersion(null)
   }
 
-  // 预览模式下用快照覆盖三个 json 字段
   const effectiveApp = useMemo(
     () =>
       previewVersion
@@ -303,26 +293,33 @@ export default function DesignManage() {
         <Space>
           <span>{app?.name ? `表单设计 - ${app.name}` : '表单设计'}</span>
           {app?.current_version_no && (
-            <Tag>
-              当前版本：
-              <Typography.Text type="primary" className="cursor-pointer" onClick={openVersions}>
-                {app.current_version_no}
-              </Typography.Text>
-            </Tag>
+            <Button shape="round" size="mini" type="primary" onClick={openVersions}>
+              当前版本：{app.current_version_no}
+              <IconSwap />
+            </Button>
           )}
         </Space>
       }
       extra={
         <Space>
-          {previewVersion && (
-            <Button size="small" onClick={() => setPreviewVersion(null)}>
-              退出预览（当前：{previewVersion.version_no}）
+          {previewVersion ? (
+            <Button
+              size="small"
+              type="outline"
+              status="warning"
+              onClick={() => setPreviewVersion(null)}
+            >
+              退出预览（{previewVersion.version_no}）
             </Button>
+          ) : (
+            <Tag color="orangered" size="large">
+              草稿：{draftVersion?.version_no || '-'}
+            </Tag>
           )}
-          <Button loading={saving} onClick={handleSave}>
+          <Button loading={saving} onClick={handleSave} disabled={!!previewVersion}>
             保存
           </Button>
-          <Button type="primary" onClick={openPublish}>
+          <Button type="primary" onClick={openPublish} disabled={!!previewVersion}>
             发布
           </Button>
         </Space>
@@ -459,14 +456,17 @@ export default function DesignManage() {
                 return (
                   <Space size="small">
                     <Button size="mini" type="primary" onClick={() => switchPreview(record)}>
-                      {previewVersion?.id === record.id ? '查看中' : '切换'}
+                      {previewVersion?.id === record.id ? '查看中' : '预览'}
                     </Button>
                     {record.status === 0 && (
                       <Space size="small">
                         <Button size="mini" onClick={() => startEditVersion(record)}>
                           编辑
                         </Button>
-                        <Popconfirm title="确认删除该待生效版本？" onOk={() => deleteVersion(record)}>
+                        <Popconfirm
+                          title="确认删除该待生效版本？"
+                          onOk={() => deleteVersion(record)}
+                        >
                           <Button size="mini" status="danger">
                             删除
                           </Button>

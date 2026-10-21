@@ -511,7 +511,7 @@ export default function ElementManage() {
     if (tableOptionsCache.current) return tableOptionsCache.current
     try {
       const res = await applicationApi.getApplication(id)
-      const app = res.data
+      const app = res.data?.application || res.data
       const options = []
       if (app?.table_name) {
         options.push({ label: `${app.table_name}（主表）`, value: app.table_name })

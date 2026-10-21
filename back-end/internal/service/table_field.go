@@ -67,7 +67,7 @@ func getApplicationBizTableBy(appID uint, tableName string) (string, error) {
 	if !isValidTableName(tableName) {
 		return "", errors.New("非法的表名")
 	}
-	app, err := ApplicationDetail(appID)
+	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return "", err
 	}

@@ -391,17 +391,19 @@ type DeptListReq struct {
 // Application 页面配置：对应表，供低代码/表单引擎使用
 type Application struct {
 	BaseModel
-	Name             string                 `gorm:"size:64;not null;comment:页面名称" json:"name"`
-	Code             string                 `gorm:"size:64;uniqueIndex;not null;comment:页面编码" json:"code"`
-	TableName        string                 `gorm:"size:128;not null;comment:对应表" json:"table_name"`
-	BillPrefix       string                 `gorm:"size:32;comment:单号前缀" json:"bill_prefix"`
-	SubTableName     string                 `gorm:"size:255;comment:子表(多个用逗号分隔)" json:"sub_table_name"`
-	Status           int                    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
-	FormLayoutJSON   map[string]interface{} `gorm:"serializer:json;type:json;comment:表单页布局配置(草稿)" json:"form_layout_json"`
-	DetailLayoutJSON map[string]interface{} `gorm:"serializer:json;type:json;comment:详情页布局配置(草稿)" json:"detail_layout_json"`
-	ApprovalFlowJSON any                    `gorm:"serializer:json;type:json;comment:审批流配置(草稿)" json:"approval_flow_json"`
-	CurrentVersionID uint                   `gorm:"default:0;index;comment:当前生效版本ID" json:"current_version_id"`
-	CurrentVersionNo  string                 `gorm:"size:32;comment:当前生效版本号" json:"current_version_no"`
+	Name             string `gorm:"size:64;not null;comment:页面名称" json:"name"`
+	Code             string `gorm:"size:64;uniqueIndex;not null;comment:页面编码" json:"code"`
+	TableName        string `gorm:"size:128;not null;comment:对应表" json:"table_name"`
+	BillPrefix       string `gorm:"size:32;comment:单号前缀" json:"bill_prefix"`
+	SubTableName     string `gorm:"size:255;comment:子表(多个用逗号分隔)" json:"sub_table_name"`
+	Status           int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
+	CurrentVersionID uint   `gorm:"default:0;index;comment:当前生效版本ID" json:"current_version_id"`
+	CurrentVersionNo  string `gorm:"size:32;comment:当前生效版本号" json:"current_version_no"`
+	// 以下三个字段不映射数据库列（草稿已迁入 oa_application_versions 设计中行），
+	// 仅供运行时把 active 版本快照塞进内存对象给业务层使用。
+	FormLayoutJSON   map[string]interface{} `gorm:"-" json:"form_layout_json,omitempty"`
+	DetailLayoutJSON map[string]interface{} `gorm:"-" json:"detail_layout_json,omitempty"`
+	ApprovalFlowJSON any                    `gorm:"-" json:"approval_flow_json,omitempty"`
 }
 
 // ApplicationVersion 流程配置版本快照：每次「发布」把草稿快照成一条版本，
@@ -414,7 +416,7 @@ type ApplicationVersion struct {
 	FormLayoutJSON   map[string]interface{} `gorm:"serializer:json;type:json;comment:表单页快照" json:"form_layout_json"`
 	DetailLayoutJSON map[string]interface{} `gorm:"serializer:json;type:json;comment:详情页快照" json:"detail_layout_json"`
 	ApprovalFlowJSON any                    `gorm:"serializer:json;type:json;comment:审批流快照" json:"approval_flow_json"`
-	Status           int                    `gorm:"default:0;index;comment:0待生效 1已生效 2已失效" json:"status"`
+	Status           int                    `gorm:"default:3;index;comment:0待生效 1已生效 2已失效 3设计中(草稿)" json:"status"`
 	EffectiveAt      time.Time              `gorm:"comment:生效时间" json:"effective_at"`
 	ExpiredAt        *time.Time             `gorm:"comment:失效时间" json:"expired_at"`
 	CreatedBy        uint                   `gorm:"comment:创建人" json:"created_by"`
@@ -424,6 +426,7 @@ const (
 	AppVersionStatusScheduled = 0 // 待生效
 	AppVersionStatusActive    = 1 // 已生效
 	AppVersionStatusExpired   = 2 // 已失效
+	AppVersionStatusDraft     = 3 // 设计中（草稿，每个应用有且仅有一条）
 )
 
 type ApplicationCreateReq struct {

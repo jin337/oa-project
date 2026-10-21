@@ -10,7 +10,7 @@ import (
 
 // checkApplicationElementTableKey 校验 table_key 属于该页面配置（主表或子表）
 func checkApplicationElementTableKey(appID uint, tableKey string) error {
-	app, err := ApplicationDetail(appID)
+	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func checkApplicationElementUniqueField(appID uint, tableKey, fieldKey string, e
 // ApplicationElementList 表单元素分页列表：keyword 模糊匹配 label 或 field_key
 // 返回 ApplicationElementListItem（不含 created_at/created_by/updated_at/updated_by 审计字段）
 func ApplicationElementList(appID uint, req *model.ApplicationElementListReq) ([]model.ApplicationElementListItem, int64, error) {
-	app, err := ApplicationDetail(appID)
+	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return nil, 0, err
 	}
