@@ -10,14 +10,27 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
-/* 滚动条基础*/
-::-webkit-scrollbar {width: 8px;background: transparent;}
-/* 轨道核心*/
-::-webkit-scrollbar-track {background: transparent;}
-/* 滑块*/
-::-webkit-scrollbar-thumb {border-radius: 10px;background-color: rgba(209, 213, 218, 0.8);}
-/* 上下箭头按钮*/
-::-webkit-scrollbar-button:vertical {height: 2px;background: transparent;}
+/* 滚动条基础 */
+::-webkit-scrollbar {
+  width: 8px;
+  background: transparent;
+}
+
+/* 轨道 */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 滑块默认透明 */
+::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  background-color: transparent;
+}
+
+/* 鼠标移入容器时显示滑块 */
+.overflow-y-auto:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(209, 213, 218, 0.8);
+}
 
 /* 表单标题样式换行 */
 strong {

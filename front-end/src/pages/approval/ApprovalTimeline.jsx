@@ -475,7 +475,7 @@ export default function ApprovalTimeline({
                     // 节点尚未流转：全员 Tag 平铺
                     <div className="mt-1.5 flex flex-wrap items-center gap-1">
                       {nodeTags.map((entry) => (
-                        <Tag key={entry.key} size="small">
+                        <Tag key={entry.key||entry.id} size="small">
                           {entry.name}
                         </Tag>
                       ))}
