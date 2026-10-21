@@ -1777,13 +1777,13 @@ func checkScheduledTimeConflict(appID uint, effectiveAt time.Time, excludeVersio
 }
 
 // UpdateApplicationVersionEffectiveAt 仅允许修改「待生效」版本的生效时间
-func UpdateApplicationVersionEffectiveAt(appID, versionID uint, effectiveAt time.Time) error {
+func UpdateApplicationVersionEffectiveAt(appID, versionID uint, effectiveAt time.Time, remark *string) error {
 	var ver model.ApplicationVersion
 	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&ver).Error; err != nil {
 		return errors.New("版本不存在")
 	}
 	if ver.Status != model.AppVersionStatusScheduled {
-		return errors.New("仅待生效版本可修改生效时间")
+		return errors.New("仅待生效版本可修改")
 	}
 	if !effectiveAt.After(time.Now()) {
 		return errors.New("生效时间不能早于当前时间")
@@ -1791,7 +1791,11 @@ func UpdateApplicationVersionEffectiveAt(appID, versionID uint, effectiveAt time
 	if err := checkScheduledTimeConflict(appID, effectiveAt, versionID); err != nil {
 		return err
 	}
-	return database.DB.Model(&ver).Update("effective_at", effectiveAt).Error
+	updates := map[string]interface{}{"effective_at": effectiveAt}
+	if remark != nil {
+		updates["remark"] = *remark
+	}
+	return database.DB.Model(&ver).Updates(updates).Error
 }
 
 // UpdateApplicationVersionSnapshot 保存「设计中」版本的三个 json 快照

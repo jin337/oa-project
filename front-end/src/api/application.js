@@ -122,9 +122,9 @@ export function publishApplicationVersion(id, data) {
   return request.post(`/application/${id}/versions/publish`, data)
 }
 
-// PUT /application/:id/versions/:versionId/effective_at 修改待生效版本的生效时间
-export function updateApplicationVersionEffectiveAt(id, versionId, effectiveAt) {
-  return request.put(`/application/${id}/versions/${versionId}/effective_at`, { effective_at: effectiveAt })
+// PUT /application/:id/versions/:versionId/edit 编辑待生效版本的生效时间和版本说明
+export function updateApplicationVersionEffectiveAt(id, versionId, payload) {
+  return request.put(`/application/${id}/versions/${versionId}/edit`, payload)
 }
 
 // PUT /application/:id/versions/:versionId 保存版本的三个 json 快照

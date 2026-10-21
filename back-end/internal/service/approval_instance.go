@@ -279,6 +279,7 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		database.DB.Select("dept_id").First(&creator, curUserID)
 		instance = model.ApprovalInstance{
 			AppID:                 req.AppID,
+			BillNo:                readBillNo(ctx.app.TableName, req.BusinessDataID),
 			BusinessTable:         ctx.app.TableName,
 			BusinessDataID:        req.BusinessDataID,
 			ApprovalFlowJSON:      ctx.injectedNodes, // 直接传入结构化数据，由 GORM serializer:json 统一序列化

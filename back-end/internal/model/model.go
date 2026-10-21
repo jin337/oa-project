@@ -715,6 +715,7 @@ const (
 type ApprovalInstance struct {
 	BaseModel
 	AppID                uint              `gorm:"index;not null;comment:关联页面配置ID" json:"app_id"`
+	BillNo               string            `gorm:"size:64;index;comment:业务单号(提交时从业务主表冗余，用于列表搜索)" json:"bill_no"`
 	BusinessTable        string            `gorm:"size:128;not null;comment:业务表名(不含前缀)" json:"business_table"`
 	BusinessDataID       uint              `gorm:"not null;comment:业务数据主键ID" json:"business_data_id"`
 	ApprovalFlowJSON     any               `gorm:"column:approval_flow_json;serializer:json;type:json;comment:审批流配置快照(提交时冻结)" json:"approval_flow_json"`

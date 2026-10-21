@@ -1,29 +1,29 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    DatePicker,
-    Descriptions,
-    Divider,
-    Drawer,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Radio,
-    Select,
-    Space,
-    Spin,
-    Switch,
-    Table,
-    Tag,
-    Tooltip,
-    TreeSelect,
+  Button,
+  Card,
+  Checkbox,
+  DatePicker,
+  Descriptions,
+  Divider,
+  Drawer,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Radio,
+  Select,
+  Space,
+  Spin,
+  Switch,
+  Table,
+  Tag,
+  Tooltip,
+  TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -487,7 +487,7 @@ export default function UserManage() {
           />
           <TreeSelect
             multiple
-            className="w-50!"
+            className="w-55!"
             placeholder="按部门筛选（可多选）"
             allowClear
             treeData={toTreeData(deptTree)}

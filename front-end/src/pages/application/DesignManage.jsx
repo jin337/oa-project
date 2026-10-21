@@ -110,6 +110,7 @@ export default function DesignManage() {
   const [versionList, setVersionList] = useState([])
   const [editingVersion, setEditingVersion] = useState(null)
   const [editingEffectiveAt, setEditingEffectiveAt] = useState(null)
+  const [editingRemark, setEditingRemark] = useState('')
   const [previewVersion, setPreviewVersion] = useState(null)
   const [draftVersion, setDraftVersion] = useState(null)
   const layoutRef = useRef(null)
@@ -238,17 +239,17 @@ export default function DesignManage() {
   const startEditVersion = (record) => {
     setEditingVersion(record)
     setEditingEffectiveAt(record.effective_at)
+    setEditingRemark(record.remark || '')
   }
 
   const saveEditVersion = async () => {
     if (!editingVersion || !editingEffectiveAt) return
     try {
-      await applicationApi.updateApplicationVersionEffectiveAt(
-        id,
-        editingVersion.id,
-        new Date(editingEffectiveAt).toISOString(),
-      )
-      Message.success('生效时间已更新')
+      await applicationApi.updateApplicationVersionEffectiveAt(id, editingVersion.id, {
+        effective_at: new Date(editingEffectiveAt).toISOString(),
+        remark: editingRemark,
+      })
+      Message.success('已更新')
       setEditingVersion(null)
       await loadVersions()
     } catch (e) {
@@ -438,7 +439,21 @@ export default function DesignManage() {
                 ),
             },
             { title: '失效时间', dataIndex: 'expired_at', width: 160, render: formatTime },
-            { title: '版本说明', dataIndex: 'remark', render: (v) => v || '-' },
+            {
+              title: '版本说明',
+              dataIndex: 'remark',
+              render: (v, record) =>
+                editingVersion?.id === record.id ? (
+                  <Input
+                    size="mini"
+                    style={{ width: '100%' }}
+                    value={editingRemark}
+                    onChange={(val) => setEditingRemark(val)}
+                  />
+                ) : (
+                  v || '-'
+                ),
+            },
             {
               title: '操作',
               width: 190,

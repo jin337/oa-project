@@ -256,12 +256,13 @@ func ApplicationVersionUpdateEffectiveAt(c *gin.Context) {
 	}
 	var body struct {
 		EffectiveAt *time.Time `json:"effective_at"`
+		Remark      *string    `json:"remark"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.EffectiveAt == nil {
 		response.Fail(c, response.CodeParamError, "effective_at 不能为空")
 		return
 	}
-	if err := service.UpdateApplicationVersionEffectiveAt(id, uint(versionID), *body.EffectiveAt); err != nil {
+	if err := service.UpdateApplicationVersionEffectiveAt(id, uint(versionID), *body.EffectiveAt, body.Remark); err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}

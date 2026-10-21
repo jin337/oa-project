@@ -392,7 +392,11 @@ export default function ExamineGroupManage() {
                 field="code"
                 rules={[
                   { required: true, message: '请输入编号' },
-                  { minLength: 1, maxLength: 64, message: '长度 1-64 个字符' },
+                  { minLength: 1, maxLength: 10, message: '长度 1-10 个字符' },
+                  {
+                    match: /^$|^[A-Z]+$/,
+                    message: '只能使用英文大写字母',
+                  },
                 ]}
               >
                 <Input placeholder="如：FIN-AUDIT" disabled={Boolean(editing)} />

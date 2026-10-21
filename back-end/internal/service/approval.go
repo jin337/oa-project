@@ -462,7 +462,7 @@ func applyApprovalKeyword(db *gorm.DB, keyword string) *gorm.DB {
 		Joins("JOIN oa_applications AS ka ON ka.id = oa_approval_instances.app_id AND ka.deleted_at IS NULL").
 		Joins("LEFT JOIN oa_users AS ku ON ku.id = oa_approval_instances.created_by").
 		Joins("LEFT JOIN oa_user_profiles AS kp ON kp.user_id = ku.id").
-		Where("(ka.name LIKE ? OR ku.username LIKE ? OR kp.nickname LIKE ?)", like, like, like)
+		Where("(ka.name LIKE ? OR ku.username LIKE ? OR kp.nickname LIKE ? OR oa_approval_instances.bill_no LIKE ?)", like, like, like, like)
 }
 
 // ApprovalList 审批列表跨应用聚合查询：

@@ -336,9 +336,9 @@ export default function DynamicList({ app, code, editable = false }) {
         <div className="mb-3">
           <Form form={searchForm} layout="inline">
             {searchFields.map((field) => (
-              <FormItem key={field.field_key} field={field.field_key} label={field.label}>
-                <Input style={{ width: 180 }}
-                  placeholder={field.placeholder || `请输入${field.label || '内容'}`}
+              <FormItem key={field.field_key} field={field.field_key}>
+                <Input className="w-55!"
+                  placeholder={field.label}
                   allowClear
                 />
               </FormItem>

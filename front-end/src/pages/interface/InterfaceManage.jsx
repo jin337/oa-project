@@ -499,7 +499,7 @@ export default function InterfaceManage() {
       dataIndex: 'category',
       width: 100,
       align: 'center',
-      render: (v) => (v ? <Tag color="cyan">{v}</Tag> : <Tag gray>-</Tag>),
+      render: (v) => (v ? <Tag color="cyan">{v}</Tag> : '-'),
     },
     {
       key: 'method',
@@ -650,7 +650,7 @@ export default function InterfaceManage() {
       <div className="mb-3">
         <Space wrap>
           <Input
-            className="w-60!"
+            className="w-55!"
             placeholder="按接口名称 / 对外路径搜索"
             allowClear
             value={keyword}
@@ -658,7 +658,7 @@ export default function InterfaceManage() {
             onPressEnter={handleSearch}
           />
           <Select
-            className="w-28!"
+            className="w-55!"
             placeholder="请求方法"
             allowClear
             value={keywordMethod || undefined}
@@ -666,7 +666,7 @@ export default function InterfaceManage() {
             options={METHOD_OPTIONS}
           />
           <Select
-            className="w-32!"
+            className="w-55!"
             placeholder="定义方式"
             allowClear
             value={keywordType || undefined}
@@ -674,7 +674,7 @@ export default function InterfaceManage() {
             options={TYPE_OPTIONS}
           />
           <Select
-            className="w-28!"
+            className="w-55!"
             placeholder="分类"
             allowClear
             showSearch
@@ -683,7 +683,7 @@ export default function InterfaceManage() {
             options={categoryOptions}
           />
           <Select
-            className="w-24!"
+            className="w-55!"
             placeholder="状态"
             allowClear
             value={keywordStatus}
