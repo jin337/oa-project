@@ -625,9 +625,6 @@ export default function Apply() {
         maskClosable={false}
         footer={
           <div className="flex justify-end gap-2">
-            <Button loading={drawerSaving} onClick={() => setDrawerVisible(false)}>
-              关闭
-            </Button>
             <Button loading={drawerSaving} onClick={handleSaveDraft}>
               保存草稿
             </Button>

@@ -50,7 +50,6 @@ export default function DetailDrawer({
   onCancel,
   currentTask,
   onAction,
-  initialEditing = false,
 }) {
   const [loading, setLoading] = useState(false)
   const [instance, setInstance] = useState(null)
@@ -59,8 +58,6 @@ export default function DetailDrawer({
   const [operating, setOperating] = useState(false)
   // 审批详情动态表单实例（字段权限 perm=2 可编辑字段修改后，提交时读取最新值）
   const [detailForm] = Form.useForm()
-  // 已驳回发起人侧：只读态 -> 点"编辑"进入修改态，footer 显示"重新提交"
-  const [editing, setEditing] = useState(false)
 
   // 转交 Modal（用户选择统一使用 PersonSelectorModal）
   const [delegateVisible, setDelegateVisible] = useState(false)
@@ -116,7 +113,6 @@ export default function DetailDrawer({
     setInstance(null)
     setLoadError(false)
     setComment('')
-    setEditing(initialEditing)
 
     if (record.instance_id) {
       approvalApi
@@ -137,7 +133,7 @@ export default function DetailDrawer({
     return () => {
       cancelled = true
     }
-  }, [visible, record, initialEditing])
+  }, [visible, record])
 
   // 关闭时重置所有状态
   useEffect(() => {
@@ -203,11 +199,6 @@ export default function DetailDrawer({
   const canDelegate = showDelegateButtons && currentNodePerms.includes(2)
   const canAddSign = showDelegateButtons && currentNodePerms.includes(3)
 
-  // 已驳回（status=3）的发起人侧详情：表单可编辑，footer 显示"重新提交"（对齐钉钉退回语义）
-  const showResubmit = !currentTask && Number(instance?.status) === 3
-  // 已驳回：默认只读，点"编辑"后表单才可改
-  const resubmitEditing = showResubmit && editing
-
   // ========== 审批操作 ==========
   // 收集审批人修改后的表单数据：序列化时间字段后与实例初始数据比对，有差异才随审批提交
   // 被字段权限（perm=1）隐藏、未渲染到表单的字段不会出现在 getFieldsValue 中，
@@ -254,23 +245,6 @@ export default function DetailDrawer({
       const names = { 1: '已同意', 2: '已拒绝', 3: '已退回' }
       Message.success(names[action] || '操作成功')
       setComment('')
-      onAction?.()
-      onCancel?.()
-    } catch {
-      // 错误已在请求层提示
-    } finally {
-      setOperating(false)
-    }
-  }
-
-  // ========== 已驳回重新提交 ==========
-  const handleResubmit = async () => {
-    if (!instance) return
-    setOperating(true)
-    try {
-      const businessData = buildModifiedBusinessData()
-      await approvalApi.resubmitApprovalInstance(instance.id || record.instance_id, businessData)
-      Message.success('已重新提交')
       onAction?.()
       onCancel?.()
     } catch {
@@ -330,20 +304,6 @@ export default function DetailDrawer({
 
   // 操作按钮区域
   const renderActions = () => {
-    if (showResubmit && editing) {
-      return (
-        <div className="flex items-center justify-end">
-          <Space>
-            <Button size="small" onClick={onCancel}>
-              取消
-            </Button>
-            <Button type="primary" size="small" loading={operating} onClick={handleResubmit}>
-              重新提交
-            </Button>
-          </Space>
-        </div>
-      )
-    }
     if (!showApproveButtons && !showDelegateButtons) return null
     return (
       <>
@@ -378,12 +338,6 @@ export default function DetailDrawer({
           </Space>
           {showApproveButtons && (
             <Space>
-              <Button
-                size="small"
-                onClick={onCancel}
-              >
-                关闭
-              </Button>
               <Button
                 status="danger"
                 size="small"
@@ -433,18 +387,14 @@ export default function DetailDrawer({
         visible={visible}
         onCancel={onCancel}
         footer={
-          renderActions() || (
-            <Button size="small" onClick={onCancel}>
-              关闭
-            </Button>
-          )
+          renderActions()
         }
         unmountOnExit
         maskClosable={false}
       >
         {/* 审批状态印章：显示在标题栏右上角 */}
         {instance && (
-          <div className="absolute top-5 right-6 z-10">
+          <div className="absolute top-3 right-6 z-10">
             <span
               className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full bg-white text-base font-bold"
               style={{
@@ -471,7 +421,7 @@ export default function DetailDrawer({
                 form={detailForm}
                 pageType="detail"
                 fieldPerms={instance?.field_perms}
-                editable={Boolean(currentTask) || resubmitEditing}
+                editable={Boolean(currentTask)}
                 detailDynamicStates={detailDynamicStates}
               />
             </div>

@@ -373,7 +373,7 @@ export default function ApprovalTimeline({
               <span className="font-medium">发起人</span>
             </div>
             <div className="mt-0.5 flex items-center justify-between text-xs text-gray-500">
-              <span className="truncate text-sm font-medium text-gray-700">{createdByName}</span>
+              <Tag size="small">{createdByName}</Tag>
               <span>{formatTime(instance.created_at)}</span>
             </div>
           </Timeline.Item>

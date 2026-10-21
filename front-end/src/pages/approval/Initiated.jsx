@@ -476,7 +476,7 @@ export default function Initiated() {
       key: 'action',
       width: 160,
       render: (_, r) => (
-        <Space>
+        <Space size={0}>
           <Button type="text" size="small" onClick={() => openDetail(r)}>
             详情
           </Button>
@@ -576,28 +576,31 @@ export default function Initiated() {
           <div className="flex justify-end gap-2">
             {copyMode ? (
               <>
-                <Button onClick={closeEditDrawer}>关闭</Button>
-                <Button loading={editSaving} onClick={handleCopySaveDraft}>
-                  保存草稿
-                </Button>
                 <Button type="primary" loading={editSaving} onClick={handleCopySubmit}>
                   提交审核
+                </Button>
+                <Button loading={editSaving} onClick={handleCopySaveDraft}>
+                  保存草稿
                 </Button>
               </>
             ) : Number(editRecord?.approval_status) === WITHDRAWN_STATUS ? (
               <>
-              <Button onClick={closeEditDrawer}>关闭</Button>
-                <Button loading={editSaving} onClick={handleSaveWithdrawn}>
-                  保存草稿
-                </Button>
                 <Button type="primary" loading={editSaving} onClick={handleSubmitWithdrawn}>
                   提交审核
                 </Button>
+                <Button loading={editSaving} onClick={handleSaveWithdrawn}>
+                  保存草稿
+                </Button>
               </>
             ) : (
-              <Button type="primary" loading={editSaving} onClick={handleResubmit}>
-                重新提交
-              </Button>
+              <>
+                <Button type="primary" loading={editSaving} onClick={handleResubmit}>
+                  重新提交
+                </Button>
+                <Button loading={editSaving} onClick={handleSaveWithdrawn}>
+                  保存草稿
+                </Button>
+              </>
             )}
           </div>
         }
@@ -609,8 +612,8 @@ export default function Initiated() {
         ) : editApp ? (
           /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
              空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
-          <div className="@container flex flex-wrap items-start h-full">
-            <div className="min-w-0 shrink grow basis-140 px-4 py-3 h-full overflow-y-auto">
+          <div className="@container flex h-full flex-wrap items-start">
+            <div className="h-full min-w-0 shrink grow basis-140 overflow-y-auto px-4 py-3">
               <DynamicForm
                 app={editApp}
                 form={editForm}
@@ -618,7 +621,7 @@ export default function Initiated() {
                 onValuesChange={setFormValues}
               />
             </div>
-            <div className="w-full shrink-0 @min-[985px]:w-100 border-l border-(--color-neutral-3) px-4 py-3 h-full overflow-y-auto">
+            <div className="h-full w-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 @min-[985px]:w-100">
               {/* 审批流只读还原；副本可直接提交，故接上自选节点选人回调（编辑走实例已有的人选，不受影响） */}
               <DynamicFlowView
                 raw={editApp?.approval_flow_json}

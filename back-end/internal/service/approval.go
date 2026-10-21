@@ -562,9 +562,10 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 }
 
 // approvalListInitiated 我的发起列表：从 approval_instance 表查询当前用户发起的实例
+// 注意：「我的发起」语义上只看自己发起的，不应用数据权限扩展（部门主管/超管也只看自己的）；
+// 若要看到全公司单子，走「我审批的」或专门的监控视图。
 func approvalListInitiated(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
-	// 数据权限：部门主管能看本部门所有人发起的审批单
-	userIDs := getUserIDsByDataScope(curUserID)
+	userIDs := []uint{curUserID}
 
 	var total int64
 	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).

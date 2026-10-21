@@ -343,17 +343,14 @@ export default function Drafts() {
         unmountOnExit
         maskClosable={false}
         footer={
-          <div className="flex justify-between gap-2">
+          <>
             <Button type="primary" loading={drawerSaving} onClick={() => handleSubmit(draftRecord)}>
               提交审核
             </Button>
-            <div className="flex gap-2">
-              <Button onClick={() => setDrawerVisible(false)}>取消</Button>
-              <Button type="primary" loading={drawerSaving} onClick={handleDraftSave}>
-                保存草稿
-              </Button>
-            </div>
-          </div>
+            <Button loading={drawerSaving} onClick={handleDraftSave}>
+              保存草稿
+            </Button>
+          </>
         }
       >
         {drawerLoading ? (
@@ -363,8 +360,8 @@ export default function Drafts() {
         ) : drawerApp ? (
           /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
              空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
-          <div className="@container flex flex-wrap items-start h-full">
-            <div className="min-w-0 shrink grow basis-140 px-4 py-3 h-full overflow-y-auto">
+          <div className="@container flex h-full flex-wrap items-start">
+            <div className="h-full min-w-0 shrink grow basis-140 overflow-y-auto px-4 py-3">
               <DynamicForm
                 app={drawerApp}
                 form={drawerForm}
@@ -372,7 +369,7 @@ export default function Drafts() {
                 onValuesChange={setFormValues}
               />
             </div>
-            <div className="w-full shrink-0 @min-[985px]:w-100 border-l border-(--color-neutral-3) px-4 py-3 h-full overflow-y-auto">
+            <div className="h-full w-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 @min-[985px]:w-100">
               {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
               <DynamicFlowView
                 raw={drawerApp?.approval_flow_json}
