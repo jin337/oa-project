@@ -427,7 +427,7 @@ export default function DetailDrawer({
   return (
     <SelectorDataContext.Provider value={selectorData}>
       <Drawer
-        className={'relative'}
+        className={'relative [&_.arco-drawer-content]:p-0!'}
         width="80%"
         title={`详情 - ${title}`}
         visible={visible}
@@ -464,8 +464,8 @@ export default function DetailDrawer({
         ) : instance ? (
           /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
              空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
-          <div className="@container flex flex-wrap items-start gap-6">
-            <div className="min-w-0 shrink grow basis-140">
+          <div className="@container flex flex-wrap items-start h-full">
+            <div className="min-w-0 shrink grow basis-140 px-4 py-3 h-full overflow-y-auto">
               <DynamicForm
                 app={{ ...appFromInstance, form_layout_json: appFromInstance?.detail_layout_json }}
                 form={detailForm}
@@ -475,7 +475,7 @@ export default function DetailDrawer({
                 detailDynamicStates={detailDynamicStates}
               />
             </div>
-            <div className="w-full shrink-0 @min-[985px]:w-100">
+            <div className="w-full shrink-0 @min-[985px]:w-100 border-l border-(--color-neutral-3) px-4 py-3 h-full overflow-y-auto">
               <ApprovalTimeline
                 instanceId={record?.instance_id}
                 visible={visible}

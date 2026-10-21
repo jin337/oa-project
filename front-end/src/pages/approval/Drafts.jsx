@@ -210,7 +210,10 @@ export default function Drafts() {
           business_data: payload,
           ...(draftMembersPayload || {}),
         })
-        submitResult = await approvalApi.submitDraftInstance(record.instance_id, draftMembersPayload)
+        submitResult = await approvalApi.submitDraftInstance(
+          record.instance_id,
+          draftMembersPayload,
+        )
       } else {
         // 无实例（旧草稿），走发起审批接口：带 business_data 时后端按 business_data_id 更新已有业务数据
         submitResult = await approvalApi.createApprovalInstance({
@@ -309,6 +312,7 @@ export default function Drafts() {
         setVisibleCols={setVisibleCols}
         columns={columns}
         colKeys={ALL_COL_KEYS}
+        placeholder="按模块 / 申请人搜索"
       />
       <Table
         rowKey={(r) => r.data_id ?? r.id}
@@ -331,6 +335,7 @@ export default function Drafts() {
 
       {/* 继续编辑 Drawer：注入动态表单并回填草稿数据 */}
       <Drawer
+        className={'relative [&_.arco-drawer-content]:p-0!'}
         width="80%"
         visible={drawerVisible}
         onCancel={() => setDrawerVisible(false)}
@@ -358,8 +363,8 @@ export default function Drafts() {
         ) : drawerApp ? (
           /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
              空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
-          <div className="@container flex flex-wrap items-start gap-6">
-            <div className="min-w-0 grow shrink basis-140">
+          <div className="@container flex flex-wrap items-start h-full">
+            <div className="min-w-0 shrink grow basis-140 px-4 py-3 h-full overflow-y-auto">
               <DynamicForm
                 app={drawerApp}
                 form={drawerForm}
@@ -367,7 +372,7 @@ export default function Drafts() {
                 onValuesChange={setFormValues}
               />
             </div>
-            <div className="w-full shrink-0 @min-[985px]:w-100">
+            <div className="w-full shrink-0 @min-[985px]:w-100 border-l border-(--color-neutral-3) px-4 py-3 h-full overflow-y-auto">
               {/* 审批流程：抽屉内独立渲染审批流配置只读还原，按实际填报数据评估条件分支命中 */}
               <DynamicFlowView
                 raw={drawerApp?.approval_flow_json}
