@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"back-end/internal/config"
 	"back-end/internal/database"
@@ -591,10 +592,6 @@ func ApplicationDataList(appID uint, curUserID uint, req *model.ApplicationDataL
 	}
 	if list == nil {
 		list = []map[string]interface{}{}
-	}
-	// 剥离审计字段，不返回给前端（与详情接口保持一致）
-	for i := range list {
-		stripAuditFields(list[i])
 	}
 	return list, total, nil
 }
@@ -1494,6 +1491,7 @@ func alterTableComment(realTableName, comment string) error {
 // syncTableKeyReferences 表改名后同步引用（直接修改传入的 app 内存对象，由调用方统一 Save）：
 //  1. oa_application_elements.table_key：旧 key → 新 key（同一 app 下，直接 UPDATE DB）
 //  2. 应用的 FormLayoutJSON / DetailLayoutJSON / ApprovalFlowJSON 中旧表名字符串 → 新表名
+//
 // 主表与子表改名共用此函数，避免提交时按旧 table_key 找不到字段
 func syncTableKeyReferences(app *model.Application, oldKey, newKey string) error {
 	if app == nil || oldKey == "" || newKey == "" || oldKey == newKey {
