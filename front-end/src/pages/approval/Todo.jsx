@@ -1,13 +1,19 @@
-import { Button, Card, Message, Table } from '@arco-design/web-react'
+import { Button, Card, Table } from '@arco-design/web-react'
 import { useState } from 'react'
-import * as approvalApi from 'src/api/approval'
-import { PersonSelectModalWithData } from 'src/components/PersonSelectModalWithData'
-import { userIdFromKey } from 'src/pages/application/examine/flowModel'
-import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import {
+  colBillNo,
+  colCreatedAt,
+  colCreatedName,
+  colDept,
+  colIndex,
+  colItem,
+  colNodeName,
+  colStatus,
+} from 'src/pages/approval/approvalColumns'
+import CCModal from 'src/pages/approval/CCModal'
 import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 import { useApprovalList } from 'src/pages/approval/useApprovalList'
-import { formatTime } from 'src/utils/format'
 
 const PAGE_TITLE = '我的待办'
 
@@ -49,73 +55,21 @@ export default function Todo() {
     sizeMenu,
   } = useApprovalList('todo', { title: PAGE_TITLE, withTask: true, colKeys: ALL_COL_KEYS })
 
+  // 待办：点击「模块」列打开详情时需携带当前任务 ID，用于 Drawer 内审批
+  const openDetailWithTask = (r) => openDetail(r, { id: r.id, instance_id: r.instance_id })
+
   const columns = [
+    colIndex,
     {
-      title: '序号',
-      key: 'index',
-      width: 62,
-      align: 'center',
-      render: (_, __, index) => index + 1,
+      ...colItem(openDetailWithTask),
+      // 待办模块点击要带任务
     },
-    {
-      title: '模块',
-      key: 'item_name',
-      dataIndex: 'item_name',
-      // 未从申请项发起（无 item_name）时回退展示流程配置名称；点击模块名打开详情抽屉
-      render: (v, r) => (
-        <Button
-          type="text"
-          size="small"
-          className="-ml-4!"
-          onClick={() => openDetail(r, { id: r.id, instance_id: r.instance_id })}
-        >
-          {v || r?.app_name || '-'}
-        </Button>
-      ),
-    },
-    {
-      title: '单号',
-      key: 'bill_no',
-      dataIndex: 'bill_no',
-      width: 200,
-      render: (v) => v || '-',
-    },
-    {
-      title: '部门',
-      key: 'dept_name',
-      dataIndex: 'dept_name',
-      width: 110,
-      render: (v) => v || '-',
-    },
-    {
-      title: '申请人',
-      key: 'created_name',
-      dataIndex: 'created_name',
-      width: 110,
-      render: (v) => v || '-',
-    },
-    {
-      title: '审批节点',
-      key: 'node_name',
-      dataIndex: 'node_name',
-      width: 110,
-      render: (v) => v || '-',
-    },
-    {
-      title: '申请时间',
-      key: 'created_at',
-      dataIndex: 'created_at',
-      width: 180,
-      render: formatTime,
-    },
-    {
-      title: '状态',
-      key: 'approval_status',
-      dataIndex: 'approval_status',
-      width: 90,
-      align: 'center',
-      render: (v) => <ApprovalStatusTag status={v} />,
-    },
+    colBillNo,
+    colDept,
+    colCreatedName,
+    colNodeName,
+    colCreatedAt,
+    colStatus,
     {
       title: '操作',
       key: 'action',
@@ -174,31 +128,7 @@ export default function Todo() {
         onAction={fetchList}
       />
 
-      {/* 抄送人员选择：多选组织架构用户 */}
-      {ccRecord && (
-        <PersonSelectModalWithData
-          title="选择抄送人"
-          selectMode={2}
-          onChange={async (items) => {
-            const userIds = items?.map((it) => userIdFromKey(it?.key)).filter(Boolean)
-            if (!userIds?.length) {
-              Message.warning('请选择至少一位抄送人')
-              return
-            }
-            try {
-              await approvalApi.manualCCApprovalInstance(
-                ccRecord.instance_id || ccRecord.id,
-                userIds,
-              )
-              Message.success('已发送抄送')
-              setCCRecord(null)
-            } catch (e) {
-              // 错误已在请求层提示
-            }
-          }}
-          onCancel={() => setCCRecord(null)}
-        />
-      )}
+      <CCModal record={ccRecord} onClose={() => setCCRecord(null)} onSuccess={fetchList} />
     </Card>
   )
 }

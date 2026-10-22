@@ -13,7 +13,6 @@ import {
 import { IconDoubleLeft, IconDoubleRight, IconDown } from '@arco-design/web-react/icon'
 import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
-import { PersonSelectModalWithData } from 'src/components/PersonSelectModalWithData'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
   parseLayoutJson,
@@ -21,12 +20,21 @@ import DynamicForm, {
   runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { buildSelfSelectUserIDs, userIdFromKey } from 'src/pages/application/examine/flowModel'
-import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
+import CCModal from 'src/pages/approval/CCModal'
+import {
+  colBillNo,
+  colCreatedAt,
+  colCreatedName,
+  colDept,
+  colFinishedAt,
+  colIndex,
+  colNodeName,
+  colStatus,
+} from 'src/pages/approval/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
 import { useApprovalList } from 'src/pages/approval/useApprovalList'
-import { formatTime } from 'src/utils/format'
 
 const PAGE_TITLE = '我的发起'
 
@@ -436,18 +444,13 @@ export default function Initiated() {
   // 已撤回如需删除，先在编辑抽屉「保存草稿」转为草稿，再到草稿箱删除。
 
   const columns = [
-    {
-      title: '序号',
-      key: 'index',
-      width: 62,
-      align: 'center',
-      render: (_, __, index) => index + 1,
-    },
+    colIndex,
     {
       title: '模块',
       key: 'item_name',
       dataIndex: 'item_name',
-      // 未从申请项发起（无 item_name）时回退展示流程配置名称；点击模块名打开详情抽屉
+      // 未从申请项发起（无 item_name）时回退展示流程配置名称；
+      // 已驳回/已撤回可编辑的记录点击模块直接进入编辑，否则打开详情抽屉
       render: (v, r) => (
         <Button
           type="text"
@@ -459,56 +462,13 @@ export default function Initiated() {
         </Button>
       ),
     },
-    {
-      title: '单号',
-      key: 'bill_no',
-      dataIndex: 'bill_no',
-      width: 200,
-      render: (v) => v || '-',
-    },
-    {
-      title: '部门',
-      key: 'dept_name',
-      dataIndex: 'dept_name',
-      width: 110,
-      render: (v) => v || '-',
-    },
-    {
-      title: '申请人',
-      key: 'created_name',
-      dataIndex: 'created_name',
-      width: 110,
-      render: (v) => v || '-',
-    },
-    {
-      title: '审批节点',
-      key: 'node_name',
-      dataIndex: 'node_name',
-      width: 110,
-      render: (v) => v || '-',
-    },
-    {
-      title: '申请时间',
-      key: 'created_at',
-      dataIndex: 'created_at',
-      width: 180,
-      render: formatTime,
-    },
-    {
-      title: '完成时间',
-      key: 'finished_at',
-      dataIndex: 'finished_at',
-      width: 180,
-      render: formatTime,
-    },
-    {
-      title: '状态',
-      key: 'approval_status',
-      dataIndex: 'approval_status',
-      width: 90,
-      align: 'center',
-      render: (v) => <ApprovalStatusTag status={v} />,
-    },
+    colBillNo,
+    colDept,
+    colCreatedName,
+    colNodeName,
+    colCreatedAt,
+    colFinishedAt,
+    colStatus,
     {
       title: '操作',
       key: 'action',
@@ -699,31 +659,7 @@ export default function Initiated() {
         ) : null}
       </Drawer>
 
-      {/* 抄送人员选择：多选组织架构用户 */}
-      {ccRecord && (
-        <PersonSelectModalWithData
-          title="选择抄送人"
-          selectMode={2}
-          onChange={async (items) => {
-            const userIds = items?.map((it) => userIdFromKey(it?.key)).filter(Boolean)
-            if (!userIds?.length) {
-              Message.warning('请选择至少一位抄送人')
-              return
-            }
-            try {
-              await approvalApi.manualCCApprovalInstance(
-                ccRecord.instance_id || ccRecord.id,
-                userIds,
-              )
-              Message.success('已发送抄送')
-              closeCC()
-            } catch (e) {
-              // 错误已在请求层提示
-            }
-          }}
-          onCancel={closeCC}
-        />
-      )}
+      <CCModal record={ccRecord} onClose={closeCC} onSuccess={fetchList} />
     </Card>
   )
 }

@@ -385,7 +385,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         onCancel={onCancel}
         footer={null}
         unmountOnExit
-        maskClosable={false}
+        maskClosable={!showApproveButtons && !showDelegateButtons}
       >
         {loading ? (
           <div className="flex h-40 w-full items-center justify-center">

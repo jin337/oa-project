@@ -19,10 +19,16 @@ import DynamicForm, {
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
-import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import {
+  colBillNo,
+  colCreatedAt,
+  colCreatedName,
+  colDept,
+  colIndex,
+  colStatus,
+} from 'src/pages/approval/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import { useApprovalList } from 'src/pages/approval/useApprovalList'
-import { formatTime } from 'src/utils/format'
 
 const PAGE_TITLE = '草稿箱'
 
@@ -256,13 +262,7 @@ export default function Drafts() {
   }
 
   const columns = [
-    {
-      title: '序号',
-      key: 'index',
-      width: 62,
-      align: 'center',
-      render: (_, __, index) => index + 1,
-    },
+    colIndex,
     {
       title: '模块',
       key: 'item_name',
@@ -274,42 +274,11 @@ export default function Drafts() {
         </Button>
       ),
     },
-    {
-      title: '单号',
-      key: 'bill_no',
-      dataIndex: 'bill_no',
-      width: 200,
-      render: (v) => v || '-',
-    },
-    {
-      title: '部门',
-      key: 'dept_name',
-      dataIndex: 'dept_name',
-      width: 110,
-      render: (v) => v || '-',
-    },
-    {
-      title: '申请人',
-      key: 'created_name',
-      dataIndex: 'created_name',
-      width: 110,
-      render: (v) => v || '-',
-    },
-    {
-      title: '创建时间',
-      key: 'created_at',
-      dataIndex: 'created_at',
-      width: 180,
-      render: formatTime,
-    },
-    {
-      title: '状态',
-      key: 'approval_status',
-      dataIndex: 'approval_status',
-      width: 90,
-      align: 'center',
-      render: (v) => <ApprovalStatusTag status={v} />,
-    },
+    colBillNo,
+    colDept,
+    colCreatedName,
+    colCreatedAt,
+    colStatus,
     {
       title: '操作',
       key: 'action',
