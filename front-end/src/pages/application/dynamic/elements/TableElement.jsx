@@ -198,18 +198,20 @@ export const TableElementField = ({
         const columns = permColumns.map((col, i) => {
           const colKey = col.dataIndex || col.field_key || `col_${i + 1}`
           const isDetail = pageType === 'detail'
+          // 列标题兜底：优先 col.title，其次字段 label / name / field_key（兼容旧版本
+          // form_layout_json 中 title 为空、但字段元数据 label 仍存在的历史数据）
+          const colTitle = col.title || col.label || col.name || col.field_key || `列${i + 1}`
           return {
-            title:
-              (
-                <>
-                  {col.required && !isDetail ? (
-                    <span className="mr-1 text-[rgb(var(--danger-6))]">&#x2A;</span>
-                  ) : (
-                    ''
-                  )}
-                  {col.title}
-                </>
-              ) || `列${i + 1}`,
+            title: (
+              <>
+                {col.required && !isDetail ? (
+                  <span className="mr-1 text-[rgb(var(--danger-6))]">&#x2A;</span>
+                ) : (
+                  ''
+                )}
+                {colTitle}
+              </>
+            ),
             dataIndex: colKey,
             align: col.align || undefined,
             width: col.width || undefined,
