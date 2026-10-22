@@ -59,7 +59,7 @@ export default function ToMe() {
       render: (v, r) => v || r?.app_name || '-',
     },
     { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
-    { title: '申请人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
+    { title: '操作人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
     {
       title: '单号',
       key: 'bill_no',
