@@ -1,8 +1,8 @@
 import { Button, Drawer, Radio } from '@arco-design/web-react'
 import { useState } from 'react'
+import { PersonPicker } from 'src/components/PersonSelectorModal'
 import { APPROVER_TYPE_OPTIONS, CC_TIMING_OPTIONS, SELF_SELECT_OPTIONS } from 'src/pages/application/design/constants'
 import { normalizeMembers } from 'src/pages/application/examine/flowModel'
-import { PersonPicker } from 'src/pages/application/examine/PersonSelectorModal'
 
 /**
  * 抄送人节点设置抽屉：配置抄送对象（指定人员 / 指定角色 / 发起人自选 / 审核人员组）与抄送时机。

@@ -1,18 +1,18 @@
 import { Button } from '@arco-design/web-react'
 import { forwardRef, useEffect, useImperativeHandle, useMemo } from 'react'
+import { PersonSelectorModal } from 'src/components/PersonSelectorModal'
 import { ADDABLE_NODE_TYPES, NODE_TYPE_META } from 'src/pages/application/design/constants'
 import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
 import { CcEditDrawer } from 'src/pages/application/examine/CcEditDrawer'
 import { ConditionEditDrawer } from 'src/pages/application/examine/ConditionEditDrawer'
 import { FlowNode } from 'src/pages/application/examine/FlowCanvas'
 import {
-  buildDeptDescMap,
-  buildOrgItemMap,
-  buildRoleItemMap,
-  buildUserDeptMap,
-  normalizeMembers,
+    buildDeptDescMap,
+    buildOrgItemMap,
+    buildRoleItemMap,
+    buildUserDeptMap,
+    normalizeMembers,
 } from 'src/pages/application/examine/flowModel'
-import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
 import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
 import { useApprovalFlow } from 'src/pages/application/examine/useApprovalFlow'
 

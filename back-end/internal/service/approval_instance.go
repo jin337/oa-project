@@ -670,6 +670,59 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 	})
 }
 
+// ApprovalInstanceManualCC 手动抄送：把当前实例抄送给指定用户列表（可多选）。
+//   - 幂等：同一 instance + user 已存在（manual-cc）则跳过该用户
+//   - 写入 oa_approval_cc_records，并给每个被抄送人发一条站内通知
+func ApprovalInstanceManualCC(curUserID, instanceID uint, userIDs []uint) error {
+	if len(userIDs) == 0 {
+		return errors.New("请选择抄送人")
+	}
+	var inst model.ApprovalInstance
+	if err := database.DB.First(&inst, instanceID).Error; err != nil {
+		return errors.New("审批实例不存在")
+	}
+	if inst.DeletedAt.Valid {
+		return errors.New("审批实例不存在")
+	}
+	appName := getInstanceAppName(&inst)
+	now := time.Now()
+	// 过滤掉已抄送过的用户
+	var existing []uint
+	database.DB.Model(&model.ApprovalCCRecord{}).
+		Where("instance_id = ? AND node_id = ? AND user_id IN ?", instanceID, "manual-cc", userIDs).
+		Pluck("user_id", &existing)
+	existingSet := make(map[uint]struct{}, len(existing))
+	for _, id := range existing {
+		existingSet[id] = struct{}{}
+	}
+	for _, uid := range userIDs {
+		if uid == 0 {
+			continue
+		}
+		if _, ok := existingSet[uid]; ok {
+			continue
+		}
+		rec := model.ApprovalCCRecord{
+			InstanceID: instanceID,
+			NodeID:     "manual-cc",
+			NodeName:   "手动抄送",
+			UserID:     uid,
+			NotifiedAt: &now,
+		}
+		if err := database.DB.Create(&rec).Error; err != nil {
+			continue
+		}
+		notifyCreate(database.DB, model.Notification{
+			UserID:     uid,
+			Type:       3,
+			Title:      appName,
+			Msg:        "您有新的抄送通知",
+			InstanceID: inst.ID,
+		})
+	}
+	return nil
+}
+
 // ApprovalInstanceDelete 删除流程实例（软删除）
 // 仅允许发起人删除「草稿」实例——从未正式发起、未产生任何审批结果的记录。
 // 已撤回需先编辑保存（转为草稿）后到草稿箱删除；已驳回/已作废/已通过/已拒绝等留有流程痕迹的记录不允许删除。

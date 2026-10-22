@@ -4,21 +4,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as deptApi from 'src/api/dept'
 import { fetchAll } from 'src/api/fetchAll'
 import * as roleApi from 'src/api/role'
+import { PersonSelectorModal } from 'src/components/PersonSelectorModal'
 import { OPERATOR_OPTIONS } from 'src/pages/application/design/constants'
 import {
-  buildOrgItemMap,
-  buildRoleItemMap,
-  buildUserDeptMap,
-  transformDeptTree,
-  transformRoleList,
+    buildOrgItemMap,
+    buildRoleItemMap,
+    buildUserDeptMap,
+    transformDeptTree,
+    transformRoleList,
 } from 'src/pages/application/examine/flowModel'
-import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
 import { SelectorDataContext, useSelectorData } from 'src/pages/application/examine/selector-context'
 import {
-  hasExpandableMember,
-  loadMemberDirectory,
-  resolveMemberPeople,
-  resolveNodePeople,
+    hasExpandableMember,
+    loadMemberDirectory,
+    resolveMemberPeople,
+    resolveNodePeople,
 } from 'src/utils/flowMembers'
 
 /**

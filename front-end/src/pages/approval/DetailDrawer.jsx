@@ -16,13 +16,13 @@ import * as approvalApi from 'src/api/approval'
 import * as deptApi from 'src/api/dept'
 import { fetchAll } from 'src/api/fetchAll'
 import * as roleApi from 'src/api/role'
+import { PersonSelectorModal } from 'src/components/PersonSelectorModal'
 import DynamicForm, {
   evaluateDynamicStates,
   parseLayoutJson,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { safeSetFieldsValue } from 'src/pages/application/dynamic/useApplicationDetailData'
-import { PersonSelectorModal } from 'src/pages/application/examine/PersonSelectorModal'
 import {
   buildOrgItemMap,
   buildRoleItemMap,

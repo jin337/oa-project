@@ -1,16 +1,16 @@
 import { Button, Checkbox, Drawer, Radio, Select } from '@arco-design/web-react'
 import { IconClose, IconPlus } from '@arco-design/web-react/icon'
 import { useMemo, useState } from 'react'
+import { PersonPicker } from 'src/components/PersonSelectorModal'
 import {
-    APPROVER_TYPE_OPTIONS,
-    EMPTY_HANDLER_OPTIONS,
-    FIELD_PERM_OPTIONS,
-    PERMISSION_OPTIONS,
-    SELF_SELECT_OPTIONS,
-    STRATEGY_OPTIONS,
+  APPROVER_TYPE_OPTIONS,
+  EMPTY_HANDLER_OPTIONS,
+  FIELD_PERM_OPTIONS,
+  PERMISSION_OPTIONS,
+  SELF_SELECT_OPTIONS,
+  STRATEGY_OPTIONS,
 } from 'src/pages/application/design/constants'
 import { normalizeMembers } from 'src/pages/application/examine/flowModel'
-import { PersonPicker } from 'src/pages/application/examine/PersonSelectorModal'
 
 /**
  * 审批人节点设置抽屉：审批对象 / 审批方式 / 容错与权限 / 表单字段权限 四个配置模块。

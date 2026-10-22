@@ -124,6 +124,26 @@ func ApprovalInstanceResubmit(c *gin.Context) {
 	response.OKMsg(c, "已重新提交")
 }
 
+// ApprovalInstanceManualCC POST /{APIPrefix}/approval/instance/:id/manual-cc 手动抄送指定用户
+func ApprovalInstanceManualCC(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		UserIDs []uint `json:"user_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeParamError, "参数错误")
+		return
+	}
+	if err := service.ApprovalInstanceManualCC(middleware.CurrentUserID(c), id, req.UserIDs); err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	response.OKMsg(c, "已发送抄送")
+}
+
 // ApprovalInstanceDelete DELETE /{APIPrefix}/approval/instance/:id 删除已终结实例
 func ApprovalInstanceDelete(c *gin.Context) {
 	id, ok := parseID(c)

@@ -1,4 +1,8 @@
-import { Button, Card, Space, Table } from '@arco-design/web-react'
+import { Button, Card, Message, Space, Table } from '@arco-design/web-react'
+import { useState } from 'react'
+import * as approvalApi from 'src/api/approval'
+import { PersonSelectorModal } from 'src/components/PersonSelectorModal'
+import { userIdFromKey } from 'src/pages/application/examine/flowModel'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
 import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
@@ -21,6 +25,7 @@ const ALL_COL_KEYS = [
 
 /** 经我处理：展示当前用户已处理完毕的历史审批记录，只读查看详情 */
 export default function Workplace() {
+  const [ccRecord, setCCRecord] = useState(null)
   const {
     list,
     total,
@@ -92,12 +97,15 @@ export default function Workplace() {
     {
       title: '操作',
       key: 'action',
-      width: 90,
+      width: 150,
       align: 'center',
       render: (_, r) => (
         <Space>
           <Button type="text" size="small" onClick={() => openDetail(r)}>
             详情
+          </Button>
+          <Button type="text" size="small" onClick={() => setCCRecord(r)}>
+            抄送
           </Button>
         </Space>
       ),
@@ -144,6 +152,32 @@ export default function Workplace() {
         visible={Boolean(detailRecord)}
         onCancel={closeDetail}
       />
+
+      {/* 抄送人员选择：多选组织架构用户 */}
+      {ccRecord && (
+        <PersonSelectorModal
+          title="选择抄送人"
+          modes={[1]}
+          selectMode={2}
+          onChange={async (items) => {
+            const userIds = items
+              ?.map((it) => userIdFromKey(it?.key))
+              .filter(Boolean)
+            if (!userIds?.length) {
+              Message.warning('请选择至少一位抄送人')
+              return
+            }
+            try {
+              await approvalApi.manualCCApprovalInstance(ccRecord.instance_id || ccRecord.id, userIds)
+              Message.success('已发送抄送')
+              setCCRecord(null)
+            } catch (e) {
+              // 错误已在请求层提示
+            }
+          }}
+          onCancel={() => setCCRecord(null)}
+        />
+      )}
     </Card>
   )
 }

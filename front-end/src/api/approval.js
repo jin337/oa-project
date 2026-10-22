@@ -88,6 +88,11 @@ export function resubmitApprovalInstance(id, businessData) {
   return request.put(`/approval/instance/${id}/resubmit`, { business_data: businessData })
 }
 
+// POST /approval/instance/:id/manual-cc 手动抄送指定用户（可多选）
+export function manualCCApprovalInstance(id, userIds) {
+  return request.post(`/approval/instance/${id}/manual-cc`, { user_ids: userIds })
+}
+
 // DELETE /approval/instance/:id 删除已终结的流程实例
 export function deleteApprovalInstance(id) {
   return request.delete(`/approval/instance/${id}`)

@@ -19,7 +19,8 @@ import DynamicForm, {
   runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
+import { buildSelfSelectUserIDs, userIdFromKey } from 'src/pages/application/examine/flowModel'
+import { PersonSelectorModal } from 'src/components/PersonSelectorModal'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
 import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
@@ -348,6 +349,11 @@ export default function Initiated() {
     }
   }
 
+  // 抄送：弹出人员选择器（多选），选中后调用接口抄送给指定用户
+  const [ccRecord, setCCRecord] = useState(null)
+  const openCC = (record) => setCCRecord(record)
+  const closeCC = () => setCCRecord(null)
+
   // 已撤回编辑：保存修改（后端把实例转为草稿，之后在草稿箱继续完善）
   const handleSaveWithdrawn = async () => {
     let values
@@ -476,7 +482,7 @@ export default function Initiated() {
     {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 220,
       render: (_, r) => (
         <Space size={0}>
           <Button type="text" size="small" onClick={() => openDetail(r)}>
@@ -515,6 +521,10 @@ export default function Initiated() {
           {/* 副本：任何状态都可复制，点开即在申请抽屉里回填一份副本数据，是否提交由用户决定 */}
           <Button type="text" size="small" onClick={() => openCopy(r)}>
             副本
+          </Button>
+          {/* 抄送：弹出人员选择器（多选），把该实例抄送给指定用户 */}
+          <Button type="text" size="small" onClick={() => openCC(r)}>
+            抄送
           </Button>
         </Space>
       ),
@@ -649,6 +659,32 @@ export default function Initiated() {
           </div>
         ) : null}
       </Drawer>
+
+      {/* 抄送人员选择：多选组织架构用户 */}
+      {ccRecord && (
+        <PersonSelectorModal
+          title="选择抄送人"
+          modes={[1]}
+          selectMode={2}
+          onChange={async (items) => {
+            const userIds = items
+              ?.map((it) => userIdFromKey(it?.key))
+              .filter(Boolean)
+            if (!userIds?.length) {
+              Message.warning('请选择至少一位抄送人')
+              return
+            }
+            try {
+              await approvalApi.manualCCApprovalInstance(ccRecord.instance_id || ccRecord.id, userIds)
+              Message.success('已发送抄送')
+              closeCC()
+            } catch (e) {
+              // 错误已在请求层提示
+            }
+          }}
+          onCancel={closeCC}
+        />
+      )}
     </Card>
   )
 }
