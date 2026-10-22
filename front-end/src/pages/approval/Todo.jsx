@@ -9,11 +9,11 @@ import {
   colItem,
   colNodeName,
   colStatus,
-} from 'src/pages/approval/approvalColumns'
-import CCModal from 'src/pages/approval/CCModal'
-import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
-import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
-import { useApprovalList } from 'src/pages/approval/useApprovalList'
+} from 'src/pages/approval/components/approvalColumns'
+import CCModal from 'src/pages/approval/components/CCModal'
+import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
+import ApprovalDetailDrawer from 'src/pages/approval/components/DetailDrawer'
+import { useApprovalList } from 'src/pages/approval/components/useApprovalList'
 
 const PAGE_TITLE = '我的待办'
 
@@ -66,8 +66,8 @@ export default function Todo() {
     },
     colBillNo,
     colDept,
-    colCreatedName,
     colNodeName,
+    colCreatedName,
     colCreatedAt,
     colStatus,
     {

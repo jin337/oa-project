@@ -10,11 +10,11 @@ import {
   colItem,
   colNodeName,
   colStatus,
-} from 'src/pages/approval/approvalColumns'
-import CCModal from 'src/pages/approval/CCModal'
-import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
-import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
-import { useApprovalList } from 'src/pages/approval/useApprovalList'
+} from 'src/pages/approval/components/approvalColumns'
+import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
+import CCModal from 'src/pages/approval/components/CCModal'
+import ApprovalDetailDrawer from 'src/pages/approval/components/DetailDrawer'
+import { useApprovalList } from 'src/pages/approval/components/useApprovalList'
 
 const PAGE_TITLE = '经我处理'
 
@@ -25,8 +25,8 @@ const ALL_COL_KEYS = [
   'dept_name',
   'created_name',
   'bill_no',
-  'created_at',
   'node_name',
+  'created_at',
   'finished_at',
   'approval_status',
 ]
@@ -61,8 +61,8 @@ export default function Workplace() {
     colItem(openDetail),
     colBillNo,
     colDept,
-    colCreatedName,
     colNodeName,
+    colCreatedName,
     colCreatedAt,
     colFinishedAt,
     colStatus,

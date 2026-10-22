@@ -1,4 +1,4 @@
-﻿import {
+import {
   Button,
   Drawer,
   Empty,
@@ -32,7 +32,7 @@ import {
   userIdFromKey,
 } from 'src/pages/application/examine/flowModel'
 import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
-import ApprovalTimeline from 'src/pages/approval/ApprovalTimeline.jsx'
+import ApprovalTimeline from 'src/pages/approval/components/ApprovalTimeline.jsx'
 
 /**
  * 审批记录动态详情 Drawer（公共组件）：

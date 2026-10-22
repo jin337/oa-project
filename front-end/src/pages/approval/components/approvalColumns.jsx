@@ -1,5 +1,5 @@
 import { Button } from '@arco-design/web-react'
-import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
+import { ApprovalStatusTag } from 'src/pages/approval/components/approvalStatus.jsx'
 import { formatTime } from 'src/utils/format'
 
 /**

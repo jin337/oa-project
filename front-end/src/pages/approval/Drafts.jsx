@@ -26,9 +26,9 @@ import {
   colDept,
   colIndex,
   colStatus,
-} from 'src/pages/approval/approvalColumns'
-import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
-import { useApprovalList } from 'src/pages/approval/useApprovalList'
+} from 'src/pages/approval/components/approvalColumns'
+import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
+import { useApprovalList } from 'src/pages/approval/components/useApprovalList'
 
 const PAGE_TITLE = '草稿箱'
 
