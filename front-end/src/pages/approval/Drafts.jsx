@@ -5,7 +5,6 @@ import {
   Form,
   Message,
   Popconfirm,
-  Space,
   Spin,
   Table,
 } from '@arco-design/web-react'
@@ -28,7 +27,15 @@ import { formatTime } from 'src/utils/format'
 const PAGE_TITLE = '草稿箱'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'item_name', 'dept_name', 'created_at', 'approval_status']
+const ALL_COL_KEYS = [
+  'index',
+  'item_name',
+  'dept_name',
+  'created_name',
+  'bill_no',
+  'created_at',
+  'approval_status',
+]
 
 /** 草稿箱：展示当前用户状态为「草稿」的申请记录，支持继续编辑 / 提交审核 / 删除 */
 export default function Drafts() {
@@ -261,9 +268,33 @@ export default function Drafts() {
       key: 'item_name',
       dataIndex: 'item_name',
       // 未从申请项发起（无 item_name）时回退展示流程配置名称
-      render: (v, r) => v || r?.app_name || '-',
+      render: (v, r) => (
+        <Button type="text" size="small" className="-ml-4!" onClick={() => openDraftEdit(r)}>
+          {v || r?.app_name || '-'}
+        </Button>
+      ),
     },
-    { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
+    {
+      title: '单号',
+      key: 'bill_no',
+      dataIndex: 'bill_no',
+      width: 200,
+      render: (v) => v || '-',
+    },
+    {
+      title: '部门',
+      key: 'dept_name',
+      dataIndex: 'dept_name',
+      width: 110,
+      render: (v) => v || '-',
+    },
+    {
+      title: '申请人',
+      key: 'created_name',
+      dataIndex: 'created_name',
+      width: 110,
+      render: (v) => v || '-',
+    },
     {
       title: '创建时间',
       key: 'created_at',
@@ -282,18 +313,14 @@ export default function Drafts() {
     {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 70,
+      align: 'center',
       render: (_, r) => (
-        <Space>
-          <Button type="text" size="small" onClick={() => openDraftEdit(r)}>
-            编辑
+        <Popconfirm position="lb" title="确定删除该草稿吗？" onOk={() => handleDelete(r)}>
+          <Button type="text" size="small" status="danger">
+            删除
           </Button>
-          <Popconfirm position="lb" title="确定删除该草稿吗？" onOk={() => handleDelete(r)}>
-            <Button type="text" size="small" status="danger">
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
+        </Popconfirm>
       ),
     },
   ]
@@ -365,7 +392,7 @@ export default function Drafts() {
               <Button
                 size="mini"
                 type="primary"
-                status='success'
+                status="success"
                 icon={flowCollapsed ? <IconDoubleLeft /> : <IconDoubleRight />}
                 onClick={() => setFlowCollapsed((v) => !v)}
               />
@@ -380,7 +407,9 @@ export default function Drafts() {
                 />
               </div>
             </div>
-            <div className={`h-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 transition-all ${flowCollapsed ? 'm-0! w-0 border-l-0 p-0!' : 'w-100'}`}>
+            <div
+              className={`h-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 transition-all ${flowCollapsed ? 'm-0! w-0 border-l-0 p-0!' : 'w-100'}`}
+            >
               {!flowCollapsed && (
                 <DynamicFlowView
                   raw={drawerApp?.approval_flow_json}

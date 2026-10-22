@@ -13,6 +13,7 @@
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"back-end/internal/database"
@@ -524,9 +525,6 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 	}
 
 	records := make([]model.ApprovalRecord, 0, len(tasks))
-	// 待办场景：审批节点列显示当前待办任务的审批人姓名
-	nameMap := queryUserNames(map[uint]bool{curUserID: true})
-	assigneeName := nameMap[curUserID]
 	for _, t := range tasks {
 		var inst model.ApprovalInstance
 		if err := database.DB.First(&inst, t.InstanceID).Error; err != nil {
@@ -540,6 +538,8 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 		var item model.ApprovalCategoryItem
 		database.DB.Where("code = ?", app.Code).First(&item)
 
+		// 审批节点列显示当前待处理人姓名
+		assigneeName := queryUserNames(map[uint]bool{t.AssigneeID: true})[t.AssigneeID]
 		rec := model.ApprovalRecord{
 			ID:             t.ID,
 			InstanceID:     inst.ID,
@@ -593,10 +593,56 @@ func approvalListInitiated(curUserID uint, req *model.ApprovalListReq) ([]model.
 	}
 
 	fillApprovalUserInfo(records)
+	fillRecordNodeName(records)
 	return records, total, nil
 }
 
-// approvalListFromInstances 从 approval_instances 表聚合审批列表（草稿箱场景）
+// fillRecordNodeName 批量回填列表记录的「审批节点」列：显示当前流转到的处理人姓名。
+//   - 进行中实例：取当前待处理任务（status=0）的审批人姓名（或签多个处理人用「、」连接）
+//   - 已终结实例：留空（流程已结束，没有"当前处理人"）
+func fillRecordNodeName(records []model.ApprovalRecord) {
+	if len(records) == 0 {
+		return
+	}
+	instIDs := make([]uint, 0, len(records))
+	for _, r := range records {
+		if r.InstanceID > 0 {
+			instIDs = append(instIDs, r.InstanceID)
+		}
+	}
+	if len(instIDs) == 0 {
+		return
+	}
+	var tasks []model.ApprovalInstanceTask
+	database.DB.Where("instance_id IN ? AND status = ?", instIDs, model.TaskStatusPending).
+		Order("instance_id ASC, id ASC").
+		Find(&tasks)
+	// 收集所有待处理审批人 ID，批量查姓名
+	uidSet := map[uint]bool{}
+	byInst := map[uint][]uint{}
+	for _, t := range tasks {
+		if t.AssigneeID > 0 {
+			uidSet[t.AssigneeID] = true
+			byInst[t.InstanceID] = append(byInst[t.InstanceID], t.AssigneeID)
+		}
+	}
+	nameMap := queryUserNames(uidSet)
+	for i := range records {
+		instID := records[i].InstanceID
+		ids := byInst[instID]
+		if len(ids) == 0 {
+			records[i].NodeName = ""
+			continue
+		}
+		names := make([]string, 0, len(ids))
+		for _, uid := range ids {
+			if n, ok := nameMap[uid]; ok && n != "" {
+				names = append(names, n)
+			}
+		}
+		records[i].NodeName = strings.Join(names, "、")
+	}
+}
 func approvalListFromInstances(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
 	baseWhere := "oa_approval_instances.created_by = ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status = ?"
 	baseArgs := []interface{}{curUserID, model.InstanceStatusDraft}
@@ -678,6 +724,7 @@ func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.A
 	}
 
 	fillApprovalUserInfo(records)
+	fillRecordNodeName(records)
 	return records, total, nil
 }
 

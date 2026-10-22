@@ -351,9 +351,9 @@ export default function ApplicationManage() {
       title: '名称',
       dataIndex: 'name',
       render: (v, record) => (
-        <Typography.Text type="primary" className="cursor-pointer" onClick={() => openEdit(record)}>
+        <Button type="text" size="small" className="-ml-4!" onClick={() => openEdit(record)}>
           {v}
-        </Typography.Text>
+        </Button>
       ),
     },
     {
@@ -384,13 +384,9 @@ export default function ApplicationManage() {
       width: 110,
       render: (v, record) =>
         v ? (
-          <Typography.Text
-            type="primary"
-            className="cursor-pointer"
-            onClick={() => openVersions(record)}
-          >
+          <Button type="text" size="small" onClick={() => openVersions(record)}>
             {v}
-          </Typography.Text>
+          </Button>
         ) : (
           '-'
         ),

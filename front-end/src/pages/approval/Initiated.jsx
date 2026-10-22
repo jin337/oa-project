@@ -2,16 +2,18 @@ import {
   Button,
   Card,
   Drawer,
+  Dropdown,
   Form,
+  Menu,
   Message,
-  Popconfirm,
-  Space,
+  Modal,
   Spin,
   Table,
 } from '@arco-design/web-react'
-import { IconDoubleLeft, IconDoubleRight } from '@arco-design/web-react/icon'
+import { IconDoubleLeft, IconDoubleRight, IconDown } from '@arco-design/web-react/icon'
 import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
+import { PersonSelectModalWithData } from 'src/components/PersonSelectModalWithData'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
   parseLayoutJson,
@@ -20,7 +22,6 @@ import DynamicForm, {
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs, userIdFromKey } from 'src/pages/application/examine/flowModel'
-import { PersonSelectorModal } from 'src/components/PersonSelectorModal'
 import { ApprovalStatusTag } from 'src/pages/approval/approvalStatus.jsx'
 import ApprovalTableToolbar from 'src/pages/approval/ApprovalTableToolbar'
 import ApprovalDetailDrawer from 'src/pages/approval/DetailDrawer'
@@ -78,6 +79,7 @@ const ALL_COL_KEYS = [
   'created_name',
   'bill_no',
   'created_at',
+  'node_name',
   'finished_at',
   'approval_status',
 ]
@@ -445,16 +447,44 @@ export default function Initiated() {
       title: '模块',
       key: 'item_name',
       dataIndex: 'item_name',
-      // 未从申请项发起（无 item_name）时回退展示流程配置名称
-      render: (v, r) => v || r?.app_name || '-',
+      // 未从申请项发起（无 item_name）时回退展示流程配置名称；点击模块名打开详情抽屉
+      render: (v, r) => (
+        <Button
+          type="text"
+          size="small"
+          className="-ml-4!"
+          onClick={() => (r.can_edit ? openRejectedEdit(r) : openDetail(r))}
+        >
+          {v || r?.app_name || '-'}
+        </Button>
+      ),
     },
-    { title: '部门', key: 'dept_name', dataIndex: 'dept_name', render: (v) => v || '-' },
-    { title: '申请人', key: 'created_name', dataIndex: 'created_name', render: (v) => v || '-' },
     {
       title: '单号',
       key: 'bill_no',
       dataIndex: 'bill_no',
       width: 200,
+      render: (v) => v || '-',
+    },
+    {
+      title: '部门',
+      key: 'dept_name',
+      dataIndex: 'dept_name',
+      width: 110,
+      render: (v) => v || '-',
+    },
+    {
+      title: '申请人',
+      key: 'created_name',
+      dataIndex: 'created_name',
+      width: 110,
+      render: (v) => v || '-',
+    },
+    {
+      title: '审批节点',
+      key: 'node_name',
+      dataIndex: 'node_name',
+      width: 110,
       render: (v) => v || '-',
     },
     {
@@ -482,52 +512,61 @@ export default function Initiated() {
     {
       title: '操作',
       key: 'action',
-      width: 220,
-      render: (_, r) => (
-        <Space size={0}>
-          <Button type="text" size="small" onClick={() => openDetail(r)}>
-            详情
-          </Button>
-          {/* 撤回：进行中且提交后 30 分钟内可撤回（与后端 Withdraw 时间窗一致） */}
-          {r.can_withdraw && isWithinWithdrawWindow(r) && (
-            <Popconfirm
-              position="lb"
-              title="撤回后该申请将标记为已撤回，可继续编辑或重新提交，确定撤回？"
-              onOk={() => handleWithdraw(r)}
-            >
-              <Button type="text" size="small" status="warning">
-                撤回
-              </Button>
-            </Popconfirm>
-          )}
-          {/* 编辑：已驳回（改完重新提交）/ 已撤回（改完保存或重新提交） */}
-          {r.can_edit && (
-            <Button type="text" size="small" onClick={() => openRejectedEdit(r)}>
-              编辑
+      width: 90,
+      align: 'center',
+      render: (_, r) => {
+        // 操作项定义：key / 文案 / 是否可用 / 点击动作；需要二次确认的项带 confirmText
+        const defs = [
+          {
+            key: 'withdraw',
+            label: '撤回',
+            visible: r.can_withdraw && isWithinWithdrawWindow(r),
+            confirmText: '撤回后该申请将标记为已撤回，可继续编辑或重新提交，确定撤回？',
+            onClick: () => handleWithdraw(r),
+          },
+          {
+            key: 'void',
+            label: '作废',
+            visible: r.can_void,
+            confirmText: '作废后该单据将保留在列表中并标记为已作废，且不可恢复，确定作废？',
+            onClick: () => handleVoid(r),
+          },
+          { key: 'copy', label: '副本', onClick: () => openCopy(r) },
+          { key: 'cc', label: '抄送', onClick: () => openCC(r) },
+        ].filter((d) => d.visible !== false)
+        if (!defs.length) return '-'
+        const menu = (
+          <Menu
+            style={{ width: 60 }}
+            onClickMenuItem={(key) => {
+              const d = defs.find((it) => it.key === key)
+              if (!d) return
+              if (d.confirmText) {
+                Modal.confirm({
+                  title: '操作确认',
+                  content: d.confirmText,
+                  okText: '确定',
+                  cancelText: '取消',
+                  onOk: () => d.onClick?.(),
+                })
+                return
+              }
+              d.onClick?.()
+            }}
+          >
+            {defs?.map((d) => (
+              <Menu.Item key={d.key}>{d.label}</Menu.Item>
+            ))}
+          </Menu>
+        )
+        return (
+          <Dropdown trigger="click" position="br" droplist={menu}>
+            <Button size="mini" type="text">
+              操作 <IconDown />
             </Button>
-          )}
-          {/* 作废：仅已撤回（后端判定），作废后保留记录、置为「已作废」 */}
-          {r.can_void && (
-            <Popconfirm
-              position="lb"
-              title="作废后该单据将保留在列表中并标记为已作废，且不可恢复，确定作废？"
-              onOk={() => handleVoid(r)}
-            >
-              <Button type="text" size="small" status="danger">
-                作废
-              </Button>
-            </Popconfirm>
-          )}
-          {/* 副本：任何状态都可复制，点开即在申请抽屉里回填一份副本数据，是否提交由用户决定 */}
-          <Button type="text" size="small" onClick={() => openCopy(r)}>
-            副本
-          </Button>
-          {/* 抄送：弹出人员选择器（多选），把该实例抄送给指定用户 */}
-          <Button type="text" size="small" onClick={() => openCC(r)}>
-            抄送
-          </Button>
-        </Space>
-      ),
+          </Dropdown>
+        )
+      },
     },
   ]
 
@@ -627,7 +666,7 @@ export default function Initiated() {
               <Button
                 size="mini"
                 type="primary"
-                status='success'
+                status="success"
                 icon={flowCollapsed ? <IconDoubleLeft /> : <IconDoubleRight />}
                 onClick={() => setFlowCollapsed((v) => !v)}
               />
@@ -662,20 +701,20 @@ export default function Initiated() {
 
       {/* 抄送人员选择：多选组织架构用户 */}
       {ccRecord && (
-        <PersonSelectorModal
+        <PersonSelectModalWithData
           title="选择抄送人"
-          modes={[1]}
           selectMode={2}
           onChange={async (items) => {
-            const userIds = items
-              ?.map((it) => userIdFromKey(it?.key))
-              .filter(Boolean)
+            const userIds = items?.map((it) => userIdFromKey(it?.key)).filter(Boolean)
             if (!userIds?.length) {
               Message.warning('请选择至少一位抄送人')
               return
             }
             try {
-              await approvalApi.manualCCApprovalInstance(ccRecord.instance_id || ccRecord.id, userIds)
+              await approvalApi.manualCCApprovalInstance(
+                ccRecord.instance_id || ccRecord.id,
+                userIds,
+              )
               Message.success('已发送抄送')
               closeCC()
             } catch (e) {
