@@ -448,7 +448,7 @@ const LayoutManage = forwardRef(function LayoutManage(
         </div>
 
         {/* 中间画布：宽度小于 750px 时出现横向滚动条 */}
-        <div className="flex-1 overflow-x-auto overflow-y-auto">
+        <div className="flex-1 overflow-auto">
           <div className="min-w-188">
             <DynamicForm
               app={{ form_layout_json: { formConfig, elements: layoutElements } }}

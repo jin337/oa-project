@@ -56,7 +56,7 @@ export default function MoveFormMode({
       ) : (
         <Form
           form={form}
-          className="mx-auto max-w-187.5"
+          className="mx-auto max-w-[90%]"
           layout={formConfig.layout}
           labelAlign={formConfig.labelAlign}
           disabled
