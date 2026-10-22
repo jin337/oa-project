@@ -565,7 +565,7 @@ export default function Initiated() {
       {/* 编辑/副本 Drawer（共用一套表单）：副本底部为「保存草稿」+「提交审核」，关掉即不提交；
           已撤回底部为「保存草稿」+「提交审核」；已驳回底部为「重新提交」 */}
       <Drawer
-        className={'relative [&_.arco-drawer-content]:p-0!'}
+        className="[&_.arco-drawer-content]:p-0!"
         width="80%"
         visible={editVisible}
         onCancel={closeEditDrawer}
@@ -610,19 +610,18 @@ export default function Initiated() {
             <Spin />
           </div>
         ) : editApp ? (
-          /* 表单与审批流程左右布局：表单列自适应，流程列固定列宽并参与换行；
-             空间不足（容器<985px:表单列 basis 560px + 流程列 400px + gap 24px = 984px）时流程列占满整行，两列顶部对齐 */
-          <div className="@container flex h-full flex-wrap items-start">
-            <div className="h-full min-w-0 shrink grow basis-140 overflow-y-auto px-4 py-3">
-              <DynamicForm
-                app={editApp}
-                form={editForm}
-                pageType="form"
-                onValuesChange={setFormValues}
-              />
+          <div className="flex h-full flex-nowrap items-start">
+            <div className="max-h-full flex-1 overflow-y-auto px-4 py-3">
+              <div className="min-w-188">
+                <DynamicForm
+                  app={editApp}
+                  form={editForm}
+                  pageType="form"
+                  onValuesChange={setFormValues}
+                />
+              </div>
             </div>
-            <div className="h-full w-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 @min-[985px]:w-100">
-              {/* 审批流只读还原；副本可直接提交，故接上自选节点选人回调（编辑走实例已有的人选，不受影响） */}
+            <div className="h-full w-100 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3">
               <DynamicFlowView
                 raw={editApp?.approval_flow_json}
                 formData={formValues}

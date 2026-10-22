@@ -375,7 +375,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   return (
     <SelectorDataContext.Provider value={selectorData}>
       <Drawer
-        className={'[&_.arco-drawer-content]:p-0!'}
+        className="[&_.arco-drawer-content]:p-0!"
         width="80%"
         title={`详情 - ${title}`}
         visible={visible}
@@ -390,17 +390,22 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
           </div>
         ) : instance ? (
           <div className="flex h-full flex-nowrap items-start">
-            <div className="m-auto h-full min-w-187.5 shrink grow overflow-auto px-4 py-3">
-              <DynamicForm
-                app={{ ...appFromInstance, form_layout_json: appFromInstance?.detail_layout_json }}
-                form={detailForm}
-                pageType="detail"
-                fieldPerms={instance?.field_perms}
-                editable={Boolean(currentTask)}
-                detailDynamicStates={detailDynamicStates}
-              />
+            <div className="max-h-full flex-1 overflow-y-auto px-4 py-3">
+              <div className="min-w-188">
+                <DynamicForm
+                  app={{
+                    ...appFromInstance,
+                    form_layout_json: appFromInstance?.detail_layout_json,
+                  }}
+                  form={detailForm}
+                  pageType="detail"
+                  fieldPerms={instance?.field_perms}
+                  editable={Boolean(currentTask)}
+                  detailDynamicStates={detailDynamicStates}
+                />
+              </div>
             </div>
-            <div className="h-full w-100 shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3">
+            <div className="h-full w-100 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3">
               {renderActions()}
               {/* 审批状态印章：显示在标题栏右上角 */}
               <div className="relative">
