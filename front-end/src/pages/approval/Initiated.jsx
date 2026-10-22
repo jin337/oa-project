@@ -9,6 +9,7 @@ import {
   Spin,
   Table,
 } from '@arco-design/web-react'
+import { IconDoubleLeft, IconDoubleRight } from '@arco-design/web-react/icon'
 import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
@@ -152,6 +153,7 @@ export default function Initiated() {
   const [copyMode, setCopyMode] = useState(false)
   const [selfSelectMembers, setSelfSelectMembers] = useState({})
   const [selfSelectReady, setSelfSelectReady] = useState(true)
+  const [flowCollapsed, setFlowCollapsed] = useState(false)
 
   // 关闭抽屉：一并退出副本模式并清掉自选人员，避免下一次「编辑」沿用副本的底部按钮
   const closeEditDrawer = () => {
@@ -610,7 +612,16 @@ export default function Initiated() {
             <Spin />
           </div>
         ) : editApp ? (
-          <div className="flex h-full flex-nowrap items-start">
+          <div className="relative flex h-full flex-nowrap items-start">
+            <div className={`absolute top-3 right-0 z-10`}>
+              <Button
+                size="mini"
+                type="primary"
+                status='success'
+                icon={flowCollapsed ? <IconDoubleLeft /> : <IconDoubleRight />}
+                onClick={() => setFlowCollapsed((v) => !v)}
+              />
+            </div>
             <div className="max-h-full flex-1 overflow-y-auto px-4 py-3">
               <div className="min-w-188">
                 <DynamicForm
@@ -621,15 +632,19 @@ export default function Initiated() {
                 />
               </div>
             </div>
-            <div className="h-full w-100 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3">
-              <DynamicFlowView
-                raw={editApp?.approval_flow_json}
-                formData={formValues}
-                onMembersChange={(nodeId, members) => {
-                  setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
-                }}
-                onReadyStateChange={setSelfSelectReady}
-              />
+            <div
+              className={`h-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 transition-all ${flowCollapsed ? 'm-0! w-0 border-l-0 p-0!' : 'w-100'}`}
+            >
+              {!flowCollapsed && (
+                <DynamicFlowView
+                  raw={editApp?.approval_flow_json}
+                  formData={formValues}
+                  onMembersChange={(nodeId, members) => {
+                    setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
+                  }}
+                  onReadyStateChange={setSelfSelectReady}
+                />
+              )}
             </div>
           </div>
         ) : null}

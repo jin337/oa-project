@@ -9,6 +9,8 @@
   Space,
   Spin,
 } from '@arco-design/web-react'
+import { IconDoubleLeft, IconDoubleRight } from '@arco-design/web-react/icon'
+
 import { useEffect, useMemo, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import * as deptApi from 'src/api/dept'
@@ -60,6 +62,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   const [addSignerVisible, setAddSignerVisible] = useState(false)
   // 加签类型：1-前加签（加签人先审，通过后本人再审） 2-后加签（本人通过后加签人再审）
   const [addSignType, setAddSignType] = useState(2)
+  const [flowCollapsed, setFlowCollapsed] = useState(false)
 
   // 选择器数据源：抽屉打开时统一加载一次（组织架构 + 角色，仅启用），
   // 供 DynamicFlowView 自选节点弹层、转交/加签弹层共用，避免各自重复请求
@@ -389,7 +392,16 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
             <Spin />
           </div>
         ) : instance ? (
-          <div className="flex h-full flex-nowrap items-start">
+          <div className="relative flex h-full flex-nowrap items-start">
+            <div className={`absolute top-3 right-0 z-10`}>
+              <Button
+                size="mini"
+                type="primary"
+                status='success'
+                icon={flowCollapsed ? <IconDoubleLeft /> : <IconDoubleRight />}
+                onClick={() => setFlowCollapsed((v) => !v)}
+              />
+            </div>
             <div className="max-h-full flex-1 overflow-y-auto px-4 py-3">
               <div className="min-w-188">
                 <DynamicForm
@@ -405,7 +417,9 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
                 />
               </div>
             </div>
-            <div className="h-full w-100 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3">
+            <div
+              className={`h-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 transition-all ${flowCollapsed ? 'm-0! w-0 border-l-0 p-0!' : 'w-100'}`}
+            >
               {renderActions()}
               {/* 审批状态印章：显示在标题栏右上角 */}
               <div className="relative">

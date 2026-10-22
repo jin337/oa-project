@@ -9,6 +9,7 @@ import {
   Spin,
   Table,
 } from '@arco-design/web-react'
+import { IconDoubleLeft, IconDoubleRight } from '@arco-design/web-react/icon'
 import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
@@ -61,6 +62,7 @@ export default function Drafts() {
   const [formValues, setFormValues] = useState({})
   // 发起人自选审批人（nodeId -> [{ type, key, label }]），提交时转为 nodeId -> [userId] 传给后端
   const [selfSelectMembers, setSelfSelectMembers] = useState({})
+  const [flowCollapsed, setFlowCollapsed] = useState(false)
 
   // 将草稿暂存的自选成员（nodeId -> [{ type, key, label }]）注入审批流配置的自选节点 members，
   // 供 DynamicFlowView 展示已选审批人/抄送人；兼容 JSON 字符串与节点数组，条件分支 children 递归处理
@@ -358,7 +360,16 @@ export default function Drafts() {
             <Spin />
           </div>
         ) : drawerApp ? (
-          <div className="flex h-full flex-nowrap items-start">
+          <div className="relative flex h-full flex-nowrap items-start">
+            <div className={`absolute top-3 right-0 z-10`}>
+              <Button
+                size="mini"
+                type="primary"
+                status='success'
+                icon={flowCollapsed ? <IconDoubleLeft /> : <IconDoubleRight />}
+                onClick={() => setFlowCollapsed((v) => !v)}
+              />
+            </div>
             <div className="max-h-full flex-1 overflow-y-auto px-4 py-3">
               <div className="min-w-188">
                 <DynamicForm
@@ -369,14 +380,16 @@ export default function Drafts() {
                 />
               </div>
             </div>
-            <div className="h-full w-100 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3">
-              <DynamicFlowView
-                raw={drawerApp?.approval_flow_json}
-                formData={formValues}
-                onMembersChange={(nodeId, members) => {
-                  setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
-                }}
-              />
+            <div className={`h-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 transition-all ${flowCollapsed ? 'm-0! w-0 border-l-0 p-0!' : 'w-100'}`}>
+              {!flowCollapsed && (
+                <DynamicFlowView
+                  raw={drawerApp?.approval_flow_json}
+                  formData={formValues}
+                  onMembersChange={(nodeId, members) => {
+                    setSelfSelectMembers((prev) => ({ ...prev, [nodeId]: members }))
+                  }}
+                />
+              )}
             </div>
           </div>
         ) : null}
