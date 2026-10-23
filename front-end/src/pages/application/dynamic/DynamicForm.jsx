@@ -792,35 +792,36 @@ export const CanvasElement = memo(function CanvasElement({
         {renderFormItemElement(el, ctx)}
         {/* 透明蒙层阻止触发表单控件原生交互（置于容器内，避免 FormItem children 成数组导致字段注入失效） */}
         <div
-          className={`absolute inset-0 z-1 border transition-all ${
+          className={`absolute inset-0 z-10 border transition-all ${
             isSelected
-              ? `border-[rgb(var(--arcoblue-6))] ${el.element_type === 'table' && ctx.pageType === 'move-detail' ? 'shadow-[0_1px_0_0_rgb(var(--arcoblue-6))]' : ''}`
+              ? 'border-[rgb(var(--arcoblue-6))]'
               : isDragOver
                 ? 'border-dashed border-[rgb(var(--arcoblue-6))] '
-                : `border-transparent hover:border-[rgb(var(--arcoblue-6))] ${el.element_type === 'table' && ctx.pageType === 'move-detail' ? 'hover:shadow-[0_1px_0_0_rgb(var(--arcoblue-6))]' : ''}`
+                : 'border-transparent hover:border-[rgb(var(--arcoblue-6))]'
           }`}
-        ></div>
-        {isSelected && (
-          <>
-            {/* 拖拽图标：绝对定位左下角 */}
-            <span className="absolute bottom-0 left-0 z-10 bg-[rgb(var(--arcoblue-6))] px-1">
-              <IconDragArrow className="cursor-grab text-white!" />
-            </span>
-            {/* 删除按钮：绝对定位右上角（悬浮于边框上） */}
-            <Button
-              size="mini"
-              status="danger"
-              shape="circle"
-              icon={<IconDelete />}
-              title="删除元素"
-              className="absolute! -top-2 -right-2 z-2 shadow"
-              onClick={(e) => {
-                e.stopPropagation()
-                onRemoveElement?.(el.id)
-              }}
-            />
-          </>
-        )}
+        >
+          {isSelected && (
+            <>
+              {/* 拖拽图标：绝对定位左下角 */}
+              <span className="absolute bottom-0 left-0 bg-[rgb(var(--arcoblue-6))] px-1">
+                <IconDragArrow className="cursor-grab text-white!" />
+              </span>
+              {/* 删除按钮：绝对定位右上角（悬浮于边框上） */}
+              <Button
+                size="mini"
+                status="danger"
+                shape="circle"
+                icon={<IconDelete />}
+                title="删除元素"
+                className="absolute! -top-2 -right-2 z-2 shadow"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRemoveElement?.(el.id)
+                }}
+              />
+            </>
+          )}
+        </div>
       </div>
     </Col>
   )
