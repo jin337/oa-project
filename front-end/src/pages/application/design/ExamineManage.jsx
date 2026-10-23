@@ -1,10 +1,11 @@
 import { Button } from '@arco-design/web-react'
-import { forwardRef, useEffect, useImperativeHandle, useMemo } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { PersonSelectorModal } from 'src/components/PersonSelectorModal'
 import { ADDABLE_NODE_TYPES, NODE_TYPE_META } from 'src/pages/application/design/constants'
 import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
 import { CcEditDrawer } from 'src/pages/application/examine/CcEditDrawer'
 import { ConditionEditDrawer } from 'src/pages/application/examine/ConditionEditDrawer'
+import { EndEventEditDrawer } from 'src/pages/application/examine/EndEventEditDrawer'
 import { FlowNode } from 'src/pages/application/examine/FlowCanvas'
 import {
   buildDeptDescMap,
@@ -45,6 +46,10 @@ const ExamineManage = forwardRef(function ExamineManage(
   // 流程主表名（table_name）：供条件编辑抽屉区分主表 / 子表字段分组
   const mainTable = app?.table_name || ''
 
+  // 流程结束事件脚本（存为节点数组末尾的特殊节点 { type:'end', event:'...' }，画布不渲染）
+  const [endEventScript, setEndEventScript] = useState('')
+  const [endDrawerOpen, setEndDrawerOpen] = useState(false)
+
   // 审批流数据回显：app 变化时解析 approval_flow_json 还原画布
   useEffect(() => {
     if (!app) return
@@ -58,7 +63,20 @@ const ExamineManage = forwardRef(function ExamineManage(
         parsed = null
       }
     }
-    if (Array.isArray(parsed) && parsed.length) setNodes(parsed)
+    if (Array.isArray(parsed) && parsed.length) {
+      // 抽出流程结束事件特殊节点，其余作为画布节点
+      let endNode = null
+      const canvasNodes = []
+      for (const n of parsed) {
+        if (n && n.type === 'end') {
+          endNode = n
+        } else {
+          canvasNodes.push(n)
+        }
+      }
+      setEndEventScript(endNode?.event || '')
+      setNodes(canvasNodes)
+    }
   }, [app, setNodes])
 
   // 选择器派生映射
@@ -80,8 +98,16 @@ const ExamineManage = forwardRef(function ExamineManage(
     [orgTree, roleList, examineGroups, orgItemMap, roleItemMap, userDeptMap],
   )
 
-  // 对外暴露：返回当前审批流节点（供外层合并保存）
-  useImperativeHandle(ref, () => ({ getNodes: () => nodes }), [nodes])
+  // 对外暴露：返回当前审批流节点（供外层合并保存）；流程结束事件作为特殊节点追加在末尾
+  useImperativeHandle(ref, () => ({
+    getNodes: () => {
+      const list = Array.isArray(nodes) ? [...nodes] : []
+      if (endEventScript && endEventScript.trim()) {
+        list.push({ type: 'end', event: endEventScript })
+      }
+      return list
+    },
+  }), [nodes, endEventScript])
 
   // 节点点击编辑：1-发起人 跳过中间弹窗直接唤起人员选择器（确认即保存 members），其余进入节点编辑
   const handleNodeEdit = (node) => {
@@ -136,7 +162,7 @@ const ExamineManage = forwardRef(function ExamineManage(
             />
           ))}
         </div>
-        <Button size='small'>流程结束</Button>
+        <Button size='small' onClick={() => setEndDrawerOpen(true)}>流程结束</Button>
       </div>
       {/* 节点/条件编辑弹层：发起人直接唤起人员选择器，审批人/抄送人/条件分支用 Drawer */}
       {editing?.kind === 'initiator' && (
@@ -180,6 +206,18 @@ const ExamineManage = forwardRef(function ExamineManage(
           mainTable={mainTable}
           onCancel={closeEdit}
           onSave={saveBranch}
+        />
+      )}
+
+      {/* 流程结束事件抽屉 */}
+      {endDrawerOpen && (
+        <EndEventEditDrawer
+          event={endEventScript}
+          onCancel={() => setEndDrawerOpen(false)}
+          onSave={(script) => {
+            setEndEventScript(script)
+            setEndDrawerOpen(false)
+          }}
         />
       )}
     </SelectorDataContext.Provider>

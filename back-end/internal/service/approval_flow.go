@@ -62,7 +62,8 @@ type flowRule struct {
 	Agg      string `json:"agg"`       // 子表聚合方式：row-单行(默认) / sum-列合计 / avg-平均值；主表字段忽略
 }
 
-// parseFlowNodes 解析 approval_flow_json 为节点数组（兼容 JSON 字符串与已解析结构）
+// parseFlowNodes 解析 approval_flow_json 为节点数组（兼容 JSON 字符串与已解析结构）。
+// 末尾可能追加特殊节点 { type:"end", event:"..." }（流程结束事件），不属于审批节点，解析前过滤掉。
 func parseFlowNodes(raw any) ([]flowNode, error) {
 	if raw == nil {
 		return nil, nil
@@ -72,8 +73,23 @@ func parseFlowNodes(raw any) ([]flowNode, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 先解析为 []map[string]any，过滤掉 type 为字符串 "end" 的特殊节点
+	var rawList []map[string]any
+	if err := json.Unmarshal(b, &rawList); err != nil {
+		return nil, err
+	}
+	filtered := make([]map[string]any, 0, len(rawList))
+	for _, item := range rawList {
+		if t, ok := item["type"]; ok {
+			if ts, isStr := t.(string); isStr && ts == "end" {
+				continue
+			}
+		}
+		filtered = append(filtered, item)
+	}
+	fb, _ := json.Marshal(filtered)
 	var nodes []flowNode
-	if err := json.Unmarshal(b, &nodes); err != nil {
+	if err := json.Unmarshal(fb, &nodes); err != nil {
 		return nil, err
 	}
 	return nodes, nil

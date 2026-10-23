@@ -332,18 +332,21 @@ export default function DynamicFlowView({ raw, formData, onMembersChange, onRead
   const nodes = useMemo(() => parseApprovalFlow(raw), [raw])
   // 发起人自选节点运行期成员覆盖：nodeId -> members（选择后展示用）
   const [memberOverrides, setMemberOverrides] = useState({})
-  // 合并成员覆盖进节点树（含条件分支 children 递归），供渲染统一按 node.members 展示
+  // 合并成员覆盖进节点树（含条件分支 children 递归），供渲染统一按 node.members 展示；
+  // 同时过滤流程结束事件特殊节点（type==='end'，不属于审批节点）
   const mergedNodes = useMemo(() => {
     if (!nodes) return nodes
     const merge = (list) =>
-      (list || []).map((n) => {
-        const m = { ...n }
-        if (memberOverrides[n.id]) m.members = memberOverrides[n.id]
-        if (n.type === 4 && Array.isArray(n.branches)) {
-          m.branches = n.branches.map((b) => ({ ...b, children: merge(b.children) }))
-        }
-        return m
-      })
+      (list || [])
+        .filter((n) => n && n.type !== 'end')
+        .map((n) => {
+          const m = { ...n }
+          if (memberOverrides[n.id]) m.members = memberOverrides[n.id]
+          if (n.type === 4 && Array.isArray(n.branches)) {
+            m.branches = n.branches.map((b) => ({ ...b, children: merge(b.children) }))
+          }
+          return m
+        })
     return merge(nodes)
   }, [nodes, memberOverrides])
   // 隐藏发起人（type=1）：发起人节点仅用于流程起始说明，不在流转展示中呈现

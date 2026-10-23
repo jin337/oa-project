@@ -65,6 +65,7 @@ function flattenFlowNodes(nodes, executionPathSet) {
   const result = []
   const walk = (list) => {
     for (const node of list) {
+      if (!node || node.type === 'end') continue // 流程结束事件特殊节点，不参与时间线
       if (node.type === 4) {
         // 条件分支：递归展开各分支的 children
         if (node.branches) {
