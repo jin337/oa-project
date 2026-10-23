@@ -808,6 +808,7 @@ func approvalListCC(curUserID uint, req *model.ApprovalListReq) ([]model.Approva
 	}
 
 	fillApprovalUserInfo(records)
+	fillRecordNodeName(records)
 	return records, total, nil
 }
 

@@ -1,5 +1,5 @@
 import { SIZE_OPTIONS } from 'src/config/app'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Menu } from '@arco-design/web-react'
 import { useLocation } from 'react-router-dom'
 import * as approvalApi from 'src/api/approval'
@@ -40,18 +40,24 @@ export function useApprovalList(scope, { title = '', withTask = false, colKeys =
   }, [location.pathname, addTab, title])
 
   // 拉取列表（依赖分页 / 作用域 / 生效关键词）
+  const reqIdRef = useRef(0)
   const fetchList = useCallback(async () => {
+    const reqId = ++reqIdRef.current
     setLoading(true)
+    setList([])
+    setTotal(0)
     try {
       const params = { page, size, scope }
       if (appliedKeyword) params.keyword = appliedKeyword
       const res = await approvalApi.getApprovalList(params)
+      // 忽略过期响应（快速连续搜索/翻页时，后发先至的旧请求不应覆盖新数据）
+      if (reqId !== reqIdRef.current) return
       setList(res.data?.list || [])
       setTotal(res.data?.total || 0)
     } catch (e) {
       // 错误已在请求层提示
     } finally {
-      setLoading(false)
+      if (reqId === reqIdRef.current) setLoading(false)
     }
   }, [page, size, scope, appliedKeyword])
 
