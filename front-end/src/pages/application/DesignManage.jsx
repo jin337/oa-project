@@ -182,16 +182,12 @@ export default function DesignManage() {
 
   const openPublish = async () => {
     setPublishVisible(true)
+    // 默认立即生效、版本说明为空，不沿用当前 active 版本的生效方式与说明
+    setPublishForm({ remark: '', mode: 'now', effectiveAt: null })
     try {
       const res = await applicationApi.listApplicationVersions(id)
       const list = (res.data || []).filter((v) => v.status !== 3)
       setVersionList(list)
-      const src = list.find((v) => v.status === 1)
-      setPublishForm({
-        remark: src?.remark || '',
-        mode: src?.effective_at ? 'timer' : 'now',
-        effectiveAt: src?.effective_at ? new Date(src.effective_at) : null,
-      })
     } catch (e) {
       // 用默认空
     }
