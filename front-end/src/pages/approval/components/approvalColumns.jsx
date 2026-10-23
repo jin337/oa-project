@@ -1,4 +1,4 @@
-import { Button } from '@arco-design/web-react'
+import { Button, Typography } from '@arco-design/web-react'
 import { ApprovalStatusTag } from 'src/pages/approval/components/approvalStatus.jsx'
 import { formatTime } from 'src/utils/format'
 
@@ -38,7 +38,7 @@ export const colBillNo = {
   key: 'bill_no',
   dataIndex: 'bill_no',
   width: 200,
-  render: (v) => v || '-',
+  render: (v) => <Typography.Text copyable={v}>{v || '-'}</Typography.Text>,
 }
 
 // 部门列
