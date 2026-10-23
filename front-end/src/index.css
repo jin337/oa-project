@@ -36,6 +36,11 @@ strong {
   display: inline-block;
 }
 
+/* 禁用表单输入框样式覆盖 */
+.arco-input-disabled {
+  -webkit-text-fill-color: var(--color-text-2) !important;
+}
+
 /* —— Arco Tabs 样式覆盖 —— */
 /* 还原 card-gutter 模式下激活页签的底边框色与背景色（含 hover 态） */
 .arco-tabs-header-nav-card-gutter .arco-tabs-header-title-active,

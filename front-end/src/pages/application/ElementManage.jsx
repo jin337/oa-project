@@ -866,8 +866,19 @@ export default function ElementManage() {
       key: 'data_source',
       title: '数据源',
       dataIndex: 'data_source.type',
-      width: 80,
+      width: 100,
       align: 'center',
+      filters: [
+        {
+          text: '静态',
+          value: 'json',
+        },
+        {
+          text: '动态',
+          value: 'api',
+        },
+      ],
+      onFilter: (value, row) => row.data_source?.type === value,
       render: (v) => (v ? <Tag color="arcoblue">{v === 'json' ? '静态' : '动态'}</Tag> : '-'),
     },
     {
@@ -1726,7 +1737,7 @@ function ApiRefModal({ visible, onCancel, onSelect }) {
       title: '分类',
       dataIndex: 'category',
       width: 90,
-      render: (c) => c || '-'
+      render: (c) => c || '-',
     },
     {
       key: 'method',
