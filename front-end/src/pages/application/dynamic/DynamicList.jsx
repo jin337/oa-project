@@ -12,7 +12,7 @@
   Popover,
   Space,
   Spin,
-  Table
+  Table,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -229,7 +229,11 @@ export default function DynamicList({ app, code, editable = false }) {
               </Button>
             )}
             {editable && (
-              <Popconfirm position="lb" title="确认删除该条数据？" onOk={() => handleDelete(record)}>
+              <Popconfirm
+                position="lb"
+                title="确认删除该条数据？"
+                onOk={() => handleDelete(record)}
+              >
                 <Button type="text" size="small" status="danger">
                   删除
                 </Button>
@@ -337,10 +341,7 @@ export default function DynamicList({ app, code, editable = false }) {
           <Form form={searchForm} layout="inline">
             {searchFields.map((field) => (
               <FormItem key={field.field_key} field={field.field_key}>
-                <Input className="w-55!"
-                  placeholder={field.label}
-                  allowClear
-                />
+                <Input className="w-55!" placeholder={field.label} allowClear />
               </FormItem>
             ))}
             <FormItem>
@@ -414,12 +415,18 @@ export default function DynamicList({ app, code, editable = false }) {
         onCancel={() => setDrawerVisible(false)}
         footer={
           drawerState === 'detail' ? null : (
-            <Button type="primary" loading={drawerSubmitting} onClick={handleDrawerSubmit}>
-              提交
-            </Button>
+            <>
+              <Button loading={drawerSubmitting} onClick={() => setDrawerVisible(false)}>
+                取消
+              </Button>
+              <Button type="primary" loading={drawerSubmitting} onClick={handleDrawerSubmit}>
+                提交
+              </Button>
+            </>
           )
         }
         unmountOnExit
+        maskClosable={drawerState === 'detail'}
       >
         {drawerLoading ? (
           <div className="flex h-40 items-center justify-center">
