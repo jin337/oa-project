@@ -7,11 +7,11 @@ import { CcEditDrawer } from 'src/pages/application/examine/CcEditDrawer'
 import { ConditionEditDrawer } from 'src/pages/application/examine/ConditionEditDrawer'
 import { FlowNode } from 'src/pages/application/examine/FlowCanvas'
 import {
-    buildDeptDescMap,
-    buildOrgItemMap,
-    buildRoleItemMap,
-    buildUserDeptMap,
-    normalizeMembers,
+  buildDeptDescMap,
+  buildOrgItemMap,
+  buildRoleItemMap,
+  buildUserDeptMap,
+  normalizeMembers,
 } from 'src/pages/application/examine/flowModel'
 import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
 import { useApprovalFlow } from 'src/pages/application/examine/useApprovalFlow'
@@ -136,20 +136,21 @@ const ExamineManage = forwardRef(function ExamineManage(
             />
           ))}
         </div>
-        <div className="text-gray-400">流程结束</div>
+        <Button size='small'>流程结束</Button>
       </div>
-        {/* 节点/条件编辑弹层：发起人直接唤起人员选择器，审批人/抄送人/条件分支用 Drawer */}
-        {editing?.kind === 'initiator' && (
-          <PersonSelectorModal
-            title="选择可发起人"
-            modes={[1, 2]} // 1-组织架构 / 2-角色
-            selectMode={2} // 可发起人员支持多人，保持多选
-            value={normalizeMembers(editing.node.members)}
-            onChange={(items) => saveNode({ ...editing.node, members: items })}
-            onCancel={closeEdit}
-          />
-        )}
-        {editing?.kind === 'node' && editing.node.type === 2 && ( // 2-审批人
+      {/* 节点/条件编辑弹层：发起人直接唤起人员选择器，审批人/抄送人/条件分支用 Drawer */}
+      {editing?.kind === 'initiator' && (
+        <PersonSelectorModal
+          title="选择可发起人"
+          modes={[1, 2]} // 1-组织架构 / 2-角色
+          selectMode={2} // 可发起人员支持多人，保持多选
+          value={normalizeMembers(editing.node.members)}
+          onChange={(items) => saveNode({ ...editing.node, members: items })}
+          onCancel={closeEdit}
+        />
+      )}
+      {editing?.kind === 'node' &&
+        editing.node.type === 2 && ( // 2-审批人
           <ApproverEditDrawer
             key={editing.node.id}
             node={editing.node}
@@ -160,7 +161,8 @@ const ExamineManage = forwardRef(function ExamineManage(
             onSave={saveNode}
           />
         )}
-        {editing?.kind === 'node' && editing.node.type === 3 && ( // 3-抄送人
+      {editing?.kind === 'node' &&
+        editing.node.type === 3 && ( // 3-抄送人
           <CcEditDrawer
             key={editing.node.id}
             node={editing.node}
@@ -168,18 +170,18 @@ const ExamineManage = forwardRef(function ExamineManage(
             onSave={saveNode}
           />
         )}
-        {editing?.kind === 'branch' && (
-          <ConditionEditDrawer
-            key={editing.branch.id}
-            node={editing.node}
-            branch={editing.branch}
-            formFields={formFields}
-            fieldsLoading={false}
-            mainTable={mainTable}
-            onCancel={closeEdit}
-            onSave={saveBranch}
-          />
-        )}
+      {editing?.kind === 'branch' && (
+        <ConditionEditDrawer
+          key={editing.branch.id}
+          node={editing.node}
+          branch={editing.branch}
+          formFields={formFields}
+          fieldsLoading={false}
+          mainTable={mainTable}
+          onCancel={closeEdit}
+          onSave={saveBranch}
+        />
+      )}
     </SelectorDataContext.Provider>
   )
 })

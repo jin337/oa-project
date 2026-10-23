@@ -101,6 +101,7 @@ export function ApproverEditDrawer({
       title="审批人设置"
       visible
       onCancel={onCancel}
+      maskClosable={false}
       footer={
         <div className="flex justify-end gap-2">
           <Button onClick={onCancel}>取消</Button>

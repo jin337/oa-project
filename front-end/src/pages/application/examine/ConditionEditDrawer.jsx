@@ -91,6 +91,7 @@ export function ConditionEditDrawer({
       width={"50%"}
       title={`编辑条件 - ${branch.isDefault ? '默认分支' : branch.label}`}
       visible
+      maskClosable={false}
       onCancel={onCancel}
       footer={
         <div className="flex justify-end gap-2">

@@ -26,6 +26,7 @@ export function CcEditDrawer({ node, onCancel, onSave }) {
       width={600}
       title="抄送人设置"
       visible
+      maskClosable={false}
       onCancel={onCancel}
       footer={
         <div className="flex justify-end gap-2">
