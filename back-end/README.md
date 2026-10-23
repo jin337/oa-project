@@ -1,524 +1,239 @@
-# back-end
+# OA 管理系统 · 后端服务
 
-> OA 系统后端服务 · Go + Gin + GORM + MySQL
+基于 **Go 1.26 + Gin + GORM** 的 OA（办公自动化）平台后端，提供审批流程引擎、动态表单设计、版本管理、审批列表聚合、抄送通知、自定义接口分发等能力。
+
+---
 
 ## 目录
 
 - [项目简介](#项目简介)
 - [核心技术栈](#核心技术栈)
-- [目录结构说明](#目录结构说明)
-- [环境依赖要求](#环境依赖要求)
-- [本地开发与运行步骤](#本地开发与运行步骤)
+- [目录结构](#目录结构)
+- [环境依赖](#环境依赖)
+- [快速开始](#快速开始)
 - [配置文件说明](#配置文件说明)
-- [构建与部署指南](#构建与部署指南)
-- [接口约定](#接口约定)
-- [接口清单](#接口清单)
-- [核心机制](#核心机制)
+- [常用命令（Taskfile）](#常用命令taskfile)
+- [构建与部署](#构建与部署)
+- [API 与约定](#api-与约定)
+
+---
 
 ## 项目简介
 
-本服务是 OA 管理系统的后端，为同级目录 `front-end`（React 19 + Vite）提供统一的 RESTful API。项目内置 **RBAC 权限体系**（用户-角色-菜单-部门-数据范围）、**流程配置引擎**（动态表单 / 数据表 / 审批流配置）与 **审批工作流引擎**（草稿、提交、审批、转交、撤回的完整状态机），可在不写代码的前提下完成「建流程 → 配字段 → 配表单 → 配布局 → 配审批流 → 发起审批」的全链路闭环。
+本服务是 OA 全栈项目的后端层，主要业务模块：
 
-### 核心特性
+- **认证与权限**：JWT 登录、菜单树、按钮/数据权限。
+- **流程配置**：应用（Application）、版本（Version）、表单元素（Element）的全生命周期管理。
+- **表单设计器后端**：表单页 / 详情页布局 JSON、动态字段、子表关联。
+- **审批引擎**：实例（Instance）、任务（Task）、执行路径解析、节点流转、撤回/作废/重新提交。
+- **审批列表聚合**：待办 / 我的发起 / 经我处理 / 抄送我的 / 草稿箱五合一分页接口。
+- **抄送与通知**：抄送人选择、站内通知、SSE 实时推送。
+- **自定义接口分发**：后台配置 SQL / HTTP 接口，前端按权限调用。
 
-- **RBAC 权限模型**：用户 ⇄ 角色 ⇄ 菜单（目录/页面/按钮）多对多授权，部门树 + 数据范围过滤（全部 / 自定义 / 本部门 / 本部门及下级 / 仅本人）
-- **JWT 登录鉴权**：登录签发 token，`Authorization: Bearer <token>` 访问受保护接口，支持本人改密与管理员重置密码
-- **流程配置引擎**：流程（表单/表格）→ 数据表字段 → 表单元素 → 布局 → 审批流，全链路配置化，业务数据动态读写；流程编码由内置 `idgen` 生成（`app_<毫秒base32>_<随机base32>`，字典序即时间序）
-- **接口管理**：`oa_api_definitions` 定义 **SQL 直查 / HTTP 转发** 两类接口，统一分发端点 `{APIPrefix}/interfaces/*path` 对外暴露，支持一键导入后端路由、试调、被引用统计（防误删）
-- **审核人员组**：`oa_examine_groups` 配置可复用审核人集合，审批人 / 抄送对象均可选「审核人员组」
-- **审批工作流**：条件分支 + 指定人员/指定角色/发起人自选/审核人员组多种审批人类型，依次/会签/或签审批方式，草稿箱、自动通过、转交、撤回、退回全流程状态机，核心流转全部事务化
-- **动态表单引擎**：字段级数据源（静态/接口，可引用接口管理定义）、事件联动、动态显隐与禁用、校验规则、子表、文件上传，支持 form / detail / move-form / move-detail 四种布局模式
-- **文件上传**：通用单文件上传接口（按 `app_code` 分目录存储），返回 `{url, name, size}`；上传文件通过 `/uploads/*` 静态服务直接映射磁盘目录
-- **站内通知**：审批待办/退回/抄送/结果事件自动生成站内通知，支持未读计数、已读标记、全部已读，通过 SSE 实时推送到前端（无需轮询）
-- **公共计算接口**：数字转大写金额与表达式计算，供表单事件联动调用
-- **版本化自动迁移**：GORM AutoMigrate 只增改不删减，`migrate_versions` 记录版本，full / incremental 双模式
-- **工程化基建**：统一响应体、中文参数校验、全局异常兜底、请求超时、跨域、连接池、环境化配置（dev / test / prod）
+---
 
 ## 核心技术栈
 
-| 分类 | 技术 | 版本 | 说明 |
-| --- | --- | --- | --- |
-| 语言 | Go | 1.26.2 | `go.mod` 声明 `go 1.26.2` |
-| Web 框架 | Gin | v1.12.0 | 路由分组 + 中间件链 |
-| ORM | GORM | v1.31.2 | 配合 `gorm.io/driver/mysql v1.6.0` |
-| 鉴权 | golang-jwt/jwt | v5.3.1 | HS256 签名，密钥/有效期/签发者可配 |
-| 参数校验 | go-playground/validator | v10.30.3 | 配合 `locales` + `universal-translator` 输出中文错误提示 |
-| 加密 | golang.org/x/crypto | v0.55.0 | bcrypt 密码哈希 |
-| 配置 | gopkg.in/yaml.v3 | v3.0.1 | 环境变量 `APP_ENV` 切换配置文件 |
-| 开发工具 | air / task / UPX | — | 热重载 / 任务封装 / 打包压缩（均可选） |
+| 分类 | 技术 | 说明 |
+| --- | --- | --- |
+| 语言 | Go 1.26+ | 使用泛型、`log/slog` 等新标准库能力 |
+| Web 框架 | Gin | HTTP 路由、中间件、参数绑定 |
+| ORM | GORM | 模型映射、自动迁移、连接池 |
+| 配置 | YAML + `APP_ENV` | 多环境配置文件，按环境加载 |
+| 鉴权 | JWT | `golang-jwt` 签发与校验 |
+| 数据库 | MySQL 5.7+ | 表前缀 `oa_`，字符集 utf8mb4 |
+| 任务 | Task / air | 任务封装与热重载 |
+| 日志 | 控制台 + 文件 | 按环境分文件落盘 |
 
-## 目录结构说明
+---
+
+## 目录结构
 
 ```
 back-end/
-├── cmd/server/main.go          # 入口：加载配置 → 初始化日志 → 连接数据库 → 自动迁移 → 组装路由 → 优雅停机
+├── cmd/
+│   └── server/              # 程序入口（main.go）
 ├── configs/
-│   ├── config-dev.yaml         # 开发环境配置（默认）
-│   ├── config-test.yaml        # 测试环境配置
-│   └── config-prod.yaml        # 生产环境配置
+│   ├── config-dev.yaml      # 开发环境
+│   ├── config-test.yaml     # 测试环境
+│   └── config-prod.yaml     # 生产环境
 ├── internal/
-│   ├── config/                 # config.go：配置加载（APP_ENV 切换 + 默认安全配置兜底）
-│   ├── database/
-│   │   ├── mysql.go            #   连接（自动建库 / 连接池 / 健康检测）
-│   │   └── migrate.go          #   版本化自动迁移（migrate_versions 版本表）
-│   ├── middleware/
-│   │   ├── recovery.go         #   全局 panic 兜底
-│   │   ├── cors.go             #   跨域
-│   │   ├── timeout.go          #   请求统一超时（SSE 长连接白名单豁免）
-│   │   ├── jwt.go              #   JWT 鉴权
-│   │   └── datascope.go        #   数据权限过滤（按部门范围）
-│   ├── model/
-│   │   ├── model.go            #   全部实体 + 请求/响应结构 + 状态枚举
-│   │   └── base.go             #   分页与公共字段
-│   ├── router/                 # 路由注册（RESTful，统一 {APIPrefix} 前缀；各 Group 独立文件）
-│   │   ├── router.go           #   总装配：全局中间件 + 各模块路由注册入口
-│   │   ├── auth.go / user.go / role.go / menu.go / dept.go       # 认证与 RBAC
-│   │   ├── application.go / approval.go / notification.go / upload.go / utils.go
-│   │   ├── api_definition.go   #   接口管理（/api-definitions）+ 统一分发端点（/interfaces/*path）
-│   │   └── examine_group.go    #   审核人员组（/examine-groups）
-│   ├── handler/                # 接口处理器（薄封装：参数校验 → 调 service → 统一响应）
-│   │   ├── auth.go             #   登录 / 用户资料 / 菜单树
-│   │   ├── user.go / role.go / menu.go / dept.go            # RBAC 管理
-│   │   ├── application.go / form_element.go / table_field.go # 流程配置（流程/表字段/表单元素）
-│   │   ├── approval.go         #   审批分类 / 申请项 / 审批列表
-│   │   ├── approval_instance.go#   流程实例与任务（发起/草稿/提交/详情/撤回/删除/审批/转交/加签）
-│   │   ├── api_definition.go   #   接口定义管理（列表/增删改/试调/枚举导入/统一分发）
-│   │   ├── examine_group.go    #   审核人员组
-│   │   ├── upload.go           #   通用文件上传（按 app_code 分目录）
-│   │   ├── notification.go     #   站内通知（列表/未读数/已读/SSE 推送）
-│   │   ├── utils.go            #   公共计算/转换接口
-│   │   ├── health.go           #   健康检查
-│   │   └── helper.go           #   处理器公共辅助
-│   ├── service/                # 业务逻辑层
-│   │   ├── auth.go / user.go / role.go / menu.go / dept.go
-│   │   ├── application.go / form_element.go / table_field.go
-│   │   ├── approval.go         #   审批分类/申请项/列表聚合（待办/发起/已办/抄送/草稿）
-│   │   ├── approval_flow.go    #   流程定义模型、快照解析、条件评估、执行路径、自选成员注入
-│   │   ├── approval_member.go  #   审批人解析（自选/角色/成员/审核人员组/发起人类型）
-│   │   ├── approval_instance.go#   实例生命周期：创建/草稿/提交/详情/撤回/删除（事务化状态流转）
-│   │   ├── approval_task.go    #   任务引擎：任务生成/自动通过/节点推进/终结/审批/转交/加签
-│   │   ├── api_definition.go   #   接口定义：SQL 模板校验 / SQL 执行引擎 / HTTP 转发 / 试调 / 被引用统计
-│   │   ├── examine_group.go    #   审核人员组 CRUD + 审核人信息翻译
-│   │   ├── route_comment.go    #   解析 router 源码行内注释 → 接口名称（导入后端路由用）
-│   │   ├── notification.go     #   通知落库 + 事务内队列 + SSE Hub
-│   │   └── helper.go           #   服务层公共辅助
-│   └── pkg/                    # 基础组件：logger 日志 / response 统一响应 / vtrans 中文翻译 / idgen 实体编码
-├── uploads/                    # 上传文件存储根目录（按 app_code 分子目录，运行时生成）
-├── bin/                        # 编译产物目录（已 gitignore）
-├── logs/                       # 运行日志目录（已 gitignore）
-├── Taskfile.yml                # 常用任务封装（启动/编译/打包/测试/清理）
-├── .air.toml                   # air 热重载配置（产物输出 bin/main.exe）
-└── go.mod / go.sum
+│   ├── config/              # 配置加载与校验
+│   ├── database/            # GORM 初始化、自动迁移
+│   ├── handler/             # HTTP handler（控制器层）
+│   ├── middleware/          # JWT、CORS、日志、recovered 等
+│   ├── model/               # GORM 模型与请求/响应结构
+│   ├── router/               # 路由注册（按模块拆分）
+│   ├── service/             # 业务逻辑层
+│   └── pkg/
+│       ├── idgen/           # 单号生成器（OA 序列号）
+│       ├── logger/          # 日志封装
+│       ├── response/        # 统一响应结构
+│       └── vtrans/          # 参数绑定错误翻译
+├── logs/                    # 运行日志（运行时生成）
+├── uploads/                 # 用户上传文件
+├── bin/                     # 编译产物输出
+├── Taskfile.yml             # 任务封装
+├── .air.toml                # air 热重载配置
+├── go.mod / go.sum
+└── README.md
 ```
 
-## 环境依赖要求
+---
+
+## 环境依赖
 
 | 依赖 | 版本要求 | 说明 |
 | --- | --- | --- |
-| Go | ≥ 1.26 | `go.mod` 声明 `go 1.26.2` |
-| MySQL | ≥ 5.7 | 库不存在时自动创建；字符集 `utf8mb4` |
-| task（可选） | ≥ 3 | 使用 `task` 命令时需要；Windows 可 `winget install go-task.go-task` |
-| air（可选） | 最新 | 开发热重载：`go install github.com/air-verse/air@latest` |
-| UPX（可选） | 最新 | 发布版打包压缩时需要，未安装时自动跳过 |
-| 磁盘目录 | — | `uploads/` 需存在且进程可写（上传文件存储根目录），否则文件上传接口会失败 |
-| front-end（联调可选） | Node ≥ 20.19 | 前端开发服务固定 8181 端口，通过 Vite 代理调用本服务 8180 |
+| Go | ≥ 1.26 | 与 `go.mod` 对齐 |
+| MySQL | 5.7+ | 建议 8.0；库不存在时会自动创建 |
+| task | 可选 | 推荐安装（`winget install go-task.go-task`），也可直接用 `go run` |
+| air | 可选 | 开发热重载，`go run ./cmd/server` 可替代 |
+| upx | 可选 | 打包压缩，未安装时自动跳过 |
 
-## 本地开发与运行步骤
+---
+
+## 快速开始
 
 ### 1. 准备数据库
 
-编辑 `configs/config-dev.yaml` 中 `mysql` 段（库不存在会自动创建）：
+确保 MySQL 已启动，并在 `configs/config-dev.yaml` 中填写正确的连接信息：
 
 ```yaml
 mysql:
   host: 127.0.0.1
   port: 3306
   username: root
-  password: "你的数据库密码"
-  dbname: oa_test        # 库不存在会自动创建
-  table_prefix: oa_      # 所有表统一加 oa_ 前缀
+  password: "your-password"
+  dbname: oa_test
 ```
 
-### 2. 安装依赖
+> 库不存在时服务启动会自动创建；表结构由 GORM 自动迁移（`migrate.enable: true`）完成。
+
+### 2. 下载依赖
 
 ```bash
-go mod download          # 或 go mod tidy
+cd back-end
+go mod tidy
 ```
 
-### 3. 启动服务
+### 3. 启动开发服务
+
+方式一：直接运行
 
 ```bash
-# 方式一：直接运行（默认 dev 环境）
 go run ./cmd/server
-
-# 方式二：指定环境
-APP_ENV=dev  go run ./cmd/server   # Linux / macOS
-APP_ENV=test go run ./cmd/server
-APP_ENV=prod go run ./cmd/server
-
-# Windows PowerShell 指定环境
-$env:APP_ENV="dev"; go run ./cmd/server
 ```
 
-服务默认监听 **8180** 端口（`configs/config-dev.yaml` 中 `server.port` 可改）。
-
-### 4. 验证
-
-- 健康检查（无需鉴权）：`GET http://localhost:8180/`，返回服务状态、环境名、数据库连通性
-- 默认管理员账号：**`admin` / `admin123`**（首次启动 `migrate.mode=full` 时自动初始化）
-
-> 配置文件读取/解析失败时不崩服务，自动回退默认安全配置（端口 8080、迁移关闭）。
-
-**前后端联调**：另开终端启动前端（详见同级目录 `front-end/README.md`）：
+方式二：使用 Task（默认 dev 环境）
 
 ```bash
-cd ../front-end
-npm install
-npm run dev          # 前端 8181，{APIPrefix} 与 /uploads 代理到本服务 8180
+task run
 ```
 
-浏览器访问 `http://localhost:8181/` 登录后即可联调；前端不再需要单独配置后端地址。
-
-### 5. 开发热重载（可选）
-
-项目内置 `.air.toml`，安装 air 后：
+方式三：热重载（需安装 air）
 
 ```bash
-air                 # 监听 go 文件变更，自动重新编译并重启（产物输出 bin/main.exe）
+task run-dev
 ```
 
-### 6. 常用任务（task 封装）
+服务默认监听 **`http://127.0.0.1:8180`**，API 统一前缀为 **`/v1/api`**。
+
+### 4. 切换环境
 
 ```bash
-task --list         # 查看全部任务（等价于 task default）
-task deps           # go mod tidy
-task run            # 启动服务（默认 dev，APP_ENV=test task run 可切换）
-task run-dev        # 开发环境启动（air 热重载）
-task run-test       # 测试环境启动
-task run-prod       # 生产环境启动（谨慎执行）
-task build          # 编译到项目根目录 server(.exe)
-task test           # go test ./... -v
-task vet            # go vet ./...
-task package        # 发布版打包（-s -w + UPX，产物输出 bin/）
-task clean          # 清理编译产物、bin/ 与 logs/
+APP_ENV=test task run     # 测试环境
+APP_ENV=prod task run     # 生产环境（谨慎）
 ```
 
-### 7. 测试覆盖
-
-测试集中在**纯逻辑**上（不依赖 DB / 网络，可离线运行），入口：`go test ./...` 或 `task test`。
-
-| 测试文件 | 覆盖内容 |
-| --- | --- |
-| `internal/handler/utils_test.go` | 数字转大写金额（万/亿分级、节间与节内零、角分、负数、非法输入）与表达式计算（优先级、括号、取模、负数、除零等错误分支） |
-| `internal/pkg/idgen/idgen_test.go` | 实体编码：段2 毫秒的 Crockford base32 定长编码、字典序与时间序一致、段3 长度与字符集 |
-| `internal/service/helper_test.go` | 审计字段剥离（业务字段与 `id`/`parent_id` 保留、nil map 安全）与系统列集合派生 |
-| `internal/service/dept_test.go` | 部门树构建：数据权限过滤后只剩子部门时各自成为根节点、正常层级嵌套、空列表、环状数据不死循环 |
-
-当前基线：`go test ./... -count=1` 共 **66 个断言全部通过**，`go vet ./...` 无输出。
-> **测试文件为什么留在各包目录**：Go 的 `go test` 以「目录 = 包」组织，`*_test.go` 只有与被测代码同目录同包时才能访问**未导出**标识符。上表被测的 `numberToUpper` / `parseFactor`、`encodeMillis`、`stripAuditFields`、`systemCols`、`buildDeptTree` 都是未导出函数，因此测试文件必须与实现同目录；把它们集中到 `internal/test/` 会在编译期直接报 `undefined: xxx`。若确实要集中，只有两条路：把被测函数改为导出（污染生产 API，且 `encodeMillis` 属实现细节），或在各包内加 `export_test.go` 做别名桥（等于没搬）。当前选择就近放置。
+---
 
 ## 配置文件说明
 
-配置按环境拆分：`configs/config-{dev,test,prod}.yaml`，通过环境变量 `APP_ENV` 选择，默认 `dev`。**项目不使用 `.env` 文件**，全部配置集中在 YAML 中。文件只分两大块：`server`（服务）与 `mysql`（数据库 + 迁移）。
+所有环境配置位于 `configs/`，通过环境变量 `APP_ENV`（默认 `dev`）选择加载 `config-{env}.yaml`。
 
-### 配置项一览
+### server
 
-| 配置段 | 字段 | 说明 |
-| --- | --- | --- |
-| `server` | `port` | 服务端口，默认 8180 |
-| `server` | `mode` | gin 模式：`debug` / `release` / `test` |
-| `server` | `api_prefix` | **API 统一前缀，版本号变更唯一真值**（默认 `{APIPrefix}`，改 `/v2/api` 时需同步前端 `.env` 与 Nginx） |
-| `server` | `request_timeout` | 接口统一请求超时（秒），默认 10；SSE 长连接已豁免 |
-| `server.jwt` | `secret` | JWT 签名密钥，**生产环境务必修改** |
-| `server.jwt` | `expire` | token 有效期（小时） |
-| `server.jwt` | `issuer` | token 签发者 |
-| `server.log` | `level` | 日志级别：debug / info / warn / error |
-| `server.log` | `path` | 日志文件路径，留空则只输出控制台 |
-| `server.cors` | `enable` / `allow_origins` / `allow_methods` / `allow_headers` | 跨域开关与放行规则 |
-| `mysql` | `host` / `port` / `username` / `password` / `dbname` | 数据库连接（库不存在自动创建） |
-| `mysql` | `table_prefix` | 表前缀，默认 `oa_` |
-| `mysql` | `charset` / `collation` / `parse_time` / `loc` | 字符集、排序规则与时间解析 |
-| `mysql` | `max_open_conns` / `max_idle_conns` / `conn_max_lifetime` / `connect_timeout` | 连接池参数 |
-| `mysql.migrate` | `enable` | 自动迁移总开关，**生产建议 false** |
-| `mysql.migrate` | `mode` | `full`=全量建表 + 初始化数据；`incremental`=仅增量加表/加字段 |
-| `mysql.migrate` | `log_enable` / `log_path` | 迁移日志开关与路径 |
+| 字段 | 说明 |
+| --- | --- |
+| `server.port` | HTTP 监听端口，默认 `8180` |
+| `server.mode` | Gin 运行模式：`debug` / `release` / `test` |
+| `server.api_prefix` | 路由统一前缀，默认 `/v1/api`（需与前端 `.env`、Nginx 对齐） |
+| `server.request_timeout` | 全局请求超时（秒） |
+| `server.jwt.secret` | JWT 签名密钥，**生产必须修改** |
+| `server.jwt.expire` | Token 有效期（小时） |
+| `server.log.level` | 日志级别：`debug` / `info` / `warn` / `error` |
+| `server.log.path` | 日志文件路径，留空则只输出控制台 |
+| `server.cors.*` | 跨域开关、放行来源、方法、请求头 |
 
-### 自动迁移机制
+### mysql
 
-- **版本管理**：`migrate_versions` 表记录已应用版本，可回溯升级历史
-- **安全规则**：AutoMigrate 只增改表/字段，**不删表、不删字段**；单个版本失败自动回滚
-- **新增迭代**：在 `internal/database/migrate.go` 的 `migrations` 清单按版本号追加即可
+| 字段 | 说明 |
+| --- | --- |
+| `mysql.host` / `port` | 数据库地址 |
+| `mysql.username` / `password` | 认证信息 |
+| `mysql.dbname` | 库名，不存在自动创建 |
+| `mysql.table_prefix` | 表前缀，默认 `oa_` |
+| `mysql.charset` / `collation` | 字符集与排序规则 |
+| `mysql.max_open_conns` / `max_idle_conns` | 连接池参数 |
+| `mysql.migrate.enable` | 是否启动时自动迁移（生产建议关闭） |
+| `mysql.migrate.mode` | `full` 全量建表+初始化；`incremental` 只增量加表/加字段 |
 
-## 构建与部署指南
+> 生产环境请通过环境变量或独立的 `config-prod.yaml` 覆盖敏感项，不要将生产密钥提交到仓库。
 
-### 本地构建
+---
+
+## 常用命令（Taskfile）
+
+| 命令 | 作用 |
+| --- | --- |
+| `task` | 列出所有可用任务 |
+| `task deps` | `go mod tidy` 整理依赖 |
+| `task build` | 编译可执行文件到项目根 |
+| `task run` | 启动服务（默认 dev） |
+| `task run-dev` | air 热重载启动 |
+| `task run-test` / `task run-prod` | 对应环境启动 |
+| `task package` | 打包到 `bin/`，并尝试 UPX 压缩 |
+| `task test` | 运行单元测试 |
+| `task vet` | `go vet` 静态检查 |
+| `task clean` | 清理编译产物、`bin/`、日志 |
+
+---
+
+## 构建与部署
+
+### 本地编译
 
 ```bash
-go build -o server.exe ./cmd/server          # Windows
-go build -o server ./cmd/server              # Linux / macOS
+task build
+# 产物：./oa_serve_main（Windows 为 oa_serve_main.exe）
 ```
 
-### 发布版打包（task）
+### 生产打包
 
 ```bash
 task package
+# 产物：bin/oa_serve_main（带 -ldflags "-s -w"，默认注入 prod 环境）
 ```
 
-流程：`go mod tidy` → `go build -ldflags="-s -w" -o bin/server(.exe)` → UPX 压缩（本机实测 24.1MB → 5.8MB）。Windows 需提前安装 `upx`；Linux 分支未安装时自动跳过压缩。产物输出到 `bin/`（已 gitignore）。
+### 部署建议
 
-### 跨平台交叉编译
+1. 编译产物 + `configs/config-prod.yaml` + `uploads/` + `logs/` 一起发布。
+2. 通过 `APP_ENV=prod` 启动，或在二进制同级目录放置正确的配置文件。
+3. 前置 Nginx：将 `/v1/api` 与 `/uploads` 反代到本服务（默认 8180），其余路径指向前端静态资源。
+4. 生产环境建议关闭自动迁移（`mysql.migrate.enable: false`），先在测试库验证迁移再上线。
+5. 使用 systemd / supervisor 等进程管理器守护进程，日志按日轮转。
 
-```bash
-GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w" -o bin/server    ./cmd/server
-GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/server.exe ./cmd/server
-```
+---
 
-### 生产部署检查清单
+## API 与约定
 
-1. 修改 `configs/config-prod.yaml`：JWT `secret` 改为强随机值、`mysql.password` 正确、`server.mode: release`
-2. 关闭自动迁移：`mysql.migrate.enable: false`（结构变更走增量迁移或 DBA 审核）
-3. 将 `bin/server` 与 `configs/` 部署到服务器，以 `APP_ENV=prod` 启动：
+- 统一响应结构：
 
-```bash
-APP_ENV=prod ./bin/server
-```
+  ```json
+  { "code": 0, "msg": "ok", "data": {}, "timestamp": 1700000000 }
+  ```
 
-4. 确保 `uploads/` 目录存在且进程有写权限（上传文件存储根目录）
-5. 建议通过 systemd 守护（Linux 示例）：
-
-```ini
-[Unit]
-Description=OA Backend
-After=network.target mysql.service
-
-[Service]
-WorkingDirectory=/opt/oa/back-end
-Environment=APP_ENV=prod
-ExecStart=/opt/oa/back-end/bin/server
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
-
-6. 前端静态资源由 Nginx 托管，`{APIPrefix}` 反向代理到本服务（详见 `front-end/README.md`）
-
-## 接口约定
-
-- 统一前缀 `{APIPrefix}`（唯一真值：`configs/config-*.yaml` 的 `server.api_prefix`），标准 RESTful：GET 查询 / POST 新增 / PUT 修改 / DELETE 删除
-- 统一返回体：`{ "code": 0, "msg": "success", "data": {...}, "timestamp": 1234567890 }`，`code=0` 成功，非 0 失败（`msg` 为中文错误提示）
-- 鉴权接口请求头携带 `Authorization: Bearer <token>`
-- 非法参数自动拦截并返回中文提示；系统 panic 被全局拦截，不泄露原生报错
-- 分页接口统一参数：`page`（默认 1）、`size`（默认 10）
-
-## 接口清单
-
-### 认证
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | / | 健康检查：服务状态、环境名、数据库连通性（无需鉴权） |
-| POST | {APIPrefix}/auth/login | 登录，返回 token |
-| GET | {APIPrefix}/auth/profile | 当前用户 + 菜单树 + 权限标识 |
-| GET | {APIPrefix}/auth/menus | 当前用户菜单树 |
-
-### 用户 / 角色 / 菜单 / 部门
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET/POST | {APIPrefix}/users | 用户分页列表（数据范围过滤）/ 新增 |
-| PUT | {APIPrefix}/users/switch-dept | 切换当前部门（多部门用户） |
-| GET/PUT/DELETE | {APIPrefix}/users/:id | 用户详情 / 修改 / 删除 |
-| PUT | {APIPrefix}/users/:id/roles | 用户分配角色（多对多） |
-| PUT | {APIPrefix}/users/:id/password | 修改密码（仅限本人，需校验旧密码） |
-| PUT | {APIPrefix}/users/:id/reset-password | 重置密码（管理员操作） |
-| GET/PUT | {APIPrefix}/users/:id/profile | 获取 / 更新员工档案（1:1，upsert） |
-| GET/POST | {APIPrefix}/roles | 角色分页列表 / 新增 |
-| GET | {APIPrefix}/roles/users | 角色下的用户 |
-| GET/PUT/DELETE | {APIPrefix}/roles/:id | 角色详情 / 修改 / 删除 |
-| PUT | {APIPrefix}/roles/:id/menus | 角色分配菜单（多对多） |
-| PUT | {APIPrefix}/roles/:id/depts | 角色自定义数据范围绑定部门 |
-| GET/POST | {APIPrefix}/menus | 菜单树 / 新增（目录/页面/按钮） |
-| GET/PUT/DELETE | {APIPrefix}/menus/:id | 菜单详情 / 修改 / 删除 |
-| GET/POST | {APIPrefix}/depts | 部门树 / 新增 |
-| GET | {APIPrefix}/depts/users | 部门下的用户 |
-| GET/PUT/DELETE | {APIPrefix}/depts/:id | 部门详情 / 修改 / 删除 |
-
-### 审批（{APIPrefix}/approval）
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | /approval/list | 审批列表聚合：`scope=todo` 待办 / `initiated` 我的发起 / `approved` 我审批的 / `cc` 抄送我的 / `drafts` 草稿箱 |
-| GET/POST | /approval/category | 审批分类列表 / 新增 |
-| PUT/DELETE | /approval/category/:id | 修改 / 删除审批分类 |
-| GET/POST | /approval/category/item | 申请项列表 / 新增 |
-| PUT/DELETE | /approval/category/item/:id | 修改 / 删除申请项 |
-| POST | /approval/instance | 发起审批（可携带自选审批人 `approval_draft_members`） |
-| POST | /approval/instance/draft | 保存草稿（不启动流程、不生成任务） |
-| GET | /approval/instance/:id | 实例详情（快照 + 业务数据 + 任务列表 + 审批人映射；同时返回 `detail_layout_json` 只读详情布局与 `form_layout_json` 可编辑表单布局，供草稿/退回编辑使用） |
-| PUT | /approval/instance/:id/submit | 从草稿提交发起审批 |
-| PUT | /approval/instance/:id/withdraw | 撤回（仅发起人、仅进行中） |
-| PUT | /approval/instance/:id/resubmit | 退回后重新提交（发起人修改表单数据后重走流程） |
-| DELETE | /approval/instance/:id | 删除（仅已拒绝/已退回/已作废/已撤回/草稿） |
-| PUT | /approval/instance/:id/task/:taskId/approve | 审批操作：`action` 1=通过 2=拒绝 3=退回 |
-| PUT | /approval/instance/:id/task/:taskId/delegate | 转交（`to_user_id` 指定目标用户） |
-| PUT | /approval/instance/:id/task/:taskId/add-sign | 加签（前加签 / 后加签） |
-
-### 文件上传（{APIPrefix}/upload）
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| POST | /upload | 单文件上传，form-data `file`，query `app_code` 指定流程编码；返回 `{url, name, size}` |
-| GET | /uploads/* | 上传文件静态访问（无需鉴权，直接映射磁盘 uploads 目录） |
-
-### 站内通知（{APIPrefix}/notifications）
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | /notifications | 通知列表（分页，按时间倒序，仅返回未读） |
-| GET | /notifications/unread-count | 当前用户未读通知数 |
-| PUT | /notifications/read-all | 全部标记为已读 |
-| PUT | /notifications/:id/read | 单条标记为已读 |
-| GET | /notifications/stream?token=xxx | SSE 实时推送通知流（服务器发送事件） |
-
-### 工具接口（{APIPrefix}/utils）
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| POST | /utils/calculate | 公共计算 / 转换接口 |
-| | | - `type: "number_to_upper"`：数字转大写金额（如 100000 → "壹拾万元整"） |
-| | | - `type: "calc"`：表达式计算（支持 `+`、`-`、`*`、`/`、`%`、括号，如 `"(100+2)*3 % 7"` → 5） |
-
-### 接口管理（{APIPrefix}/api-definitions）
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | /api-definitions | 接口列表（分页，支持关键字/方法/定义方式过滤，按时间倒序；返回 `referenced` 被引用数） |
-| POST | /api-definitions | 新建接口（`type=sql` SQL 直查 / `type=http` HTTP 转发，method+path 联合唯一） |
-| POST | /api-definitions/debug | 试调接口：以当前账号身份真实执行（SQL 直查 / HTTP 转发），应用当前账号数据权限 |
-| GET | /api-definitions/backend/routes | 枚举后端全部业务路由（解析 router 源码行内注释作为接口名称） |
-| POST | /api-definitions/backend/import | 一键导入后端路由为 HTTP 转发定义 |
-| GET/PUT/DELETE | /api-definitions/:id | 接口详情 / 修改 / 删除 |
-
-### 统一分发端点（{APIPrefix}/interfaces）
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET/POST/PUT/DELETE | /interfaces/*path | 按 method+path（status=1）匹配接口定义并执行：SQL 直查返回行数组（单列 `_data` 且可解析 JSON 时返回对象/数组）；HTTP 转发原样透传目标响应体 |
-
-### 审核人员组（{APIPrefix}/examine-groups）
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET/POST | /examine-groups | 审核人员组列表 / 新增 |
-| GET/PUT/DELETE | /examine-groups/:id | 详情 / 修改 / 删除（`approvers` 为用户昵称等翻译后信息） |
-
-### 流程配置（{APIPrefix}/application）
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET/POST | /application | 流程分页列表 / 新增 |
-| GET | /application/by-code/:code | 按流程编码获取（动态页面路由用） |
-| GET/PUT/DELETE | /application/:id | 流程详情 / 修改 / 删除 |
-| GET/POST | /application/:id/fields | 数据表字段列表 / 新增 |
-| PUT/DELETE | /application/:id/fields/:fieldId | 修改 / 删除数据表字段 |
-| GET/POST | /application/:id/element | 表单元素列表 / 新增 |
-| PUT/DELETE | /application/:id/element/:elementId | 修改 / 删除表单元素 |
-| POST | /application/:id/data | 动态业务数据新增（自动建数据行） |
-| GET/PUT/DELETE | /application/:id/data/:dataId | 业务数据详情 / 修改 / 删除 |
-
-## 核心机制
-
-### 实时通知（SSE）
-
-- **连接建立**：`GET /notifications/stream?token=xxx`，鉴权通过后先下发一帧 `event: connected`，携带初始未读数
-- **事件类型**：`notification`（新通知）/ `ping`（30 秒心跳保活）
-- **通知类型**：`1` 待办 / `2` 退回 / `3` 抄送 / `4` 结果（通过/拒绝）
-- **写入与推送时序**：通知在业务事务内入队（`notifyCreate`）→ 事务提交成功后统一 flush 推送（`withNotify`）；事务回滚则整队丢弃，不产生幽灵通知
-- **连接管理**：每个用户维护独立的 SSE 连接，客户端断开自动重连（前端 EventSource 原生能力）
-- **超时豁免**：SSE 属长连接，已加入 `middleware/timeout.go` 的 `ssePaths` 白名单，不受 `server.request_timeout` 约束
-- **多标签页同步**：前端通过 BroadcastChannel 实现多标签页通知同步
-
-### 文件上传
-
-- **文件存储**：按 `app_code` 分目录存储，路径格式 `/uploads/{app_code}/{yyyyMMddHHmmss}_{filename}`
-- **数据格式**：业务字段存储 JSON 数组，每个元素包含 `{uid, url, name, size}`
-- **支持格式**：通用文件上传，支持图片、文档、压缩包等
-- **静态访问**：上传文件通过 `/uploads/*` 直接访问，无需鉴权
-
-### 动态表单引擎
-
-- **动态表单**：支持文本、数字、日期、下拉、单选、多选、上传、子表等多种组件
-- **事件联动**：支持 `on_mount`、`on_change`、`on_blur` 事件，实现字段间联动
-- **数据校验**：支持必填、正则、表达式等多种校验规则
-- **布局配置**：支持表单页（form）、详情页（detail）、设计器表单页（move-form）、设计器详情页（move-detail）四种模式
-
-### 数据权限（DataScope）
-
-角色数据范围：`1`=全部数据、`2`=自定义部门、`3`=仅本部门、`4`=本部门及下级、`5`=仅本人。部门维度（2/3/4）按部门集合追加 `dept_id IN (...)` 过滤，仅本人（5）追加 `created_by = 当前用户` 过滤；两种维度并存时取并集（`middleware/datascope.go`）。系统约定部门列统一为 `dept_id`、创建人列统一为 `created_by`，无别名主表查询自动限定到主表，JOIN 其他表不产生歧义。
-
-### 接口管理（oa_api_definitions）
-
-- **双模式定义**：`type=sql` 为 SQL 模板直查（`${form.xxx}` 占位，参数化绑定，仅允许 SELECT）；`type=http` 为转发到内部相对路径（`target_path`）
-- **统一分发**：`{APIPrefix}/interfaces/*path` 按 method+path（status=1）匹配定义，动态路径段（`:id`）支持模板匹配
-- **SQL 直查数据权限**：按「静态写死」方式——模板内显式写 `dept_id IN (...)` / `created_by = ...` 过滤（无兜底注入，避免误导）；返回结构由 SQL 自身声明：结果单列且列名为 `_data` 且值可解析 JSON（`JSON_OBJECT` / `JSON_ARRAYAGG`）时自动解析为对象/数组，其余按行数组返回（列表/选项语义）
-- **HTTP 转发**：以当前账号身份调用内部接口，转发结果原样透传（`Forwarded` 标记避免双重包裹），保证联动填充能取到 `res.data`
-- **被引用统计**：`referenced` 字段运行时统计表单元素 `data_source` / `actions` 中对本接口的引用次数（不入库），`>0` 时前端禁用删除，防误删
-- **导入后端路由**：`GET /backend/routes` 解析 `internal/router/*.go` 源码，读取路由注册处的行内注释（如 `// 发起审批`）作为接口名称；`POST /backend/import` 批量生成 HTTP 转发定义（默认排序 1）
-- **试调**：`POST /api-definitions/debug` 以当前账号身份真实执行（SQL 直查 / HTTP 转发），并应用当前账号数据权限
-
-### 审核人员组（oa_examine_groups）
-
-审批对象类型「审核人员组」：`ExamineGroup` 记录组名称、编号、审核人 ID 列表（JSON 存储）与排序；服务层翻译填充 `approvers`（用户昵称等）供前端展示。审批人 / 抄送人节点均可选择审核人员组（单选），运行时解析为组内审核人集合，与指定角色同属多人审批场景。
-
-### 流程编码（idgen）
-
-实体编码统一由 `internal/pkg/idgen` 生成，结构为 `<段1>_<段2>_<段3>`（全小写）：
-
-- **段1**：实体类型前缀（流程为 `app`）
-- **段2**：40bit 毫秒时间戳（自定义纪元 2020-01-01）→ Crockford base32 定长 8 字符；同一毫秒内相同，字典序与时间序一致，可直接排序
-- **段3**：40bit `crypto/rand` 随机 → Crockford base32 定长 8 字符
-
-示例：`app_65vhh0h9_3f9k2m7x`、`app_65vhh0hb_k7nq2wbp`（字典序更大 = 更晚生成）。
-
-### 审批流状态机
-
-**实例状态**（`oa_approval_instances.status`）：
-
-| 值 | 名称 | 说明 |
-| --- | --- | --- |
-| 0 | 进行中 | 流程流转中 |
-| 1 | 已通过 | 终态 |
-| 2 | 已拒绝 | 终态，不可再编辑 |
-| 3 | 已退回 | 非终态，发起人可编辑后重新提交（代码常量 `InstanceStatusReturned`） |
-| 4 | 已作废 | 枚举保留，当前流程未产生 |
-| 5 | 已撤回 | 枚举保留，撤回实际回到「草稿」 |
-| 6 | 草稿 | 未提交，可编辑 / 提交 / 删除 |
-
-```
- 草稿(6) ──提交──▶ 进行中(0) ──通过──▶ 已通过(1)
-                      │  │
-                      │  ├──拒绝──▶ 已拒绝(2)
-                      │  │
-                      │  └──退回──▶ 已退回(3) ──重新提交──▶ 进行中(0)
-                      │
-                      └──撤回──▶ 草稿(6)
-```
-
-**任务状态**（`oa_approval_instance_tasks.status`）：`0` 待处理 / `1` 已通过 / `2` 已拒绝 / `3` 已退回 / `4` 已转交 / `5` 已取消
-
-**操作语义**：
-
-- **通过**：当前节点完成，推进到下一节点；全部节点完成则实例变为「已通过」
-- **拒绝**：实例直接终结为「已拒绝」，不可再编辑
-- **退回**：退回给发起人，实例变为「已退回」；发起人编辑后「重新提交」，重走完整审批流程（与钉钉对齐，新旧任务不叠加）
-- **撤回**：仅发起人、仅进行中可操作，实例回退到「草稿」，可继续编辑或重新提交
-
-**约束与保证**：
-
-- **提交草稿时校验**：「发起人自选」审批节点必须已选人（未选返回明确提示）；「空审批人 + `emptyHandler=1`」仅用于角色无人等合法场景的自动跳过
-- **事务保证**：发起/提交/审批/撤回等涉及实例状态 + 任务表 + 快照的多表更新全部在单个数据库事务内执行；提交草稿带原子守卫（`WHERE status=Draft`），防并发重复提交
-- **抄送节点**：不生成审批任务，直接推进；依次审批按序生成下一人任务（转交衍生任务不计入索引）
-
-> 注意区分两套状态枚举：实例/任务状态（上表，`oa_approval_instances.status`）与列表聚合用的「审核状态」（`0` 草稿 / `1` 待审核 / `2` 审核中 / `3` 已通过 / `4` 不通过 / `5` 已退回 / `6` 已作废 / `7` 已删除），后者仅用于列表展示与筛选。
+- 鉴权：除登录、健康检查外，所有接口需在请求头携带 `Authorization: Bearer <token>`。
+- 分页：列表接口统一接收 `page`、`size`，返回 `{ list, total }`。
+- 错误：业务错误使用非 0 `code`，由中间件统一捕获并翻译。
