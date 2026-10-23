@@ -50,9 +50,9 @@ export const MEMBER_TYPE_OPTIONS = [
 /** 审批对象（1-指定人员 / 2-指定角色 / 3-发起人自选 / 4-审核人员组）——审批人 / 抄送人节点共用 */
 export const APPROVER_TYPE_OPTIONS = [
   { value: 1, label: '指定人员' },
+  { value: 4, label: '审核人员组' },
   { value: 2, label: '指定角色' },
   { value: 3, label: '发起人自选' },
-  { value: 4, label: '审核人员组' },
 ]
 
 /** 发起人自选类型（1-单选 / 2-多选） */
