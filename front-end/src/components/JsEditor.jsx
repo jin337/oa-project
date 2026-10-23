@@ -29,6 +29,150 @@ function changeFontSize(delta) {
   window.dispatchEvent(new CustomEvent(FONT_SIZE_EVENT))
 }
 
+// ──────────────────────────────── JS 美化 / 简化 ────────────────────────────────
+// 美化：按大括号缩进，左大括号单独换行（Allman 风格）；右大括号顶格回退一级。
+// 简化：去注释、压缩空白为单空格、整体一行。
+const beautifyJs = (src) => {
+  if (!src) return ''
+  // 扫描整段源码，在 { } ; 边界处切行；字符串/模板/注释内部不切。
+  const out = []
+  let indent = 0
+  let buf = ''
+  let inStr = null
+  const flushLine = (delta) => {
+    const t = buf.trim()
+    buf = ''
+    if (!t) return
+    out.push('  '.repeat(Math.max(0, indent)) + t)
+    if (delta) indent = Math.max(0, indent + delta)
+  }
+  let i = 0
+  while (i < src.length) {
+    const c = src[i]
+    if (inStr) {
+      buf += c
+      if (c === '\\' && i + 1 < src.length) {
+        buf += src[i + 1]
+        i += 2
+        continue
+      }
+      if (c === inStr) inStr = null
+      i++
+      continue
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      inStr = c
+      buf += c
+      i++
+      continue
+    }
+    // 注释
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') {
+        buf += src[i]
+        i++
+      }
+      flushLine(0)
+      continue
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      buf += '/*'
+      i += 2
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) {
+        buf += src[i]
+        i++
+      }
+      buf += '*/'
+      i += 2
+      flushLine(0)
+      continue
+    }
+    if (c === ';') {
+      buf += c
+      flushLine(0)
+      i++
+      continue
+    }
+    if (c === '{') {
+      buf += c
+      flushLine(1)
+      i++
+      continue
+    }
+    if (c === '}') {
+      // } 之前若还有非空白内容（例如 "} else {" / "} catch (e) {"），先把前面内容成行
+      const before = buf.trim()
+      if (before && before !== '}') {
+        out.push('  '.repeat(Math.max(0, indent)) + before)
+      }
+      buf = ''
+      indent = Math.max(0, indent - 1)
+      out.push('  '.repeat(Math.max(0, indent)) + '}')
+      i++
+      // 吃掉 } 后的衔接词（else/catch/while 等），遇到 { ; } 或换行停止
+      let rest = ''
+      while (i < src.length && !'{;}\n'.includes(src[i])) {
+        rest += src[i]
+        i++
+      }
+      if (rest.trim()) buf = rest.trim()
+      continue
+    }
+    buf += c
+    i++
+  }
+  if (buf.trim()) flushLine(0)
+  return out.join('\n')
+}
+
+const compactJs = (src) => {
+  if (!src) return ''
+  let out = ''
+  let i = 0
+  let inStr = null
+  while (i < src.length) {
+    const c = src[i]
+    if (inStr) {
+      out += c
+      if (c === '\\' && i + 1 < src.length) {
+        out += src[i + 1]
+        i += 2
+        continue
+      }
+      if (c === inStr) inStr = null
+      i++
+      continue
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      inStr = c
+      out += c
+      i++
+      continue
+    }
+    // 行注释整段丢弃
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') i++
+      continue
+    }
+    // 块注释丢弃
+    if (c === '/' && src[i + 1] === '*') {
+      i += 2
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++
+      i += 2
+      continue
+    }
+    if (/\s/.test(c)) {
+      // 压缩空白为单空格，但保留字符串外的分隔需要；去掉多余空格
+      if (out && !/\s$/.test(out)) out += ' '
+      i++
+      continue
+    }
+    out += c
+    i++
+  }
+  return out.trim()
+}
+
 // ──────────────────────────────── JS 语法高亮 ────────────────────────────────
 const JS_KW = new Set([
   'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'do',
@@ -240,6 +384,13 @@ export default function JsEditor(props) {
     <>
       <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-2 py-1">
         <Space size={0}>
+          <Button type="text" size="mini" onClick={() => onChange?.(beautifyJs(value))}>
+            美化
+          </Button>
+          {/* <Button type="text" size="mini" onClick={() => onChange?.(compactJs(value))}>
+            简化
+          </Button> */}
+          <span className="mx-1 inline-block h-3 w-px bg-gray-300" />
           <Button
             type="text"
             size="mini"
