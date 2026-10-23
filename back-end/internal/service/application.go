@@ -1641,14 +1641,6 @@ func PublishApplicationVersion(appID uint, curUserID uint, req *ApplicationVersi
 		}
 	}
 
-	var oldActive model.ApplicationVersion
-	hasOldActive := false
-	if app.CurrentVersionID > 0 {
-		if e := database.DB.Where("id = ? AND status = ?", app.CurrentVersionID, model.AppVersionStatusActive).First(&oldActive).Error; e == nil {
-			hasOldActive = true
-		}
-	}
-
 	now := time.Now()
 	newStatus := model.AppVersionStatusScheduled
 	if !effectiveAt.After(now) {
@@ -1683,15 +1675,10 @@ func PublishApplicationVersion(appID uint, curUserID uint, req *ApplicationVersi
 			Status:        model.AppVersionStatusDraft,
 			EffectiveAt:   time.Now(),
 		}
-		if hasOldActive {
-			newDraft.FormLayoutJSON = oldActive.FormLayoutJSON
-			newDraft.DetailLayoutJSON = oldActive.DetailLayoutJSON
-			newDraft.ApprovalFlowJSON = oldActive.ApprovalFlowJSON
-		} else {
-			newDraft.FormLayoutJSON = draft.FormLayoutJSON
-			newDraft.DetailLayoutJSON = draft.DetailLayoutJSON
-			newDraft.ApprovalFlowJSON = draft.ApprovalFlowJSON
-		}
+		// 从刚发布的版本克隆下一轮设计起点，保证表单设置（含提交前/后事件）、布局、审批流全部沿用
+		newDraft.FormLayoutJSON = published.FormLayoutJSON
+		newDraft.DetailLayoutJSON = published.DetailLayoutJSON
+		newDraft.ApprovalFlowJSON = published.ApprovalFlowJSON
 		return tx.Create(&newDraft).Error
 	})
 	if err != nil {
