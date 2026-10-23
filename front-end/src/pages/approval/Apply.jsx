@@ -15,7 +15,14 @@ import {
   Space,
   Spin,
 } from '@arco-design/web-react'
-import { IconDelete, IconDoubleLeft, IconDoubleRight, IconEdit, IconPlus, IconSettings } from '@arco-design/web-react/icon'
+import {
+  IconDelete,
+  IconDoubleLeft,
+  IconDoubleRight,
+  IconEdit,
+  IconPlus,
+  IconSettings,
+} from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
 import * as approvalApi from 'src/api/approval'
@@ -648,12 +655,14 @@ export default function Apply() {
               <Button
                 size="mini"
                 type="primary"
-                status='success'
+                status="success"
                 icon={flowCollapsed ? <IconDoubleLeft /> : <IconDoubleRight />}
                 onClick={() => setFlowCollapsed((v) => !v)}
               />
             </div>
-            <div className="max-h-full flex-1 overflow-y-auto px-4 py-3">
+            <div
+              className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pl-4 pr-8' : 'px-4'} py-3`}
+            >
               <div className="min-w-188">
                 <DynamicForm
                   app={drawerApp}

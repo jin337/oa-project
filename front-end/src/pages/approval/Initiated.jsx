@@ -631,7 +631,7 @@ export default function Initiated() {
                 onClick={() => setFlowCollapsed((v) => !v)}
               />
             </div>
-            <div className="max-h-full flex-1 overflow-y-auto px-4 py-3">
+            <div className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pl-4 pr-8' : 'px-4'} py-3`}>
               <div className="min-w-188">
                 <DynamicForm
                   app={editApp}
