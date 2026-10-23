@@ -1,19 +1,6 @@
-import {
-  Button,
-  Form,
-  Grid,
-  Input,
-} from '@arco-design/web-react'
+import { Button, Form, Grid, Input } from '@arco-design/web-react'
 import { IconDelete, IconDragArrow } from '@arco-design/web-react/icon'
-import {
-  memo,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import request from 'src/api/request'
 import { useAuth } from 'src/store/auth-context'
 import { API_PREFIX } from 'src/utils/constants'
@@ -62,7 +49,7 @@ export {
   removeColumn,
   renderCommonSettings,
   renderPreviewConfig,
-  updateColumn
+  updateColumn,
 } from './elements/elementConfig'
 // 纯函数实现已迁移到 ./utils/formUtils，此处原样再导出以保持既有调用方不变
 export {
@@ -74,7 +61,7 @@ export {
   parseLayoutJson,
   runOnSubmitAfter,
   runOnSubmitBefore,
-  serializeTimeFields
+  serializeTimeFields,
 } from './utils/formUtils'
 
 const FormItem = Form.Item
@@ -805,18 +792,18 @@ export const CanvasElement = memo(function CanvasElement({
         {renderFormItemElement(el, ctx)}
         {/* 透明蒙层阻止触发表单控件原生交互（置于容器内，避免 FormItem children 成数组导致字段注入失效） */}
         <div
-          className={`absolute inset-0 z-1 border transition-colors ${
+          className={`absolute inset-0 z-1 border transition-all ${
             isSelected
-              ? 'border-[rgb(var(--arcoblue-6))] '
+              ? `border-[rgb(var(--arcoblue-6))] ${el.element_type === 'table' && ctx.pageType === 'move-detail' ? 'shadow-[0_1px_0_0_rgb(var(--arcoblue-6))]' : ''}`
               : isDragOver
                 ? 'border-dashed border-[rgb(var(--arcoblue-6))] '
-                : 'border-transparent hover:border-[rgb(var(--arcoblue-6))]'
+                : `border-transparent hover:border-[rgb(var(--arcoblue-6))] ${el.element_type === 'table' && ctx.pageType === 'move-detail' ? 'hover:shadow-[0_1px_0_0_rgb(var(--arcoblue-6))]' : ''}`
           }`}
         ></div>
         {isSelected && (
           <>
             {/* 拖拽图标：绝对定位左下角 */}
-            <span className="absolute bottom-0 left-0 bg-[rgb(var(--arcoblue-6))] px-1">
+            <span className="absolute bottom-0 left-0 z-10 bg-[rgb(var(--arcoblue-6))] px-1">
               <IconDragArrow className="cursor-grab text-white!" />
             </span>
             {/* 删除按钮：绝对定位右上角（悬浮于边框上） */}
