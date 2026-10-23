@@ -8,7 +8,7 @@ import {
   Tabs,
   Tooltip,
 } from '@arco-design/web-react'
-import { IconDelete, IconSync } from '@arco-design/web-react/icon'
+import { IconDelete, IconMenuFold, IconMenuUnfold, IconSync } from '@arco-design/web-react/icon'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import JsEditor from 'src/components/JsEditor'
 import DynamicForm, {
@@ -87,6 +87,10 @@ const LayoutManage = forwardRef(function LayoutManage(
   // 选中与面板
   const [selectedId, setSelectedId] = useState(null)
   const [activePanel, setActivePanel] = useState('form')
+
+  // 左右侧栏折叠
+  const [leftCollapsed, setLeftCollapsed] = useState(false)
+  const [rightCollapsed, setRightCollapsed] = useState(false)
 
   // 拖拽状态
   const dragType = useRef(null) // 'new' | 'move'
@@ -342,7 +346,11 @@ const LayoutManage = forwardRef(function LayoutManage(
   return (
     <div className="flex h-full items-stretch">
       {/* ========== 左侧：组件库（按表分组，两列网格） ========== */}
-      <div className="flex w-83 shrink-0 flex-col">
+      <div
+        className={`shrink-0 flex-col overflow-hidden transition-all duration-200 ${
+          leftCollapsed ? 'w-0 border-r-0' : 'flex w-83 border-r border-gray-200'
+        }`}
+      >
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
           <span className="text-sm font-medium text-gray-800">组件库</span>
           <Button type="text" size="mini" icon={<IconSync />} onClick={handleRefreshLibrary}>
@@ -420,9 +428,18 @@ const LayoutManage = forwardRef(function LayoutManage(
       </div>
 
       {/* ========== 中间：预览画布（自定义 Header，标题靠左 / 按钮靠右） ========== */}
-      <div className="flex min-w-0 flex-1 flex-col border-x border-gray-200">
+      <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 py-2 px-3">
-          <div className="w-60 text-sm font-medium text-gray-800">预览画布</div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="text"
+              size="mini"
+              icon={leftCollapsed ? <IconMenuUnfold /> : <IconMenuFold />}
+              onClick={() => setLeftCollapsed((v) => !v)}
+              tooltip={leftCollapsed ? '展开组件库' : '收起组件库'}
+            />
+            <div className="w-40 text-sm font-medium text-gray-800">预览画布</div>
+          </div>
           {/* 表单页 / 详情页切换 */}
           <Radio.Group
             className="whitespace-nowrap"
@@ -432,7 +449,7 @@ const LayoutManage = forwardRef(function LayoutManage(
             onChange={handlePageChange}
             options={PAGE_OPTIONS}
           />
-          <div className="flex w-60 items-center justify-end gap-2">
+          <div className="flex items-center gap-2">
             {/* 详情页编辑时：一键将表单页布局同步到详情页 */}
             {activePage === 'detail' && (
               <Button size="mini" icon={<IconSync />} onClick={handleSyncLayout}>
@@ -444,6 +461,13 @@ const LayoutManage = forwardRef(function LayoutManage(
                 清空
               </Button>
             </Popconfirm>
+            <Button
+              type="text"
+              size="mini"
+              icon={rightCollapsed ? <IconMenuFold /> : <IconMenuUnfold />}
+              onClick={() => setRightCollapsed((v) => !v)}
+              tooltip={rightCollapsed ? '收起属性面板' : '展开属性面板'}
+            />
           </div>
         </div>
 
@@ -492,7 +516,11 @@ const LayoutManage = forwardRef(function LayoutManage(
       </div>
 
       {/* ========== 右侧：属性配置面板（Tabs 作为顶部导航） ========== */}
-      <div className="flex w-100 shrink-0 flex-col overflow-hidden">
+      <div
+        className={`shrink-0 flex-col overflow-hidden transition-all duration-200 ${
+          rightCollapsed ? 'w-0 border-l-0' : 'flex w-100 border-l border-gray-200'
+        }`}
+      >
         <Tabs
           activeTab={panelKey}
           onChange={setActivePanel}
