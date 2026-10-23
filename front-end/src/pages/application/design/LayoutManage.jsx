@@ -99,12 +99,15 @@ const LayoutManage = forwardRef(function LayoutManage(
   const [dragOverIndex, setDragOverIndex] = useState(null)
 
   // app 变化时回填表单页 / 详情页布局配置
-  // 仅在首次拿到 app 或 key（预览版本切换）变化时初始化一次；
-  // 不在每次 app prop 引用变化时重置，否则保存后 reloadApp 会把未提交到版本快照的新元素清空
-  const initializedRef = useRef(false)
+  // 同一 app 首次进入时初始化；切换到不同 app（id 变化）时重新加载
+  const initializedAppIdRef = useRef(null)
   useEffect(() => {
-    if (!app || initializedRef.current) return
-    initializedRef.current = true
+    if (!app) return
+    if (initializedAppIdRef.current === app.id) return
+    initializedAppIdRef.current = app.id
+    setSelectedId(null)
+    setActivePanel('form')
+    setActivePage('form')
     setLayouts({
       form: parseLayoutJson(app?.form_layout_json) || { formConfig: { ...DEFAULT_FORM_CONFIG }, elements: [] },
       detail: parseLayoutJson(app?.detail_layout_json) || { formConfig: { ...DEFAULT_FORM_CONFIG }, elements: [] },
