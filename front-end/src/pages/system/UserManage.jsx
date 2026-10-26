@@ -51,7 +51,21 @@ const ALL_COL_KEYS = [
   'created_at',
 ]
 // 角色标签颜色池（Arco 预设色），按角色 ID 取模分配，保证同一角色颜色稳定
-const ROLE_COLORS = ['arcoblue', 'green', 'orangered', 'magenta', 'cyan', 'purple', 'lime','gold','red','orange','blue','pinkpurple','gray']
+const ROLE_COLORS = [
+  'arcoblue',
+  'green',
+  'orangered',
+  'magenta',
+  'cyan',
+  'purple',
+  'lime',
+  'gold',
+  'red',
+  'orange',
+  'blue',
+  'pinkpurple',
+  'gray',
+]
 
 function getRoleColor(role) {
   const id = Number(role?.id)
@@ -100,6 +114,7 @@ function normalizeUserPayload(values) {
 
 export default function UserManage() {
   const { hasPerm } = usePermission()
+  const canEdit = hasPerm('system:user:edit')
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -369,7 +384,7 @@ export default function UserManage() {
       render: (deptIds) =>
         (deptIds || []).length
           ? deptIds.map((d) => (
-              <Tag key={d.id} color={getRoleColor(d)}className="mr-1">
+              <Tag key={d.id} color={getRoleColor(d)} className="mr-1">
                 {d.name}
               </Tag>
             ))
@@ -402,53 +417,52 @@ export default function UserManage() {
       dataIndex: 'status',
       width: 80,
       align: 'center',
-      render: (status, record) => (
-        <Switch
-          size="small"
-          checked={status === 1}
-          loading={togglingId === record.id}
-          onChange={(checked) => handleToggleStatus(record, checked)}
-        />
-      ),
+      render: (status, record) =>
+        canEdit ? (
+          <Switch
+            size="small"
+            checked={status === 1}
+            loading={togglingId === record.id}
+            onChange={(checked) => handleToggleStatus(record, checked)}
+          />
+        ) : status === 1 ? (
+          <Tag color="green">启用</Tag>
+        ) : (
+          <Tag color="red">停用</Tag>
+        ),
     },
-    {
+    canEdit && {
       key: 'action',
       title: '操作',
       width: 290,
       render: (_, record) => (
         <Space>
-          {hasPerm('system:user:resetPwd') && (
-            <Button size="mini" onClick={() => openResetPassword(record)}>
-              重置密码
-            </Button>
-          )}
-          {hasPerm('system:user:edit') && (
-            <Space>
-              <Button size="mini" onClick={() => openDetail(record)}>
-                查看详情
+          <Button size="mini" onClick={() => openResetPassword(record)}>
+            重置密码
+          </Button>
+          <Button size="mini" onClick={() => openDetail(record)}>
+            查看详情
+          </Button>
+          <Button size="mini" onClick={() => openEdit(record)}>
+            编辑
+          </Button>
+          {record.id === 1 ? (
+            <Tooltip content="内置管理员不可删除">
+              <Button size="mini" status="danger" disabled>
+                删除
               </Button>
-              <Button size="mini" onClick={() => openEdit(record)}>
-                编辑
+            </Tooltip>
+          ) : (
+            <Popconfirm
+              position="lb"
+              focusLock
+              title="确认删除该用户？"
+              onOk={() => handleDelete(record)}
+            >
+              <Button size="mini" status="danger">
+                删除
               </Button>
-              {record.id === 1 ? (
-                <Tooltip content="内置管理员不可删除">
-                  <Button size="mini" status="danger" disabled>
-                    删除
-                  </Button>
-                </Tooltip>
-              ) : (
-                <Popconfirm
-                  position="lb"
-                  focusLock
-                  title="确认删除该用户？"
-                  onOk={() => handleDelete(record)}
-                >
-                  <Button size="mini" status="danger">
-                    删除
-                  </Button>
-                </Popconfirm>
-              )}
-            </Space>
+            </Popconfirm>
           )}
         </Space>
       ),
@@ -503,7 +517,7 @@ export default function UserManage() {
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {hasPerm('system:user:edit') ? (
+        {canEdit ? (
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
             新增用户
           </Button>

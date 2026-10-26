@@ -411,7 +411,7 @@ export default function ApplicationManage() {
           <Tag color="red">停用</Tag>
         ),
     },
-    {
+    hasPerm('application:edit') && {
       key: 'action',
       title: '操作',
       width: 150,
@@ -425,33 +425,31 @@ export default function ApplicationManage() {
           </Menu>
         )
         return (
-          hasPerm('application:edit') && (
-            <Space>
-              <Dropdown trigger="click" droplist={actionMenu} position="br">
-                <Button size="mini" type="text">
-                  配置
-                  <IconDown />
-                </Button>
-              </Dropdown>
-              <Button size="mini" onClick={() => openListPage(record)}>
-                数据
+          <Space>
+            <Dropdown trigger="click" droplist={actionMenu} position="br">
+              <Button size="mini" type="text">
+                配置
+                <IconDown />
               </Button>
-              {record.status !== 1 && (
-                <Popconfirm
-                  disabled={record.status === 1}
-                  position="lb"
-                  focusLock
-                  title="确认删除该流程配置？"
-                  content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
-                  onOk={() => handleDelete(record)}
-                >
-                  <Button size="mini" status="danger">
-                    删除
-                  </Button>
-                </Popconfirm>
-              )}
-            </Space>
-          )
+            </Dropdown>
+            <Button size="mini" onClick={() => openListPage(record)}>
+              数据
+            </Button>
+            {record.status !== 1 && (
+              <Popconfirm
+                disabled={record.status === 1}
+                position="lb"
+                focusLock
+                title="确认删除该流程配置？"
+                content="注意：此操作将同时物理删除对应的主表及所有子表，数据不可恢复，请谨慎操作！"
+                onOk={() => handleDelete(record)}
+              >
+                <Button size="mini" status="danger">
+                  删除
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
         )
       },
     },

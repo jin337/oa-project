@@ -192,7 +192,7 @@ func seedInitData(db *gorm.DB) error {
 		{ParentID: systemDir.ID, Name: "部门管理", Type: model.MenuTypeMenu, Path: "/system/dept", Perm: "system:dept", Sort: 4, Status: 1, Hidden: 0},
 		{ParentID: systemDir.ID, Name: "审核人员组", Type: model.MenuTypeMenu, Path: "/system/examine", Perm: "system:examine", Sort: 5, Status: 1, Hidden: 0},
 		// 流程配置
-		{ParentID: applicationPage.ID, Name: "表管理", Type: model.MenuTypeMenu, Path: "/application/:id/tables", Perm: "application:tables", Sort: 1, Status: 1, Hidden: 1},
+		{ParentID: applicationPage.ID, Name: "表字段管理", Type: model.MenuTypeMenu, Path: "/application/:id/tables", Perm: "application:tables", Sort: 1, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "表单元素管理", Type: model.MenuTypeMenu, Path: "/application/:id/elements", Perm: "application:elements", Sort: 2, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "表单设计", Type: model.MenuTypeMenu, Path: "/application/:id/design", Perm: "application:design", Sort: 3, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "数据", Type: model.MenuTypeMenu, Path: "/application/list", Perm: "application:list", Sort: 5, Status: 1, Hidden: 1},
@@ -200,7 +200,7 @@ func seedInitData(db *gorm.DB) error {
 		{ParentID: approvalDir.ID, Name: "申请", Type: model.MenuTypeMenu, Path: "/approval/apply", Perm: "approval:apply", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: approvalDir.ID, Name: "我的发起", Type: model.MenuTypeMenu, Path: "/approval/initiated", Perm: "approval:initiated", Sort: 2, Status: 1, Hidden: 0},
 		{ParentID: approvalDir.ID, Name: "我的待办", Type: model.MenuTypeMenu, Path: "/approval/todo", Perm: "approval:todo", Sort: 3, Status: 1, Hidden: 0},
-		{ParentID: approvalDir.ID, Name: "我审批的", Type: model.MenuTypeMenu, Path: "/approval/workplace", Perm: "approval:workplace", Sort: 4, Status: 1, Hidden: 0},
+		{ParentID: approvalDir.ID, Name: "经我处理", Type: model.MenuTypeMenu, Path: "/approval/workplace", Perm: "approval:workplace", Sort: 4, Status: 1, Hidden: 0},
 		{ParentID: approvalDir.ID, Name: "抄送我的", Type: model.MenuTypeMenu, Path: "/approval/tome", Perm: "approval:tome", Sort: 5, Status: 1, Hidden: 0},
 		{ParentID: approvalDir.ID, Name: "草稿箱", Type: model.MenuTypeMenu, Path: "/approval/drafts", Perm: "approval:drafts", Sort: 6, Status: 1, Hidden: 0},
 	}
@@ -213,10 +213,7 @@ func seedInitData(db *gorm.DB) error {
 	buttons := []model.Menu{
 		// 系统管理（pageMenus: 0 用户管理 / 1 角色管理 / 2 菜单管理 / 3 部门管理 / 4 审核人员组）
 		{ParentID: pageMenus[0].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:user:edit", Sort: 1, Status: 1, Hidden: 0},
-		{ParentID: pageMenus[0].ID, Name: "详情", Type: model.MenuTypeButton, Perm: "system:user:detail", Sort: 2, Status: 1, Hidden: 0},
-		{ParentID: pageMenus[0].ID, Name: "重置密码", Type: model.MenuTypeButton, Perm: "system:user:resetPwd", Sort: 3, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[1].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:role:edit", Sort: 1, Status: 1, Hidden: 0},
-		{ParentID: pageMenus[1].ID, Name: "分配菜单", Type: model.MenuTypeButton, Perm: "system:role:assignMenu", Sort: 2, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[2].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:menu:edit", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[3].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:dept:edit", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: pageMenus[4].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:examine:edit", Sort: 1, Status: 1, Hidden: 0},

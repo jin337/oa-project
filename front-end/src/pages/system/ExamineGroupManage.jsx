@@ -245,38 +245,39 @@ export default function ExamineGroupManage() {
       dataIndex: 'status',
       width: 80,
       align: 'center',
-      render: (status, record) => (
-        <Switch
-          size="small"
-          checked={status === 1}
-          loading={togglingId === record.id}
-          onChange={(checked) => handleToggleStatus(record, checked)}
-        />
-      ),
+      render: (status, record) =>
+        canEdit ? (
+          <Switch
+            size="small"
+            checked={status === 1}
+            loading={togglingId === record.id}
+            onChange={(checked) => handleToggleStatus(record, checked)}
+          />
+        ) : status === 1 ? (
+          <Tag color="green">启用</Tag>
+        ) : (
+          <Tag color="red">停用</Tag>
+        ),
     },
-    {
+    canEdit && {
       key: 'action',
       title: '操作',
       width: 140,
       render: (_, record) => (
         <Space>
-          {canEdit && (
-            <Button size="mini" onClick={() => openEdit(record)}>
-              编辑
+          <Button size="mini" onClick={() => openEdit(record)}>
+            编辑
+          </Button>
+          <Popconfirm
+            position="lb"
+            focusLock
+            title="确认删除该审核人员组？"
+            onOk={() => handleDelete(record)}
+          >
+            <Button size="mini" status="danger">
+              删除
             </Button>
-          )}
-          {canEdit && (
-            <Popconfirm
-              position="lb"
-              focusLock
-              title="确认删除该审核人员组？"
-              onOk={() => handleDelete(record)}
-            >
-              <Button size="mini" status="danger">
-                删除
-              </Button>
-            </Popconfirm>
-          )}
+          </Popconfirm>
         </Space>
       ),
     },

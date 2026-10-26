@@ -89,6 +89,7 @@ const EMPTY_FORM = {
 
 export default function RoleManage() {
   const { hasPerm } = usePermission()
+  const canEdit = hasPerm('system:role:edit')
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -321,52 +322,52 @@ export default function RoleManage() {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
-      width: 80,
+      width: 70,
       align: 'center',
-      render: (status, record) => (
-        <Switch
-          size="small"
-          checked={status === 1}
-          loading={togglingId === record.id}
-          onChange={(checked) => handleToggleStatus(record, checked)}
-        />
-      ),
+      render: (status, record) =>
+        canEdit ? (
+          <Switch
+            size="small"
+            checked={status === 1}
+            loading={togglingId === record.id}
+            onChange={(checked) => handleToggleStatus(record, checked)}
+          />
+        ) : status === 1 ? (
+          <Tag color="green">启用</Tag>
+        ) : (
+          <Tag color="red">停用</Tag>
+        ),
     },
-    {
+    canEdit && {
       key: 'action',
       title: '操作',
       width: 220,
       render: (_, record) => (
         <Space>
-          {hasPerm('system:role:assignMenu') && (
-            <Button size="mini" onClick={() => openAssignMenus(record)}>
-              分配菜单
-            </Button>
+          <Button size="mini" onClick={() => openAssignMenus(record)}>
+            分配菜单
+          </Button>
+          <Button size="mini" onClick={() => openEdit(record)}>
+            编辑
+          </Button>
+          {record.code === 'admin' ? (
+            <Tooltip content="超级管理员角色不可删除">
+              <Button size="mini" status="danger" disabled>
+                删除
+              </Button>
+            </Tooltip>
+          ) : (
+            <Popconfirm
+              position="lb"
+              focusLock
+              title="确认删除该角色？"
+              onOk={() => handleDelete(record)}
+            >
+              <Button size="mini" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
           )}
-          {hasPerm('system:role:edit') && (
-            <Button size="mini" onClick={() => openEdit(record)}>
-              编辑
-            </Button>
-          )}
-          {hasPerm('system:role:edit') &&
-            (record.code === 'admin' ? (
-              <Tooltip content="超级管理员角色不可删除">
-                <Button size="mini" status="danger" disabled>
-                  删除
-                </Button>
-              </Tooltip>
-            ) : (
-              <Popconfirm
-                position="lb"
-                focusLock
-                title="确认删除该角色？"
-                onOk={() => handleDelete(record)}
-              >
-                <Button size="mini" status="danger">
-                  删除
-                </Button>
-              </Popconfirm>
-            ))}
         </Space>
       ),
     },
@@ -410,7 +411,7 @@ export default function RoleManage() {
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {hasPerm('system:role:edit') ? (
+        {canEdit ? (
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
             新增角色
           </Button>

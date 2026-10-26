@@ -16,6 +16,7 @@ import {
   Space,
   Switch,
   Table,
+  Tag,
   Tooltip,
   TreeSelect,
 } from '@arco-design/web-react'
@@ -53,6 +54,7 @@ const EMPTY_FORM = {
 
 export default function DeptManage() {
   const { hasPerm } = usePermission()
+  const canEdit = hasPerm('system:dept:edit')
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(false)
 
@@ -215,48 +217,52 @@ export default function DeptManage() {
       dataIndex: 'status',
       width: 80,
       align: 'center',
-      render: (status, record) => (
-        <Switch
-          size="small"
-          checked={status === 1}
-          loading={togglingId === record.id}
-          onChange={(checked) => handleToggleStatus(record, checked)}
-        />
-      ),
+      render: (status, record) =>
+        canEdit ? (
+          <Switch
+            size="small"
+            checked={status === 1}
+            loading={togglingId === record.id}
+            onChange={(checked) => handleToggleStatus(record, checked)}
+          />
+        ) : status === 1 ? (
+          <Tag color="green">启用</Tag>
+        ) : (
+          <Tag color="red">停用</Tag>
+        ),
     },
-    {
+    canEdit && {
       key: 'action',
       title: '操作',
       width: 220,
-      render: (_, record) =>
-        hasPerm('system:dept:edit') && (
-          <Space>
-            <Button size="mini" onClick={() => openCreate(record.id)}>
-              新增子部门
-            </Button>
-            <Button size="mini" onClick={() => openEdit(record)}>
-              编辑
-            </Button>
-            {record.children?.length > 0 ? (
-              <Tooltip content="存在子节点，请先删除子节点">
-                <Button size="mini" status="danger" disabled>
-                  删除
-                </Button>
-              </Tooltip>
-            ) : (
-              <Popconfirm
-                position="lb"
-                focusLock
-                title="确认删除该部门？"
-                onOk={() => handleDelete(record)}
-              >
-                <Button size="mini" status="danger">
-                  删除
-                </Button>
-              </Popconfirm>
-            )}
-          </Space>
-        ),
+      render: (_, record) => (
+        <Space>
+          <Button size="mini" onClick={() => openCreate(record.id)}>
+            新增子部门
+          </Button>
+          <Button size="mini" onClick={() => openEdit(record)}>
+            编辑
+          </Button>
+          {record.children?.length > 0 ? (
+            <Tooltip content="存在子节点，请先删除子节点">
+              <Button size="mini" status="danger" disabled>
+                删除
+              </Button>
+            </Tooltip>
+          ) : (
+            <Popconfirm
+              position="lb"
+              focusLock
+              title="确认删除该部门？"
+              onOk={() => handleDelete(record)}
+            >
+              <Button size="mini" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
+      ),
     },
   ]
 
@@ -280,7 +286,7 @@ export default function DeptManage() {
     <Card title="部门管理">
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {hasPerm('system:dept:edit') ? (
+        {canEdit ? (
           <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
             新增部门
           </Button>
