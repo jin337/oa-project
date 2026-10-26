@@ -292,12 +292,16 @@ export default function InterfaceManage() {
 
   useEffect(() => {
     fetchList()
+  }, [page, size, fetchList])
+
+  // 仅在页面首次进入时拉取一次分类候选项和库表名列表，搜索/翻页不重复调用
+  useEffect(() => {
     fetchCategories()
     apiDefinitionApi
       .listApiDefinitionDatabases()
       .then((res) => setDbNames(res.data || []))
       .catch(() => {})
-  }, [page, size, fetchList, fetchCategories])
+  }, [fetchCategories])
 
   // 一键导入后端全部业务路由为 HTTP 转发定义
   const handleImportRoutes = () => {
@@ -700,10 +704,12 @@ export default function InterfaceManage() {
 
       {/* 工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {canEdit && (
+        {canEdit ? (
           <Button type="primary" onClick={openCreate}>
             新增接口
           </Button>
+        ) : (
+          <div />
         )}
         <Space>
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>

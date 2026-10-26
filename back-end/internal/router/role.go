@@ -18,7 +18,7 @@ func registerRoleRoutes(api *gin.RouterGroup) {
 		roles.GET("/:id", handler.RoleDetail)     // 角色详情
 		roles.PUT("/:id", middleware.RequirePermission("system:role:edit"), handler.RoleUpdate)     // 修改角色
 		roles.DELETE("/:id", middleware.RequirePermission("system:role:edit"), handler.RoleDelete)  // 删除角色
-		roles.PUT("/:id/menus", middleware.RequirePermission("system:role:assignMenu"), handler.RoleAssignMenus) // 分配菜单权限
+		roles.PUT("/:id/menus", middleware.RequirePermission("system:role:edit"), handler.RoleAssignMenus) // 分配菜单权限
 		roles.PUT("/:id/depts", middleware.RequirePermission("system:role:edit"), handler.RoleAssignDepts) // 分配数据范围部门
 	}
 }
