@@ -853,6 +853,7 @@ type ApprovalRecord struct {
 	StatusName     string                 `json:"status_name"`           // 审核状态中文名
 	CreatedBy      uint                   `json:"created_by"`            // 发起人 ID
 	CreatedName    string                 `json:"created_name"`          // 发起人姓名
+	CCByName       string                 `json:"cc_by_name,omitempty"`  // 抄送我的：发起抄送的人姓名（手动抄送/抄送节点触发者）
 	BillNo         string                 `json:"bill_no"`               // 业务单号（提交审核时生成，展示在申请人之后）
 	DeptID         uint                   `json:"dept_id"`               // 发起人部门 ID（快照）
 	DeptName       string                 `json:"dept_name"`             // 发起人部门名称
@@ -863,6 +864,8 @@ type ApprovalRecord struct {
 
 	// 实例状态原值（仅服务端内部用于推导下面的能力标记，不对外输出）
 	InstanceStatus int `json:"-"`
+	// 抄送我的：抄送发起人 ID（内部字段，用于填名后清空，不对外输出）
+	CCByUserID uint `json:"-"`
 	// 操作能力标记：由实例状态计算，前端据此渲染「作废/撤回/编辑/删除」按钮
 	CanVoid     bool `json:"can_void"`     // 可作废：仅已撤回（审核中一律只能撤回）
 	CanWithdraw bool `json:"can_withdraw"` // 可撤回：进行中

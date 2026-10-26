@@ -59,6 +59,15 @@ export const colCreatedName = {
   render: (v) => v || '-',
 }
 
+// 抄送人列（抄送我的列表：发起本次抄送的人）
+export const colCCByName = {
+  title: '抄送人',
+  key: 'cc_by_name',
+  dataIndex: 'cc_by_name',
+  width: 110,
+  render: (v) => v || '-',
+}
+
 // 审批节点（当前处理人）列
 export const colNodeName = {
   title: '审批节点',

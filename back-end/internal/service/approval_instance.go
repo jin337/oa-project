@@ -709,6 +709,7 @@ func ApprovalInstanceManualCC(curUserID, instanceID uint, userIDs []uint) error 
 			UserID:     uid,
 			NotifiedAt: &now,
 		}
+		rec.CreatedBy, rec.UpdatedBy = curUserID, curUserID
 		if err := database.DB.Create(&rec).Error; err != nil {
 			continue
 		}

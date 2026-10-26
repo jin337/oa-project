@@ -2,6 +2,7 @@ import { Button, Card, Table } from '@arco-design/web-react'
 import { useState } from 'react'
 import {
   colBillNo,
+  colCCByName,
   colCreatedAt,
   colCreatedName,
   colDept,
@@ -24,6 +25,7 @@ const ALL_COL_KEYS = [
   'item_name',
   'dept_name',
   'created_name',
+  'cc_by_name',
   'bill_no',
   'node_name',
   'created_at',
@@ -63,6 +65,7 @@ export default function ToMe() {
     colDept,
     colNodeName,
     colCreatedName,
+    colCCByName,
     colCreatedAt,
     colFinishedAt,
     colStatus,

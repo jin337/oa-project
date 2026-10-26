@@ -740,6 +740,18 @@ func approvalListCC(curUserID uint, req *model.ApprovalListReq) ([]model.Approva
 			recordHit[r.InstanceID] = true
 		}
 	}
+	// 每个实例对应「抄送我的」记录：优先 manual-cc（手动抄送，created_by=操作人），否则取任意一条非空 created_by
+	ccByUserID := map[uint]uint{}
+	for _, r := range ccRecords {
+		if r.CreatedBy == 0 {
+			continue
+		}
+		if r.NodeID == "manual-cc" {
+			ccByUserID[r.InstanceID] = r.CreatedBy
+		} else if _, ok := ccByUserID[r.InstanceID]; !ok {
+			ccByUserID[r.InstanceID] = r.CreatedBy
+		}
+	}
 
 	// 2. 执行路径解析命中（兼容存量实例 / 抄送记录未写入的实例）
 	parseHit := map[uint]bool{}
@@ -804,10 +816,16 @@ func approvalListCC(curUserID uint, req *model.ApprovalListReq) ([]model.Approva
 		if err := database.DB.First(&app, inst.AppID).Error; err != nil {
 			continue
 		}
-		records = append(records, buildApprovalRecord(inst, app))
+		rec := buildApprovalRecord(inst, app)
+		if uid, ok := ccByUserID[inst.ID]; ok && uid > 0 {
+			rec.CCByUserID = uid
+		}
+		records = append(records, rec)
 	}
 
 	fillApprovalUserInfo(records)
+	// 填充抄送发起人姓名
+	fillCCByName(records)
 	fillRecordNodeName(records)
 	return records, total, nil
 }
@@ -938,6 +956,29 @@ func fillApprovalUserInfo(records []model.ApprovalRecord) {
 		} else if did, ok := userDept[r.CreatedBy]; ok {
 			// 旧数据兼容：实时查用户表部门
 			r.DeptName = deptName[did]
+		}
+	}
+}
+
+// fillCCByName 抄送我的：把 CCByUserID（抄送发起人）解析为姓名写入 CCByName。
+func fillCCByName(records []model.ApprovalRecord) {
+	if len(records) == 0 {
+		return
+	}
+	uidSet := map[uint]bool{}
+	for i := range records {
+		if records[i].CCByUserID > 0 {
+			uidSet[records[i].CCByUserID] = true
+		}
+	}
+	if len(uidSet) == 0 {
+		return
+	}
+	nameMap := queryUserNames(uidSet)
+	for i := range records {
+		r := &records[i]
+		if r.CCByUserID > 0 {
+			r.CCByName = nameMap[r.CCByUserID]
 		}
 	}
 }
