@@ -178,9 +178,7 @@ function DebugModal({ record, onClose }) {
       />
       <div className="my-2 flex items-center gap-2">
         {result && (
-          <Tag color={result.error ? 'red' : 'green'}>
-            {result.error ? '试调失败' : '试调成功'}
-          </Tag>
+          <Tag color={result.error ? 'red' : 'green'}>{result.error ? '试调失败' : '试调成功'}</Tag>
         )}
       </div>
       <div>
@@ -295,7 +293,8 @@ export default function InterfaceManage() {
   useEffect(() => {
     fetchList()
     fetchCategories()
-    apiDefinitionApi.listApiDefinitionDatabases()
+    apiDefinitionApi
+      .listApiDefinitionDatabases()
       .then((res) => setDbNames(res.data || []))
       .catch(() => {})
   }, [page, size, fetchList, fetchCategories])
@@ -570,32 +569,31 @@ export default function InterfaceManage() {
           <Tag color="red">停用</Tag>
         ),
     },
-    {
+    canEdit && {
       key: 'action',
       title: '操作',
       width: 120,
-      render: (_, record) =>
-        canEdit ? (
-          <Space>
-            <Button size="mini" onClick={() => setDebugTarget(record)}>
-              调试
+      render: (_, record) => (
+        <Space>
+          <Button size="mini" onClick={() => setDebugTarget(record)}>
+            调试
+          </Button>
+          <Button size="mini" onClick={() => openEdit(record)}>
+            编辑
+          </Button>
+          <Popconfirm
+            position="lb"
+            focusLock
+            disabled={record.referenced > 0}
+            title="确认删除该接口？"
+            onOk={() => handleDelete(record)}
+          >
+            <Button size="mini" status="danger" disabled={record.referenced > 0}>
+              删除
             </Button>
-            <Button size="mini" onClick={() => openEdit(record)}>
-              编辑
-            </Button>
-            <Popconfirm
-              position="lb"
-              focusLock
-              disabled={record.referenced > 0}
-              title="确认删除该接口？"
-              onOk={() => handleDelete(record)}
-            >
-              <Button size="mini" status="danger" disabled={record.referenced > 0}>
-                删除
-              </Button>
-            </Popconfirm>
-          </Space>
-        ) : null,
+          </Popconfirm>
+        </Space>
+      ),
     },
   ]
 
@@ -711,7 +709,7 @@ export default function InterfaceManage() {
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} trigger='click' position="br">
+          <Dropdown droplist={sizeMenu} trigger="click" position="br">
             <Button size="small" icon={<IconList />}>
               密度
             </Button>
@@ -817,7 +815,8 @@ export default function InterfaceManage() {
           <Row gutter={20}>
             <Col span={8}>
               <FormItem label="分类" field="category" extra="取自 router.go 注册行注释">
-                <Select allowCreate
+                <Select
+                  allowCreate
                   allowClear
                   showSearch
                   placeholder="如：通知 / 工具"

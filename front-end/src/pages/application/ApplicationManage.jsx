@@ -62,6 +62,7 @@ export default function ApplicationManage() {
   const navigate = useNavigate()
   const { addTab } = useTabs()
   const { hasPerm } = usePermission()
+  const canEdit = hasPerm('application:edit')
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -350,11 +351,14 @@ export default function ApplicationManage() {
       key: 'name',
       title: '名称',
       dataIndex: 'name',
-      render: (v, record) => (
-        <Button type="text" size="small" className="-ml-4!" onClick={() => openEdit(record)}>
-          {v}
-        </Button>
-      ),
+      render: (v, record) =>
+        canEdit ? (
+          <Button type="text" size="small" className="-ml-4!" onClick={() => openEdit(record)}>
+            {v}
+          </Button>
+        ) : (
+          v
+        ),
     },
     {
       key: 'code',
@@ -384,9 +388,13 @@ export default function ApplicationManage() {
       width: 110,
       render: (v, record) =>
         v ? (
-          <Button type="text" size="small" onClick={() => openVersions(record)}>
-            {v}
-          </Button>
+          canEdit ? (
+            <Button type="text" size="small" onClick={() => openVersions(record)}>
+              {v}
+            </Button>
+          ) : (
+            v
+          )
         ) : (
           '-'
         ),
@@ -398,7 +406,7 @@ export default function ApplicationManage() {
       width: 70,
       align: 'center',
       render: (status, record) =>
-        hasPerm('application:edit') ? (
+        canEdit ? (
           <Switch
             size="small"
             checked={status === 1}
@@ -411,7 +419,7 @@ export default function ApplicationManage() {
           <Tag color="red">停用</Tag>
         ),
     },
-    hasPerm('application:edit') && {
+    canEdit && {
       key: 'action',
       title: '操作',
       width: 150,
@@ -493,7 +501,7 @@ export default function ApplicationManage() {
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {hasPerm('application:edit') ? (
+        {canEdit ? (
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
             新增流程
           </Button>

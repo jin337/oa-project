@@ -104,6 +104,7 @@ function remapLinkedFieldErrors(errors, form, app) {
  */
 export default function Apply() {
   const { hasPerm } = usePermission()
+  const canEdit = hasPerm('approval:edit')
   // 分类 & 申请项数据
   const [categories, setCategories] = useState([])
   const [items, setItems] = useState([])
@@ -406,7 +407,7 @@ export default function Apply() {
       className="h-full"
       title="审批申请"
       extra={
-        hasPerm('approval:edit') && (
+        canEdit && (
           <Space>
             {/* 管理模式开关：进入后展示管理操作，退出后恢复普通浏览 */}
             <Button
@@ -431,7 +432,7 @@ export default function Apply() {
           {categories.map((c) => {
             const catItems = items.filter((it) => it.category_id === c.id)
             // 没有管理权限时，如果分类下无申请项，就隐藏这个分类
-            if (!hasPerm('approval:edit') && catItems.length === 0) {
+            if (!canEdit && catItems.length === 0) {
               return null
             }
             return (
@@ -440,7 +441,7 @@ export default function Apply() {
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <span className="text-base font-medium">{c.name}</span>
-                    {isManaging && hasPerm('approval:edit') && (
+                    {isManaging && canEdit && (
                       <>
                         <Button
                           size="mini"
@@ -458,7 +459,7 @@ export default function Apply() {
                       </>
                     )}
                   </div>
-                  {isManaging && hasPerm('approval:edit') && (
+                  {isManaging && canEdit && (
                     <Button
                       size="small"
                       type="secondary"
@@ -491,7 +492,7 @@ export default function Apply() {
                                 {item.name}
                               </div>
                             </div>
-                            {isManaging && hasPerm('approval:edit') && (
+                            {isManaging && canEdit && (
                               <div
                                 className="flex shrink-0 items-center"
                                 onClick={(e) => e.stopPropagation()}
