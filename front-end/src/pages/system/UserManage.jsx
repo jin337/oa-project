@@ -282,7 +282,7 @@ export default function UserManage() {
   // 打开重置密码弹窗
   const openResetPassword = (record) => {
     setResetTarget(record)
-    resetForm.setFieldsValue({ new_password: '' })
+    resetForm.setFieldsValue({ new_password: '123456' })
     setResetModalVisible(true)
   }
 
@@ -442,7 +442,7 @@ export default function UserManage() {
             重置密码
           </Button>
           <Button size="mini" onClick={() => openDetail(record)}>
-            查看详情
+            档案
           </Button>
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
@@ -621,7 +621,7 @@ export default function UserManage() {
               </FormItem>
             </Col>
             <Col span={12}>
-              <FormItem label="所属部门" field="dept_ids">
+              <FormItem label="部门" field="dept_ids">
                 <TreeSelect
                   multiple
                   placeholder="请选择部门（可多选）"
@@ -666,6 +666,7 @@ export default function UserManage() {
           <FormItem
             label="新密码"
             field="new_password"
+            tooltip={<div>默认：123456</div>}
             rules={[
               { required: true, message: '请输入新密码' },
               { minLength: 6, maxLength: 64, message: '长度 6-64 个字符' },
@@ -700,10 +701,10 @@ export default function UserManage() {
                 { label: '邮箱', value: detailUser?.email || '-' },
                 { label: '手机号', value: detailUser?.phone || '-' },
                 {
-                  label: '所属部门',
+                  label: '部门',
                   value: (detailUser?.dept_ids || []).length
                     ? detailUser.dept_ids.map((d) => (
-                        <Tag key={d.id} color="arcoblue" className="mr-1">
+                        <Tag key={d.id} color={getRoleColor(d)} className="mr-1">
                           {d.name}
                         </Tag>
                       ))
