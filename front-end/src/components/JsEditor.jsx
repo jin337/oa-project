@@ -1,5 +1,10 @@
 import { Button, Modal, Space } from '@arco-design/web-react'
-import { IconFullscreen, IconFullscreenExit, IconMinus, IconPlus } from '@arco-design/web-react/icon'
+import {
+  IconFullscreen,
+  IconFullscreenExit,
+  IconMinus,
+  IconPlus,
+} from '@arco-design/web-react/icon'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 // ──────────────────────────────── 字号（模块级，localStorage 持久化） ────────────────────────────────
@@ -30,11 +35,25 @@ function changeFontSize(delta) {
 }
 
 // ──────────────────────────────── JS 美化 / 简化 ────────────────────────────────
-// 美化：按大括号缩进，左大括号单独换行（Allman 风格）；右大括号顶格回退一级。
+// 美化：使用项目已安装的 prettier（babel parser）格式化，K&R 风格、2 空格缩进。
+// 片段（如箭头函数体）prettier 也能识别；语法错误时回退到手工缩进版本。
 // 简化：去注释、压缩空白为单空格、整体一行。
-const beautifyJs = (src) => {
+let _prettierPromise = null
+function loadPrettier() {
+  if (!_prettierPromise) {
+    _prettierPromise = import('prettier/standalone').then((m) =>
+      Promise.all([import('prettier/plugins/babel'), m]).then(([babel, core]) => ({
+        core,
+        parsers: { babel: babel.parsers.babel },
+      })),
+    )
+  }
+  return _prettierPromise
+}
+
+// 手工回退版：按 { } ; 边界断行（字符串/注释内不切）
+const manualBeautifyJs = (src) => {
   if (!src) return ''
-  // 扫描整段源码，在 { } ; 边界处切行；字符串/模板/注释内部不切。
   const out = []
   let indent = 0
   let buf = ''
@@ -66,7 +85,6 @@ const beautifyJs = (src) => {
       i++
       continue
     }
-    // 注释
     if (c === '/' && src[i + 1] === '/') {
       while (i < src.length && src[i] !== '\n') {
         buf += src[i]
@@ -100,7 +118,6 @@ const beautifyJs = (src) => {
       continue
     }
     if (c === '}') {
-      // } 之前若还有非空白内容（例如 "} else {" / "} catch (e) {"），先把前面内容成行
       const before = buf.trim()
       if (before && before !== '}') {
         out.push('  '.repeat(Math.max(0, indent)) + before)
@@ -109,7 +126,6 @@ const beautifyJs = (src) => {
       indent = Math.max(0, indent - 1)
       out.push('  '.repeat(Math.max(0, indent)) + '}')
       i++
-      // 吃掉 } 后的衔接词（else/catch/while 等），遇到 { ; } 或换行停止
       let rest = ''
       while (i < src.length && !'{;}\n'.includes(src[i])) {
         rest += src[i]
@@ -123,6 +139,42 @@ const beautifyJs = (src) => {
   }
   if (buf.trim()) flushLine(0)
   return out.join('\n')
+}
+
+// prettier 美化：先按完整 Program 试，失败则包成表达式再试；都失败回退手工版
+const beautifyJs = async (src) => {
+  if (!src || !src.trim()) return src || ''
+  try {
+    const { core, parsers } = await loadPrettier()
+    const tryFormat = (text) =>
+      core.format(text, {
+        parser: 'babel',
+        plugins: [parsers],
+        semi: true,
+        tabWidth: 2,
+        printWidth: 80,
+        singleQuote: true,
+        trailingComma: 'es5',
+      })
+    try {
+      return (await tryFormat(src)).trim()
+    } catch {
+      // 片段（如 `(a, b) => { ... }`）不是完整 Program，包成表达式再格式化
+      try {
+        const wrapped = `async function _f() {\n${src}\n}`
+        const formatted = await tryFormat(wrapped)
+        // 抽出函数体内容
+        const body = formatted
+          .replace(/^async function _f\(\) \{\n/, '')
+          .replace(/\n\}\s*$/, '')
+        return body.trim()
+      } catch {
+        return manualBeautifyJs(src)
+      }
+    }
+  } catch {
+    return manualBeautifyJs(src)
+  }
 }
 
 const compactJs = (src) => {
@@ -175,10 +227,42 @@ const compactJs = (src) => {
 
 // ──────────────────────────────── JS 语法高亮 ────────────────────────────────
 const JS_KW = new Set([
-  'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'do',
-  'switch', 'case', 'break', 'continue', 'new', 'typeof', 'instanceof', 'in', 'of',
-  'try', 'catch', 'finally', 'throw', 'async', 'await', 'class', 'extends', 'this',
-  'null', 'undefined', 'true', 'false', 'import', 'from', 'export', 'default',
+  'const',
+  'let',
+  'var',
+  'function',
+  'return',
+  'if',
+  'else',
+  'for',
+  'while',
+  'do',
+  'switch',
+  'case',
+  'break',
+  'continue',
+  'new',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'try',
+  'catch',
+  'finally',
+  'throw',
+  'async',
+  'await',
+  'class',
+  'extends',
+  'this',
+  'null',
+  'undefined',
+  'true',
+  'false',
+  'import',
+  'from',
+  'export',
+  'default',
 ])
 
 const escapeHtml = (s) =>
@@ -246,7 +330,17 @@ const highlightLine = (line) => {
 }
 
 // ──────────────────────────────── 带行号编辑区 ────────────────────────────────
-function LineTextarea({ value, onChange, placeholder, maxLength, minRows, maxRows, id, full, fontSize }) {
+function LineTextarea({
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+  minRows,
+  maxRows,
+  id,
+  full,
+  fontSize,
+}) {
   const gutterRef = useRef(null)
   const highlightRef = useRef(null)
   const taRef = useRef(null)
@@ -263,16 +357,13 @@ function LineTextarea({ value, onChange, placeholder, maxLength, minRows, maxRow
   }
   const padStyle = { padding: '4px 8px' }
 
-  useLayoutEffect(
-    () => {
-      if (!highlightRef.current) return
-      const segs = Array.from(highlightRef.current.children).map((el) =>
-        Math.max(1, Math.round(el.offsetHeight / ROW_H)),
-      )
-      setWrapSegs(segs)
-    },
-    [value, minRows, maxRows, fontSize, ROW_H],
-  )
+  useLayoutEffect(() => {
+    if (!highlightRef.current) return
+    const segs = Array.from(highlightRef.current.children).map((el) =>
+      Math.max(1, Math.round(el.offsetHeight / ROW_H)),
+    )
+    setWrapSegs(segs)
+  }, [value, minRows, maxRows, fontSize, ROW_H])
 
   const syncScroll = (e) => {
     const t = e.target
@@ -303,7 +394,10 @@ function LineTextarea({ value, onChange, placeholder, maxLength, minRows, maxRow
   }
 
   return (
-    <div className="flex" style={{ height, ...fontStyle, ...(full ? { height: 'calc(100% - 34px)' } : {}) }}>
+    <div
+      className="flex"
+      style={{ height, ...fontStyle, ...(full ? { height: 'calc(100% - 34px)' } : {}) }}
+    >
       <pre
         ref={gutterRef}
         className="m-0 overflow-hidden border-r border-gray-200 bg-gray-50 py-1 pr-2 text-right text-gray-400 select-none"
@@ -318,7 +412,7 @@ function LineTextarea({ value, onChange, placeholder, maxLength, minRows, maxRow
           </div>
         ))}
       </pre>
-      <div className="relative flex-1 overflow-hidden bg-gray-50 h-full">
+      <div className="relative h-full flex-1 overflow-hidden bg-gray-50">
         <div
           ref={highlightRef}
           aria-hidden
@@ -373,6 +467,7 @@ export default function JsEditor(props) {
   } = props
   const [fullscreen, setFullscreen] = useState(false)
   const [fontSize, setFontSize] = useState(readFontSize)
+  const [beautifying, setBeautifying] = useState(false)
 
   useEffect(() => {
     const handler = () => setFontSize(readFontSize())
@@ -380,16 +475,32 @@ export default function JsEditor(props) {
     return () => window.removeEventListener(FONT_SIZE_EVENT, handler)
   }, [])
 
+  const handleBeautify = async () => {
+    if (beautifying) return
+    setBeautifying(true)
+    try {
+      const next = await beautifyJs(value)
+      onChange?.(next)
+    } finally {
+      setBeautifying(false)
+    }
+  }
+
   const renderEditor = (toolbarAction, textareaProps) => (
     <>
       <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-2 py-1">
         <Space size={0}>
-          <Button type="text" size="mini" onClick={() => onChange?.(beautifyJs(value))}>
+          <Button
+            type="text"
+            size="mini"
+            loading={beautifying}
+            onClick={handleBeautify}
+          >
             美化
           </Button>
-          {/* <Button type="text" size="mini" onClick={() => onChange?.(compactJs(value))}>
+          <Button type="text" size="mini" onClick={() => onChange?.(compactJs(value))}>
             简化
-          </Button> */}
+          </Button>
           <span className="mx-1 inline-block h-3 w-px bg-gray-300" />
           <Button
             type="text"
