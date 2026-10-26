@@ -149,7 +149,7 @@ const CONFIG_HELP_CONTENT = (
     <div className="mb-1 font-medium text-gray-800">一、基础属性</div>
     <ul className="mb-3 list-disc pl-4">
       <li>
-        <b className="text-gray-700">字段分类</b>：该元素所属的数据表（主表 /
+        <b className="text-gray-700">物理表</b>：该元素所属的数据表（主表 /
         子表），决定数据写入哪张表；
       </li>
       <li>
@@ -851,7 +851,7 @@ export default function ElementManage() {
     { key: 'field_key', title: '对应字段', dataIndex: 'field_key' },
     {
       key: 'table_key',
-      title: '表分类',
+      title: '物理表',
       dataIndex: 'table_key',
       render: (v) => (v ? <Tag color="arcoblue">{v}</Tag> : '-'),
     },
@@ -961,7 +961,7 @@ export default function ElementManage() {
           />
           <Select
             className="w-55!"
-            placeholder="表分类（主表/子表）"
+            placeholder="物理表（主表/子表）"
             allowClear
             showSearch
             value={tableKey || undefined}
@@ -1065,12 +1065,12 @@ export default function ElementManage() {
           }}
         >
           <Row gutter={20}>
-            {/* 字段分类 */}
+            {/* 物理表 */}
             <Col span={12}>
               <FormItem
-                label="字段分类"
+                label="物理表"
                 field="table_key"
-                rules={[{ required: true, message: '请选择字段分类' }]}
+                rules={[{ required: true, message: '请选择物理表' }]}
               >
                 <Select
                   placeholder="请选择数据表"
