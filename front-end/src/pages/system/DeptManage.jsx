@@ -198,9 +198,17 @@ export default function DeptManage() {
       key: 'leader',
       title: '负责人',
       dataIndex: 'leader',
+      width: 110,
       render: (v, record) => record.leader_name || '-',
     },
-    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80,align: 'center', },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80, align: 'center' },
+    {
+      key: 'created_at',
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 180,
+      render: (v) => v?.slice(0, 19).replace('T', ' '),
+    },
     {
       key: 'status',
       title: '状态',
@@ -215,13 +223,6 @@ export default function DeptManage() {
           onChange={(checked) => handleToggleStatus(record, checked)}
         />
       ),
-    },
-    {
-      key: 'created_at',
-      title: '创建时间',
-      dataIndex: 'created_at',
-      width: 180,
-      render: (v) => v?.slice(0, 19).replace('T', ' '),
     },
     {
       key: 'action',
@@ -290,7 +291,7 @@ export default function DeptManage() {
           <Button size="small" icon={<IconRefresh />} onClick={fetchTree}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} trigger='click' position="br">
+          <Dropdown droplist={sizeMenu} trigger="click" position="br">
             <Button size="small" icon={<IconList />}>
               密度
             </Button>
@@ -349,9 +350,9 @@ export default function DeptManage() {
                   allowClear
                   showSearch
                   filterOption={(input, option) =>
-                    (option.props.searchText || String(option.props.children).toLowerCase()).includes(
-                      input.toLowerCase(),
-                    )
+                    (
+                      option.props.searchText || String(option.props.children).toLowerCase()
+                    ).includes(input.toLowerCase())
                   }
                 >
                   {userOptions.map((u) => (

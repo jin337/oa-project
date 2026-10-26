@@ -51,7 +51,7 @@ const ALL_COL_KEYS = [
   'created_at',
 ]
 // 角色标签颜色池（Arco 预设色），按角色 ID 取模分配，保证同一角色颜色稳定
-const ROLE_COLORS = ['arcoblue', 'green', 'orangered', 'magenta', 'cyan', 'purple', 'lime', 'gold']
+const ROLE_COLORS = ['arcoblue', 'green', 'orangered', 'magenta', 'cyan', 'purple', 'lime','gold','red','orange','blue','pinkpurple','gray']
 
 function getRoleColor(role) {
   const id = Number(role?.id)
@@ -369,7 +369,7 @@ export default function UserManage() {
       render: (deptIds) =>
         (deptIds || []).length
           ? deptIds.map((d) => (
-              <Tag key={d.id} color="arcoblue" className="mr-1">
+              <Tag key={d.id} color={getRoleColor(d)}className="mr-1">
                 {d.name}
               </Tag>
             ))
@@ -390,6 +390,13 @@ export default function UserManage() {
     { key: 'email', title: '邮箱', dataIndex: 'email', render: (v) => v || '-' },
     { key: 'phone', title: '手机号', dataIndex: 'phone', render: (v) => v || '-' },
     {
+      key: 'created_at',
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 180,
+      render: (v) => v?.slice(0, 19).replace('T', ' '),
+    },
+    {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
@@ -403,13 +410,6 @@ export default function UserManage() {
           onChange={(checked) => handleToggleStatus(record, checked)}
         />
       ),
-    },
-    {
-      key: 'created_at',
-      title: '创建时间',
-      dataIndex: 'created_at',
-      width: 180,
-      render: (v) => v?.slice(0, 19).replace('T', ' '),
     },
     {
       key: 'action',
@@ -507,12 +507,14 @@ export default function UserManage() {
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
             新增用户
           </Button>
-        ) : <div/>}
+        ) : (
+          <div />
+        )}
         <Space>
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} trigger='click' position="br">
+          <Dropdown droplist={sizeMenu} trigger="click" position="br">
             <Button size="small" icon={<IconList />}>
               密度
             </Button>

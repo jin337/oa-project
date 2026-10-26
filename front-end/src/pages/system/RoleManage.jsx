@@ -1,27 +1,27 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    InputNumber,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Radio,
-    Select,
-    Space,
-    Switch,
-    Table,
-    Tag,
-    Tooltip,
-    Tree,
-    TreeSelect,
-    Typography,
+  Button,
+  Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Radio,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Tooltip,
+  Tree,
+  TreeSelect,
+  Typography,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -307,6 +307,17 @@ export default function RoleManage() {
     },
     { key: 'sort', title: '排序', dataIndex: 'sort', width: 80, align: 'center' },
     {
+      key: 'remark',
+      title: '备注',
+      dataIndex: 'remark',
+      width: 200,
+      render: (v) => (
+        <Typography.Text className="mb-0!" ellipsis={{ showTooltip: true }}>
+          {v || '-'}
+        </Typography.Text>
+      ),
+    },
+    {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
@@ -319,17 +330,6 @@ export default function RoleManage() {
           loading={togglingId === record.id}
           onChange={(checked) => handleToggleStatus(record, checked)}
         />
-      ),
-    },
-    {
-      key: 'remark',
-      title: '备注',
-      dataIndex: 'remark',
-      width: 200,
-      render: (v) => (
-        <Typography.Text className="mb-0!" ellipsis={{ showTooltip: true }}>
-          {v || '-'}
-        </Typography.Text>
       ),
     },
     {
@@ -421,7 +421,7 @@ export default function RoleManage() {
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} trigger='click' position="br">
+          <Dropdown droplist={sizeMenu} trigger="click" position="br">
             <Button size="small" icon={<IconList />}>
               密度
             </Button>
