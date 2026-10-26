@@ -220,7 +220,7 @@ export default function MenuManage() {
   )
 
   const columns = [
-    { key: 'name', title: '菜单名称', dataIndex: 'name' },
+    { key: 'name', title: '菜单名称', dataIndex: 'name', width: 300 },
     {
       key: 'type',
       title: '类型',
@@ -243,9 +243,7 @@ export default function MenuManage() {
         if (!v) return '-'
         const [code = '', st = ''] = String(v).split(':')
         const name = appOptions.find((a) => a.code === code.trim())?.name || code.trim()
-        const state = LINK_STATE_OPTIONS.find(
-          (o) => o.value === (st.trim() || DEFAULT_LINK_STATE),
-        )
+        const state = LINK_STATE_OPTIONS.find((o) => o.value === (st.trim() || DEFAULT_LINK_STATE))
         return state ? `${name}（${state.label}）` : name
       },
     },
@@ -350,7 +348,7 @@ export default function MenuManage() {
           <Button size="small" icon={<IconRefresh />} onClick={fetchTree}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} trigger='click' position="br">
+          <Dropdown droplist={sizeMenu} trigger="click" position="br">
             <Button size="small" icon={<IconList />}>
               密度
             </Button>
