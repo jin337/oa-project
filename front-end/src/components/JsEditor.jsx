@@ -164,9 +164,7 @@ const beautifyJs = async (src) => {
         const wrapped = `async function _f() {\n${src}\n}`
         const formatted = await tryFormat(wrapped)
         // 抽出函数体内容
-        const body = formatted
-          .replace(/^async function _f\(\) \{\n/, '')
-          .replace(/\n\}\s*$/, '')
+        const body = formatted.replace(/^async function _f\(\) \{\n/, '').replace(/\n\}\s*$/, '')
         return body.trim()
       } catch {
         return manualBeautifyJs(src)
@@ -467,7 +465,6 @@ export default function JsEditor(props) {
   } = props
   const [fullscreen, setFullscreen] = useState(false)
   const [fontSize, setFontSize] = useState(readFontSize)
-  const [beautifying, setBeautifying] = useState(false)
 
   useEffect(() => {
     const handler = () => setFontSize(readFontSize())
@@ -476,13 +473,10 @@ export default function JsEditor(props) {
   }, [])
 
   const handleBeautify = async () => {
-    if (beautifying) return
-    setBeautifying(true)
     try {
       const next = await beautifyJs(value)
       onChange?.(next)
-    } finally {
-      setBeautifying(false)
+    } catch (e) {
     }
   }
 
@@ -490,12 +484,7 @@ export default function JsEditor(props) {
     <>
       <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-2 py-1">
         <Space size={0}>
-          <Button
-            type="text"
-            size="mini"
-            loading={beautifying}
-            onClick={handleBeautify}
-          >
+          <Button type="text" size="mini" onClick={handleBeautify}>
             美化
           </Button>
           <Button type="text" size="mini" onClick={() => onChange?.(compactJs(value))}>
