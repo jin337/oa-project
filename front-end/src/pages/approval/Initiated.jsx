@@ -21,7 +21,6 @@ import DynamicForm, {
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
-import CCModal from 'src/pages/approval/components/CCModal'
 import {
   colBillNo,
   colCreatedAt,
@@ -33,6 +32,7 @@ import {
   colStatus,
 } from 'src/pages/approval/components/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
+import CCModal from 'src/pages/approval/components/CCModal'
 import ApprovalDetailDrawer from 'src/pages/approval/components/DetailDrawer'
 import { useApprovalList } from 'src/pages/approval/components/useApprovalList'
 
@@ -522,7 +522,7 @@ export default function Initiated() {
         return (
           <Dropdown trigger="click" position="br" droplist={menu}>
             <Button size="mini" type="text">
-              操作 <IconDown />
+              更多 <IconDown />
             </Button>
           </Dropdown>
         )
