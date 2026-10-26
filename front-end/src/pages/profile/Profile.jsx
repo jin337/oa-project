@@ -101,7 +101,7 @@ export default function Profile() {
           </Avatar>
 
           {/* 右侧：详细资料 */}
-          <div className="flex-1 max-w-300">
+          <div className="max-w-300 flex-1">
             <Descriptions
               column={2}
               labelStyle={{ textAlign: 'right', paddingRight: 20 }}
@@ -126,6 +126,19 @@ export default function Profile() {
                 {
                   label: '邮箱',
                   value: user?.email || '-',
+                },
+                {
+                  label: '部门',
+                  value: user?.dept?.name || '-',
+                },
+                {
+                  label: '角色',
+                  value:
+                    user?.roles?.map((role) => (
+                      <Tag key={role.id} className="mr-1">
+                        {role.name}
+                      </Tag>
+                    )) || '-',
                 },
                 {
                   label: '注册时间',

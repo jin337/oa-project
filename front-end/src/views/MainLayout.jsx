@@ -14,10 +14,10 @@ import { useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import * as userApi from 'src/api/user'
 import { MenuIcon } from 'src/components/icon-select'
-import NotificationBell from 'src/pages/layout/notification-bell'
-import TabsBar from 'src/pages/layout/tabs-bar'
 import { APP_NAME } from 'src/config/app.js'
 import { useMenuMeta } from 'src/hooks/useMenuMeta'
+import NotificationBell from 'src/pages/layout/notification-bell'
+import TabsBar from 'src/pages/layout/tabs-bar'
 import { useAuth } from 'src/store/auth-context'
 import { TabProvider, useTabs } from 'src/store/tab-context'
 
@@ -126,10 +126,7 @@ function HeaderBar() {
   }, [activeChain, visibleMenuKeys, location.pathname])
 
   // 菜单树渲染结果缓存：菜单数据不变时不重新生成整棵菜单 JSX
-  const menuItems = useMemo(
-    () => (menus && menus.length > 0 ? renderMenus(menus) : null),
-    [menus],
-  )
+  const menuItems = useMemo(() => (menus && menus.length > 0 ? renderMenus(menus) : null), [menus])
 
   // 切换当前部门：调用接口成功后更新全局用户状态中的 dept_id
   const handleSwitchDept = async (deptId) => {
@@ -138,6 +135,8 @@ function HeaderBar() {
       await userApi.switchDept(deptId)
       updateUser({ dept_id: deptId })
       Message.success('切换部门成功')
+      // 切换部门后整体刷新，让各页面按新 dept_id 重新拉取数据/权限
+      window.location.reload()
     } catch (e) {
       // 错误已在请求层提示
     }
@@ -197,13 +196,18 @@ function HeaderBar() {
         <NotificationBell />
         <Select
           bordered={false}
-          className="w-20!"
+          autoWidth={{ maxWidth: 500 }}
+          triggerProps={{
+            autoAlignPopupWidth: false,
+            autoAlignPopupMinWidth: true,
+            position: 'br',
+          }}
           placeholder="切换部门"
           value={user?.dept_id ?? undefined}
           options={(user?.dept_ids || []).map((d) => ({ label: d.name, value: d.id }))}
           onChange={handleSwitchDept}
         />
-        <Dropdown droplist={profileMenu} trigger='click' position="br">
+        <Dropdown droplist={profileMenu} trigger="click" position="br">
           <Space className="cursor-pointer">
             <Avatar size={32} className="bg-[#165dff]!">
               <IconUser />
@@ -228,7 +232,9 @@ export default function MainLayout() {
         <Content className="flex-1 overflow-auto bg-gray-50 p-4">
           {/* 面包屑：由当前激活页签的 breadcrumbs 驱动 */}
           <ContentBreadcrumb />
-          <div className="w-full h-[calc(100vh-160px)]"><Outlet /></div>
+          <div className="h-[calc(100vh-160px)] w-full">
+            <Outlet />
+          </div>
         </Content>
       </Layout>
     </TabProvider>

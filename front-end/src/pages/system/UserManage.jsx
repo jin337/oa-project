@@ -52,6 +52,8 @@ const ALL_COL_KEYS = [
 ]
 // 角色标签颜色池（Arco 预设色），按角色 ID 取模分配，保证同一角色颜色稳定
 const ROLE_COLORS = [
+  'none',
+  'red',
   'arcoblue',
   'green',
   'orangered',
@@ -60,7 +62,6 @@ const ROLE_COLORS = [
   'purple',
   'lime',
   'gold',
-  'red',
   'orange',
   'blue',
   'pinkpurple',
