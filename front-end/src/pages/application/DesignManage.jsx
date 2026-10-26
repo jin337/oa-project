@@ -291,7 +291,7 @@ export default function DesignManage() {
           <span>{app?.name ? `表单设计 - ${app.name}` : '表单设计'}</span>
           {app?.current_version_no && (
             <Button shape="round" size="mini" type="primary" onClick={openVersions}>
-              当前版本：{app.current_version_no}
+              生效版本：{app.current_version_no}
               <IconSwap />
             </Button>
           )}
@@ -299,20 +299,6 @@ export default function DesignManage() {
       }
       extra={
         <Space>
-          {previewVersion ? (
-            <Button
-              size="small"
-              type="outline"
-              status="warning"
-              onClick={() => setPreviewVersion(null)}
-            >
-              退出预览（{previewVersion.version_no}）
-            </Button>
-          ) : (
-            <Tag color="orangered" size="large">
-              草稿：{draftVersion?.version_no || '-'}
-            </Tag>
-          )}
           <Button loading={saving} onClick={handleSave} disabled={!!previewVersion}>
             保存
           </Button>
@@ -322,7 +308,27 @@ export default function DesignManage() {
         </Space>
       }
     >
-      <Tabs type="line" justify destroyOnHide={false} className="[&_.arco-tabs-content]:p-0!">
+      <Tabs
+        type="line"
+        justify
+        destroyOnHide={false}
+        className="[&_.arco-tabs-content]:p-0!"
+        extra={
+          <div className="px-4">
+            {previewVersion ? (
+              <Button
+                size="mini"
+                status="danger"
+                onClick={() => setPreviewVersion(null)}
+              >
+                退出预览（{previewVersion.version_no}）
+              </Button>
+            ) : (
+              <Tag color='red'>草稿：{draftVersion?.version_no || '-'}</Tag>
+            )}
+          </div>
+        }
+      >
         <TabPane key="layout" title="表单设置布局">
           <LayoutManage
             key={`layout-${previewVersion?.id || 'draft'}`}
