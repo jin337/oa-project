@@ -41,10 +41,10 @@ const MenuItem = Menu.Item
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = [
   'index',
+  'nickname',
   'username',
   'dept',
   'roles',
-  'email',
   'phone',
   'status',
   'created_at',
@@ -154,6 +154,7 @@ export default function UserManage() {
   const [detailVisible, setDetailVisible] = useState(false)
   const [detailUser, setDetailUser] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [detailEditing, setDetailEditing] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileForm] = Form.useForm()
 
@@ -216,20 +217,6 @@ export default function UserManage() {
   const openCreate = () => {
     setEditing(null)
     form.setFieldsValue(EMPTY_FORM)
-    setModalVisible(true)
-  }
-
-  const openEdit = (record) => {
-    setEditing(record)
-    form.setFieldsValue({
-      username: record.username,
-      email: record.email,
-      phone: record.phone,
-      password: '',
-      status: record.status,
-      dept_ids: (record.dept_ids || []).map((d) => d.id),
-      role_ids: (record.roles || []).map((r) => r.id),
-    })
     setModalVisible(true)
   }
 
@@ -307,36 +294,47 @@ export default function UserManage() {
     }
   }
 
-  // 打开用户详情抽屉：拉取详情并回填档案表单
-  const openDetail = async (record) => {
+  // 打开用户档案抽屉：列表接口已 Preload Profile/Roles/Dept，直接用行数据，无需再请求 GET /users/:id
+  const openDetail = (record) => {
     setDetailVisible(true)
     setDetailUser(record)
-    setDetailLoading(true)
-    try {
-      const res = await userApi.getUser(record.id)
-      const detail = res.data
-      setDetailUser(detail)
-      const profile = detail.profile || {}
-      profileForm.setFieldsValue({
-        nickname: profile.nickname || '',
-        gender: profile.gender ?? 0,
-        birthday: profile.birthday || '',
-        address: profile.address || '',
-        join_date: profile.join_date || '',
-        emergency_contact: profile.emergency_contact || '',
-      })
-    } catch (e) {
-      // 错误已在请求层提示
-    } finally {
-      setDetailLoading(false)
-    }
+    setDetailLoading(false)
+    setDetailEditing(false)
+    const profile = record.profile || {}
+    profileForm.setFieldsValue({
+      username: record.username || '',
+      email: record.email || '',
+      phone: record.phone || '',
+      dept_ids: (record.dept_ids || []).map((d) => d.id),
+      role_ids: (record.roles || []).map((r) => r.id),
+      nickname: profile.nickname || '',
+      gender: profile.gender ?? 0,
+      birthday: profile.birthday || '',
+      address: profile.address || '',
+      join_date: profile.join_date || '',
+      emergency_contact: profile.emergency_contact || '',
+    })
   }
 
-  // 保存详细档案
+  // 保存用户详情：基础信息走 updateUser / assignUserRoles，档案走 updateUserProfile（三个不同接口）
   const handleSaveProfile = async () => {
     const values = await profileForm.validate()
     setProfileSaving(true)
     try {
+      // 1) 基础信息：邮箱、手机号、部门
+      const basePayload = {
+        email: values.email || '',
+        phone: values.phone || '',
+      }
+      if (Array.isArray(values.dept_ids)) {
+        basePayload.dept_ids = values.dept_ids.map(Number)
+      }
+      await userApi.updateUser(detailUser.id, basePayload)
+      // 2) 角色：单独走 assignUserRoles 接口
+      if (Array.isArray(values.role_ids)) {
+        await userApi.assignUserRoles(detailUser.id, values.role_ids.map(Number))
+      }
+      // 3) 详细档案：单独走 updateUserProfile
       await userApi.updateUserProfile(detailUser.id, {
         nickname: values.nickname,
         gender: values.gender,
@@ -345,7 +343,7 @@ export default function UserManage() {
         join_date: values.join_date || '',
         emergency_contact: values.emergency_contact,
       })
-      Message.success('档案保存成功')
+      Message.success('保存成功')
       setDetailVisible(false)
       fetchList()
     } catch (e) {
@@ -383,6 +381,7 @@ export default function UserManage() {
       render: (_, __, index) => index + 1,
     },
     { key: 'username', title: '用户名', dataIndex: 'username' },
+    { key: 'nickname', title: '姓名 ', dataIndex: 'profile.nickname' },
     {
       key: 'dept',
       title: '部门',
@@ -409,7 +408,6 @@ export default function UserManage() {
           </Tag>
         )),
     },
-    { key: 'email', title: '邮箱', dataIndex: 'email', render: (v) => v || '-' },
     { key: 'phone', title: '手机号', dataIndex: 'phone', render: (v) => v || '-' },
     {
       key: 'created_at',
@@ -441,17 +439,14 @@ export default function UserManage() {
     canEdit && {
       key: 'action',
       title: '操作',
-      width: 200,
+      width: 120,
       render: (_, record) => (
         <Space>
           <Button size="mini" onClick={() => openResetPassword(record)}>
             重置密码
           </Button>
           <Button size="mini" onClick={() => openDetail(record)}>
-            档案
-          </Button>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
+            用户档案
           </Button>
           {record.status !== 1 && record.id !== 1 && (
             <Popconfirm
@@ -686,23 +681,123 @@ export default function UserManage() {
           </FormItem>
         </Form>
       </Modal>
-      {/* 用户详情抽屉 */}
+      {/* 用户档案抽屉：默认预览，点编辑进入编辑态 */}
       <Drawer
-        title={`用户详情 - ${detailUser?.username || ''}`}
+        title={
+          <span className="flex items-center gap-3">
+            <span>用户档案 - {detailUser?.username || ''}</span>
+            {canEdit && !detailEditing && (
+              <Button size="mini" type="primary" onClick={() => setDetailEditing(true)}>
+                编辑
+              </Button>
+            )}
+          </span>
+        }
         visible={detailVisible}
-        width={600}
-        onOk={handleSaveProfile}
-        confirmLoading={profileSaving}
+        width={640}
         unmountOnExit
         onCancel={() => setDetailVisible(false)}
+        footer={
+          detailEditing ? (
+            <div className="flex justify-end gap-2">
+              <Button
+                onClick={() => {
+                  setDetailEditing(false)
+                  openDetail(detailUser)
+                }}
+              >
+                取消
+              </Button>
+              <Button type="primary" loading={profileSaving} onClick={handleSaveProfile}>
+                保存
+              </Button>
+            </div>
+          ) : null
+        }
       >
         {detailLoading ? (
           <div className="flex justify-center py-10">
             <Spin />
           </div>
+        ) : detailEditing ? (
+          /* 编辑态：基础信息 + 详细档案 同一表单 */
+          <Form
+            form={profileForm}
+            layout="horizontal"
+            autoComplete="off"
+            size="small"
+            labelCol={{ span: 4 }}
+            wrapperCol={{ span: 20 }}
+          >
+            <FormItem label="用户名" field="username" disabled>
+              <Input placeholder="请输入用户名" allowClear />
+            </FormItem>
+            <FormItem
+              label="邮箱"
+              field="email"
+              rules={[{ type: 'email', message: '邮箱格式不正确' }]}
+            >
+              <Input placeholder="请输入邮箱" allowClear />
+            </FormItem>
+            <FormItem label="手机号" field="phone">
+              <Input placeholder="请输入手机号" allowClear />
+            </FormItem>
+            <FormItem label="部门" field="dept_ids">
+              <TreeSelect
+                multiple
+                placeholder="请选择部门（可多选）"
+                allowClear
+                treeData={toTreeData(deptTree)}
+              />
+            </FormItem>
+            <FormItem label="角色" field="role_ids">
+              <Select mode="multiple" placeholder="请选择角色" allowClear>
+                {allRoles.map((r) => (
+                  <Select.Option key={r.id} value={r.id}>
+                    {r.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </FormItem>
+
+            <Divider orientation="left">详细档案</Divider>
+            <FormItem
+              label="姓名"
+              field="nickname"
+              rules={[{ maxLength: 64, message: '姓名不能超过 64 个字符' }]}
+            >
+              <Input placeholder="请输入姓名" allowClear />
+            </FormItem>
+            <FormItem label="性别" field="gender">
+              <Radio.Group>
+                <Radio value={1}>男</Radio>
+                <Radio value={2}>女</Radio>
+              </Radio.Group>
+            </FormItem>
+            <FormItem label="出生日期" field="birthday">
+              <DatePicker placeholder="请选择出生日期" allowClear className="w-full" />
+            </FormItem>
+            <FormItem label="入职日期" field="join_date">
+              <DatePicker placeholder="请选择入职日期" allowClear className="w-full" />
+            </FormItem>
+            <FormItem
+              label="联系地址"
+              field="address"
+              rules={[{ maxLength: 255, message: '联系地址不能超过 255 个字符' }]}
+            >
+              <Input placeholder="请输入联系地址" allowClear />
+            </FormItem>
+            <FormItem
+              label="紧急联系人"
+              field="emergency_contact"
+              rules={[{ maxLength: 64, message: '紧急联系人不能超过 64 个字符' }]}
+            >
+              <Input placeholder="请输入紧急联系人" allowClear />
+            </FormItem>
+          </Form>
         ) : (
+          /* 预览态：只读展示 */
           <>
-            {/* 基本信息区：只读展示 */}
             <Descriptions
               column={1}
               labelStyle={{ width: 110, textAlign: 'right', paddingRight: 20 }}
@@ -746,43 +841,26 @@ export default function UserManage() {
             />
 
             <Divider orientation="left">详细档案</Divider>
-
-            {/* 详细档案区：可编辑表单 */}
-            <Form form={profileForm} layout="horizontal" autoComplete="off">
-              <FormItem
-                label="姓名"
-                field="nickname"
-                rules={[{ maxLength: 64, message: '姓名不能超过 64 个字符' }]}
-              >
-                <Input placeholder="请输入姓名" allowClear />
-              </FormItem>
-              <FormItem label="性别" field="gender">
-                <Radio.Group>
-                  <Radio value={1}>男</Radio>
-                  <Radio value={2}>女</Radio>
-                </Radio.Group>
-              </FormItem>
-              <FormItem label="出生日期" field="birthday">
-                <DatePicker placeholder="请选择出生日期" allowClear className="w-full" />
-              </FormItem>
-              <FormItem
-                label="联系地址"
-                field="address"
-                rules={[{ maxLength: 255, message: '联系地址不能超过 255 个字符' }]}
-              >
-                <Input placeholder="请输入联系地址" allowClear />
-              </FormItem>
-              <FormItem label="入职日期" field="join_date">
-                <DatePicker placeholder="请选择入职日期" allowClear className="w-full" />
-              </FormItem>
-              <FormItem
-                label="紧急联系人"
-                field="emergency_contact"
-                rules={[{ maxLength: 64, message: '紧急联系人不能超过 64 个字符' }]}
-              >
-                <Input placeholder="请输入紧急联系人" allowClear />
-              </FormItem>
-            </Form>
+            <Descriptions
+              column={1}
+              labelStyle={{ width: 110, textAlign: 'right', paddingRight: 20 }}
+              data={[
+                { label: '姓名', value: detailUser?.profile?.nickname || '-' },
+                {
+                  label: '性别',
+                  value:
+                    detailUser?.profile?.gender === 1
+                      ? '男'
+                      : detailUser?.profile?.gender === 2
+                        ? '女'
+                        : '-',
+                },
+                { label: '出生日期', value: detailUser?.profile?.birthday || '-' },
+                { label: '联系地址', value: detailUser?.profile?.address || '-' },
+                { label: '入职日期', value: detailUser?.profile?.join_date || '-' },
+                { label: '紧急联系人', value: detailUser?.profile?.emergency_contact || '-' },
+              ]}
+            />
           </>
         )}
       </Drawer>
