@@ -44,7 +44,7 @@ type UserProfile struct {
 type Role struct {
 	BaseModel
 	Name      string `gorm:"size:64;uniqueIndex;not null;comment:角色名称" json:"name"`
-	Code      string `gorm:"size:64;uniqueIndex;not null;comment:角色编码" json:"code"`
+	IsSuper   bool   `gorm:"default:false;comment:是否超级管理员（全权限，不可删除）" json:"is_super"`
 	Sort      int    `gorm:"default:1;comment:排序" json:"sort"`
 	Status    int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	DataScope int    `gorm:"default:3;comment:数据范围 1全部 2自定义 3仅本部门 4本部门及下级 5仅本人" json:"data_scope"`
@@ -141,11 +141,6 @@ type ApiDefinitionDebugResult struct {
 	Error     string      `json:"error,omitempty"`
 	Forwarded bool        `json:"-"` // HTTP 转发结果标记：统一分发时原样透传目标响应体，避免双重包裹
 }
-
-// 角色编码常量
-const (
-	RoleCodeAdmin = "admin" // 超级管理员角色编码
-)
 
 // 数据范围常量
 const (
@@ -289,7 +284,6 @@ type UpdateProfileReq struct {
 
 type RoleCreateReq struct {
 	Name      string `json:"name" validate:"required,min=2,max=64" label:"角色名称"`
-	Code      string `json:"code" validate:"required,min=2,max=64" label:"角色编码"`
 	Sort      int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status    int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	DataScope int    `json:"data_scope" validate:"omitempty,oneof=1 2 3 4 5" label:"数据范围"`
@@ -298,7 +292,6 @@ type RoleCreateReq struct {
 
 type RoleUpdateReq struct {
 	Name      string `json:"name" validate:"omitempty,min=2,max=64" label:"角色名称"`
-	Code      string `json:"code" validate:"omitempty,min=2,max=64" label:"角色编码"`
 	Sort      int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status    *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	DataScope int    `json:"data_scope" validate:"omitempty,oneof=1 2 3 4 5" label:"数据范围"`

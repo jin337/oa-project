@@ -261,7 +261,7 @@ func isAdmin(userID uint) bool {
 		return false
 	}
 	for _, r := range user.Roles {
-		if r.Code == model.RoleCodeAdmin {
+		if r.IsSuper {
 			return true
 		}
 	}

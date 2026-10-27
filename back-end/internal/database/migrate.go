@@ -153,7 +153,7 @@ func seedInitData(db *gorm.DB) error {
 	}
 
 	// 角色
-	adminRole := model.Role{Name: "超级管理员", Code: model.RoleCodeAdmin, Sort: 1, Status: 1, DataScope: model.DataScopeAll, Remark: "拥有全部权限"}
+	adminRole := model.Role{Name: "超级管理员", IsSuper: true, Sort: 1, Status: 1, DataScope: model.DataScopeAll, Remark: "拥有全部权限"}
 	if err := db.Create([]*model.Role{&adminRole}).Error; err != nil {
 		return err
 	}
@@ -285,7 +285,7 @@ func seedApiDefinitionMenu(db *gorm.DB) error {
 		return err
 	}
 	var adminRole model.Role
-	if err := db.Where("code = ?", model.RoleCodeAdmin).First(&adminRole).Error; err != nil {
+	if err := db.Where("is_super = ?", true).First(&adminRole).Error; err != nil {
 		return err
 	}
 	return db.Model(&adminRole).Association("Menus").Append(&btn)

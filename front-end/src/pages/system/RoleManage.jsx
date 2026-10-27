@@ -36,7 +36,7 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'name', 'code', 'data_scope', 'sort', 'status', 'remark']
+const ALL_COL_KEYS = ['index', 'name', 'data_scope', 'sort', 'status', 'remark']
 // 数据范围枚举，与后端 data_scope 对齐
 const DATA_SCOPE_OPTIONS = [
   { label: '全部数据', value: 1 },
@@ -79,7 +79,6 @@ function deptToTree(depts) {
 
 const EMPTY_FORM = {
   name: '',
-  code: '',
   sort: 1,
   status: 1,
   data_scope: 3,
@@ -166,7 +165,6 @@ export default function RoleManage() {
     setEditing(record)
     form.setFieldsValue({
       name: record.name,
-      code: record.code,
       sort: record.sort,
       status: record.status,
       data_scope: record.data_scope,
@@ -298,7 +296,6 @@ export default function RoleManage() {
       render: (_, __, index) => index + 1,
     },
     { key: 'name', title: '角色名称', dataIndex: 'name' },
-    { key: 'code', title: '角色编码', dataIndex: 'code' },
     {
       key: 'data_scope',
       title: '数据范围',
@@ -324,7 +321,7 @@ export default function RoleManage() {
       width: 70,
       align: 'center',
       render: (status, record) =>
-        canEdit && record.code !== 'admin' ? (
+        canEdit && !record.is_super ? (
           <Switch
             size="small"
             checked={status === 1}
@@ -349,7 +346,7 @@ export default function RoleManage() {
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          {record.status !== 1 && record.code !== 'admin' && (
+          {record.status !== 1 && !record.is_super && (
             <Popconfirm
               position="lb"
               focusLock
@@ -475,32 +472,16 @@ export default function RoleManage() {
             }
           }}
         >
-          <Row gutter={20}>
-            <Col span={12}>
-              <FormItem
-                label="角色名称"
-                field="name"
-                rules={[
-                  { required: true, message: '请输入角色名称' },
-                  { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-                ]}
-              >
-                <Input placeholder="如：运营专员" />
-              </FormItem>
-            </Col>
-            <Col span={12}>
-              <FormItem
-                label="角色编码"
-                field="code"
-                rules={[
-                  { required: true, message: '请输入角色编码' },
-                  { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-                ]}
-              >
-                <Input placeholder="如：operator" disabled={Boolean(editing)} />
-              </FormItem>
-            </Col>
-          </Row>
+          <FormItem
+            label="角色名称"
+            field="name"
+            rules={[
+              { required: true, message: '请输入角色名称' },
+              { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
+            ]}
+          >
+            <Input placeholder="如：运营专员" />
+          </FormItem>
           <FormItem label="数据范围" field="data_scope" triggerPropName="value">
             <Radio.Group>
               {DATA_SCOPE_OPTIONS.map((o) => (

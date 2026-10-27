@@ -37,7 +37,7 @@ func hasPermission(userID uint, perm string) bool {
 		return false
 	}
 	for _, role := range user.Roles {
-		if role.Code == model.RoleCodeAdmin {
+		if role.IsSuper {
 			return true // 超级管理员全量放行
 		}
 		for _, menu := range role.Menus {

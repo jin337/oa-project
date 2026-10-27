@@ -45,7 +45,6 @@ func RoleUsers() ([]*model.OrgNode, error) {
 			Type:   model.OrgNodeTypeRole,
 			ID:     r.ID,
 			Name:   r.Name,
-			Code:   r.Code,
 			Sort:   r.Sort,
 			Status: r.Status,
 		}
@@ -93,23 +92,27 @@ func RoleDetail(id uint) (*model.Role, error) {
 	return &role, nil
 }
 
-// 角色名称/编码唯一性校验：与用户名同理，唯一索引覆盖软删除行，查重必须 Unscoped
-func checkRoleNameCodeExists(name, code string, excludeID uint) (nameExists, codeExists bool) {
-	db := database.DB.Unscoped().Model(&model.Role{})
+// 角色名称唯一性校验：唯一索引覆盖软删除行，查重必须 Unscoped
+func checkRoleNameExists(name string, excludeID uint) (bool, error) {
+	db := database.DB.Unscoped().Model(&model.Role{}).Where("name = ?", name)
 	if excludeID > 0 {
 		db = db.Where("id <> ?", excludeID)
 	}
-	var nameCount, codeCount int64
-	db.Where("name = ?", name).Count(&nameCount)
-	db.Where("code = ?", code).Count(&codeCount)
-	return nameCount > 0, codeCount > 0
+	var count int64
+	if err := db.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // RoleCreate 新增角色
 func RoleCreate(curUserID uint, req *model.RoleCreateReq) (*model.Role, error) {
-	nameExists, codeExists := checkRoleNameCodeExists(req.Name, req.Code, 0)
-	if nameExists || codeExists {
-		return nil, errors.New("角色名称或编码已存在")
+	nameExists, err := checkRoleNameExists(req.Name, 0)
+	if err != nil {
+		return nil, err
+	}
+	if nameExists {
+		return nil, errors.New("角色名称已存在")
 	}
 	status := req.Status
 	if status == 0 {
@@ -120,7 +123,7 @@ func RoleCreate(curUserID uint, req *model.RoleCreateReq) (*model.Role, error) {
 		scope = model.DataScopeDept
 	}
 	role := model.Role{
-		Name: req.Name, Code: req.Code, Sort: req.Sort,
+		Name: req.Name, Sort: req.Sort,
 		Status: status, DataScope: scope, Remark: req.Remark,
 	}
 	role.CreatedBy, role.UpdatedBy = curUserID, curUserID
@@ -136,23 +139,15 @@ func RoleUpdate(curUserID, id uint, req *model.RoleUpdateReq) (*model.Role, erro
 	if err := database.DB.First(&role, id).Error; err != nil {
 		return nil, errors.New("角色不存在")
 	}
-	if req.Name != "" && req.Name != role.Name || req.Code != "" && req.Code != role.Code {
-		newName := role.Name
-		if req.Name != "" {
-			newName = req.Name
+	if req.Name != "" && req.Name != role.Name {
+		nameExists, err := checkRoleNameExists(req.Name, id)
+		if err != nil {
+			return nil, err
 		}
-		newCode := role.Code
-		if req.Code != "" {
-			newCode = req.Code
-		}
-		nameExists, codeExists := checkRoleNameCodeExists(newName, newCode, id)
 		if nameExists {
 			return nil, errors.New("角色名称已存在")
 		}
-		if codeExists {
-			return nil, errors.New("角色编码已存在")
-		}
-		role.Name, role.Code = newName, newCode
+		role.Name = req.Name
 	}
 	if req.Sort > 0 {
 		role.Sort = req.Sort
@@ -171,13 +166,13 @@ func RoleUpdate(curUserID, id uint, req *model.RoleUpdateReq) (*model.Role, erro
 	return RoleDetail(id)
 }
 
-// RoleDelete 删除角色（软删除），内置 admin 角色不可删
+// RoleDelete 删除角色（软删除），内置超管角色不可删
 func RoleDelete(id uint) error {
 	var role model.Role
 	if err := database.DB.First(&role, id).Error; err != nil {
 		return errors.New("角色不存在")
 	}
-	if role.Code == model.RoleCodeAdmin {
+	if role.IsSuper {
 		return errors.New("内置管理员角色不可删除")
 	}
 	return database.DB.Delete(&model.Role{}, id).Error
