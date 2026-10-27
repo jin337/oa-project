@@ -88,23 +88,27 @@ func ExamineGroupDetail(id uint) (*model.ExamineGroup, error) {
 	return &group, nil
 }
 
-// 名称/编号唯一性校验：与角色同理，唯一索引覆盖软删除行，查重必须 Unscoped
-func checkExamineGroupNameCodeExists(name, code string, excludeID uint) (nameExists, codeExists bool) {
-	db := database.DB.Unscoped().Model(&model.ExamineGroup{})
+// 名称唯一性校验：与角色同理，唯一索引覆盖软删除行，查重必须 Unscoped
+func checkExamineGroupNameExists(name string, excludeID uint) (bool, error) {
+	db := database.DB.Unscoped().Model(&model.ExamineGroup{}).Where("name = ?", name)
 	if excludeID > 0 {
 		db = db.Where("id <> ?", excludeID)
 	}
-	var nameCount, codeCount int64
-	db.Where("name = ?", name).Count(&nameCount)
-	db.Where("code = ?", code).Count(&codeCount)
-	return nameCount > 0, codeCount > 0
+	var count int64
+	if err := db.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // ExamineGroupCreate 新增审核人员组
 func ExamineGroupCreate(curUserID uint, req *model.ExamineGroupCreateReq) (*model.ExamineGroup, error) {
-	nameExists, codeExists := checkExamineGroupNameCodeExists(req.Name, req.Code, 0)
-	if nameExists || codeExists {
-		return nil, errors.New("审核人员组名称或编号已存在")
+	nameExists, err := checkExamineGroupNameExists(req.Name, 0)
+	if err != nil {
+		return nil, err
+	}
+	if nameExists {
+		return nil, errors.New("审核人员组名称已存在")
 	}
 	status := req.Status
 	if status == 0 {
@@ -112,7 +116,6 @@ func ExamineGroupCreate(curUserID uint, req *model.ExamineGroupCreateReq) (*mode
 	}
 	group := model.ExamineGroup{
 		Name:        req.Name,
-		Code:        req.Code,
 		ApproverIDs: req.ApproverIDs,
 		Sort:        req.Sort,
 		Status:      status,
@@ -130,23 +133,15 @@ func ExamineGroupUpdate(curUserID, id uint, req *model.ExamineGroupUpdateReq) (*
 	if err := database.DB.First(&group, id).Error; err != nil {
 		return nil, errors.New("审核人员组不存在")
 	}
-	if req.Name != "" && req.Name != group.Name || req.Code != "" && req.Code != group.Code {
-		newName := group.Name
-		if req.Name != "" {
-			newName = req.Name
+	if req.Name != "" && req.Name != group.Name {
+		nameExists, err := checkExamineGroupNameExists(req.Name, id)
+		if err != nil {
+			return nil, err
 		}
-		newCode := group.Code
-		if req.Code != "" {
-			newCode = req.Code
-		}
-		nameExists, codeExists := checkExamineGroupNameCodeExists(newName, newCode, id)
 		if nameExists {
 			return nil, errors.New("审核人员组名称已存在")
 		}
-		if codeExists {
-			return nil, errors.New("编号已存在")
-		}
-		group.Name, group.Code = newName, newCode
+		group.Name = req.Name
 	}
 	if req.ApproverIDs != nil {
 		group.ApproverIDs = req.ApproverIDs

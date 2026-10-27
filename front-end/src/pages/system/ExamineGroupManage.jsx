@@ -32,11 +32,10 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'name', 'code', 'approvers', 'sort', 'status']
+const ALL_COL_KEYS = ['index', 'name', 'approvers', 'sort', 'status']
 
 const EMPTY_FORM = {
   name: '',
-  code: '',
   approver_ids: [],
   sort: 1,
   status: 1,
@@ -138,7 +137,6 @@ export default function ExamineGroupManage() {
     const ids = Array.isArray(record.approver_ids) ? record.approver_ids : []
     form.setFieldsValue({
       name: record.name,
-      code: record.code,
       approver_ids: ids,
       sort: record.sort,
       status: record.status,
@@ -219,7 +217,6 @@ export default function ExamineGroupManage() {
       render: (_, __, index) => index + 1,
     },
     { key: 'name', title: '组名称', dataIndex: 'name', width: 200 },
-    { key: 'code', title: '编号', dataIndex: 'code', width: 150 },
     {
       key: 'approvers',
       title: '审核人',
@@ -262,7 +259,7 @@ export default function ExamineGroupManage() {
     canEdit && {
       key: 'action',
       title: '操作',
-      width: 140,
+      width: 80,
       render: (_, record) => (
         <Space>
           <Button size="mini" onClick={() => openEdit(record)}>
@@ -376,36 +373,16 @@ export default function ExamineGroupManage() {
         className="w-160! max-w-[90vw]"
       >
         <Form form={form} layout="vertical" autoComplete="off">
-          <Row gutter={20}>
-            <Col span={12}>
-              <FormItem
-                label="审核人员组名称"
-                field="name"
-                rules={[
-                  { required: true, message: '请输入审核人员组名称' },
-                  { minLength: 1, maxLength: 64, message: '长度 1-64 个字符' },
-                ]}
-              >
-                <Input placeholder="如：财务审核组" />
-              </FormItem>
-            </Col>
-            <Col span={12}>
-              <FormItem
-                label="编号"
-                field="code"
-                rules={[
-                  { required: true, message: '请输入编号' },
-                  { minLength: 1, maxLength: 10, message: '长度 1-10 个字符' },
-                  {
-                    match: /^$|^[A-Z]+$/,
-                    message: '只能使用英文大写字母',
-                  },
-                ]}
-              >
-                <Input placeholder="如：FIN-AUDIT" disabled={Boolean(editing)} />
-              </FormItem>
-            </Col>
-          </Row>
+          <FormItem
+            label="审核人员组名称"
+            field="name"
+            rules={[
+              { required: true, message: '请输入审核人员组名称' },
+              { minLength: 1, maxLength: 64, message: '长度 1-64 个字符' },
+            ]}
+          >
+            <Input placeholder="如：财务审核组" />
+          </FormItem>
           <FormItem
             label="审核人"
             field="approver_ids"

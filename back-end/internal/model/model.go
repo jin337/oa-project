@@ -65,7 +65,6 @@ type ExamineGroupApprover struct {
 type ExamineGroup struct {
 	BaseModel
 	Name        string `gorm:"size:64;uniqueIndex;not null;comment:审核人员组名称" json:"name"`
-	Code        string `gorm:"size:64;uniqueIndex;not null;comment:编号" json:"code"`
 	ApproverIDs []uint `gorm:"serializer:json;type:json;comment:审核人用户ID列表" json:"approver_ids"`
 	Sort        int    `gorm:"default:1;comment:排序" json:"sort"`
 	Status      int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
@@ -322,7 +321,6 @@ type AssignDeptsReq struct {
 
 type ExamineGroupCreateReq struct {
 	Name        string `json:"name" validate:"required,min=1,max=64" label:"审核人员组名称"`
-	Code        string `json:"code" validate:"required,min=1,max=64" label:"编号"`
 	ApproverIDs []uint `json:"approver_ids" validate:"omitempty,dive,gt=0" label:"审核人"`
 	Sort        int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status      int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
@@ -330,7 +328,6 @@ type ExamineGroupCreateReq struct {
 
 type ExamineGroupUpdateReq struct {
 	Name        string `json:"name" validate:"omitempty,min=1,max=64" label:"审核人员组名称"`
-	Code        string `json:"code" validate:"omitempty,min=1,max=64" label:"编号"`
 	ApproverIDs []uint `json:"approver_ids" validate:"omitempty,dive,gt=0" label:"审核人"`
 	Sort        int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status      *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
