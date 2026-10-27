@@ -18,9 +18,17 @@ func UserList(curUserID uint, req *model.UserListReq) ([]model.User, int64, erro
 	if req.Username != "" {
 		db = db.Where("username LIKE ?", "%"+req.Username+"%")
 	}
+	// 部门筛选：兼容单值 dept_id 与多选 dept_ids，命中任一关联部门即返回
+	deptIDs := req.DeptIDs
 	if req.DeptID > 0 {
-		// 多部门归属过滤：命中任一关联部门即返回（oa_sys_user_dept 为 User.DeptIDs 的 many2many 关联表）
-		db = db.Where("id IN (SELECT user_id FROM oa_sys_user_dept WHERE dept_id = ?)", req.DeptID)
+		deptIDs = append(deptIDs, req.DeptID)
+	}
+	if len(deptIDs) > 0 {
+		db = db.Where("id IN (SELECT user_id FROM oa_sys_user_dept WHERE dept_id IN ?)", deptIDs)
+	}
+	// 角色筛选：命中任一关联角色即返回
+	if len(req.RoleIDs) > 0 {
+		db = db.Where("id IN (SELECT user_id FROM oa_sys_user_role WHERE role_id IN ?)", req.RoleIDs)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {

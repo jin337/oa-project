@@ -250,8 +250,10 @@ type UserUpdateReq struct {
 
 type UserListReq struct {
 	BaseListReq
-	Username string `json:"username" form:"username" validate:"omitempty" label:"用户名"`
-	DeptID   uint   `json:"dept_id" form:"dept_id" validate:"omitempty" label:"部门ID"`
+	Username string   `json:"username" form:"username" validate:"omitempty" label:"用户名"`
+	DeptID   uint     `json:"dept_id" form:"dept_id" validate:"omitempty" label:"部门ID"`
+	DeptIDs  []uint   `json:"dept_ids" form:"dept_ids[]" validate:"omitempty" label:"部门ID列表"`
+	RoleIDs  []uint   `json:"role_ids" form:"role_ids[]" validate:"omitempty" label:"角色ID列表"`
 }
 
 // SwitchDeptReq 切换当前部门请求：目标部门必须属于用户的多部门归属列表

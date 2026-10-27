@@ -124,8 +124,13 @@ export default function UserManage() {
   // 草稿筛选条件（绑定输入控件，变化不触发请求）
   const [keyword, setKeyword] = useState('')
   const [deptFilter, setDeptFilter] = useState([])
+  const [roleFilter, setRoleFilter] = useState()
   // 已生效的筛选条件（点击「搜索」后更新，驱动列表请求）
-  const [appliedFilters, setAppliedFilters] = useState({ keyword: '', deptFilter: [] })
+  const [appliedFilters, setAppliedFilters] = useState({
+    keyword: '',
+    deptFilter: [],
+    roleFilter: [],
+  })
 
   // 表格密度 & 列可见性
   const [tableSize, setTableSize] = useState('default')
@@ -159,6 +164,7 @@ export default function UserManage() {
         const params = { page: p, size: s }
         if (appliedFilters.keyword) params.username = appliedFilters.keyword
         if (appliedFilters.deptFilter?.length) params.dept_ids = appliedFilters.deptFilter
+        if (appliedFilters.roleFilter?.length) params.role_ids = appliedFilters.roleFilter
         const res = await userApi.listUsers(params)
         setList(res.data.list || [])
         setTotal(res.data.total || 0)
@@ -194,7 +200,7 @@ export default function UserManage() {
 
   // 搜索：生效当前草稿条件，回到第一页
   const handleSearch = () => {
-    setAppliedFilters({ keyword, deptFilter })
+    setAppliedFilters({ keyword, deptFilter, roleFilter })
     setPage(1)
   }
 
@@ -202,7 +208,8 @@ export default function UserManage() {
   const handleReset = () => {
     setKeyword('')
     setDeptFilter([])
-    setAppliedFilters({ keyword: '', deptFilter: [] })
+    setRoleFilter(undefined)
+    setAppliedFilters({ keyword: '', deptFilter: [], roleFilter: [] })
     setPage(1)
   }
 
@@ -501,6 +508,15 @@ export default function UserManage() {
             treeData={toTreeData(deptTree)}
             value={deptFilter}
             onChange={setDeptFilter}
+          />
+          <Select
+            mode="multiple"
+            className="w-55!"
+            placeholder="按角色筛选（可多选）"
+            allowClear
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={(allRoles || []).map((r) => ({ label: r.name, value: r.id }))}
           />
           <Button type="primary" onClick={handleSearch}>
             搜索
