@@ -245,6 +245,7 @@ type UserUpdateReq struct {
 	Status   *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	DeptID   uint   `json:"dept_id" validate:"omitempty" label:"当前部门ID"`
 	DeptIDs  []uint `json:"dept_ids" validate:"omitempty,dive,gt=0" label:"所属部门ID列表"` // nil 表示不修改多部门归属
+	RoleIDs  []uint `json:"role_ids" validate:"omitempty,dive,gt=0" label:"角色ID列表"`       // nil 表示不修改角色关联
 	Password string `json:"password" validate:"omitempty,min=6,max=64" label:"密码"`
 }
 

@@ -226,13 +226,9 @@ export default function UserManage() {
     setSaving(true)
     try {
       if (editing) {
-        // 更新接口不含角色，密码留空表示不修改
+        // 更新接口已支持 role_ids，密码留空表示不修改
         if (!payload.password) delete payload.password
-        delete payload.role_ids
         await userApi.updateUser(editing.id, payload)
-        if (Array.isArray(values.role_ids) && values.role_ids.length > 0) {
-          await userApi.assignUserRoles(editing.id, values.role_ids.map(Number))
-        }
         Message.success('保存成功')
       } else {
         await userApi.createUser(payload)
@@ -316,25 +312,19 @@ export default function UserManage() {
     })
   }
 
-  // 保存用户详情：基础信息走 updateUser / assignUserRoles，档案走 updateUserProfile（三个不同接口）
+  // 保存用户详情：基础信息+部门+角色走一次 PUT /users/:id，档案走 PUT /users/:id/profile
   const handleSaveProfile = async () => {
     const values = await profileForm.validate()
     setProfileSaving(true)
     try {
-      // 1) 基础信息：邮箱、手机号、部门
-      const basePayload = {
+      // 1) 基础信息：邮箱、手机号、部门、角色（role_ids 已合并进 updateUser 接口）
+      await userApi.updateUser(detailUser.id, {
         email: values.email || '',
         phone: values.phone || '',
-      }
-      if (Array.isArray(values.dept_ids)) {
-        basePayload.dept_ids = values.dept_ids.map(Number)
-      }
-      await userApi.updateUser(detailUser.id, basePayload)
-      // 2) 角色：单独走 assignUserRoles 接口
-      if (Array.isArray(values.role_ids)) {
-        await userApi.assignUserRoles(detailUser.id, values.role_ids.map(Number))
-      }
-      // 3) 详细档案：单独走 updateUserProfile
+        dept_ids: Array.isArray(values.dept_ids) ? values.dept_ids.map(Number) : [],
+        role_ids: Array.isArray(values.role_ids) ? values.role_ids.map(Number) : [],
+      })
+      // 2) 详细档案：单独走 updateUserProfile
       await userApi.updateUserProfile(detailUser.id, {
         nickname: values.nickname,
         gender: values.gender,
@@ -799,10 +789,10 @@ export default function UserManage() {
           /* 预览态：只读展示 */
           <>
             <Descriptions
-              column={1}
+              column={2}
               labelStyle={{ width: 110, textAlign: 'right', paddingRight: 20 }}
               data={[
-                { label: '用户名', value: detailUser?.username || '-' },
+                { label: '用户名', value: detailUser?.username || '-', span: 2 },
                 { label: '邮箱', value: detailUser?.email || '-' },
                 { label: '手机号', value: detailUser?.phone || '-' },
                 {
@@ -832,10 +822,12 @@ export default function UserManage() {
                     ) : (
                       <Tag color="red">停用</Tag>
                     ),
+                  span: 2,
                 },
                 {
                   label: '创建时间',
                   value: detailUser?.created_at?.slice(0, 19).replace('T', ' ') || '-',
+                  span: 2,
                 },
               ]}
             />

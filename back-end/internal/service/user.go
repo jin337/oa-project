@@ -158,6 +158,12 @@ func UserUpdate(curUserID, id uint, req *model.UserUpdateReq) (*model.User, erro
 	if err := database.DB.Save(&user).Error; err != nil {
 		return nil, err
 	}
+	// 角色关联：传了 role_ids 就覆盖式更新（nil 表示不修改）
+	if req.RoleIDs != nil {
+		if err := bindRoles(id, req.RoleIDs); err != nil {
+			return nil, err
+		}
+	}
 	return UserDetail(id)
 }
 
