@@ -585,17 +585,19 @@ export default function InterfaceManage() {
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          <Popconfirm
-            position="lb"
-            focusLock
-            disabled={record.referenced > 0}
-            title="确认删除该接口？"
-            onOk={() => handleDelete(record)}
-          >
-            <Button size="mini" status="danger" disabled={record.referenced > 0}>
-              删除
-            </Button>
-          </Popconfirm>
+          {record.status !== 1 && (
+            <Popconfirm
+              position="lb"
+              focusLock
+              disabled={record.referenced > 0}
+              title="确认删除该接口？"
+              onOk={() => handleDelete(record)}
+            >
+              <Button size="mini" status="danger" disabled={record.referenced > 0}>
+                删除
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
