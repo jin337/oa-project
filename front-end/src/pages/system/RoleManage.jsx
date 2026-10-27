@@ -36,7 +36,7 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
-const ALL_COL_KEYS = ['index', 'name', 'data_scope', 'sort', 'status', 'remark']
+const ALL_COL_KEYS = ['index', 'name', 'data_scope', 'remark', 'sort', 'status']
 // 数据范围枚举，与后端 data_scope 对齐
 const DATA_SCOPE_OPTIONS = [
   { label: '全部数据', value: 1 },
@@ -295,25 +295,25 @@ export default function RoleManage() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { key: 'name', title: '角色名称', dataIndex: 'name' },
+    { key: 'name', title: '角色名称', dataIndex: 'name', width: 200 },
     {
       key: 'data_scope',
       title: '数据范围',
       dataIndex: 'data_scope',
+      width: 160,
       render: (v) => DATA_SCOPE_MAP[v] || v,
     },
-    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80, align: 'center' },
     {
       key: 'remark',
       title: '备注',
       dataIndex: 'remark',
-      width: 200,
       render: (v) => (
         <Typography.Text className="mb-0!" ellipsis={{ showTooltip: true }}>
           {v || '-'}
         </Typography.Text>
       ),
     },
+    { key: 'sort', title: '排序', dataIndex: 'sort', width: 80, align: 'center' },
     {
       key: 'status',
       title: '状态',
