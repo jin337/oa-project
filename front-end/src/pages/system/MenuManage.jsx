@@ -288,7 +288,7 @@ export default function MenuManage() {
     canEdit && {
       key: 'action',
       title: '操作',
-      width: 220,
+      width: 150,
       render: (_, record) => (
         <Space>
           {record.type !== 3 && (
@@ -299,23 +299,27 @@ export default function MenuManage() {
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          {record.children?.length > 0 ? (
-            <Tooltip content="存在子节点，请先删除子节点">
-              <Button size="mini" status="danger" disabled>
-                删除
-              </Button>
-            </Tooltip>
-          ) : (
-            <Popconfirm
-              position="lb"
-              focusLock
-              title="确认删除该菜单？"
-              onOk={() => handleDelete(record)}
-            >
-              <Button size="mini" status="danger">
-                删除
-              </Button>
-            </Popconfirm>
+          {record.status !== 1 && (
+            <>
+              {record.children?.length > 0 ? (
+                <Tooltip content="存在子节点，请先删除子节点">
+                  <Button size="mini" status="danger" disabled>
+                    删除
+                  </Button>
+                </Tooltip>
+              ) : (
+                <Popconfirm
+                  position="lb"
+                  focusLock
+                  title="确认删除该菜单？"
+                  onOk={() => handleDelete(record)}
+                >
+                  <Button size="mini" status="danger">
+                    删除
+                  </Button>
+                </Popconfirm>
+              )}
+            </>
           )}
         </Space>
       ),

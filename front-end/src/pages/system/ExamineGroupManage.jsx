@@ -1,22 +1,22 @@
 import {
-    Button,
-    Card,
-    Checkbox,
-    Dropdown,
-    Form,
-    Grid,
-    Input,
-    InputNumber,
-    Menu,
-    Message,
-    Modal,
-    Popconfirm,
-    Popover,
-    Select,
-    Space,
-    Switch,
-    Table,
-    Tag,
+  Button,
+  Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Menu,
+  Message,
+  Modal,
+  Popconfirm,
+  Popover,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
@@ -268,16 +268,18 @@ export default function ExamineGroupManage() {
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          <Popconfirm
-            position="lb"
-            focusLock
-            title="确认删除该审核人员组？"
-            onOk={() => handleDelete(record)}
-          >
-            <Button size="mini" status="danger">
-              删除
-            </Button>
-          </Popconfirm>
+          {record.status !== 1 && (
+            <Popconfirm
+              position="lb"
+              focusLock
+              title="确认删除该审核人员组？"
+              onOk={() => handleDelete(record)}
+            >
+              <Button size="mini" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -332,7 +334,7 @@ export default function ExamineGroupManage() {
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>
-          <Dropdown droplist={sizeMenu} trigger='click' position="br">
+          <Dropdown droplist={sizeMenu} trigger="click" position="br">
             <Button size="small" icon={<IconList />}>
               密度
             </Button>

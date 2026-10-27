@@ -22,7 +22,6 @@ import {
   Switch,
   Table,
   Tag,
-  Tooltip,
   TreeSelect,
 } from '@arco-design/web-react'
 import { IconList, IconPlus, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
@@ -419,7 +418,7 @@ export default function UserManage() {
       width: 80,
       align: 'center',
       render: (status, record) =>
-        canEdit ? (
+        canEdit && record.id !== 1 ? (
           <Switch
             size="small"
             checked={status === 1}
@@ -435,7 +434,7 @@ export default function UserManage() {
     canEdit && {
       key: 'action',
       title: '操作',
-      width: 290,
+      width: 200,
       render: (_, record) => (
         <Space>
           <Button size="mini" onClick={() => openResetPassword(record)}>
@@ -447,13 +446,7 @@ export default function UserManage() {
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          {record.id === 1 ? (
-            <Tooltip content="内置管理员不可删除">
-              <Button size="mini" status="danger" disabled>
-                删除
-              </Button>
-            </Tooltip>
-          ) : (
+          {record.status !== 1 && record.id !== 1 && (
             <Popconfirm
               position="lb"
               focusLock
@@ -575,6 +568,7 @@ export default function UserManage() {
               <FormItem
                 label="用户名"
                 field="username"
+                disabled={editing}
                 rules={[
                   { required: true, message: '请输入用户名' },
                   { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },

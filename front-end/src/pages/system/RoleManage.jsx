@@ -18,7 +18,6 @@ import {
   Switch,
   Table,
   Tag,
-  Tooltip,
   Tree,
   TreeSelect,
   Typography,
@@ -325,7 +324,7 @@ export default function RoleManage() {
       width: 70,
       align: 'center',
       render: (status, record) =>
-        canEdit ? (
+        canEdit && record.code !== 'admin' ? (
           <Switch
             size="small"
             checked={status === 1}
@@ -341,7 +340,7 @@ export default function RoleManage() {
     canEdit && {
       key: 'action',
       title: '操作',
-      width: 220,
+      width: 150,
       render: (_, record) => (
         <Space>
           <Button size="mini" onClick={() => openAssignMenus(record)}>
@@ -350,13 +349,7 @@ export default function RoleManage() {
           <Button size="mini" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          {record.code === 'admin' ? (
-            <Tooltip content="超级管理员角色不可删除">
-              <Button size="mini" status="danger" disabled>
-                删除
-              </Button>
-            </Tooltip>
-          ) : (
+          {record.status !== 1 && record.code !== 'admin' && (
             <Popconfirm
               position="lb"
               focusLock

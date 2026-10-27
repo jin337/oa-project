@@ -177,7 +177,7 @@ const CONFIG_HELP_CONTENT = (
         <div>输入类填文本；下拉 / 单选填选项的「提交值」；</div>
         <div>多选类（多选框、树选择多选）填 JSON 数组 {'["a","b"]'} 或逗号分隔 a,b；</div>
         <div>
-          时间类（日期 / 日期时间）可取当前时间：{'${new Date()}'}、{'${now()}'}、{'${today()}'}
+          时间类（日期 / 日期时间）可取当前时间：{'${today()}'}、{'${now()}'}、{'${new Date()}'}
           ，按元素粒度自动格式化为 {'YYYY-MM-DD'} 或 {'YYYY-MM-DD HH:mm:ss'}；
         </div>
         <div>
