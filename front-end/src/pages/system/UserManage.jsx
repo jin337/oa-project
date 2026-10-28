@@ -370,8 +370,8 @@ export default function UserManage() {
       align: 'center',
       render: (_, __, index) => index + 1,
     },
-    { key: 'username', title: '用户名', dataIndex: 'username' },
-    { key: 'nickname', title: '姓名 ', dataIndex: 'profile.nickname' },
+    { key: 'username', title: '用户名', dataIndex: 'username', width: 120 },
+    { key: 'nickname', title: '姓名 ', dataIndex: 'profile.nickname', width: 120 },
     {
       key: 'dept',
       title: '部门',
@@ -398,7 +398,7 @@ export default function UserManage() {
           </Tag>
         )),
     },
-    { key: 'phone', title: '手机号', dataIndex: 'phone', render: (v) => v || '-' },
+    { key: 'phone', title: '手机号', dataIndex: 'phone', render: (v) => v || '-',width: 140 },
     {
       key: 'created_at',
       title: '创建时间',
@@ -789,10 +789,10 @@ export default function UserManage() {
           /* 预览态：只读展示 */
           <>
             <Descriptions
-              column={2}
+              column={1}
               labelStyle={{ width: 110, textAlign: 'right', paddingRight: 20 }}
               data={[
-                { label: '用户名', value: detailUser?.username || '-', span: 2 },
+                { label: '用户名', value: detailUser?.username || '-' },
                 { label: '邮箱', value: detailUser?.email || '-' },
                 { label: '手机号', value: detailUser?.phone || '-' },
                 {
@@ -822,12 +822,10 @@ export default function UserManage() {
                     ) : (
                       <Tag color="red">停用</Tag>
                     ),
-                  span: 2,
                 },
                 {
                   label: '创建时间',
                   value: detailUser?.created_at?.slice(0, 19).replace('T', ' ') || '-',
-                  span: 2,
                 },
               ]}
             />

@@ -214,8 +214,8 @@ const ExamineManage = forwardRef(function ExamineManage(
         <EndEventEditDrawer
           event={endEventScript}
           onCancel={() => setEndDrawerOpen(false)}
-          onSave={(script) => {
-            setEndEventScript(script)
+          onSave={(e) => {
+            setEndEventScript(e)
             setEndDrawerOpen(false)
           }}
         />
