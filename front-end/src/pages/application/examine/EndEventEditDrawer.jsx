@@ -1,6 +1,6 @@
-import { Button, Drawer } from '@arco-design/web-react'
+import { Button, Drawer, Message } from '@arco-design/web-react'
 import { useState } from 'react'
-import SqlEditor from 'src/components/SqlEditor'
+import SqlEditor, { scanForbidden } from 'src/components/SqlEditor'
 
 /**
  * 流程结束事件设置抽屉：配置流程全部通过后执行的脚本（与表单提交后事件一致）。
@@ -13,6 +13,15 @@ import SqlEditor from 'src/components/SqlEditor'
  */
 export function EndEventEditDrawer({ event = '', tableNames = [], onCancel, onSave }) {
   const [script, setScript] = useState(event || '')
+  const forbiddenHits = scanForbidden(script)
+
+  const handleSave = () => {
+    if (forbiddenHits.length > 0) {
+      Message.error('脚本包含禁用语句，请移除后再保存')
+      return
+    }
+    onSave(script)
+  }
 
   return (
     <Drawer
@@ -24,7 +33,7 @@ export function EndEventEditDrawer({ event = '', tableNames = [], onCancel, onSa
       footer={
         <div className="flex justify-end gap-2">
           <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" onClick={() => onSave(script)}>
+          <Button type="primary" loading={false} disabled={forbiddenHits.length > 0} onClick={handleSave}>
             保存
           </Button>
         </div>

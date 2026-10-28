@@ -1,5 +1,5 @@
 import { Button, Modal, Space } from '@arco-design/web-react'
-import { IconCode, IconFullscreen, IconFullscreenExit, IconMinus, IconPlus } from '@arco-design/web-react/icon'
+import { IconCode, IconFullscreen, IconFullscreenExit, IconMinus, IconPlus, IconExclamationCircleFill } from '@arco-design/web-react/icon'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 // ──────────────────────────────── 字号（模块级，localStorage 持久化） ────────────────────────────────
@@ -9,6 +9,26 @@ const FONT_SIZE_DEFAULT = 14
 const FONT_SIZE_MIN = 11
 const FONT_SIZE_MAX = 22
 const FONT_SIZE_EVENT = 'sql-editor:font-size-change'
+
+// ──────────────────────────────── 禁用语句黑名单 ────────────────────────────────
+// 严格禁止 DDL / 权限 / 存储过程 / 事务控制 / 文件读写。用单词边界 + 大小写不敏感匹配，
+// 避免把字段名 / 别名误伤；同时对 INTO OUTFILE / LOAD_FILE 等做短语匹配。
+const FORBIDDEN_PATTERNS = [
+  { re: /\b(DROP|TRUNCATE|ALTER|CREATE|RENAME|GRANT|REVOKE|EXEC|EXECUTE|CALL|BEGIN|COMMIT|ROLLBACK|SET)\b/i, label: 'DROP / TRUNCATE / ALTER / CREATE / RENAME / GRANT / REVOKE / EXEC / CALL / BEGIN / COMMIT / ROLLBACK / SET' },
+  { re: /\bSELECT\b[\s\S]*?\bINTO\s+(OUTFILE|DUMPFILE)\b/i, label: 'SELECT ... INTO OUTFILE / DUMPFILE' },
+  { re: /\b(LOAD_FILE|pg_read_file|pg_ls_dir)\s*\(/i, label: 'LOAD_FILE() / pg_read_file() 等文件读写函数' },
+  { re: /\bCOPY\s+(TO|FROM)\b/i, label: 'COPY TO / FROM' },
+]
+
+// 扫描 SQL 返回命中的禁用标签列表（空数组表示合法）
+export function scanForbidden(sql) {
+  if (!sql) return []
+  const hits = []
+  for (const p of FORBIDDEN_PATTERNS) {
+    if (p.re.test(sql)) hits.push(p.label)
+  }
+  return hits
+}
 
 function readFontSize() {
   try {
@@ -721,6 +741,9 @@ export default function SqlEditor(props) {
     onChange?.(v)
   }
 
+  // 禁用语句实时扫描：命中即在编辑器下方显示红色警告
+  const forbiddenHits = scanForbidden(value)
+
   const handleFormat = () => {
     if (!value) return
     onChange?.(formatSql(value))
@@ -770,48 +793,69 @@ export default function SqlEditor(props) {
     <>
       {/* 输入层文字透明，placeholder 需单独着色保持可见 */}
       <style>{'.sql-editor-input::placeholder { color: #c9cdd4; }'}</style>
-      <div className="overflow-hidden rounded border border-gray-200">
-        {renderEditor(
-          <Button type="text" size="mini" onClick={() => setFullscreen(true)}>
-            <IconFullscreen /> 全屏
-          </Button>,
-          {
-            id,
-            value,
-            onChange: handleChange,
-            placeholder,
-            maxLength,
-            minRows: 10,
-            maxRows: 10,
-            extraSuggestions,
-          },
-        )}
-
-        {/* 全屏编辑 */}
-        <Modal
-          title="SQL编辑器"
-          visible={fullscreen}
-          footer={null}
-          closable={false}
-          style={{ width: '100%', height: '100%' }}
-          className="[&_.arco-modal-content]:h-[calc(100vh-48px)] [&_.arco-modal-content]:p-0!"
-          onCancel={() => setFullscreen(false)}
-          unmountOnExit
+      <div>
+        <div
+          className={`overflow-hidden rounded border ${
+            forbiddenHits.length ? 'border-red-500' : 'border-gray-200'
+          }`}
         >
           {renderEditor(
-            <Button type="text" size="mini" onClick={() => setFullscreen(false)}>
-              <IconFullscreenExit /> 退出全屏
+            <Button type="text" size="mini" onClick={() => setFullscreen(true)}>
+              <IconFullscreen /> 全屏
             </Button>,
             {
+              id,
               value,
               onChange: handleChange,
               placeholder,
               maxLength,
-              full: true,
+              minRows: 10,
+              maxRows: 10,
               extraSuggestions,
             },
           )}
-        </Modal>
+
+          {/* 全屏编辑 */}
+          <Modal
+            title="SQL编辑器"
+            visible={fullscreen}
+            footer={null}
+            closable={false}
+            style={{ width: '100%', height: '100%' }}
+            className="[&_.arco-modal-content]:h-[calc(100vh-48px)] [&_.arco-modal-content]:p-0!"
+            onCancel={() => setFullscreen(false)}
+            unmountOnExit
+          >
+            {renderEditor(
+              <Button type="text" size="mini" onClick={() => setFullscreen(false)}>
+                <IconFullscreenExit /> 退出全屏
+              </Button>,
+              {
+                value,
+                onChange: handleChange,
+                placeholder,
+                maxLength,
+                full: true,
+                extraSuggestions,
+              },
+            )}
+          </Modal>
+        </div>
+
+        {/* 禁用语句警告 */}
+        {forbiddenHits.length > 0 && (
+          <div className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-600">
+            <div className="mb-1 flex items-center gap-1 font-medium">
+              <IconExclamationCircleFill />
+              检测到禁用语句，请移除以下内容后再保存：
+            </div>
+            <ul className="list-inside list-disc space-y-0.5">
+              {forbiddenHits.map((label) => (
+                <li key={label}>{label}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </>
   )
