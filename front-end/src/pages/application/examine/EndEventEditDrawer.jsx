@@ -1,17 +1,19 @@
 import { Button, Drawer } from '@arco-design/web-react'
 import { useState } from 'react'
-import JsEditor from 'src/components/JsEditor'
+import SqlEditor from 'src/components/SqlEditor'
 
 /**
- * 流程结束事件设置抽屉：配置流程全部通过后执行的 JS 脚本（与表单提交后事件一致）。
+ * 流程结束事件设置抽屉：配置流程全部通过后执行的脚本（与表单提交后事件一致）。
  * @param {{
  *   event: string,
+ *   tableNames: string[],
  *   onCancel: () => void,
  *   onSave: (event: string) => void,
  * }} props
  */
-export function EndEventEditDrawer({ event = '', onCancel, onSave }) {
+export function EndEventEditDrawer({ event = '', tableNames = [], onCancel, onSave }) {
   const [script, setScript] = useState(event || '')
+
   return (
     <Drawer
       width={600}
@@ -30,14 +32,13 @@ export function EndEventEditDrawer({ event = '', onCancel, onSave }) {
     >
       <div className="space-y-3">
         <div className="text-xs leading-relaxed text-gray-500">
-          流程审批全部通过后执行的 JS 脚本，可在此发起通知、写回业务字段等。
+          流程审批全部通过后执行。
         </div>
-        <JsEditor
+        <SqlEditor
           value={script}
           onChange={setScript}
-          placeholder={'// 流程结束后执行的 JS\n// (instance, form) => { ... }'}
-          minRows={10}
-          maxRows={20}
+          placeholder={'-- 流程结束后执行的 SQL / 脚本'}
+          extraSuggestions={tableNames}
         />
       </div>
     </Drawer>

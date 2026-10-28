@@ -1,5 +1,6 @@
 import { Button } from '@arco-design/web-react'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
+import { listApiDefinitionDatabases } from 'src/api/apiDefinition'
 import { PersonSelectorModal } from 'src/components/PersonSelectorModal'
 import { ADDABLE_NODE_TYPES, NODE_TYPE_META } from 'src/pages/application/design/constants'
 import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
@@ -45,6 +46,14 @@ const ExamineManage = forwardRef(function ExamineManage(
 
   // 流程主表名（table_name）：供条件编辑抽屉区分主表 / 子表字段分组
   const mainTable = app?.table_name || ''
+
+  // 当前库下表名：SqlEditor 自动补全提示词，审批流页挂载时拉一次（抽屉反复打开不重复请求）
+  const [tableNames, setTableNames] = useState([])
+  useEffect(() => {
+    listApiDefinitionDatabases()
+      .then((res) => setTableNames(res.data || []))
+      .catch(() => {})
+  }, [])
 
   // 流程结束事件脚本（存为节点数组末尾的特殊节点 { type:'end', event:'...' }，画布不渲染）
   const [endEventScript, setEndEventScript] = useState('')
@@ -213,6 +222,7 @@ const ExamineManage = forwardRef(function ExamineManage(
       {endDrawerOpen && (
         <EndEventEditDrawer
           event={endEventScript}
+          tableNames={tableNames}
           onCancel={() => setEndDrawerOpen(false)}
           onSave={(e) => {
             setEndEventScript(e)

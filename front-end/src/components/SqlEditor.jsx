@@ -674,7 +674,7 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
         {/* 补全下拉框：定位在光标下方 */}
         {suggestions.length > 0 && (
           <div
-            className="absolute z-20 max-h-56 overflow-auto rounded border border-gray-200 bg-white py-1 shadow-lg"
+            className="absolute z-20 max-h-52 overflow-auto rounded border border-gray-200 bg-white py-1 shadow-lg"
             style={{ top: caretPos.top + ROW_H, left: caretPos.left, minWidth: 160 }}
           >
             {suggestions.map((s, i) => (
