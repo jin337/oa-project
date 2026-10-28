@@ -39,6 +39,7 @@ type approvalContext struct {
 	formData      map[string]interface{}
 	execPath      []string
 	injectedNodes []flowNode // 注入发起人自选成员后的快照节点
+	endNode       any        // 流程结束事件特殊节点（{type:"end", event:"..."}），原样保留进实例快照
 }
 
 // resolveBusinessDataID 解析业务数据 ID：
@@ -116,13 +117,52 @@ func prepareApprovalContext(appID, businessDataID uint, selfSelectMembers map[st
 	// 5. 将发起人自选审批人注入流程快照（approverType=3 节点的 members 直接包含最终选人）
 	injectedNodes := injectSelfSelectIntoNodes(nodes, selfSelectMembers)
 
+	// 6. 抽取流程结束事件特殊节点（type="end"），原样保留进实例快照（parseFlowNodes 已过滤掉）
+	endNode := extractEndEventNode(app.ApprovalFlowJSON)
+
 	return &approvalContext{
 		app:           *app,
 		nodes:         nodes,
 		formData:      formData,
-		execPath: execPath,
+		execPath:      execPath,
 		injectedNodes: injectedNodes,
+		endNode:       endNode,
 	}, nil
+}
+
+// extractEndEventNode 从 approval_flow_json 原始结构中取出 {type:"end", event:"..."} 节点。
+func extractEndEventNode(flowJSON any) any {
+	if flowJSON == nil {
+		return nil
+	}
+	b, err := json.Marshal(flowJSON)
+	if err != nil {
+		return nil
+	}
+	var list []map[string]any
+	if err := json.Unmarshal(b, &list); err != nil {
+		return nil
+	}
+	for _, item := range list {
+		if t, ok := item["type"]; ok {
+			if ts, isStr := t.(string); isStr && ts == "end" {
+				return item
+			}
+		}
+	}
+	return nil
+}
+
+// buildSnapshotFlow 把注入后的节点 + 可选的流程结束事件节点合并为实例快照 JSON 数组。
+func buildSnapshotFlow(injected []flowNode, endNode any) []any {
+	out := make([]any, 0, len(injected)+1)
+	for i := range injected {
+		out = append(out, injected[i])
+	}
+	if endNode != nil {
+		out = append(out, endNode)
+	}
+	return out
 }
 
 // validateSelfSelectApprovers 校验执行路径上的发起人自选（approverType=3）节点已选择审批人。
@@ -282,7 +322,7 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 			BillNo:                readBillNo(ctx.app.TableName, req.BusinessDataID),
 			BusinessTable:         ctx.app.TableName,
 			BusinessDataID:        req.BusinessDataID,
-			ApprovalFlowJSON:      ctx.injectedNodes, // 直接传入结构化数据，由 GORM serializer:json 统一序列化
+			ApprovalFlowJSON:      buildSnapshotFlow(ctx.injectedNodes, ctx.endNode), // 含流程结束事件节点，由 GORM serializer:json 统一序列化
 			FormLayoutJSON:        ctx.app.FormLayoutJSON,
 			DetailLayoutJSON:      ctx.app.DetailLayoutJSON,
 			ExecutionPath:         ctx.execPath,
@@ -345,7 +385,7 @@ func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		AppID:                 req.AppID,
 		BusinessTable:         ctx.app.TableName,
 		BusinessDataID:        req.BusinessDataID,
-		ApprovalFlowJSON:      ctx.injectedNodes,
+		ApprovalFlowJSON:      buildSnapshotFlow(ctx.injectedNodes, ctx.endNode),
 		FormLayoutJSON:        ctx.app.FormLayoutJSON,
 		DetailLayoutJSON:      ctx.app.DetailLayoutJSON,
 		ExecutionPath:         ctx.execPath,
@@ -390,7 +430,7 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		}
 
 		// 4. 序列化快照（Updates map 不走 serializer，需手动序列化）
-		injectedFlowBytes, _ := json.Marshal(ctx.injectedNodes)
+		injectedFlowBytes, _ := json.Marshal(buildSnapshotFlow(ctx.injectedNodes, ctx.endNode))
 		execPathBytes, _ := json.Marshal(ctx.execPath)
 		formLayoutBytes, _ := json.Marshal(ctx.app.FormLayoutJSON)
 		detailLayoutBytes, _ := json.Marshal(ctx.app.DetailLayoutJSON)
@@ -484,7 +524,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 	}
 
 	// 6. 序列化快照（Updates map 不走 serializer，需手动序列化）
-	injectedFlowBytes, _ := json.Marshal(ctx.injectedNodes)
+	injectedFlowBytes, _ := json.Marshal(buildSnapshotFlow(ctx.injectedNodes, ctx.endNode))
 	execPathBytes, _ := json.Marshal(ctx.execPath)
 	formLayoutBytes, _ := json.Marshal(ctx.app.FormLayoutJSON)
 	detailLayoutBytes, _ := json.Marshal(ctx.app.DetailLayoutJSON)
@@ -672,7 +712,7 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 
 // ApprovalInstanceManualCC 手动抄送：把当前实例抄送给指定用户列表（可多选）。
 //   - 幂等：同一 instance + user 已存在（manual-cc）则跳过该用户
-//   - 写入 oa_approval_cc_records，并给每个被抄送人发一条站内通知
+//   - 写入 oa_approval_cc_records，并给每个被抄送人发一条站内通知（事务提交后通过 SSE 推送）
 func ApprovalInstanceManualCC(curUserID, instanceID uint, userIDs []uint) error {
 	if len(userIDs) == 0 {
 		return errors.New("请选择抄送人")
@@ -686,42 +726,44 @@ func ApprovalInstanceManualCC(curUserID, instanceID uint, userIDs []uint) error 
 	}
 	appName := getInstanceAppName(&inst)
 	now := time.Now()
-	// 过滤掉已抄送过的用户
-	var existing []uint
-	database.DB.Model(&model.ApprovalCCRecord{}).
-		Where("instance_id = ? AND node_id = ? AND user_id IN ?", instanceID, "manual-cc", userIDs).
-		Pluck("user_id", &existing)
-	existingSet := make(map[uint]struct{}, len(existing))
-	for _, id := range existing {
-		existingSet[id] = struct{}{}
-	}
-	for _, uid := range userIDs {
-		if uid == 0 {
-			continue
+	return withNotify(func(tx *gorm.DB) error {
+		// 过滤掉已抄送过的用户
+		var existing []uint
+		tx.Model(&model.ApprovalCCRecord{}).
+			Where("instance_id = ? AND node_id = ? AND user_id IN ?", instanceID, "manual-cc", userIDs).
+			Pluck("user_id", &existing)
+		existingSet := make(map[uint]struct{}, len(existing))
+		for _, id := range existing {
+			existingSet[id] = struct{}{}
 		}
-		if _, ok := existingSet[uid]; ok {
-			continue
+		for _, uid := range userIDs {
+			if uid == 0 {
+				continue
+			}
+			if _, ok := existingSet[uid]; ok {
+				continue
+			}
+			rec := model.ApprovalCCRecord{
+				InstanceID: instanceID,
+				NodeID:     "manual-cc",
+				NodeName:   "手动抄送",
+				UserID:     uid,
+				NotifiedAt: &now,
+			}
+			rec.CreatedBy, rec.UpdatedBy = curUserID, curUserID
+			if err := tx.Create(&rec).Error; err != nil {
+				continue
+			}
+			notifyCreate(tx, model.Notification{
+				UserID:     uid,
+				Type:       3,
+				Title:      appName,
+				Msg:        "您有新的抄送通知",
+				InstanceID: inst.ID,
+			})
 		}
-		rec := model.ApprovalCCRecord{
-			InstanceID: instanceID,
-			NodeID:     "manual-cc",
-			NodeName:   "手动抄送",
-			UserID:     uid,
-			NotifiedAt: &now,
-		}
-		rec.CreatedBy, rec.UpdatedBy = curUserID, curUserID
-		if err := database.DB.Create(&rec).Error; err != nil {
-			continue
-		}
-		notifyCreate(database.DB, model.Notification{
-			UserID:     uid,
-			Type:       3,
-			Title:      appName,
-			Msg:        "您有新的抄送通知",
-			InstanceID: inst.ID,
-		})
-	}
-	return nil
+		return nil
+	})
 }
 
 // ApprovalInstanceDelete 删除流程实例（软删除）

@@ -1,5 +1,5 @@
 import { Button, Modal, Space } from '@arco-design/web-react'
-import { IconCode, IconFullscreen, IconFullscreenExit, IconMinus, IconPlus, IconExclamationCircleFill } from '@arco-design/web-react/icon'
+import { IconCode, IconExclamationCircleFill, IconFullscreen, IconFullscreenExit, IconMinus, IconPlus } from '@arco-design/web-react/icon'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 // ──────────────────────────────── 字号（模块级，localStorage 持久化） ────────────────────────────────
@@ -11,20 +11,28 @@ const FONT_SIZE_MAX = 22
 const FONT_SIZE_EVENT = 'sql-editor:font-size-change'
 
 // ──────────────────────────────── 禁用语句黑名单 ────────────────────────────────
-// 严格禁止 DDL / 权限 / 存储过程 / 事务控制 / 文件读写。用单词边界 + 大小写不敏感匹配，
-// 避免把字段名 / 别名误伤；同时对 INTO OUTFILE / LOAD_FILE 等做短语匹配。
-const FORBIDDEN_PATTERNS = [
-  { re: /\b(DROP|TRUNCATE|ALTER|CREATE|RENAME|GRANT|REVOKE|EXEC|EXECUTE|CALL|BEGIN|COMMIT|ROLLBACK|SET)\b/i, label: 'DROP / TRUNCATE / ALTER / CREATE / RENAME / GRANT / REVOKE / EXEC / CALL / BEGIN / COMMIT / ROLLBACK / SET' },
+// 严格禁止 DDL（除可放行的 CREATE/ALTER）/ 权限 / 存储过程 / 事务控制 / 文件读写。
+// 用单词边界 + 大小写不敏感匹配，避免把字段名 / 别名误伤；同时对 INTO OUTFILE / LOAD_FILE 等做短语匹配。
+const FORBIDDEN_PATTERNS_DML = [
+  { re: /\b(DROP|TRUNCATE|ALTER|RENAME|GRANT|REVOKE|EXEC|EXECUTE|CALL|BEGIN|COMMIT|ROLLBACK|SET)\b/i, label: 'DROP / TRUNCATE / ALTER / RENAME / GRANT / REVOKE / EXEC / CALL / BEGIN / COMMIT / ROLLBACK / SET' },
+]
+// allowDDL 模式：仅禁止破坏性 DDL / 权限 / 事务 / 文件读写，放行 CREATE / ALTER（用于流程结束事件等需要建表/改表的场景）
+const FORBIDDEN_PATTERNS_DDL = [
+  { re: /\b(DROP|TRUNCATE|RENAME|GRANT|REVOKE|EXEC|EXECUTE|CALL|BEGIN|COMMIT|ROLLBACK|SET)\b/i, label: 'DROP / TRUNCATE / RENAME / GRANT / REVOKE / EXEC / CALL / BEGIN / COMMIT / ROLLBACK / SET' },
+]
+const FORBIDDEN_PATTERNS_COMMON = [
   { re: /\bSELECT\b[\s\S]*?\bINTO\s+(OUTFILE|DUMPFILE)\b/i, label: 'SELECT ... INTO OUTFILE / DUMPFILE' },
   { re: /\b(LOAD_FILE|pg_read_file|pg_ls_dir)\s*\(/i, label: 'LOAD_FILE() / pg_read_file() 等文件读写函数' },
   { re: /\bCOPY\s+(TO|FROM)\b/i, label: 'COPY TO / FROM' },
 ]
 
 // 扫描 SQL 返回命中的禁用标签列表（空数组表示合法）
-export function scanForbidden(sql) {
+// allowDDL=true 时放行 CREATE / ALTER
+export function scanForbidden(sql, { allowDDL = false } = {}) {
   if (!sql) return []
+  const head = allowDDL ? FORBIDDEN_PATTERNS_DDL : FORBIDDEN_PATTERNS_DML
   const hits = []
-  for (const p of FORBIDDEN_PATTERNS) {
+  for (const p of [...head, ...FORBIDDEN_PATTERNS_COMMON]) {
     if (p.re.test(sql)) hits.push(p.label)
   }
   return hits
@@ -727,7 +735,7 @@ function LineTextarea({ value, onChange, onFocus, placeholder, maxLength, minRow
  * 受控组件，可直接作为 Arco FormItem 的 children（透传 value/onChange/id）。
  */
 export default function SqlEditor(props) {
-  const { value = '', onChange, id, placeholder, maxLength = 8000, extraSuggestions } = props
+  const { value = '', onChange, id, placeholder, maxLength = 8000, extraSuggestions, allowDDL = false } = props
   const [fullscreen, setFullscreen] = useState(false)
   // 字号：初始读 localStorage；其它实例改动时通过自定义事件同步刷新
   const [fontSize, setFontSize] = useState(readFontSize)
@@ -742,7 +750,7 @@ export default function SqlEditor(props) {
   }
 
   // 禁用语句实时扫描：命中即在编辑器下方显示红色警告
-  const forbiddenHits = scanForbidden(value)
+  const forbiddenHits = scanForbidden(value, { allowDDL })
 
   const handleFormat = () => {
     if (!value) return

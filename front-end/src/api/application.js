@@ -141,3 +141,8 @@ export function republishApplicationVersion(id, versionId, data) {
 export function deleteApplicationVersion(id, versionId) {
   return request.delete(`/application/${id}/versions/${versionId}`)
 }
+
+// POST /application/:id/versions/:versionId/copy-to-draft 把指定版本（通常是已失效）的三个 JSON 复制到设计中草稿
+export function copyApplicationVersionToDraft(id, versionId) {
+  return request.post(`/application/${id}/versions/${versionId}/copy-to-draft`)
+}

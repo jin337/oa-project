@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
+	"sync"
 
 	"back-end/internal/database"
 	"back-end/internal/model"
-
-	"sync"
 
 	"gorm.io/gorm"
 )
@@ -102,10 +102,8 @@ func notifyCreate(tx *gorm.DB, n model.Notification) {
 	if err := tx.Create(&n).Error; err != nil {
 		return
 	}
-	if tx.Statement == nil || tx.Statement.Context == nil {
-		return
-	}
 	q, _ := tx.Statement.Context.Value(notifyQueueKey{}).(*notifyQueue)
+	log.Printf("[SSE] notifyCreate userID=%d queue=%v msg=%s\n", n.UserID, q != nil, n.Msg)
 	if q == nil {
 		return
 	}
@@ -138,7 +136,9 @@ func (h *NotificationHub) Register(userID uint) chan *model.Notification {
 		h.clients[userID] = make(map[chan *model.Notification]struct{})
 	}
 	h.clients[userID][ch] = struct{}{}
+	n := len(h.clients[userID])
 	h.mu.Unlock()
+	log.Printf("[SSE] Register userID=%d channels=%d\n", userID, n)
 	return ch
 }
 
@@ -177,6 +177,10 @@ func PushNotification(userID uint, n *model.Notification) {
 	if userID == 0 || n == nil {
 		return
 	}
+	globalHub.mu.RLock()
+	_, registered := globalHub.clients[userID]
+	globalHub.mu.RUnlock()
+	log.Printf("[SSE] PushNotification userID=%d registered=%v msg=%s\n", userID, registered, n.Msg)
 	globalHub.Push(userID, n)
 }
 

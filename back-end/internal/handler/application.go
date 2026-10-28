@@ -340,3 +340,23 @@ func ApplicationVersionDelete(c *gin.Context) {
 	}
 	response.OKMsg(c, "删除成功")
 }
+
+// ApplicationVersionCopyToDraft POST /{APIPrefix}/application/:id/versions/:versionId/copy-to-draft
+// 把指定版本（通常是已失效）的三个 JSON 快照复制到「设计中」草稿。
+func ApplicationVersionCopyToDraft(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	versionID, err := strconv.ParseUint(c.Param("versionId"), 10, 64)
+	if err != nil || versionID == 0 {
+		response.Fail(c, response.CodeParamError, "版本 ID 非法")
+		return
+	}
+	draft, err := service.CopyVersionToDraft(id, uint(versionID))
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"draft_version": draft})
+}

@@ -40,5 +40,6 @@ func registerApplicationRoutes(api *gin.RouterGroup) {
 		applications.PUT("/:id/versions/:versionId", middleware.RequirePermission("application:edit"), handler.ApplicationVersionUpdate) // 保存版本快照
 		applications.PUT("/:id/versions/:versionId/publish", middleware.RequirePermission("application:edit"), handler.ApplicationVersionRepublish) // 基于已有版本再次发布
 		applications.DELETE("/:id/versions/:versionId", middleware.RequirePermission("application:edit"), handler.ApplicationVersionDelete) // 删除待生效版本
+		applications.POST("/:id/versions/:versionId/copy-to-draft", middleware.RequirePermission("application:edit"), handler.ApplicationVersionCopyToDraft) // 复制版本到设计中草稿
 	}
 }

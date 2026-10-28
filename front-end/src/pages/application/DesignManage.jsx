@@ -263,6 +263,20 @@ export default function DesignManage() {
     }
   }
 
+  // 复制已失效版本到草稿：覆盖当前设计中版本的三个 JSON，关闭版本弹窗并刷新画布
+  const copyToDraft = async (record) => {
+    try {
+      await applicationApi.copyApplicationVersionToDraft(id, record.id)
+      Message.success(`已复制版本 v${record.version_no} 到草稿`)
+      setVersionVisible(false)
+      setPreviewVersion(null)
+      setEditingVersion(null)
+      await reloadApp()
+    } catch (e) {
+      // 错误已在请求层提示
+    }
+  }
+
   const switchPreview = (record) => {
     setPreviewVersion(record)
     setVersionVisible(false)
@@ -477,6 +491,14 @@ export default function DesignManage() {
                     <Button size="mini" type="primary" onClick={() => switchPreview(record)}>
                       {previewVersion?.id === record.id ? '查看中' : '预览'}
                     </Button>
+                    {record.status === 2 && (
+                      <Popconfirm
+                        title={`确认把已失效版本 ${record.version_no} 复制到草稿？当前草稿内容会被覆盖。`}
+                        onOk={() => copyToDraft(record)}
+                      >
+                        <Button size="mini">复制到草稿</Button>
+                      </Popconfirm>
+                    )}
                     {record.status === 0 && (
                       <Space size="small">
                         <Button size="mini" onClick={() => startEditVersion(record)}>

@@ -16,8 +16,11 @@ package service
 // ============================================================
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -261,6 +264,146 @@ func finishInstance(tx *gorm.DB, instance *model.ApprovalInstance, status int, r
 	}
 	notifyCreate(tx, n)
 
+	// 流程通过后执行「流程结束事件」配置的 SQL（仅通过时执行，拒绝/作废不触发）
+	if status == model.InstanceStatusPassed {
+		runEndEventSQL(tx, instance, appName)
+	}
+
+	return nil
+}
+
+// extractEndEventSQL 从 approval_flow_json 中提取 { type:"end", event:"..." } 节点的 SQL。
+// 解析前不做 type 过滤，直接扫描原始列表。
+func extractEndEventSQL(flowJSON any) string {
+	if flowJSON == nil {
+		return ""
+	}
+	b, err := json.Marshal(flowJSON)
+	if err != nil {
+		return ""
+	}
+	var list []map[string]any
+	if err := json.Unmarshal(b, &list); err != nil {
+		return ""
+	}
+	for _, item := range list {
+		if t, ok := item["type"]; ok {
+			if ts, isStr := t.(string); isStr && ts == "end" {
+				if ev, ok := item["event"].(string); ok {
+					return strings.TrimSpace(ev)
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// runEndEventSQL 执行流程结束事件 SQL：加载业务数据作为 ${form.xxx} 上下文，
+// 复用接口管理的占位符参数化执行。流程结束事件允许 CREATE / ALTER 建表/改表结构。
+// 失败不阻断审批终态，仅给发起人发通知。
+func runEndEventSQL(tx *gorm.DB, instance *model.ApprovalInstance, appName string) {
+	tpl := extractEndEventSQL(instance.ApprovalFlowJSON)
+	if tpl == "" {
+		return
+	}
+	if err := validateEndEventSQL(tpl); err != nil {
+		notifyCreate(tx, model.Notification{
+			UserID:     instance.CreatedBy,
+			Type:       4,
+			Title:      appName,
+			Msg:        "流程结束事件 SQL 校验失败：" + err.Error(),
+			InstanceID: instance.ID,
+		})
+		return
+	}
+	// 加载业务数据作为 form 上下文
+	formData, err := ApplicationDataDetail(instance.AppID, instance.BusinessDataID, &model.ApplicationDataDetailReq{})
+	if err != nil || formData == nil {
+		notifyCreate(tx, model.Notification{
+			UserID:     instance.CreatedBy,
+			Type:       4,
+			Title:      appName,
+			Msg:        "流程结束事件执行失败：业务数据读取失败",
+			InstanceID: instance.ID,
+		})
+		return
+	}
+	vars := map[string]interface{}{"form": formData}
+	finalSQL, args, err := resolveSQLPlaceholders(tpl, vars)
+	if err != nil {
+		notifyCreate(tx, model.Notification{
+			UserID:     instance.CreatedBy,
+			Type:       4,
+			Title:      appName,
+			Msg:        "流程结束事件执行失败：" + err.Error(),
+			InstanceID: instance.ID,
+		})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	res := tx.WithContext(ctx).Exec(finalSQL, args...)
+	if res.Error != nil {
+		notifyCreate(tx, model.Notification{
+			UserID:     instance.CreatedBy,
+			Type:       4,
+			Title:      appName,
+			Msg:        "流程结束事件执行失败：" + res.Error.Error(),
+			InstanceID: instance.ID,
+		})
+		return
+	}
+}
+
+// validateEndEventSQL 流程结束事件 SQL 校验：
+//   - 允许 SELECT / INSERT / UPDATE / DELETE / CREATE / ALTER（支持建表、改表结构）
+//   - 仍禁止 DROP / TRUNCATE / RENAME / GRANT / REVOKE / EXEC / CALL / BEGIN / COMMIT / ROLLBACK / SET
+//   - 禁止分号（不支持多语句）、注释符、文件读写函数
+//   - 占位符仅允许 ${form.xxx}
+//   - 写操作（INSERT/UPDATE/DELETE）必须带 WHERE；CREATE/ALTER 不要求 WHERE
+func validateEndEventSQL(tpl string) error {
+	tpl = strings.TrimSpace(tpl)
+	if tpl == "" {
+		return errors.New("SQL 模板不能为空")
+	}
+	// 去掉末尾单个分号（用户常复制 SQL 带分号），但中间出现分号仍视为多语句拒绝
+	tpl = strings.TrimSuffix(tpl, ";")
+	if strings.Contains(tpl, ";") {
+		return errors.New("禁止包含分号（不支持多语句）")
+	}
+	firstRe := regexp.MustCompile(`(?i)^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER)\b`)
+	m := firstRe.FindStringSubmatch(tpl)
+	if m == nil {
+		return errors.New("SQL 必须以 SELECT/INSERT/UPDATE/DELETE/CREATE/ALTER 开头")
+	}
+	for _, bad := range []string{"--", "/*", "*/", "#"} {
+		if strings.Contains(tpl, bad) {
+			return errors.New("禁止包含注释符 " + bad)
+		}
+	}
+	lower := strings.ToLower(tpl)
+	for _, kw := range []string{
+		"drop", "truncate", "rename", "grant", "revoke", "exec ", "execute ", "call ",
+		"begin", "commit", "rollback", "set ",
+		"into outfile", "into dumpfile", "load_file", "sleep(", "benchmark(",
+	} {
+		if strings.Contains(lower, kw) {
+			return errors.New("包含禁用关键字：" + strings.TrimSpace(kw))
+		}
+	}
+	// 占位符仅 ${form.xxx}
+	anyPhRe := regexp.MustCompile(`\$\{[^}]+\}`)
+	for _, ph := range anyPhRe.FindAllString(tpl, -1) {
+		if !placeholderExprRe.MatchString(ph[2 : len(ph)-1]) {
+			return errors.New("占位符仅支持 ${form.xxx} 形式：" + ph)
+		}
+	}
+	first := strings.ToUpper(m[1])
+	if first == "INSERT" || first == "UPDATE" || first == "DELETE" {
+		if !sqlWhereRe.MatchString(tpl) {
+			return errors.New(first + " 语句必须包含 WHERE 条件，禁止全表操作")
+		}
+	}
 	return nil
 }
 

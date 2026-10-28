@@ -1814,6 +1814,28 @@ func DeleteApplicationVersion(appID, versionID uint) error {
 	return database.DB.Unscoped().Delete(&ver).Error
 }
 
+// CopyVersionToDraft 把指定版本（任意状态，通常是「已失效」）的三个 JSON 快照
+// 复制到「设计中」草稿版本：覆盖当前草稿内容，便于在历史版本基础上继续编辑。
+func CopyVersionToDraft(appID, versionID uint) (*model.ApplicationVersion, error) {
+	var src model.ApplicationVersion
+	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&src).Error; err != nil {
+		return nil, errors.New("版本不存在")
+	}
+	draft, err := GetOrCreateDraftVersion(appID)
+	if err != nil {
+		return nil, err
+	}
+	draft.FormLayoutJSON = src.FormLayoutJSON
+	draft.DetailLayoutJSON = src.DetailLayoutJSON
+	draft.ApprovalFlowJSON = src.ApprovalFlowJSON
+	if err := database.DB.Model(draft).
+		Select("form_layout_json", "detail_layout_json", "approval_flow_json").
+		Updates(draft).Error; err != nil {
+		return nil, err
+	}
+	return draft, nil
+}
+
 // RepublishApplicationVersion 基于已有版本再次发布：更新 json / remark，按 effective_at 决定立即激活或保持定时
 func RepublishApplicationVersion(appID, versionID uint, remark string, effectiveAt *time.Time) (*model.ApplicationVersion, error) {
 	var ver model.ApplicationVersion

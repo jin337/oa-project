@@ -13,7 +13,8 @@ import SqlEditor, { scanForbidden } from 'src/components/SqlEditor'
  */
 export function EndEventEditDrawer({ event = '', tableNames = [], onCancel, onSave }) {
   const [script, setScript] = useState(event || '')
-  const forbiddenHits = scanForbidden(script)
+  // 流程结束事件允许 CREATE / ALTER 建表/改表（仍禁 DROP/TRUNCATE/权限/事务/文件读写）
+  const forbiddenHits = scanForbidden(script, { allowDDL: true })
 
   const handleSave = () => {
     if (forbiddenHits.length > 0) {
@@ -41,13 +42,14 @@ export function EndEventEditDrawer({ event = '', tableNames = [], onCancel, onSa
     >
       <div className="space-y-3">
         <div className="text-xs leading-relaxed text-gray-500">
-          流程审批全部通过后执行。
+          流程审批全部通过后执行
         </div>
         <SqlEditor
           value={script}
           onChange={setScript}
           placeholder={'-- 流程结束后执行的 SQL / 脚本'}
           extraSuggestions={tableNames}
+          allowDDL
         />
       </div>
     </Drawer>
