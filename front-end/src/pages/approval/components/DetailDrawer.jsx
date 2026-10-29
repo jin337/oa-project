@@ -418,7 +418,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
               </div>
             </div>
             <div
-              className={`h-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 transition-all ${flowCollapsed ? 'm-0! w-0 border-l-0 p-0!' : 'w-100'}`}
+              className={`h-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 transition-all ${flowCollapsed ? 'm-0! w-0 border-l-0 p-0!' : 'w-110'}`}
             >
               {renderActions()}
               {/* 审批状态印章：显示在标题栏右上角 */}
