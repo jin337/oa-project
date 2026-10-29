@@ -439,7 +439,6 @@ const LayoutManage = forwardRef(function LayoutManage(
               size="mini"
               icon={leftCollapsed ? <IconMenuUnfold /> : <IconMenuFold />}
               onClick={() => setLeftCollapsed((v) => !v)}
-              tooltip={leftCollapsed ? '展开组件库' : '收起组件库'}
             />
             <div className="w-40 text-sm font-medium text-gray-800">预览画布</div>
           </div>
@@ -469,7 +468,6 @@ const LayoutManage = forwardRef(function LayoutManage(
               size="mini"
               icon={rightCollapsed ? <IconMenuFold /> : <IconMenuUnfold />}
               onClick={() => setRightCollapsed((v) => !v)}
-              tooltip={rightCollapsed ? '收起属性面板' : '展开属性面板'}
             />
           </div>
         </div>

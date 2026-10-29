@@ -112,6 +112,8 @@ export default function DesignManage() {
   const [editingEffectiveAt, setEditingEffectiveAt] = useState(null)
   const [editingRemark, setEditingRemark] = useState('')
   const [previewVersion, setPreviewVersion] = useState(null)
+  // 草稿态重挂载计数：保存到草稿等动作后递增，强制设计组件用最新草稿数据重新初始化
+  const [draftTick, setDraftTick] = useState(0)
   const [draftVersion, setDraftVersion] = useState(null)
   const layoutRef = useRef(null)
   const examineRef = useRef(null)
@@ -173,6 +175,24 @@ export default function DesignManage() {
       // 后端自动把 json 写到「设计中」版本行
       await applicationApi.updateApplication(id, payload)
       Message.success('保存成功')
+    } catch (e) {
+      // 错误已在请求层提示
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // 预览历史版本态：「保存到草稿」把当前预览版本的三个 JSON 写入设计中草稿，随后退出预览回到草稿编辑态
+  const handleSavePreviewToDraft = async () => {
+    if (!previewVersion) return
+    setSaving(true)
+    try {
+      await applicationApi.copyApplicationVersionToDraft(id, previewVersion.id)
+      Message.success('已保存到草稿')
+      setPreviewVersion(null)
+      await reloadApp()
+      // 强制设计组件按最新草稿数据重挂载，避免沿用旧的画布内存态
+      setDraftTick((t) => t + 1)
     } catch (e) {
       // 错误已在请求层提示
     } finally {
@@ -263,20 +283,6 @@ export default function DesignManage() {
     }
   }
 
-  // 复制已失效版本到草稿：覆盖当前设计中版本的三个 JSON，关闭版本弹窗并刷新画布
-  const copyToDraft = async (record) => {
-    try {
-      await applicationApi.copyApplicationVersionToDraft(id, record.id)
-      Message.success(`已复制版本 ${record.version_no} 到草稿`)
-      setVersionVisible(false)
-      setPreviewVersion(null)
-      setEditingVersion(null)
-      await reloadApp()
-    } catch (e) {
-      // 错误已在请求层提示
-    }
-  }
-
   const switchPreview = (record) => {
     setPreviewVersion(record)
     setVersionVisible(false)
@@ -312,14 +318,20 @@ export default function DesignManage() {
         </Space>
       }
       extra={
-        <Space>
-          <Button loading={saving} onClick={handleSave} disabled={!!previewVersion}>
-            保存
+        previewVersion ? (
+          <Button type="primary" loading={saving} onClick={handleSavePreviewToDraft}>
+            保存到草稿
           </Button>
-          <Button type="primary" onClick={openPublish} disabled={!!previewVersion}>
-            发布
-          </Button>
-        </Space>
+        ) : (
+          <Space>
+            <Button loading={saving} onClick={handleSave}>
+              保存
+            </Button>
+            <Button type="primary" onClick={openPublish}>
+              发布
+            </Button>
+          </Space>
+        )
       }
     >
       <Tabs
@@ -330,22 +342,18 @@ export default function DesignManage() {
         extra={
           <div className="px-4">
             {previewVersion ? (
-              <Button
-                size="mini"
-                status="danger"
-                onClick={() => setPreviewVersion(null)}
-              >
+              <Button size="mini" status="danger" onClick={() => setPreviewVersion(null)}>
                 退出预览（{previewVersion.version_no}）
               </Button>
             ) : (
-              <Tag color='red'>草稿：{draftVersion?.version_no || '-'}</Tag>
+              <Tag color="red">草稿：{draftVersion?.version_no || '-'}</Tag>
             )}
           </div>
         }
       >
         <TabPane key="layout" title="表单设置布局">
           <LayoutManage
-            key={`layout-${previewVersion?.id || 'draft'}`}
+            key={`layout-${previewVersion?.id || `draft-${draftTick}`}`}
             ref={layoutRef}
             app={effectiveApp}
             elements={elements}
@@ -354,7 +362,7 @@ export default function DesignManage() {
         </TabPane>
         <TabPane key="examine" title="审批流程" className="overflow-y-auto p-3">
           <ExamineManage
-            key={`examine-${previewVersion?.id || 'draft'}`}
+            key={`examine-${previewVersion?.id || `draft-${draftTick}`}`}
             ref={examineRef}
             app={effectiveApp}
             formFields={elements}
@@ -491,14 +499,6 @@ export default function DesignManage() {
                     <Button size="mini" type="primary" onClick={() => switchPreview(record)}>
                       {previewVersion?.id === record.id ? '查看中' : '预览'}
                     </Button>
-                    {record.status === 2 && (
-                      <Popconfirm
-                        title={`确认把已失效版本 ${record.version_no} 复制到草稿？当前草稿内容会被覆盖。`}
-                        onOk={() => copyToDraft(record)}
-                      >
-                        <Button size="mini">复制到草稿</Button>
-                      </Popconfirm>
-                    )}
                     {record.status === 0 && (
                       <Space size="small">
                         <Button size="mini" onClick={() => startEditVersion(record)}>

@@ -342,7 +342,7 @@ func ApplicationVersionDelete(c *gin.Context) {
 }
 
 // ApplicationVersionCopyToDraft POST /{APIPrefix}/application/:id/versions/:versionId/copy-to-draft
-// 把指定版本（通常是已失效）的三个 JSON 快照复制到「设计中」草稿。
+// 预览历史版本时「保存到草稿」：把该版本三个 JSON 写入设计中草稿版本。
 func ApplicationVersionCopyToDraft(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

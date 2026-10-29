@@ -1814,8 +1814,8 @@ func DeleteApplicationVersion(appID, versionID uint) error {
 	return database.DB.Unscoped().Delete(&ver).Error
 }
 
-// CopyVersionToDraft 把指定版本（任意状态，通常是「已失效」）的三个 JSON 快照
-// 复制到「设计中」草稿版本：覆盖当前草稿内容，便于在历史版本基础上继续编辑。
+// CopyVersionToDraft 把指定历史版本（任意状态）的三个 JSON 快照写入「设计中」草稿版本，
+// 供在历史版本基础上继续编辑。草稿不存在时自动创建。
 func CopyVersionToDraft(appID, versionID uint) (*model.ApplicationVersion, error) {
 	var src model.ApplicationVersion
 	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&src).Error; err != nil {
