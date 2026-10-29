@@ -464,3 +464,37 @@ export const runOnSubmitAfter = async (formConfig, formValues, result) => {
     console.error('[onSubmitAfter] 执行异常:', e)
   }
 }
+
+/**
+ * 执行发起人节点上配置的提交前钩子：返回 false 阻止提交。
+ * @param {object} initiatorNode approval_flow_json 中 type=1 的发起人节点
+ * @param {object} formValues 表单当前值
+ * @returns {Promise<boolean>}
+ */
+export const runInitiatorBefore = async (initiatorNode, formValues) => {
+  const fn = compileHook(initiatorNode?.onSubmitBefore)
+  if (!fn) return true
+  try {
+    const ret = await fn(formValues)
+    return ret !== false
+  } catch (e) {
+    console.error('[initiatorOnSubmitBefore] 执行异常:', e)
+    return false
+  }
+}
+
+/**
+ * 执行发起人节点上配置的提交后钩子；异常仅打日志，不影响主流程。
+ * @param {object} initiatorNode
+ * @param {object} formValues
+ * @param {*} result
+ */
+export const runInitiatorAfter = async (initiatorNode, formValues, result) => {
+  const fn = compileHook(initiatorNode?.onSubmitAfter)
+  if (!fn) return
+  try {
+    await fn(formValues, result)
+  } catch (e) {
+    console.error('[initiatorOnSubmitAfter] 执行异常:', e)
+  }
+}

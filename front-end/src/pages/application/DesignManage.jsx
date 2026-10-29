@@ -166,10 +166,27 @@ export default function DesignManage() {
         savedFlow = []
       }
     }
+    let flow = Array.isArray(liveNodes) && liveNodes.length ? liveNodes : savedFlow || []
+    // 旧版表单设置中的提交前后事件迁移到发起人节点；迁移后从表单配置中移除
+    const formConfig = layoutPayload?.form_layout_json?.formConfig
+    const legacyBefore = formConfig?.onSubmitBefore
+    const legacyAfter = formConfig?.onSubmitAfter
+    if (legacyBefore || legacyAfter) {
+      flow = flow.map((node) =>
+        node && node.type === 1
+          ? {
+              ...node,
+              onSubmitBefore: node.onSubmitBefore ?? legacyBefore,
+              onSubmitAfter: node.onSubmitAfter ?? legacyAfter,
+            }
+          : node,
+      )
+      delete formConfig.onSubmitBefore
+      delete formConfig.onSubmitAfter
+    }
     return {
       ...layoutPayload,
-      approval_flow_json:
-        Array.isArray(liveNodes) && liveNodes.length ? liveNodes : savedFlow || [],
+      approval_flow_json: flow,
     }
   }, [app])
 
@@ -516,6 +533,7 @@ export default function DesignManage() {
                         </Button>
                         <Popconfirm
                           title="确认删除该待生效版本？"
+                          position="left"
                           onOk={() => deleteVersion(record)}
                         >
                           <Button size="mini" status="danger">

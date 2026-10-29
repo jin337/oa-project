@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 // ============================================================
 // 审批分类、申请项、审批列表聚合
@@ -93,15 +93,13 @@ func ApprovalCategoryDelete(id uint) error {
 	return database.DB.Delete(&model.ApprovalCategory{}, id).Error
 }
 
-// ApprovalCategoryItemList 申请项分页列表（带发起人权限过滤）
-func ApprovalCategoryItemList(curUserID uint, req *model.ApprovalCategoryItemListReq) ([]model.ApprovalCategoryItem, int64, error) {
+// ApprovalCategoryItemList 申请项分页列表。
+// manage=true 仅由具备 approval:edit 权限的管理模式使用：返回全量申请项并标注 can_start；
+// 普通浏览模式严格按发起人配置过滤，超级管理员也不绕过。
+func ApprovalCategoryItemList(curUserID uint, req *model.ApprovalCategoryItemListReq, manage bool) ([]model.ApprovalCategoryItem, int64, error) {
 	db := database.DB.Model(&model.ApprovalCategoryItem{})
 	if req.CategoryID > 0 {
 		db = db.Where("category_id = ?", req.CategoryID)
-	}
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, err
 	}
 	var list []model.ApprovalCategoryItem
 	err := db.Order("sort ASC, id ASC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
@@ -109,12 +107,6 @@ func ApprovalCategoryItemList(curUserID uint, req *model.ApprovalCategoryItemLis
 		return nil, 0, err
 	}
 
-	// 管理员可以看到所有申请项
-	if isAdmin(curUserID) {
-		return list, total, nil
-	}
-
-	// 获取当前用户的角色和部门
 	user, err := getUserWithRolesAndDepts(curUserID)
 	if err != nil {
 		return nil, 0, err
@@ -122,15 +114,16 @@ func ApprovalCategoryItemList(curUserID uint, req *model.ApprovalCategoryItemLis
 	userRoleIDs := getUserRoleIDs(user)
 	userDeptIDs := getUserDeptIDs(user)
 
-	// 过滤申请项：只保留用户有权限发起的
 	filteredList := make([]model.ApprovalCategoryItem, 0, len(list))
-	for _, item := range list {
+	for i := range list {
+		item := &list[i]
 		canStart, err := canUserStartApproval(item.Code, curUserID, userRoleIDs, userDeptIDs)
 		if err != nil {
 			continue // 出错的项暂时跳过
 		}
-		if canStart {
-			filteredList = append(filteredList, item)
+		item.CanStart = canStart
+		if manage || canStart {
+			filteredList = append(filteredList, *item)
 		}
 	}
 
@@ -176,15 +169,13 @@ func canUserStartApproval(appCode string, userID uint, userRoleIDs, userDeptIDs 
 		return false, err
 	}
 
-	// 如果没有配置审批流，默认允许
-	if app.ApprovalFlowJSON == nil {
-		return true, nil
-	}
-
-	// 解析审批流节点
-	nodes, err := parseFlowNodes(app.ApprovalFlowJSON)
+	// 发起页按当前生效版本判断发起人权限；未发布生效版本时保持历史兼容（默认可见）
+	nodes, err := loadActiveApprovalNodes(app.ID)
 	if err != nil {
 		return false, err
+	}
+	if nodes == nil {
+		return true, nil
 	}
 
 	// 找到发起人节点（type=1）
@@ -201,11 +192,47 @@ func canUserStartApproval(appCode string, userID uint, userRoleIDs, userDeptIDs 
 		return true, nil
 	}
 
-	// 检查发起人成员列表
+	switch creatorNode.InitiatorType {
+	case 1: // 指定人员
+		if len(creatorNode.Members) == 0 {
+			return false, nil
+		}
+		for _, member := range creatorNode.Members {
+			if member.Type != 1 {
+				continue
+			}
+			var memberUserID uint
+			if _, err := fmt.Sscanf(member.Key, "user_%d", &memberUserID); err == nil && memberUserID == userID {
+				return true, nil
+			}
+		}
+		return false, nil
+	case 2: // 指定角色
+		if len(creatorNode.Members) == 0 {
+			return false, nil
+		}
+		for _, member := range creatorNode.Members {
+			if member.Type != 3 {
+				continue
+			}
+			var memberRoleID uint
+			if _, err := fmt.Sscanf(member.Key, "role_%d", &memberRoleID); err == nil {
+				for _, userRoleID := range userRoleIDs {
+					if userRoleID == memberRoleID {
+						return true, nil
+					}
+				}
+			}
+		}
+		return false, nil
+	case 3: // 所有人
+		return true, nil
+	}
+
+	// 历史数据兼容：无 initiatorType 时按旧成员列表（人员 / 部门 / 角色）判断
 	for _, member := range creatorNode.Members {
 		switch member.Type {
 		case 1: // 人员
-			// 提取用户 ID（格式：user_1）
 			var memberUserID uint
 			if _, err := fmt.Sscanf(member.Key, "user_%d", &memberUserID); err == nil {
 				if memberUserID == userID {
@@ -213,7 +240,6 @@ func canUserStartApproval(appCode string, userID uint, userRoleIDs, userDeptIDs 
 				}
 			}
 		case 2: // 部门
-			// 提取部门 ID（格式：dept_2）
 			var memberDeptID uint
 			if _, err := fmt.Sscanf(member.Key, "dept_%d", &memberDeptID); err == nil {
 				for _, userDeptID := range userDeptIDs {
@@ -223,7 +249,6 @@ func canUserStartApproval(appCode string, userID uint, userRoleIDs, userDeptIDs 
 				}
 			}
 		case 3: // 角色
-			// 提取角色 ID（格式：role_3）
 			var memberRoleID uint
 			if _, err := fmt.Sscanf(member.Key, "role_%d", &memberRoleID); err == nil {
 				for _, userRoleID := range userRoleIDs {
@@ -235,12 +260,53 @@ func canUserStartApproval(appCode string, userID uint, userRoleIDs, userDeptIDs 
 		}
 	}
 
-	// 如果发起人成员列表为空，默认允许（向后兼容）
+	// 历史数据兼容：发起人成员列表为空时默认允许
 	if len(creatorNode.Members) == 0 {
 		return true, nil
 	}
 
 	return false, nil
+}
+
+// ensureUserCanStart 服务端二次校验当前用户是否可发起指定应用，避免前端列表过滤被绕过。
+func ensureUserCanStart(curUserID uint, appCode string) error {
+	user, err := getUserWithRolesAndDepts(curUserID)
+	if err != nil {
+		return err
+	}
+	canStart, err := canUserStartApproval(appCode, curUserID, getUserRoleIDs(user), getUserDeptIDs(user))
+	if err != nil {
+		return err
+	}
+	if !canStart {
+		return errors.New("当前用户无权发起该审批")
+	}
+	return nil
+}
+
+// ensureUserCanStartByAppID 按应用 ID 完成发起权限校验，供业务数据落库前调用。
+func ensureUserCanStartByAppID(curUserID, appID uint) error {
+	var app model.Application
+	if err := database.DB.First(&app, appID).Error; err != nil {
+		return err
+	}
+	return ensureUserCanStart(curUserID, app.Code)
+}
+
+// loadActiveApprovalNodes 读取应用当前生效版本中的审批流节点；无生效版本返回 nil。
+func loadActiveApprovalNodes(appID uint) ([]flowNode, error) {
+	var ver model.ApplicationVersion
+	err := database.DB.
+		Where("application_id = ? AND status = ?", appID, model.AppVersionStatusActive).
+		Order("id DESC").
+		First(&ver).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return parseFlowNodes(ver.ApprovalFlowJSON)
 }
 
 // ApprovalCategoryItemCreate 新增申请项
@@ -860,6 +926,7 @@ func instanceCCContainsUser(inst model.ApprovalInstance, userID uint) bool {
 //     （优先档案 Nickname，无档案回退 Username），使用 Unscoped 保证软删用户的历史记录仍可显示姓名
 //   - 发起人部门名称：收集去重后的 dept_id，再一次 `WHERE id IN (...)` 批量查询 Dept 名称
 //   - 完成时间：仅终态（已通过/不通过/已驳回/已作废）取记录 updated_at，草稿/待审核/审核中置空
+//
 // queryUserNames 批量查询用户姓名（用户ID -> 姓名，含已删除用户），列表/详情共用
 func queryUserNames(uidSet map[uint]bool) map[uint]string {
 	nameMap := make(map[uint]string, len(uidSet))

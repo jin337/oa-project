@@ -3,7 +3,7 @@ import { useState } from 'react'
 import SqlEditor, { scanForbidden } from 'src/components/SqlEditor'
 
 /**
- * 流程结束事件设置抽屉：配置流程全部通过后执行的脚本（与表单提交后事件一致）。
+ * 流程结束事件设置抽屉：配置流程全部通过后执行的脚本（与申请提交后事件一致）。
  * @param {{
  *   event: string,
  *   tableNames: string[],

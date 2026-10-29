@@ -6,7 +6,6 @@ import (
 	"back-end/internal/service"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
@@ -63,7 +62,6 @@ func NotificationRead(c *gin.Context) {
 // NotificationStream GET /{APIPrefix}/notifications/stream SSE 实时推送
 func NotificationStream(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
-	log.Printf("[SSE] NotificationStream hit userID=%d\n", userID)
 	if userID == 0 {
 		c.Status(401)
 		return

@@ -721,7 +721,7 @@ export default function ApplicationManage() {
                     >
                       编辑
                     </Button>
-                    <Popconfirm title="确认删除该待生效版本？" onOk={() => deleteVersion(record)}>
+                    <Popconfirm title="确认删除该待生效版本？" position="left"  onOk={() => deleteVersion(record)}>
                       <Button size="mini" status="danger">
                         删除
                       </Button>

@@ -1697,11 +1697,15 @@ func activateVersion(tx *gorm.DB, ver *model.ApplicationVersion) error {
 		return err
 	}
 	if err := tx.Model(&model.ApplicationVersion{}).
-		Where("application_id = ? AND status = ?", ver.ApplicationID, model.AppVersionStatusActive).
+		Where("application_id = ? AND status = ? AND id <> ?", ver.ApplicationID, model.AppVersionStatusActive, ver.ID).
 		Updates(map[string]interface{}{"status": model.AppVersionStatusExpired, "expired_at": now}).Error; err != nil {
 		return err
 	}
-	if err := tx.Model(ver).Update("status", model.AppVersionStatusActive).Error; err != nil {
+	// 新激活版本必须清空失效时间；不能把旧版本的 expired_at 带到当前生效版本
+	if err := tx.Model(ver).Updates(map[string]interface{}{
+		"status":     model.AppVersionStatusActive,
+		"expired_at": nil,
+	}).Error; err != nil {
 		return err
 	}
 	return tx.Model(&model.Application{}).Where("id = ?", ver.ApplicationID).

@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 // ============================================================
 // 流程实例生命周期
@@ -247,6 +247,7 @@ func instanceStatusToBizStatus(instanceStatus int) int {
 //   - 实例不存在 → 流程实例不存在
 //   - 非发起人操作 → 只能{action}自己发起的审批
 //   - 当前状态不在允许集合 → 仅「{允许状态}」状态的实例可{action}，当前为「{当前状态}」
+//
 // db 可为 database.DB 或事务句柄 tx（调用方所在事务内加载时传 tx，保证一致性读）。
 func loadOwnedInstance(db *gorm.DB, curUserID, instanceID uint, action string, allowedStatuses ...int) (*model.ApprovalInstance, error) {
 	var instance model.ApprovalInstance
@@ -290,18 +291,23 @@ func finishNoApproverInstance(tx *gorm.DB, instance *model.ApprovalInstance, cur
 //  4. 校验发起人自选节点已选审批人
 //  5. 事务内创建流程实例并为首个审批节点生成任务
 func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
-	// 0. 解析业务数据 ID（支持自动创建）
+	// 0. 先校验发起权限，避免无权用户触发业务数据创建
+	if err := ensureUserCanStartByAppID(curUserID, req.AppID); err != nil {
+		return nil, err
+	}
+
+	// 1. 解析业务数据 ID（支持自动创建）
 	if _, err := resolveBusinessDataID(curUserID, req); err != nil {
 		return nil, err
 	}
 
-	// 1. 准备流程上下文
+	// 2. 准备流程上下文
 	ctx, err := prepareApprovalContext(req.AppID, req.BusinessDataID, req.ApprovalDraftMembers)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. 发起人自选节点必须已选择审批人
+	// 3. 发起人自选节点必须已选择审批人
 	if err := validateSelfSelectApprovers(ctx); err != nil {
 		return nil, err
 	}
@@ -318,17 +324,17 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		var creator model.User
 		database.DB.Select("dept_id").First(&creator, curUserID)
 		instance = model.ApprovalInstance{
-			AppID:                 req.AppID,
-			BillNo:                readBillNo(ctx.app.TableName, req.BusinessDataID),
-			BusinessTable:         ctx.app.TableName,
-			BusinessDataID:        req.BusinessDataID,
-			ApprovalFlowJSON:      buildSnapshotFlow(ctx.injectedNodes, ctx.endNode), // 含流程结束事件节点，由 GORM serializer:json 统一序列化
-			FormLayoutJSON:        ctx.app.FormLayoutJSON,
-			DetailLayoutJSON:      ctx.app.DetailLayoutJSON,
-			ExecutionPath:         ctx.execPath,
-			CurrentNodeIdx:        0,
-			Status:                model.InstanceStatusRunning,
-			DeptID:                creator.DeptID,
+			AppID:            req.AppID,
+			BillNo:           readBillNo(ctx.app.TableName, req.BusinessDataID),
+			BusinessTable:    ctx.app.TableName,
+			BusinessDataID:   req.BusinessDataID,
+			ApprovalFlowJSON: buildSnapshotFlow(ctx.injectedNodes, ctx.endNode), // 含流程结束事件节点，由 GORM serializer:json 统一序列化
+			FormLayoutJSON:   ctx.app.FormLayoutJSON,
+			DetailLayoutJSON: ctx.app.DetailLayoutJSON,
+			ExecutionPath:    ctx.execPath,
+			CurrentNodeIdx:   0,
+			Status:           model.InstanceStatusRunning,
+			DeptID:           creator.DeptID,
 			// 提交即进入审批流转，不持久化草稿暂存（approval_draft_members 仅草稿专用）；
 			// 撤回回退草稿时由 ApprovalInstanceWithdraw 从快照自选节点写回暂存
 		}
@@ -366,33 +372,38 @@ func ApprovalInstanceSaveDraft(curUserID uint, req *model.ApprovalInstanceCreate
 
 // saveDraftCreate 新建草稿实例（status=Draft，不生成审批任务）
 func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
-	// 0. 解析业务数据 ID（支持自动创建）
+	// 0. 先校验发起权限，避免无权用户触发业务数据创建
+	if err := ensureUserCanStartByAppID(curUserID, req.AppID); err != nil {
+		return nil, err
+	}
+
+	// 1. 解析业务数据 ID（支持自动创建）
 	if _, err := resolveBusinessDataID(curUserID, req); err != nil {
 		return nil, err
 	}
 
-	// 1. 准备流程上下文（快照/表单/执行路径）
+	// 2. 准备流程上下文（快照/表单/执行路径）
 	ctx, err := prepareApprovalContext(req.AppID, req.BusinessDataID, req.ApprovalDraftMembers)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. 创建草稿实例
+	// 3. 创建草稿实例
 	// 查发起人当前部门，记录快照
 	var creator model.User
 	database.DB.Select("dept_id").First(&creator, curUserID)
 	instance := model.ApprovalInstance{
-		AppID:                 req.AppID,
-		BusinessTable:         ctx.app.TableName,
-		BusinessDataID:        req.BusinessDataID,
-		ApprovalFlowJSON:      buildSnapshotFlow(ctx.injectedNodes, ctx.endNode),
-		FormLayoutJSON:        ctx.app.FormLayoutJSON,
-		DetailLayoutJSON:      ctx.app.DetailLayoutJSON,
-		ExecutionPath:         ctx.execPath,
+		AppID:                req.AppID,
+		BusinessTable:        ctx.app.TableName,
+		BusinessDataID:       req.BusinessDataID,
+		ApprovalFlowJSON:     buildSnapshotFlow(ctx.injectedNodes, ctx.endNode),
+		FormLayoutJSON:       ctx.app.FormLayoutJSON,
+		DetailLayoutJSON:     ctx.app.DetailLayoutJSON,
+		ExecutionPath:        ctx.execPath,
 		CurrentNodeIdx:       0,
-		Status:                model.InstanceStatusDraft,
+		Status:               model.InstanceStatusDraft,
 		ApprovalDraftMembers: req.ApprovalDraftMembers,
-		DeptID:                creator.DeptID,
+		DeptID:               creator.DeptID,
 	}
 	instance.CreatedBy, instance.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&instance).Error; err != nil {
@@ -416,6 +427,9 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 			return err
 		}
 		instance = *owned
+		if err := ensureUserCanStartByAppID(curUserID, instance.AppID); err != nil {
+			return err
+		}
 
 		// 2. 业务数据：以草稿实例已关联的业务行为准（复用行 + 更新 payload），不允许新建
 		req.BusinessDataID = instance.BusinessDataID
@@ -448,17 +462,17 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 			Where("id = ? AND status IN ?", instance.ID,
 				[]int{model.InstanceStatusDraft, model.InstanceStatusWithdrawn}).
 			Updates(map[string]interface{}{
-				"app_id":                   instance.AppID,
-				"business_table":           ctx.app.TableName,
-				"business_data_id":         req.BusinessDataID,
-				"approval_flow_json":       string(injectedFlowBytes),
-				"form_layout_json":         string(formLayoutBytes),
-				"detail_layout_json":        string(detailLayoutBytes),
-				"execution_path":           string(execPathBytes),
-				"current_node_idx":         0,
-				"status":                   model.InstanceStatusDraft,
+				"app_id":                 instance.AppID,
+				"business_table":         ctx.app.TableName,
+				"business_data_id":       req.BusinessDataID,
+				"approval_flow_json":     string(injectedFlowBytes),
+				"form_layout_json":       string(formLayoutBytes),
+				"detail_layout_json":     string(detailLayoutBytes),
+				"execution_path":         string(execPathBytes),
+				"current_node_idx":       0,
+				"status":                 model.InstanceStatusDraft,
 				"approval_draft_members": selfSelectJSON,
-				"updated_by":               curUserID,
+				"updated_by":             curUserID,
 			})
 		if res.Error != nil {
 			return res.Error
@@ -493,6 +507,9 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		return nil, err
 	}
 	instance = *owned
+	if err := ensureUserCanStartByAppID(curUserID, instance.AppID); err != nil {
+		return nil, err
+	}
 
 	// 2. 合并发起人自选审批人：提交时传入 > 草稿暂存
 	selfSelectMembers := instance.ApprovalDraftMembers
@@ -536,15 +553,15 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 			Where("id = ? AND status IN ?", instanceID,
 				[]int{model.InstanceStatusDraft, model.InstanceStatusWithdrawn}).
 			Updates(map[string]interface{}{
-				"approval_flow_json":       string(injectedFlowBytes),
-				"form_layout_json":         string(formLayoutBytes),
-				"detail_layout_json":        string(detailLayoutBytes),
-				"execution_path":           string(execPathBytes),
-				"current_node_idx":         0,
-				"status":                   model.InstanceStatusRunning,
-				"approval_draft_members":   nil, // 草稿暂存提交后清空（成员已注入快照；撤回时由 Withdraw 写回）
-				"created_at":               time.Now(), // 重新提交时刷新申请时间，撤回 30 分钟窗口随之重新起算
-				"updated_by":               curUserID,
+				"approval_flow_json":     string(injectedFlowBytes),
+				"form_layout_json":       string(formLayoutBytes),
+				"detail_layout_json":     string(detailLayoutBytes),
+				"execution_path":         string(execPathBytes),
+				"current_node_idx":       0,
+				"status":                 model.InstanceStatusRunning,
+				"approval_draft_members": nil,        // 草稿暂存提交后清空（成员已注入快照；撤回时由 Withdraw 写回）
+				"created_at":             time.Now(), // 重新提交时刷新申请时间，撤回 30 分钟窗口随之重新起算
+				"updated_by":             curUserID,
 			})
 		if res.Error != nil {
 			return res.Error

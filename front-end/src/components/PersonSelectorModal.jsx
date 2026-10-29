@@ -289,7 +289,23 @@ export function PersonPicker({
 
   return (
     <>
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+      <Button type="primary" size="small" icon={<IconPlus />} onClick={() => setVisible(true)}>
+        {placeholder || '选择人员'}
+      </Button>
+      {visible && (
+        <PersonSelectorModal
+          title={placeholder || '选择人员'}
+          modes={modes}
+          selectMode={selectMode}
+          value={value}
+          onChange={(items) => {
+            onChange(items)
+            setVisible(false)
+          }}
+          onCancel={() => setVisible(false)}
+        />
+      )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
         {value.length ? (
           value.map((item, i) => (
             <Tag
@@ -310,22 +326,6 @@ export function PersonPicker({
           <span className="text-xs text-gray-400">未选择</span>
         )}
       </div>
-      <Button type="primary" size="small" icon={<IconPlus />} onClick={() => setVisible(true)}>
-        {placeholder || '选择人员'}
-      </Button>
-      {visible && (
-        <PersonSelectorModal
-          title={placeholder || '选择人员'}
-          modes={modes}
-          selectMode={selectMode}
-          value={value}
-          onChange={(items) => {
-            onChange(items)
-            setVisible(false)
-          }}
-          onCancel={() => setVisible(false)}
-        />
-      )}
     </>
   )
 }

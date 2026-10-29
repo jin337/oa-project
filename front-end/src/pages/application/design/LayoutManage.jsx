@@ -10,7 +10,6 @@ import {
 } from '@arco-design/web-react'
 import { IconDelete, IconMenuFold, IconMenuUnfold, IconSync } from '@arco-design/web-react/icon'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import JsEditor from 'src/components/JsEditor'
 import DynamicForm, {
   BASE_LAYOUT_ELEMENTS,
   DEFAULT_FORM_CONFIG,
@@ -572,33 +571,8 @@ const LayoutManage = forwardRef(function LayoutManage(
                 <div className="mb-1 font-medium text-gray-600">表单配置说明：</div>
                 <div>· 垂直布局：标签显示在控件上方</div>
                 <div>· 水平布局：标签显示在控件左侧，可调整标签宽度与对齐</div>
+                <div>· 提交前后事件统一在「审批流程 - 发起人设置」中配置</div>
               </div>
-              {activePage === 'form' && (
-                <>
-                  <div>
-                    <div className="mb-2 text-sm text-gray-600">表单提交前事件</div>
-                    <JsEditor
-                      value={formConfig.onSubmitBefore || ''}
-                      onChange={(v) => updateFormConfig({ onSubmitBefore: v })}
-                      placeholder={
-                        '// 提交前执行的 JS，可 return false 阻止提交\n// (form) => { ... }'
-                      }
-                      minRows={6}
-                      maxRows={12}
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-2 text-sm text-gray-600">表单提交后事件</div>
-                    <JsEditor
-                      value={formConfig.onSubmitAfter || ''}
-                      onChange={(v) => updateFormConfig({ onSubmitAfter: v })}
-                      placeholder={'// 提交成功后执行的 JS\n// (form, result) => { ... }'}
-                      minRows={6}
-                      maxRows={12}
-                    />
-                  </div>
-                </>
-              )}
             </div>
           </TabPane>
 

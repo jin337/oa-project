@@ -1,27 +1,27 @@
 import {
-  AutoComplete,
-  Button,
-  Card,
-  Drawer,
-  Empty,
-  Form,
-  Grid,
-  Input,
-  InputNumber,
-  Message,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Spin,
+    AutoComplete,
+    Button,
+    Card,
+    Drawer,
+    Empty,
+    Form,
+    Grid,
+    Input,
+    InputNumber,
+    Message,
+    Modal,
+    Popconfirm,
+    Select,
+    Space,
+    Spin,
 } from '@arco-design/web-react'
 import {
-  IconDelete,
-  IconDoubleLeft,
-  IconDoubleRight,
-  IconEdit,
-  IconPlus,
-  IconSettings,
+    IconDelete,
+    IconDoubleLeft,
+    IconDoubleRight,
+    IconEdit,
+    IconPlus,
+    IconSettings,
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
@@ -29,12 +29,14 @@ import * as approvalApi from 'src/api/approval'
 import { fetchAll } from 'src/api/fetchAll'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView.jsx'
 import DynamicForm, {
-  parseLayoutJson,
-  runOnSubmitAfter,
-  runOnSubmitBefore,
-  serializeTimeFields,
+    parseLayoutJson,
+    runInitiatorAfter,
+    runInitiatorBefore,
+    runOnSubmitAfter,
+    runOnSubmitBefore,
+    serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
+import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
 
 import IconSelect, { MenuIcon } from 'src/components/icon-select'
 import { usePermission } from 'src/hooks/usePermission'
@@ -151,15 +153,18 @@ export default function Apply() {
     }
   }, [])
 
-  // 加载申请项列表
+  // 加载申请项列表：管理权限用户请求全量并带 can_start 标记；普通浏览仍由后端按发起人权限过滤
   const fetchItems = useCallback(async () => {
     try {
-      const res = await fetchAll(approvalApi.listApprovalItems)
+      const res = await fetchAll(
+        approvalApi.listApprovalItems,
+        canEdit ? { manage: 1 } : undefined,
+      )
       setItems(res.data?.list || [])
     } catch (e) {
       // 错误已在请求层提示
     }
-  }, [])
+  }, [canEdit])
 
   // 加载流程配置列表（申请项名称的可选项）
   const fetchApplications = useCallback(async () => {
@@ -374,12 +379,15 @@ export default function Apply() {
     try {
       const payload = await validateAndBuildPayload()
       if (!payload) return
-      // 提交前事件：return false 阻止提交
+      // 提交前事件：优先使用发起人节点配置；为空时兼容旧版表单配置
       const layout = parseLayoutJson(drawerApp?.form_layout_json)
       const formConfig = layout?.formConfig || {}
-      const ok = await runOnSubmitBefore(formConfig, payload)
+      const initiator = getInitiatorNode(drawerApp?.approval_flow_json)
+      const ok = initiator?.onSubmitBefore
+        ? await runInitiatorBefore(initiator, payload)
+        : await runOnSubmitBefore(formConfig, payload)
       if (!ok) {
-        Message.info('表单提交前事件已拦截本次提交')
+        Message.info('申请提交前事件已拦截本次提交')
         return
       }
       const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
@@ -390,8 +398,12 @@ export default function Apply() {
           ? selfSelectUserIDs
           : undefined,
       })
-      // 提交成功后事件
-      await runOnSubmitAfter(formConfig, payload, res?.data)
+      // 提交成功后事件：优先使用发起人节点配置
+      if (initiator?.onSubmitAfter) {
+        await runInitiatorAfter(initiator, payload, res?.data)
+      } else {
+        await runOnSubmitAfter(formConfig, payload, res?.data)
+      }
       Message.success('提交成功')
       setDrawerVisible(false)
       setSelfSelectMembers({})
@@ -401,6 +413,10 @@ export default function Apply() {
       setDrawerSaving(false)
     }
   }
+
+  // 普通浏览模式只展示当前用户可发起的申请项；管理模式保留全量配置项用于维护
+  const visibleItems =
+    isManaging && canEdit ? items : items.filter((item) => item.can_start !== false)
 
   return (
     <Card
@@ -430,9 +446,8 @@ export default function Apply() {
       {categories.length ? (
         <div className="space-y-4">
           {categories.map((c) => {
-            const catItems = items.filter((it) => it.category_id === c.id)
-            // 没有管理权限时，如果分类下无申请项，就隐藏这个分类
-            if (!canEdit && catItems.length === 0) {
+            const catItems = visibleItems.filter((it) => it.category_id === c.id)
+            if (catItems.length === 0) {
               return null
             }
             return (

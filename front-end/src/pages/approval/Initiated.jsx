@@ -1,35 +1,37 @@
 import {
-  Button,
-  Card,
-  Drawer,
-  Dropdown,
-  Form,
-  Menu,
-  Message,
-  Modal,
-  Spin,
-  Table,
+    Button,
+    Card,
+    Drawer,
+    Dropdown,
+    Form,
+    Menu,
+    Message,
+    Modal,
+    Spin,
+    Table,
 } from '@arco-design/web-react'
 import { IconDoubleLeft, IconDoubleRight, IconDown } from '@arco-design/web-react/icon'
 import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
-  parseLayoutJson,
-  runOnSubmitAfter,
-  runOnSubmitBefore,
-  serializeTimeFields,
+    parseLayoutJson,
+    runInitiatorAfter,
+    runInitiatorBefore,
+    runOnSubmitAfter,
+    runOnSubmitBefore,
+    serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
+import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
 import {
-  colBillNo,
-  colCreatedAt,
-  colCreatedName,
-  colDept,
-  colFinishedAt,
-  colIndex,
-  colNodeName,
-  colStatus,
+    colBillNo,
+    colCreatedAt,
+    colCreatedName,
+    colDept,
+    colFinishedAt,
+    colIndex,
+    colNodeName,
+    colStatus,
 } from 'src/pages/approval/components/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
 import CCModal from 'src/pages/approval/components/CCModal'
@@ -414,10 +416,13 @@ export default function Initiated() {
       const layout = parseLayoutJson(editApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
       const formConfig = layout?.formConfig || {}
-      // 提交前事件
-      const ok = await runOnSubmitBefore(formConfig, payload)
+      const initiator = getInitiatorNode(editApp?.approval_flow_json)
+      // 提交前事件：优先使用发起人节点配置；为空时兼容旧版表单配置
+      const ok = initiator?.onSubmitBefore
+        ? await runInitiatorBefore(initiator, payload)
+        : await runOnSubmitBefore(formConfig, payload)
       if (!ok) {
-        Message.info('表单提交前事件已拦截本次提交')
+        Message.info('申请提交前事件已拦截本次提交')
         return
       }
       const instanceId = editRecord.instance_id || editRecord.id
@@ -428,8 +433,12 @@ export default function Initiated() {
           ? { approval_draft_members: selfSelectUserIDs }
           : {}),
       })
-      // 提交成功后事件
-      await runOnSubmitAfter(formConfig, payload, res?.data)
+      // 提交成功后事件：优先使用发起人节点配置
+      if (initiator?.onSubmitAfter) {
+        await runInitiatorAfter(initiator, payload, res?.data)
+      } else {
+        await runOnSubmitAfter(formConfig, payload, res?.data)
+      }
       Message.success('已重新提交')
       setEditVisible(false)
       fetchList()

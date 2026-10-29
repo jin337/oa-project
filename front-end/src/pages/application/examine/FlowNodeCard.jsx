@@ -19,18 +19,30 @@ export function renderNodeSummary(node, userDeptMap = {}, deptDescMap = {}) {
     return <span className="block w-full truncate text-xs">发起人自选</span>
   }
 
-  // 发起人节点按已选部门折叠子级（如选了「总公司」则其下部门/人员均不重复展示）
-  const members = node.type === 1 ? foldDeptMembers(node.members, deptDescMap) : node.members
+  // 发起人节点：3-所有人直接展示所有人
+  if (node.type === 1 && node.initiatorType === 3) {
+    return <span className="block w-full text-xs">所有人</span>
+  }
+
+  // 发起人节点按已选部门折叠子级（如选了「总公司」则其下部门/人员均不重复展示）；
+  // 新版 initiatorType=1/2 直接展示指定人员或角色，不再按部门折叠
+  const members =
+    node.type === 1
+      ? node.initiatorType
+        ? node.members
+        : foldDeptMembers(node.members, deptDescMap)
+      : node.members
 
   if (!members?.length) {
     return <span className="cursor-pointer text-xs text-gray-400">未设置成员</span>
   }
 
   const labels = members.map(renderMemberLabel)
+  const memberUnit = node.type === 1 && node.initiatorType === 2 ? '个角色' : '人'
   const summaryText =
     labels.length <= 3
       ? labels.join('、')
-      : `${labels.slice(0, 3).join('、')} 等 ${labels.length} 人`
+      : `${labels.slice(0, 3).join('、')} 等 ${labels.length} ${memberUnit}`
   const tooltipContent = (
     <div className="flex max-h-80 flex-wrap gap-1 overflow-auto p-1">
       {members.map((m, i) => (
@@ -128,6 +140,7 @@ export const FlowNodeCard = memo(function FlowNodeCard({
   return (
     <div
       className="relative w-55 cursor-pointer rounded border border-(--color-neutral-3) bg-white shadow"
+      onClick={() => onEdit?.(node)}
     >
       <div
         className={`flex items-center justify-between border-b border-(--color-neutral-3) px-2 py-1 text-white ${meta.bg}`}
@@ -153,7 +166,7 @@ export const FlowNodeCard = memo(function FlowNodeCard({
           </Popconfirm>
         )}
       </div>
-      <div className="px-3 py-2"  onClick={() => onEdit?.(node)}>{renderNodeSummary(node, userDeptMap, deptDescMap)}</div>
+      <div className="px-3 py-2">{renderNodeSummary(node, userDeptMap, deptDescMap)}</div>
     </div>
   )
 })

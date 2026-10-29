@@ -28,6 +28,11 @@ func RequirePermission(perm string) gin.HandlerFunc {
 	}
 }
 
+// HasPermission 查询用户是否拥有指定按钮权限标识，供服务层/处理器做非强制拦截的展示控制。
+func HasPermission(userID uint, perm string) bool {
+	return hasPermission(userID, perm)
+}
+
 // hasPermission 查询用户启用角色所关联的按钮权限标识，命中指定 perm 返回 true
 func hasPermission(userID uint, perm string) bool {
 	var user model.User

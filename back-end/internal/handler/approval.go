@@ -83,7 +83,9 @@ func ApprovalCategoryItemList(c *gin.Context) {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	list, total, err := service.ApprovalCategoryItemList(middleware.CurrentUserID(c), &req)
+	curUserID := middleware.CurrentUserID(c)
+	manage := req.Manage && middleware.HasPermission(curUserID, "approval:edit")
+	list, total, err := service.ApprovalCategoryItemList(curUserID, &req, manage)
 	if err != nil {
 		respondServiceError(c, err)
 		return

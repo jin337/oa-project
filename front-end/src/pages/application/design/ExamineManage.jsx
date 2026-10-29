@@ -1,19 +1,18 @@
 import { Button } from '@arco-design/web-react'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { listApiDefinitionDatabases } from 'src/api/apiDefinition'
-import { PersonSelectorModal } from 'src/components/PersonSelectorModal'
 import { ADDABLE_NODE_TYPES, NODE_TYPE_META } from 'src/pages/application/design/constants'
 import { ApproverEditDrawer } from 'src/pages/application/examine/ApproverEditDrawer'
 import { CcEditDrawer } from 'src/pages/application/examine/CcEditDrawer'
 import { ConditionEditDrawer } from 'src/pages/application/examine/ConditionEditDrawer'
 import { EndEventEditDrawer } from 'src/pages/application/examine/EndEventEditDrawer'
+import { InitiatorEditDrawer } from 'src/pages/application/examine/InitiatorEditDrawer'
 import { FlowNode } from 'src/pages/application/examine/FlowCanvas'
 import {
   buildDeptDescMap,
   buildOrgItemMap,
   buildRoleItemMap,
   buildUserDeptMap,
-  normalizeMembers,
 } from 'src/pages/application/examine/flowModel'
 import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
 import { useApprovalFlow } from 'src/pages/application/examine/useApprovalFlow'
@@ -118,7 +117,7 @@ const ExamineManage = forwardRef(function ExamineManage(
     },
   }), [nodes, endEventScript])
 
-  // 节点点击编辑：1-发起人 跳过中间弹窗直接唤起人员选择器（确认即保存 members），其余进入节点编辑
+  // 节点点击编辑：1-发起人打开发起人设置抽屉；其余进入对应节点编辑抽屉
   const handleNodeEdit = (node) => {
     if (node.type === 1) {
       openEdit({ kind: 'initiator', node })
@@ -173,15 +172,13 @@ const ExamineManage = forwardRef(function ExamineManage(
         </div>
         <Button size='small' onClick={() => setEndDrawerOpen(true)}>流程结束</Button>
       </div>
-      {/* 节点/条件编辑弹层：发起人直接唤起人员选择器，审批人/抄送人/条件分支用 Drawer */}
+      {/* 节点/条件编辑弹层：发起人抽屉配置发起对象与提交前后事件，审批人/抄送人/条件分支用 Drawer */}
       {editing?.kind === 'initiator' && (
-        <PersonSelectorModal
-          title="选择可发起人"
-          modes={[1, 2]} // 1-组织架构 / 2-角色
-          selectMode={2} // 可发起人员支持多人，保持多选
-          value={normalizeMembers(editing.node.members)}
-          onChange={(items) => saveNode({ ...editing.node, members: items })}
+        <InitiatorEditDrawer
+          key={editing.node.id}
+          node={editing.node}
           onCancel={closeEdit}
+          onSave={saveNode}
         />
       )}
       {editing?.kind === 'node' &&

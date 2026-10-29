@@ -245,16 +245,16 @@ type UserUpdateReq struct {
 	Status   *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	DeptID   uint   `json:"dept_id" validate:"omitempty" label:"当前部门ID"`
 	DeptIDs  []uint `json:"dept_ids" validate:"omitempty,dive,gt=0" label:"所属部门ID列表"` // nil 表示不修改多部门归属
-	RoleIDs  []uint `json:"role_ids" validate:"omitempty,dive,gt=0" label:"角色ID列表"`       // nil 表示不修改角色关联
+	RoleIDs  []uint `json:"role_ids" validate:"omitempty,dive,gt=0" label:"角色ID列表"`   // nil 表示不修改角色关联
 	Password string `json:"password" validate:"omitempty,min=6,max=64" label:"密码"`
 }
 
 type UserListReq struct {
 	BaseListReq
-	Username string   `json:"username" form:"username" validate:"omitempty" label:"用户名"`
-	DeptID   uint     `json:"dept_id" form:"dept_id" validate:"omitempty" label:"部门ID"`
-	DeptIDs  []uint   `json:"dept_ids" form:"dept_ids[]" validate:"omitempty" label:"部门ID列表"`
-	RoleIDs  []uint   `json:"role_ids" form:"role_ids[]" validate:"omitempty" label:"角色ID列表"`
+	Username string `json:"username" form:"username" validate:"omitempty" label:"用户名"`
+	DeptID   uint   `json:"dept_id" form:"dept_id" validate:"omitempty" label:"部门ID"`
+	DeptIDs  []uint `json:"dept_ids" form:"dept_ids[]" validate:"omitempty" label:"部门ID列表"`
+	RoleIDs  []uint `json:"role_ids" form:"role_ids[]" validate:"omitempty" label:"角色ID列表"`
 }
 
 // SwitchDeptReq 切换当前部门请求：目标部门必须属于用户的多部门归属列表
@@ -391,7 +391,7 @@ type Application struct {
 	SubTableName     string `gorm:"size:255;comment:子表(多个用逗号分隔)" json:"sub_table_name"`
 	Status           int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	CurrentVersionID uint   `gorm:"default:0;index;comment:当前生效版本ID" json:"current_version_id"`
-	CurrentVersionNo  string `gorm:"size:32;comment:当前生效版本号" json:"current_version_no"`
+	CurrentVersionNo string `gorm:"size:32;comment:当前生效版本号" json:"current_version_no"`
 	// 以下三个字段不映射数据库列（草稿已迁入 oa_application_versions 设计中行），
 	// 仅供运行时把 active 版本快照塞进内存对象给业务层使用。
 	FormLayoutJSON   map[string]interface{} `gorm:"-" json:"form_layout_json,omitempty"`
@@ -480,8 +480,8 @@ type ApplicationDataListReq struct {
 	BaseListReq
 	TableName    string            `json:"table_name" form:"table_name" validate:"required" label:"表名"`
 	Status       *int              `json:"status" form:"status" validate:"omitempty,oneof=0 1 2 3 4 5 6 7 8" label:"审核状态"` // nil 表示不过滤；0 草稿 1 待审核 2 审核中 3 已通过 4 不通过 5 已驳回 6 已作废 7 已删除 8 已撤回
-	ExcludeDraft bool              `json:"exclude_draft" form:"exclude_draft" label:"是否排除草稿"`                            // 为 true 时不返回草稿(0)数据（如审核人视角的已提交列表）
-	Filters      map[string]string `json:"-" form:"-"`                                                                   // 动态搜索字段（field_key → 值）
+	ExcludeDraft bool              `json:"exclude_draft" form:"exclude_draft" label:"是否排除草稿"`                              // 为 true 时不返回草稿(0)数据（如审核人视角的已提交列表）
+	Filters      map[string]string `json:"-" form:"-"`                                                                     // 动态搜索字段（field_key → 值）
 }
 
 // ApplicationDataDetailReq 动态数据详情查询：主键为路径参数 dataId，目标表以应用配置为准
@@ -655,6 +655,9 @@ type ApprovalCategoryItem struct {
 	Sort       int    `gorm:"default:1;comment:排序" json:"sort"`
 
 	Category *ApprovalCategory `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+
+	// CanStart 仅用于申请页列表的前端展示区分：管理模式返回全量并标注是否可发起，不入库
+	CanStart bool `json:"can_start" gorm:"-"`
 }
 
 type ApprovalCategoryItemCreateReq struct {
@@ -676,6 +679,7 @@ type ApprovalCategoryItemUpdateReq struct {
 type ApprovalCategoryItemListReq struct {
 	BaseListReq
 	CategoryID uint `json:"category_id" form:"category_id" validate:"omitempty" label:"所属分类"`
+	Manage     bool `json:"manage" form:"manage" validate:"omitempty" label:"管理模式"`
 }
 
 // ============================================================
@@ -761,8 +765,8 @@ type ApprovalInstanceCreateReq struct {
 // ApprovalInstanceSubmitDraftReq 从草稿提交发起审批请求
 // 允许覆盖草稿暂存的发起人自选审批人；其余配置（流程快照/表单数据/执行路径）在提交时重新评估
 type ApprovalInstanceSubmitDraftReq struct {
-	ApprovalDraftMembers map[string][]uint `json:"approval_draft_members" validate:"omitempty" label:"发起人自选审批人"` // nodeId -> 用户ID列表，覆盖草稿暂存值
-	BusinessData         map[string]interface{} `json:"business_data" validate:"omitempty" label:"业务数据"` // 发起人在编辑抽屉中修改后的表单数据，可选
+	ApprovalDraftMembers map[string][]uint      `json:"approval_draft_members" validate:"omitempty" label:"发起人自选审批人"` // nodeId -> 用户ID列表，覆盖草稿暂存值
+	BusinessData         map[string]interface{} `json:"business_data" validate:"omitempty" label:"业务数据"`              // 发起人在编辑抽屉中修改后的表单数据，可选
 }
 
 // ApprovalInstanceResubmitReq 已驳回实例重新提交请求（发起人修改表单数据后从驳回节点继续审批）
@@ -816,7 +820,7 @@ type ApprovalInstanceTaskResult struct {
 	AddSignFrom   uint       `json:"add_sign_from"`
 	AddSignType   int        `json:"add_sign_type"`
 	// CreatedBy 加签发起人（add_sign_from>0 时记录是谁发起的加签）；普通任务为审批人本人
-	CreatedBy     uint       `json:"created_by"`
+	CreatedBy uint `json:"created_by"`
 }
 
 // ApprovalInstanceDetailResult 实例详情响应（含任务列表+审批记录）

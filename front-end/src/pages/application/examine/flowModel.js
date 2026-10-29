@@ -41,6 +41,7 @@ import { NODE_TYPE_META } from 'src/pages/application/design/constants'
  * @property {1|2|3|4} type 节点类型（1-发起人 / 2-审批人 / 3-抄送人 / 4-条件分支）
  * @property {string} label 节点名称
  * @property {ApprovalMember[]} [members] 成员（发起人 / 审批人 / 抄送人）
+ * @property {number} [initiatorType] 发起人对象（1-指定人员 / 2-指定角色 / 3-所有人，仅 type=1）
  * @property {number} [approverType] 审批对象（1-指定人员 / 2-指定角色 / 3-发起人自选 / 4-审核人员组）
  * @property {number} [selfSelect] 发起人自选类型（1-单选 / 2-多选）
  * @property {number} [strategy] 审批方式（1-依次审批 / 2-会签 / 3-或签）
@@ -49,6 +50,8 @@ import { NODE_TYPE_META } from 'src/pages/application/design/constants'
  * @property {number[]} [permissions] 审批人操作权限（1-退回 / 2-转交 / 3-加签）
  * @property {ApprovalFieldPerm[]} [fieldPerms] 表单字段权限
  * @property {number} [ccTiming] 抄送时机（1-审批通过后抄送 / 2-流程结束时统一抄送）
+ * @property {string} [onSubmitBefore] 发起人节点申请提交前事件 JS 源码（type=1）
+ * @property {string} [onSubmitAfter] 发起人节点申请提交后事件 JS 源码（type=1）
  * @property {number} [relation] 条件关系（1-且(AND) / 2-或(OR)）
  * @property {ApprovalBranch[]} [branches] 条件分支列表（仅 type=4）
  */
@@ -77,7 +80,7 @@ export const createBranch = (label, isDefault = false) => ({
  */
 export const createNode = (type) => {
   const base = { id: genId('n'), type, label: NODE_TYPE_META[type].label }
-  if (type === 1) return { ...base, members: [] } // 1-发起人
+  if (type === 1) return { ...base, initiatorType: 3, members: [] } // 1-发起人：默认所有人
   if (type === 3) return { ...base, members: [], ccTiming: 2 } // 3-抄送人；ccTiming 2-流程结束时统一抄送
   if (type === 2)
     return {
@@ -108,6 +111,25 @@ export const createNode = (type) => {
 export const normalizeMembers = (members) =>
   // 旧字符串数组成员兜底：默认按 1-人员 处理
   (members || []).map((m) => (typeof m === 'string' ? { type: 1, label: m } : m))
+
+/**
+ * 从审批流 JSON（数组或 JSON 字符串）中取根发起人节点（type=1）。
+ * @param {Array|string} rawFlow approval_flow_json
+ * @returns {ApprovalNode|null}
+ */
+export function getInitiatorNode(rawFlow) {
+  let parsed = null
+  if (Array.isArray(rawFlow)) parsed = rawFlow
+  else if (typeof rawFlow === 'string' && rawFlow) {
+    try {
+      parsed = JSON.parse(rawFlow)
+    } catch {
+      parsed = null
+    }
+  }
+  if (!Array.isArray(parsed)) return null
+  return parsed.find((n) => n && n.type === 1) || null
+}
 
 // ==================== 对象选择器数据转换（组织架构 / 角色接口） ====================
 

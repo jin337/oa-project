@@ -21,20 +21,21 @@ import (
 
 // flowNode 审批流节点（从 approval_flow_json 反序列化后的结构）
 type flowNode struct {
-	ID           string        `json:"id"`
-	Type         int           `json:"type"` // 1-发起人 2-审批人 3-抄送人 4-条件分支
-	Label        string        `json:"label"`
-	Members      []flowMember  `json:"members"`
-	ApproverType int           `json:"approverType"` // 1-指定人员 2-指定角色 3-发起人自选 4-审核人员组
-	SelfSelect   int           `json:"selfSelect"`   // 1-单选 2-多选
-	Strategy     int           `json:"strategy"`     // 1-依次审批 2-会签 3-或签
-	EmptyHandler int           `json:"emptyHandler"` // 审批人为空处理
-	EmptyMembers []flowMember  `json:"emptyMembers"`
-	Permissions  []int         `json:"permissions"`
-	FieldPerms   []interface{} `json:"fieldPerms"`
-	CCTiming     int           `json:"ccTiming"`
-	Relation     int           `json:"relation"` // 1-且(AND) 2-或(OR)
-	Branches     []flowBranch  `json:"branches"`
+	ID            string        `json:"id"`
+	Type          int           `json:"type"` // 1-发起人 2-审批人 3-抄送人 4-条件分支
+	Label         string        `json:"label"`
+	Members       []flowMember  `json:"members"`
+	InitiatorType int           `json:"initiatorType"` // 发起人对象：1-指定人员 2-指定角色 3-所有人（仅 type=1）
+	ApproverType  int           `json:"approverType"`  // 1-指定人员 2-指定角色 3-发起人自选 4-审核人员组
+	SelfSelect    int           `json:"selfSelect"`    // 1-单选 2-多选
+	Strategy      int           `json:"strategy"`      // 1-依次审批 2-会签 3-或签
+	EmptyHandler  int           `json:"emptyHandler"`  // 审批人为空处理
+	EmptyMembers  []flowMember  `json:"emptyMembers"`
+	Permissions   []int         `json:"permissions"`
+	FieldPerms    []interface{} `json:"fieldPerms"`
+	CCTiming      int           `json:"ccTiming"`
+	Relation      int           `json:"relation"` // 1-且(AND) 2-或(OR)
+	Branches      []flowBranch  `json:"branches"`
 }
 
 // flowMember 审批成员

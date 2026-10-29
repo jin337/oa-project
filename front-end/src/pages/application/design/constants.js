@@ -47,6 +47,13 @@ export const MEMBER_TYPE_OPTIONS = [
   { value: 4, label: '审核人员组' }, // 4-审核人员组（对应接口 examine-group）
 ]
 
+/** 发起人对象（1-指定人员 / 2-指定角色 / 3-所有人） */
+export const INITIATOR_TYPE_OPTIONS = [
+  { value: 1, label: '指定人员' },
+  { value: 2, label: '指定角色' },
+  { value: 3, label: '所有人' },
+]
+
 /** 审批对象（1-指定人员 / 2-指定角色 / 3-发起人自选 / 4-审核人员组）——审批人 / 抄送人节点共用 */
 export const APPROVER_TYPE_OPTIONS = [
   { value: 1, label: '指定人员' },

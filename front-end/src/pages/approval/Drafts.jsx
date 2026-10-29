@@ -1,31 +1,33 @@
 import {
-  Button,
-  Card,
-  Drawer,
-  Form,
-  Message,
-  Popconfirm,
-  Spin,
-  Table,
+    Button,
+    Card,
+    Drawer,
+    Form,
+    Message,
+    Popconfirm,
+    Spin,
+    Table,
 } from '@arco-design/web-react'
 import { IconDoubleLeft, IconDoubleRight } from '@arco-design/web-react/icon'
 import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
-  parseLayoutJson,
-  runOnSubmitAfter,
-  runOnSubmitBefore,
-  serializeTimeFields,
+    parseLayoutJson,
+    runInitiatorAfter,
+    runInitiatorBefore,
+    runOnSubmitAfter,
+    runOnSubmitBefore,
+    serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { buildSelfSelectUserIDs } from 'src/pages/application/examine/flowModel'
+import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
 import {
-  colBillNo,
-  colCreatedAt,
-  colCreatedName,
-  colDept,
-  colIndex,
-  colStatus,
+    colBillNo,
+    colCreatedAt,
+    colCreatedName,
+    colDept,
+    colIndex,
+    colStatus,
 } from 'src/pages/approval/components/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
 import { useApprovalList } from 'src/pages/approval/components/useApprovalList'
@@ -201,10 +203,13 @@ export default function Drafts() {
       const layout = parseLayoutJson(drawerApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
       const formConfig = layout?.formConfig || {}
-      // 提交前事件
-      const ok = await runOnSubmitBefore(formConfig, payload)
+      const initiator = getInitiatorNode(drawerApp?.approval_flow_json)
+      // 提交前事件：优先使用发起人节点配置；为空时兼容旧版表单配置
+      const ok = initiator?.onSubmitBefore
+        ? await runInitiatorBefore(initiator, payload)
+        : await runOnSubmitBefore(formConfig, payload)
       if (!ok) {
-        Message.info('表单提交前事件已拦截本次提交')
+        Message.info('申请提交前事件已拦截本次提交')
         setDrawerSaving(false)
         return
       }
@@ -238,8 +243,12 @@ export default function Drafts() {
           ...(draftMembersPayload || {}),
         })
       }
-      // 提交成功后事件
-      await runOnSubmitAfter(formConfig, payload, submitResult?.data)
+      // 提交成功后事件：优先使用发起人节点配置
+      if (initiator?.onSubmitAfter) {
+        await runInitiatorAfter(initiator, payload, submitResult?.data)
+      } else {
+        await runOnSubmitAfter(formConfig, payload, submitResult?.data)
+      }
       Message.success('提交成功')
       setDrawerVisible(false)
       fetchList()
