@@ -114,6 +114,11 @@ export default function DesignManage() {
   const [previewVersion, setPreviewVersion] = useState(null)
   // 草稿态重挂载计数：保存到草稿等动作后递增，强制设计组件用最新草稿数据重新初始化
   const [draftTick, setDraftTick] = useState(0)
+  // 布局组件左右侧栏折叠状态：上提到父级持有，切版本 / 保存到草稿重挂载时保持；整页刷新后恢复默认展开
+  const [leftCollapsed, setLeftCollapsed] = useState(false)
+  const [rightCollapsed, setRightCollapsed] = useState(false)
+  const toggleLeftCollapsed = () => setLeftCollapsed((v) => !v)
+  const toggleRightCollapsed = () => setRightCollapsed((v) => !v)
   const [draftVersion, setDraftVersion] = useState(null)
   const layoutRef = useRef(null)
   const examineRef = useRef(null)
@@ -182,12 +187,13 @@ export default function DesignManage() {
     }
   }
 
-  // 预览历史版本态：「保存到草稿」把当前预览版本的三个 JSON 写入设计中草稿，随后退出预览回到草稿编辑态
+  // 预览历史版本态：「保存到草稿」把当前编辑器（含预览态下的修改）汇总写入设计中草稿，随后退出预览回到草稿编辑态
   const handleSavePreviewToDraft = async () => {
     if (!previewVersion) return
     setSaving(true)
     try {
-      await applicationApi.copyApplicationVersionToDraft(id, previewVersion.id)
+      const payload = collectPayload()
+      await applicationApi.updateApplication(id, payload)
       Message.success('已保存到草稿')
       setPreviewVersion(null)
       await reloadApp()
@@ -358,6 +364,10 @@ export default function DesignManage() {
             app={effectiveApp}
             elements={elements}
             onRefreshElements={loadElements}
+            leftCollapsed={leftCollapsed}
+            rightCollapsed={rightCollapsed}
+            onToggleLeftCollapsed={toggleLeftCollapsed}
+            onToggleRightCollapsed={toggleRightCollapsed}
           />
         </TabPane>
         <TabPane key="examine" title="审批流程" className="overflow-y-auto p-3">

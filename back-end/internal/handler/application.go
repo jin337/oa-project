@@ -340,23 +340,3 @@ func ApplicationVersionDelete(c *gin.Context) {
 	}
 	response.OKMsg(c, "删除成功")
 }
-
-// ApplicationVersionCopyToDraft POST /{APIPrefix}/application/:id/versions/:versionId/copy-to-draft
-// 预览历史版本时「保存到草稿」：把该版本三个 JSON 写入设计中草稿版本。
-func ApplicationVersionCopyToDraft(c *gin.Context) {
-	id, ok := parseID(c)
-	if !ok {
-		return
-	}
-	versionID, err := strconv.ParseUint(c.Param("versionId"), 10, 64)
-	if err != nil || versionID == 0 {
-		response.Fail(c, response.CodeParamError, "版本 ID 非法")
-		return
-	}
-	draft, err := service.CopyVersionToDraft(id, uint(versionID))
-	if err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
-		return
-	}
-	response.OK(c, gin.H{"draft_version": draft})
-}

@@ -141,8 +141,3 @@ export function republishApplicationVersion(id, versionId, data) {
 export function deleteApplicationVersion(id, versionId) {
   return request.delete(`/application/${id}/versions/${versionId}`)
 }
-
-// POST /application/:id/versions/:versionId/copy-to-draft 预览历史版本时保存到草稿
-export function copyApplicationVersionToDraft(id, versionId) {
-  return request.post(`/application/${id}/versions/${versionId}/copy-to-draft`)
-}

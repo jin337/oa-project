@@ -43,7 +43,15 @@ const genId = () => `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
  * 数据由父级统一请求（app / elements），这里只负责画布编排与本地布局状态。
  */
 const LayoutManage = forwardRef(function LayoutManage(
-  { app = null, elements = [], onRefreshElements },
+  {
+    app = null,
+    elements = [],
+    onRefreshElements,
+    leftCollapsed = false,
+    rightCollapsed = false,
+    onToggleLeftCollapsed,
+    onToggleRightCollapsed,
+  },
   ref,
 ) {
   // 左侧组件库（来自父级传入的表单元素）
@@ -88,9 +96,7 @@ const LayoutManage = forwardRef(function LayoutManage(
   const [selectedId, setSelectedId] = useState(null)
   const [activePanel, setActivePanel] = useState('form')
 
-  // 左右侧栏折叠
-  const [leftCollapsed, setLeftCollapsed] = useState(false)
-  const [rightCollapsed, setRightCollapsed] = useState(false)
+  // 左右侧栏折叠状态由父级 DesignManage 持有，保证切换版本 / 保存到草稿重挂载时不被重置
 
   // 拖拽状态
   const dragType = useRef(null) // 'new' | 'move'
@@ -438,7 +444,7 @@ const LayoutManage = forwardRef(function LayoutManage(
               type="text"
               size="mini"
               icon={leftCollapsed ? <IconMenuUnfold /> : <IconMenuFold />}
-              onClick={() => setLeftCollapsed((v) => !v)}
+              onClick={() => onToggleLeftCollapsed?.()}
             />
             <div className="w-40 text-sm font-medium text-gray-800">预览画布</div>
           </div>
@@ -467,7 +473,7 @@ const LayoutManage = forwardRef(function LayoutManage(
               type="text"
               size="mini"
               icon={rightCollapsed ? <IconMenuFold /> : <IconMenuUnfold />}
-              onClick={() => setRightCollapsed((v) => !v)}
+              onClick={() => onToggleRightCollapsed?.()}
             />
           </div>
         </div>
