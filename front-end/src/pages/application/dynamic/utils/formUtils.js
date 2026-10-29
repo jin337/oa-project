@@ -7,8 +7,19 @@
  */
 
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
+import request from 'src/api/request'
 
 import { evalDynamicExpr } from './evalExpression'
+
+// 事件脚本内可用的认证请求助手：复用项目 axios 实例，自动携带 Bearer Token，
+// 返回统一响应体 { code, msg, data }；提交前事件可根据 code/data 返回 false 拦截提交。
+const hookRequest = Object.freeze({
+  request: (config) => request.request(config),
+  get: (url, config) => request.get(url, config),
+  post: (url, data, config) => request.post(url, data, config),
+  put: (url, data, config) => request.put(url, data, config),
+  delete: (url, config) => request.delete(url, config),
+})
 
 // ==================== 布局与数据源解析 ====================
 
@@ -408,7 +419,9 @@ export function serializeTimeFields(values, elements) {
 
 /**
  * 安全执行用户在「表单设置布局」里填写的提交事件 JS。
- * 配置形如：  (form) => { ... return false; }
+ * 提交前签名：(form, request) => { ... return false; }
+ * 提交后签名：(form, result, request) => { ... }
+ * request 为自动带登录态的统一请求助手。
  * 支持字符串直接作为函数体（缺省包装为 async function）。
  * - onSubmitBefore：返回 false（或 throw）阻止提交；返回其他值/void 继续。
  * - onSubmitAfter：提交成功后调用；异常仅打日志，不影响主流程。
@@ -420,11 +433,10 @@ const compileHook = (source) => {
   try {
     // 用户既可能写完整箭头函数，也可能只写函数体；统一包成 async function
     if (/^\(/.test(src) || /^function/.test(src) || /^async/.test(src)) {
-      // eslint-disable-next-line no-new-func
-      return new Function(`return (${src})`)()
+      // 完整函数表达式：在外层作用域注入 request，兼容内部只声明 (form) 参数的旧脚本
+      return new Function('request', `return (${src})`)(hookRequest)
     }
-    // eslint-disable-next-line no-new-func
-    return new Function(`form`, `result`, `"use strict";\n${src}`)
+    return new Function('form', 'result', 'request', `"use strict";\n${src}`)
   } catch (e) {
     console.warn('[form-hook] 编译失败:', e)
     return null
@@ -441,11 +453,11 @@ export const runOnSubmitBefore = async (formConfig, formValues) => {
   const fn = compileHook(formConfig?.onSubmitBefore)
   if (!fn) return true
   try {
-    const ret = await fn(formValues)
+    const ret = await fn(formValues, hookRequest)
     return ret !== false
   } catch (e) {
     console.error('[onSubmitBefore] 执行异常:', e)
-    return false
+    throw e instanceof Error ? e : new Error(String(e))
   }
 }
 
@@ -459,7 +471,7 @@ export const runOnSubmitAfter = async (formConfig, formValues, result) => {
   const fn = compileHook(formConfig?.onSubmitAfter)
   if (!fn) return
   try {
-    await fn(formValues, result)
+    await fn(formValues, result, hookRequest)
   } catch (e) {
     console.error('[onSubmitAfter] 执行异常:', e)
   }
@@ -475,11 +487,11 @@ export const runInitiatorBefore = async (initiatorNode, formValues) => {
   const fn = compileHook(initiatorNode?.onSubmitBefore)
   if (!fn) return true
   try {
-    const ret = await fn(formValues)
+    const ret = await fn(formValues, hookRequest)
     return ret !== false
   } catch (e) {
     console.error('[initiatorOnSubmitBefore] 执行异常:', e)
-    return false
+    throw e instanceof Error ? e : new Error(String(e))
   }
 }
 
@@ -493,7 +505,7 @@ export const runInitiatorAfter = async (initiatorNode, formValues, result) => {
   const fn = compileHook(initiatorNode?.onSubmitAfter)
   if (!fn) return
   try {
-    await fn(formValues, result)
+    await fn(formValues, result, hookRequest)
   } catch (e) {
     console.error('[initiatorOnSubmitAfter] 执行异常:', e)
   }

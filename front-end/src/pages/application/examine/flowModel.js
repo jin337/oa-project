@@ -50,8 +50,8 @@ import { NODE_TYPE_META } from 'src/pages/application/design/constants'
  * @property {number[]} [permissions] 审批人操作权限（1-退回 / 2-转交 / 3-加签）
  * @property {ApprovalFieldPerm[]} [fieldPerms] 表单字段权限
  * @property {number} [ccTiming] 抄送时机（1-审批通过后抄送 / 2-流程结束时统一抄送）
- * @property {string} [onSubmitBefore] 发起人节点申请提交前事件 JS 源码（type=1）
- * @property {string} [onSubmitAfter] 发起人节点申请提交后事件 JS 源码（type=1）
+ * @property {string} [onSubmitBefore] 提交前事件 JS 源码，签名 (form, request) => boolean|void（type=1）
+ * @property {string} [onSubmitAfter] 提交后事件 JS 源码，签名 (form, result, request) => void（type=1）
  * @property {number} [relation] 条件关系（1-且(AND) / 2-或(OR)）
  * @property {ApprovalBranch[]} [branches] 条件分支列表（仅 type=4）
  */

@@ -383,10 +383,16 @@ export default function Apply() {
       const layout = parseLayoutJson(drawerApp?.form_layout_json)
       const formConfig = layout?.formConfig || {}
       const initiator = getInitiatorNode(drawerApp?.approval_flow_json)
-      const ok = initiator?.onSubmitBefore
-        ? await runInitiatorBefore(initiator, payload)
-        : await runOnSubmitBefore(formConfig, payload)
-      if (!ok) {
+      let hookPassed = true
+      try {
+        hookPassed = initiator?.onSubmitBefore
+          ? await runInitiatorBefore(initiator, payload)
+          : await runOnSubmitBefore(formConfig, payload)
+      } catch (hookError) {
+        Message.error(hookError.message || '申请提交前事件执行失败')
+        return
+      }
+      if (!hookPassed) {
         Message.info('申请提交前事件已拦截本次提交')
         return
       }

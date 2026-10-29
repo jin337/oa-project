@@ -205,12 +205,17 @@ export default function Drafts() {
       const formConfig = layout?.formConfig || {}
       const initiator = getInitiatorNode(drawerApp?.approval_flow_json)
       // 提交前事件：优先使用发起人节点配置；为空时兼容旧版表单配置
-      const ok = initiator?.onSubmitBefore
-        ? await runInitiatorBefore(initiator, payload)
-        : await runOnSubmitBefore(formConfig, payload)
-      if (!ok) {
+      let hookPassed = true
+      try {
+        hookPassed = initiator?.onSubmitBefore
+          ? await runInitiatorBefore(initiator, payload)
+          : await runOnSubmitBefore(formConfig, payload)
+      } catch (hookError) {
+        Message.error(hookError.message || '申请提交前事件执行失败')
+        return
+      }
+      if (!hookPassed) {
         Message.info('申请提交前事件已拦截本次提交')
-        setDrawerSaving(false)
         return
       }
       let submitResult

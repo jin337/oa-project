@@ -12,7 +12,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
  * - no-unused-vars：未使用的变量（warn，不阻塞构建）
  */
 export default [
-  { ignores: ['dist/**', 'node_modules/**'] },
+  { ignores: ['dist/**', 'web/**', 'node_modules/**'] },
   // vite.config.js 运行于 Node 环境（Vite 加载配置时执行），补充 Node 全局变量避免 no-undef
   {
     files: ['vite.config.js'],

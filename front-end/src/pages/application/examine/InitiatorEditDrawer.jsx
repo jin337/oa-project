@@ -95,7 +95,13 @@ export function InitiatorEditDrawer({ node, onCancel, onSave }) {
           <JsEditor
             value={onSubmitBefore}
             onChange={setOnSubmitBefore}
-            placeholder={'// 提交前执行的 JS，可 return false 阻止提交\n// (form) => { ... }'}
+            placeholder={
+              '// 第二个参数 request 为自动携带登录态的请求助手\n' +
+              '// (form, request) => {\n' +
+              '//   const res = await request.get(\'/depts\')\n' +
+              '//   if (res.code !== 0) return false\n' +
+              '// }'
+            }
             minRows={6}
             maxRows={12}
           />
@@ -105,7 +111,12 @@ export function InitiatorEditDrawer({ node, onCancel, onSave }) {
           <JsEditor
             value={onSubmitAfter}
             onChange={setOnSubmitAfter}
-            placeholder={'// 提交成功后执行的 JS\n// (form, result) => { ... }'}
+            placeholder={
+              '// 第三个参数 request 为自动携带登录态的请求助手\n' +
+              '// (form, result, request) => {\n' +
+              '//   await request.post(\'/xxx\', form)\n' +
+              '// }'
+            }
             minRows={6}
             maxRows={12}
           />
