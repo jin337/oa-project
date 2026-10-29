@@ -267,7 +267,7 @@ export default function DesignManage() {
   const copyToDraft = async (record) => {
     try {
       await applicationApi.copyApplicationVersionToDraft(id, record.id)
-      Message.success(`已复制版本 v${record.version_no} 到草稿`)
+      Message.success(`已复制版本 ${record.version_no} 到草稿`)
       setVersionVisible(false)
       setPreviewVersion(null)
       setEditingVersion(null)
