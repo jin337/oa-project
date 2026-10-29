@@ -1,37 +1,37 @@
 import {
-    Button,
-    Card,
-    Drawer,
-    Dropdown,
-    Form,
-    Menu,
-    Message,
-    Modal,
-    Spin,
-    Table,
+  Button,
+  Card,
+  Drawer,
+  Dropdown,
+  Form,
+  Menu,
+  Message,
+  Modal,
+  Spin,
+  Table,
 } from '@arco-design/web-react'
 import { IconDoubleLeft, IconDoubleRight, IconDown } from '@arco-design/web-react/icon'
 import { useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
-    parseLayoutJson,
-    runInitiatorAfter,
-    runInitiatorBefore,
-    runOnSubmitAfter,
-    runOnSubmitBefore,
-    serializeTimeFields,
+  parseLayoutJson,
+  runInitiatorAfter,
+  runInitiatorBefore,
+  runOnSubmitAfter,
+  runOnSubmitBefore,
+  serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
 import {
-    colBillNo,
-    colCreatedAt,
-    colCreatedName,
-    colDept,
-    colFinishedAt,
-    colIndex,
-    colNodeName,
-    colStatus,
+  colBillNo,
+  colCreatedAt,
+  colCreatedName,
+  colDept,
+  colFinishedAt,
+  colIndex,
+  colNodeName,
+  colStatus,
 } from 'src/pages/approval/components/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
 import CCModal from 'src/pages/approval/components/CCModal'
@@ -467,12 +467,7 @@ export default function Initiated() {
       // 未从申请项发起（无 item_name）时回退展示流程配置名称；
       // 已驳回/已撤回可编辑的记录点击模块直接进入编辑，否则打开详情抽屉
       render: (v, r) => (
-        <Button
-          type="text"
-          size="small"
-          className="-ml-4!"
-          onClick={() => (r.can_edit ? openRejectedEdit(r) : openDetail(r))}
-        >
+        <Button type="text" size="small" className="-ml-4!" onClick={() => openDetail(r)}>
           {v || r?.app_name || '-'}
         </Button>
       ),
@@ -492,6 +487,17 @@ export default function Initiated() {
       render: (_, r) => {
         // 操作项定义：key / 文案 / 是否可用 / 点击动作；需要二次确认的项带 confirmText
         const defs = [
+          {
+            key: 'view',
+            label: '详情',
+            onClick: () => openDetail(r),
+          },
+          {
+            key: 'edit',
+            label: '编辑',
+            visible: r.can_edit,
+            onClick: () => openRejectedEdit(r),
+          },
           {
             key: 'withdraw',
             label: '撤回',
@@ -579,6 +585,9 @@ export default function Initiated() {
             setSize(s)
           },
         }}
+        onRow={(r) => ({
+          onDoubleClick: () => openDetail(r),
+        })}
       />
 
       {/* 详情 Drawer（只读查看） */}
@@ -646,8 +655,13 @@ export default function Initiated() {
                 onClick={() => setFlowCollapsed((v) => !v)}
               />
             </div>
-            <div className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pl-4 pr-8' : 'px-4'} py-3`}>
+            <div
+              className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pr-8 pl-4' : 'px-4'} py-3`}
+            >
               <div className="min-w-188">
+                <div className="mb-3 text-center text-xl font-bold">
+                  {editApp?.item_name || editApp?.name || ''}
+                </div>
                 <DynamicForm
                   app={editApp}
                   form={editForm}

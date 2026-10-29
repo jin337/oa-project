@@ -117,6 +117,9 @@ export default function Todo() {
             setSize(s)
           },
         }}
+        onRow={(r) => ({
+          onDoubleClick: () => openDetail(r),
+        })}
       />
 
       {/* 详情 Drawer（集成同意/拒绝/转交/加签操作） */}

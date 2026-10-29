@@ -115,6 +115,9 @@ export default function ToMe() {
             setSize(s)
           },
         }}
+        onRow={(r) => ({
+          onDoubleClick: () => openDetail(r),
+        })}
       />
       <ApprovalDetailDrawer
         record={detailRecord}

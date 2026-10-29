@@ -1,27 +1,27 @@
 import {
-    AutoComplete,
-    Button,
-    Card,
-    Drawer,
-    Empty,
-    Form,
-    Grid,
-    Input,
-    InputNumber,
-    Message,
-    Modal,
-    Popconfirm,
-    Select,
-    Space,
-    Spin,
+  AutoComplete,
+  Button,
+  Card,
+  Drawer,
+  Empty,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Message,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Spin,
 } from '@arco-design/web-react'
 import {
-    IconDelete,
-    IconDoubleLeft,
-    IconDoubleRight,
-    IconEdit,
-    IconPlus,
-    IconSettings,
+  IconDelete,
+  IconDoubleLeft,
+  IconDoubleRight,
+  IconEdit,
+  IconPlus,
+  IconSettings,
 } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useState } from 'react'
 import * as applicationApi from 'src/api/application'
@@ -29,12 +29,12 @@ import * as approvalApi from 'src/api/approval'
 import { fetchAll } from 'src/api/fetchAll'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView.jsx'
 import DynamicForm, {
-    parseLayoutJson,
-    runInitiatorAfter,
-    runInitiatorBefore,
-    runOnSubmitAfter,
-    runOnSubmitBefore,
-    serializeTimeFields,
+  parseLayoutJson,
+  runInitiatorAfter,
+  runInitiatorBefore,
+  runOnSubmitAfter,
+  runOnSubmitBefore,
+  serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
 
@@ -686,6 +686,7 @@ export default function Apply() {
               className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pl-4 pr-8' : 'px-4'} py-3`}
             >
               <div className="min-w-188">
+                <div className='text-center mb-3 text-xl font-bold'>{drawerTitle}</div>
                 <DynamicForm
                   app={drawerApp}
                   form={drawerForm}

@@ -112,6 +112,9 @@ export default function Workplace() {
             setSize(s)
           },
         }}
+        onRow={(r) => ({
+          onDoubleClick: () => openDetail(r),
+        })}
       />
       <ApprovalDetailDrawer
         record={detailRecord}

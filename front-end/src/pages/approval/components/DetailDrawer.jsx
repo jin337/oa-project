@@ -404,6 +404,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
             </div>
             <div className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pl-4 pr-8' : 'px-4'} py-3`}>
               <div className="min-w-188">
+                <div className='text-center mb-3 text-xl font-bold'>{title}</div>
                 <DynamicForm
                   app={{
                     ...appFromInstance,

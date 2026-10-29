@@ -13,11 +13,7 @@ import { useCallback, useContext, useEffect, useMemo } from 'react'
 import { useAuth } from 'src/store/auth-context'
 
 import { evalDynamicExpr } from '../utils/evalExpression'
-import {
-  buildValidationRules,
-  extractFormDeps,
-  parseDefaultValue,
-} from '../utils/formUtils'
+import { buildValidationRules, extractFormDeps, parseDefaultValue } from '../utils/formUtils'
 import { RuntimeFormContext } from './runtimeContext'
 
 /**
@@ -368,7 +364,11 @@ export const TableElementField = ({
             <Table
               key={el.table_key}
               rowKey={(record) => record.key}
-              border
+              size="small"
+              border={{
+                wrapper: true,
+                cell: true,
+              }}
               pagination={false}
               columns={finalColumns}
               data={fields}
@@ -482,65 +482,63 @@ export const renderTableSettings = ({
     <div className="text-sm text-gray-600">列配置</div>
     <div>
       {(selectedElement.columns || []).map((col, idx) => (
-      <div key={col.id || `col_${idx}`} className="mb-2 rounded border border-gray-200 p-2">
-        <div className="mb-1 flex items-center justify-between">
-          <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
-          <Button
-            size="mini"
-            status="danger"
-            icon={<IconDelete />}
-            onClick={() => removeColumn(updateSelectedElementColumns, col.id)}
-          />
-        </div>
-        <Select
-          className="mb-1 w-full"
-          placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
-          value={col.dataIndex || undefined}
-          disabled={!selectedElement.table_key}
-          options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => {
-            const fk = f.field_key || f.name || String(f.id)
-            return {
-              label: `${f.label || f.name || f.field_key}（${fk}）`,
-              value: fk,
-            }
-          })}
-          onChange={(v) => handleColumnFieldChange(col.id, selectedElement.table_key, v)}
-        />
-        <div className="flex items-center gap-2">
+        <div key={col.id || `col_${idx}`} className="mb-2 rounded border border-gray-200 p-2">
+          <div className="mb-1 flex items-center justify-between">
+            <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
+            <Button
+              size="mini"
+              status="danger"
+              icon={<IconDelete />}
+              onClick={() => removeColumn(updateSelectedElementColumns, col.id)}
+            />
+          </div>
           <Select
-            className="flex-1"
-            size="mini"
-            value={col.align || undefined}
-            placeholder="对齐"
-            options={[
-              { label: '左对齐', value: 'left' },
-              { label: '居中', value: 'center' },
-              { label: '右对齐', value: 'right' },
-            ]}
-            onChange={(v) =>
-              updateSelectedElementColumns(
-                (cols) =>
+            className="mb-1 w-full"
+            placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
+            value={col.dataIndex || undefined}
+            disabled={!selectedElement.table_key}
+            options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => {
+              const fk = f.field_key || f.name || String(f.id)
+              return {
+                label: `${f.label || f.name || f.field_key}（${fk}）`,
+                value: fk,
+              }
+            })}
+            onChange={(v) => handleColumnFieldChange(col.id, selectedElement.table_key, v)}
+          />
+          <div className="flex items-center gap-2">
+            <Select
+              className="flex-1"
+              size="mini"
+              value={col.align || undefined}
+              placeholder="对齐"
+              options={[
+                { label: '左对齐', value: 'left' },
+                { label: '居中', value: 'center' },
+                { label: '右对齐', value: 'right' },
+              ]}
+              onChange={(v) =>
+                updateSelectedElementColumns((cols) =>
                   cols.map((c, i) => (i === idx ? { ...c, align: v } : c)),
-              )
-            }
-          />
-          <InputNumber
-            className="flex-1"
-            size="mini"
-            min={40}
-            max={600}
-            placeholder="列宽"
-            value={col.width || undefined}
-            onChange={(v) =>
-              updateSelectedElementColumns(
-                (cols) =>
+                )
+              }
+            />
+            <InputNumber
+              className="flex-1"
+              size="mini"
+              min={40}
+              max={600}
+              placeholder="列宽"
+              value={col.width || undefined}
+              onChange={(v) =>
+                updateSelectedElementColumns((cols) =>
                   cols.map((c, i) => (i === idx ? { ...c, width: v || undefined } : c)),
-              )
-            }
-          />
+                )
+              }
+            />
+          </div>
         </div>
-      </div>
-    ))}
+      ))}
     </div>
     <Button
       icon={<IconPlus />}
@@ -590,9 +588,7 @@ export const renderTableSettings = ({
               icon={<IconDelete />}
               onClick={() =>
                 updateSelectedElement({
-                  summaryRules: (selectedElement.summaryRules || []).filter(
-                    (_, i) => i !== idx,
-                  ),
+                  summaryRules: (selectedElement.summaryRules || []).filter((_, i) => i !== idx),
                 })
               }
             />

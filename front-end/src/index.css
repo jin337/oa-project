@@ -87,14 +87,14 @@ strong {
   border-right: 1px solid #e5e6eb;
   margin-bottom: 0;
   background-color: #f7f8fa !important;
-  padding: 4px 8px !important;
+  padding: 1px 8px !important;
 }
 
 .detail-form-descriptions .arco-form-layout-vertical .arco-form-item-wrapper {
   border-top: 1px solid #e5e6eb;
   border-right: 1px solid #e5e6eb;
   margin-bottom: 0;
-  padding: 4px 8px !important;
+  padding: 1px 8px !important;
 }
 
 .detail-form-descriptions .arco-form-layout-horizontal {
@@ -123,17 +123,18 @@ strong {
   flex-direction: row;
   align-items: center;
   line-height: 1.5;
-  padding: 4px 8px !important;
+  padding: 1px 8px !important;
   margin: 0;
 }
 
 .detail-form-descriptions .arco-form-layout-horizontal .arco-form-label-item label {
   width: 100%;
+  font-weight: 600;
 }
 
 .detail-form-descriptions .arco-form-layout-horizontal .arco-form-item-wrapper {
   border-right: 1px solid #e5e6eb;
-  padding: 4px 8px !important;
+  padding: 1px 8px !important;
 }
 .detail-form-descriptions
   .arco-form-layout-horizontal
