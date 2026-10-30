@@ -198,7 +198,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
 
   // ========== 审批操作 ==========
   // 收集审批人修改后的表单数据：序列化时间字段后与实例初始数据比对，有差异才随审批提交
-  // perm=1 字段仅脱敏展示为 ***、不注册真实输入控件，visible_if 隐藏列也可能缺失；
+  // perm=1 字段仅脱敏展示为 *****、不注册真实输入控件，visible_if 隐藏列也可能缺失；
   // 提交前用初始快照按行补齐，保证子表全量重建时数据完整（避免缺失必填列导致 MySQL 1364）
   const mergeHiddenColumns = (values, initial) => {
     if (!initial || typeof initial !== 'object') return values

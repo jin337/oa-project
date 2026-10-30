@@ -197,7 +197,7 @@ export const TableElementField = ({
           return vif ? !evalDynamicExpr(vif, globalVals) : false
         })
         // 子表列权限严格按 field + table_key 匹配，避免主表同名字段的权限误伤子表列；
-        // perm=1 不再隐藏整列，详情下保留列并将单元格值脱敏为 ***
+        // perm=1 不再隐藏整列，详情下保留列并将单元格值脱敏为 *****
         const findColPerm = (colKey) =>
           (fieldPerms || []).find(
             (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key),
@@ -243,7 +243,7 @@ export const TableElementField = ({
               const renderFn = rpc[col.element_type]
               const colPerm = findColPerm(colKey)
               const colMasked = pageType === 'detail' && colPerm?.perm === 1
-              if (colMasked) return <span>***</span>
+              if (colMasked) return <span>*****</span>
               if (!renderFn) return <span>{cellValue ?? ''}</span>
               // 审批节点字段权限：仅待办审批（editable）详情（detail）下该列 perm=2（可编辑）→ 渲染可编辑控件
               const colEditableByPerm = editable && pageType === 'detail' && colPerm?.perm === 2
@@ -435,7 +435,7 @@ export const TableElementField = ({
                                 textAlign: summaryBodyStyle.textAlign,
                               }}
                             >
-                              {summaryMasked ? '***' : values[summaryColKey] ?? ''}
+                              {summaryMasked ? '*****' : values[summaryColKey] ?? ''}
                             </SummaryCell>
                           )
                         }),

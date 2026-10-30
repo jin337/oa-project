@@ -77,7 +77,7 @@ const apiOptionDeps = (el) => {
   return extractFormDeps([ds.params, ds.label].filter(Boolean).join(' '))
 }
 
-/** 审批详情字段权限：perm=1 脱敏展示（字段保留、值显示 ***），perm=2 可编辑 */
+/** 审批详情字段权限：perm=1 脱敏展示（字段保留、值显示 *****），perm=2 可编辑 */
 const findFieldPerm = (fieldPerms, fieldKey, tableKey) =>
   (fieldPerms || []).find((p) => {
     if (!p || p.field !== fieldKey) return false
@@ -643,7 +643,7 @@ export const renderFormItemElement = (el, ctx) => {
   const fieldPerm = findFieldPerm(fieldPerms, el.field_key)
   const permEditable =
     editable && pageType === 'detail' && fieldPerm?.perm === 2
-  // perm=1 不再整字段隐藏：保留字段标签，详情值统一展示为 ***
+  // perm=1 不再整字段隐藏：保留字段标签，详情值统一展示为 *****
   const masked = pageType === 'detail' && fieldPerm?.perm === 1
 
   // 仅在水平模式下计算栅格/Flex 布局（无标签元素按宽度分配，常规元素按全局标签宽度）
@@ -689,7 +689,7 @@ export const renderFormItemElement = (el, ctx) => {
       )
     }
     if (masked) {
-      return <span className="break-all whitespace-pre-wrap">***</span>
+      return <span className="break-all whitespace-pre-wrap">*****</span>
     }
     // detail / move-detail 只读：统一经 ReadonlyValue 回显（upload/deptselect/userselect 由内部自动分派），
     // value 由 FormItem 注入（move-detail 为 MoveDetailMode 注入的模拟数据）
@@ -870,7 +870,7 @@ import MoveFormMode from './modes/MoveFormMode'
  * @param {Function} onCanvasDragOver     画布模式：画布空白区拖拽悬停
  * @param {Function} onCanvasDrop         画布模式：画布空白区放置
  * @param {Function} onCanvasClick        画布模式：画布空白区点击（取消选中）
- * @param {Array}    fieldPerms           字段权限 [{field, perm, table_key}]：perm=1 脱敏展示（值显示 ***）、
+ * @param {Array}    fieldPerms           字段权限 [{field, perm, table_key}]：perm=1 脱敏展示（值显示 *****）、
  *                                        perm=2 可编辑（正常渲染控件）；未配置权限的字段默认按只读/普通方式渲染。
  *                                        审批详情场景由实例详情接口返回当前节点 field_perms。
  */

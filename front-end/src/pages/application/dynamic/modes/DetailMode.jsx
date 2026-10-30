@@ -13,7 +13,7 @@ const Col = Grid.Col
  * DetailMode：详情只读模式（pageType === 'detail'）
  *
  * 接收 detailDynamicStates 预计算结果，渲染详情只读及审批模式下的表单。
- * 所有控件默认禁用；审批待办场景下 perm=2 的字段可编辑，perm=1 的字段保留标签但值脱敏为 ***。
+ * 所有控件默认禁用；审批待办场景下 perm=2 的字段可编辑，perm=1 的字段保留标签但值脱敏为 *****。
  */
 export default function DetailMode({
   form,

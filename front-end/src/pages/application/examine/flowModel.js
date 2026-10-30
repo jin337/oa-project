@@ -32,7 +32,7 @@ import { NODE_TYPE_META } from 'src/pages/application/design/constants'
 /**
  * @typedef {Object} ApprovalFieldPerm 表单字段权限
  * @property {string} field 表单字段标识
- * @property {number} perm 权限（1-脱敏展示（值显示 ***） / 2-可编辑）
+ * @property {number} perm 权限（1-脱敏展示（值显示 *****） / 2-可编辑）
  */
 
 /**
