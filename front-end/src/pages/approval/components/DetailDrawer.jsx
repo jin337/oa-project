@@ -38,12 +38,12 @@ import ApprovalTimeline from 'src/pages/approval/components/ApprovalTimeline.jsx
  * 审批记录动态详情 Drawer（公共组件）：
  * - 通过 record.instance_id 一次性请求流程实例详情接口
  * - 复用接口返回的 business_data 渲染动态详情，复用 detail_layout_json 构建布局
- * - 集成审批操作按钮：同意/拒绝（需 currentTask）、转交、加签（撤回仅在我的申请页）
+ * - 集成审批操作按钮：同意/不同意（需 currentTask）、转交、加签（撤回仅在我的申请页）
  *
  * @param {object} props.record        列表记录（含 instance_id / data_id / app_id 等）
  * @param {boolean} props.visible      Drawer 是否可见
  * @param {function} props.onCancel    关闭回调
- * @param {object} props.currentTask   当前用户的待办任务（含 id / instance_id），传入时显示同意/拒绝按钮
+ * @param {object} props.currentTask   当前用户的待办任务（含 id / instance_id），传入时显示同意/不同意按钮
  * @param {function} props.onAction    操作成功后的回调（通知父组件刷新列表）
  */
 export default function DetailDrawer({ record, visible, onCancel, currentTask, onAction }) {
@@ -167,12 +167,12 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     }
   }, [instance?.business_data, detailForm, appFromInstance?.detail_layout_json])
 
-  // 是否显示审批操作按钮（同意/拒绝）
+  // 是否显示审批操作按钮（同意/不同意）
   const showApproveButtons = Boolean(currentTask?.id)
   // 是否显示转交/加签按钮（有待办任务时）
   const showDelegateButtons = Boolean(currentTask?.id)
 
-  // 当前任务所在节点的审批人操作权限（node.permissions：1-拒绝 / 2-转交 / 3-加签）
+  // 当前任务所在节点的审批人操作权限（node.permissions：1-不同意 / 2-转交 / 3-加签）
   // 快照为树形结构（条件分支的 children 内嵌节点），需递归查找；
   // 通过实例任务列表定位任务所属节点，旧快照无 permissions 时默认全部放行
   const currentNodePerms = (() => {
@@ -191,7 +191,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     return node?.permissions?.length ? node.permissions : [1, 2, 3]
   })()
 
-  // 退回权限：permissions 含 1（对齐钉钉，拒绝为审批人默认操作不受配置控制）
+  // 退回权限：permissions 含 1（对齐钉钉，不同意为审批人默认操作不受配置控制）
   const canReturn = showApproveButtons && currentNodePerms.includes(1)
   const canDelegate = showDelegateButtons && currentNodePerms.includes(2)
   const canAddSign = showDelegateButtons && currentNodePerms.includes(3)
@@ -226,9 +226,9 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
 
   const handleApprove = async (action) => {
     if (!currentTask) return
-    // 拒绝/退回意见必填（对齐钉钉）
+    // 不同意/退回意见必填（对齐钉钉）
     if ((action === 2 || action === 3) && !comment.trim()) {
-      Message.warning(action === 3 ? '退回时必须填写退回意见' : '拒绝时必须填写拒绝意见')
+      Message.warning(action === 3 ? '退回时必须填写退回意见' : '不同意时必须填写不同意意见')
       return
     }
     setOperating(true)
@@ -239,7 +239,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         comment: comment.trim() || undefined,
         business_data: businessData,
       })
-      const names = { 1: '已同意', 2: '已拒绝', 3: '已退回' }
+      const names = { 1: '已同意', 2: '不同意', 3: '已退回' }
       Message.success(names[action] || '操作成功')
       setComment('')
       onAction?.()
@@ -341,7 +341,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
                 loading={operating}
                 onClick={() => handleApprove(2)}
               >
-                拒绝
+                不同意
               </Button>
               <Button
                 type="primary"
@@ -361,13 +361,13 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   // 审批状态映射（instance.status 实例状态枚举；文案以列表 approvalStatus.jsx 为准）
   const getStatusConfig = (status) => {
     const statusMap = {
-      // 0 进行中 / 1 通过 / 2 拒绝 / 3 退回 / 4 作废 / 5 撤回 / 6 草稿
+      // 0 进行中 / 1 通过 / 2 不通过 / 3 退回 / 4 作废 / 5 撤回 / 6 草稿
       0: { text: '审核中', color: '#ffb400' },
-      1: { text: '审批通过', color: '#00b42a' },
-      2: { text: '审批拒绝', color: '#f53f3f' },
-      3: { text: '审批退回', color: '#ff7d00' },
-      4: { text: '审批作废', color: '#86909c' },
-      5: { text: '审批撤回', color: '#722ed1' },
+      1: { text: '已审批', color: '#00b42a' },
+      2: { text: '不通过', color: '#f53f3f' },
+      3: { text: '退回', color: '#ff7d00' },
+      4: { text: '作废', color: '#86909c' },
+      5: { text: '撤回', color: '#722ed1' },
       6: { text: '草稿', color: '#86909c' },
     }
     return statusMap[Number(status)] || { text: '未知状态', color: '#86909c' }

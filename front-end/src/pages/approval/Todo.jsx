@@ -10,8 +10,8 @@ import {
   colNodeName,
   colStatus,
 } from 'src/pages/approval/components/approvalColumns'
-import CCModal from 'src/pages/approval/components/CCModal'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
+import CCModal from 'src/pages/approval/components/CCModal'
 import ApprovalDetailDrawer from 'src/pages/approval/components/DetailDrawer'
 import { useApprovalList } from 'src/pages/approval/components/useApprovalList'
 
@@ -118,7 +118,7 @@ export default function Todo() {
           },
         }}
         onRow={(r) => ({
-          onDoubleClick: () => openDetail(r),
+          onDoubleClick: () => openDetailWithTask(r),
         })}
       />
 
