@@ -56,26 +56,20 @@ export default function FormMode({
         layout={formConfig.layout}
         labelAlign={formConfig.labelAlign}
         autoComplete="off"
+        scrollToFirstError={{ behavior: 'smooth', block: 'center' }}
         onValuesChange={(changed, allValues) => {
           handleValuesChange(changed, allValues)
           onValuesChange?.(allValues)
         }}
       >
         <Row>
-          {elements
-            .filter((el) => {
-              // 字段权限过滤：perm=1（隐藏）不渲染；未配置权限的字段默认渲染
-              if (!fieldPerms || !el.field_key) return true
-              const fp = fieldPerms.find((p) => p && p.field === el.field_key)
-              return !fp || fp.perm !== 1
-            })
-            .map((el, index) => (
-              <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
-                <RuntimeFieldWrap el={el}>
-                  {renderFormItemElement(el, { ...formCtx, runtime: contextValue })}
-                </RuntimeFieldWrap>
-              </Col>
-            ))}
+          {elements.map((el, index) => (
+            <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
+              <RuntimeFieldWrap el={el}>
+                {renderFormItemElement(el, { ...formCtx, runtime: contextValue })}
+              </RuntimeFieldWrap>
+            </Col>
+          ))}
         </Row>
       </Form>
     </RuntimeFormContext.Provider>

@@ -13,7 +13,7 @@ const Col = Grid.Col
  * DetailMode：详情只读模式（pageType === 'detail'）
  *
  * 接收 detailDynamicStates 预计算结果，渲染详情只读及审批模式下的表单。
- * 所有控件默认禁用；审批待办场景下 perm=2 的字段可编辑。
+ * 所有控件默认禁用；审批待办场景下 perm=2 的字段可编辑，perm=1 的字段保留标签但值脱敏为 ***。
  */
 export default function DetailMode({
   form,
@@ -52,20 +52,13 @@ export default function DetailMode({
       className="detail-form-descriptions"
     >
       <Row>
-        {elements
-          .filter((el) => {
-            // 字段权限过滤：perm=1（隐藏）不渲染；未配置权限的字段默认渲染
-            if (!fieldPerms || !el.field_key) return true
-            const fp = fieldPerms.find((p) => p && p.field === el.field_key)
-            return !fp || fp.perm !== 1
-          })
-          .map((el, index) => (
-            <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
-              <RuntimeFieldWrap el={el}>
-                {renderFormItemElement(el, { ...formCtx, runtime: null })}
-              </RuntimeFieldWrap>
-            </Col>
-          ))}
+        {elements.map((el, index) => (
+          <Col span={el.width || 24} key={el.id || `el_${el.element_type}_${index}`}>
+            <RuntimeFieldWrap el={el}>
+              {renderFormItemElement(el, { ...formCtx, runtime: null })}
+            </RuntimeFieldWrap>
+          </Col>
+        ))}
       </Row>
     </Form>
   )

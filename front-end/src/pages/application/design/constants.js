@@ -90,7 +90,7 @@ export const PERMISSION_OPTIONS = [
   { value: 3, label: '加签' },
 ]
 
-/** 表单字段权限（1-隐藏 / 2-可编辑） */
+/** 表单字段权限（1-隐藏展示（内容显示 ***） / 2-可编辑） */
 export const FIELD_PERM_OPTIONS = [
   { value: 1, label: '隐藏' },
   { value: 2, label: '可编辑' },

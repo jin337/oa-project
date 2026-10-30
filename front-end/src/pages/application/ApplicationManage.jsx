@@ -310,11 +310,7 @@ export default function ApplicationManage() {
     if (key === 'tables') {
       openSubPage(record, 'tables', '表字段管理')
     } else if (key === 'elements') {
-      openSubPage(record, 'elements', '表单元素')
-    } else if (key === 'layout') {
-      openSubPage(record, 'layout', '表单设置布局')
-    } else if (key === 'examine') {
-      openSubPage(record, 'examine', '审批配置')
+      openSubPage(record, 'elements', '表单元素管理')
     } else if (key === 'design') {
       openSubPage(record, 'design', '表单设计')
     }
@@ -351,14 +347,7 @@ export default function ApplicationManage() {
       key: 'name',
       title: '名称',
       dataIndex: 'name',
-      render: (v, record) =>
-        canEdit ? (
-          <Button type="text" size="small" className="-ml-4!" onClick={() => openEdit(record)}>
-            {v}
-          </Button>
-        ) : (
-          v
-        ),
+      render: (v) => v || '-',
     },
     {
       key: 'code',
@@ -440,6 +429,9 @@ export default function ApplicationManage() {
                 <IconDown />
               </Button>
             </Dropdown>
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
             <Button size="mini" onClick={() => openListPage(record)}>
               数据
             </Button>

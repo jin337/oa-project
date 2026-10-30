@@ -277,7 +277,7 @@ export function ApproverEditDrawer({
               <Button
                 size="small"
                 icon={<IconPlus />}
-                onClick={() => setFieldPerms([...fieldPerms, { field: '', perm: 1 }])} // 新字段默认 1-隐藏
+                onClick={() => setFieldPerms([...fieldPerms, { field: '', perm: 1 }])} // 新字段默认 1-脱敏展示
               >
                 添加字段
               </Button>

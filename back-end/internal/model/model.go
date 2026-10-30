@@ -833,7 +833,7 @@ type ApprovalInstanceDetailResult struct {
 	FormLayoutJSON   any                          `json:"form_layout_json,omitempty"`   // 表单页布局（草稿/退回编辑用，可交互）
 	Tasks            []ApprovalInstanceTaskResult `json:"approval_flow_tasks,omitempty"`
 	AssigneeNameMap  map[string]string            `json:"assignee_name_map,omitempty"` // 用户ID -> 姓名
-	FieldPerms       []interface{}                `json:"field_perms,omitempty"`       // 当前执行节点的表单字段权限 [{field, perm}]
+	FieldPerms       []interface{}                `json:"field_perms,omitempty"`       // 当前执行节点的表单字段权限 [{field, perm}]（1-脱敏展示，2-可编辑）
 }
 
 // ApprovalRecord 审批列表聚合记录（跨应用汇总动态业务数据，供我的发起/待办/已办/抄送/草稿箱使用）

@@ -23,6 +23,7 @@ import DynamicForm, {
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
 import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
+import { handleApprovalFormValidationError } from 'src/pages/application/dynamic/utils/approvalFormValidation'
 import {
   colBillNo,
   colCreatedAt,
@@ -258,6 +259,7 @@ export default function Initiated() {
     try {
       values = await editForm.validate()
     } catch (e) {
+      handleApprovalFormValidationError(e?.errors || e, editForm, editApp)
       return
     }
     setEditSaving(true)
@@ -292,6 +294,7 @@ export default function Initiated() {
     try {
       values = await editForm.validate()
     } catch (e) {
+      handleApprovalFormValidationError(e?.errors || e, editForm, editApp)
       return
     }
     setEditSaving(true)
@@ -322,6 +325,7 @@ export default function Initiated() {
     try {
       values = await editForm.validate()
     } catch (e) {
+      handleApprovalFormValidationError(e?.errors || e, editForm, editApp)
       return
     }
     setEditSaving(true)
@@ -372,6 +376,7 @@ export default function Initiated() {
     try {
       values = await editForm.validate()
     } catch (e) {
+      handleApprovalFormValidationError(e?.errors || e, editForm, editApp)
       return
     }
     setEditSaving(true)
@@ -409,6 +414,7 @@ export default function Initiated() {
     try {
       values = await editForm.validate()
     } catch (e) {
+      handleApprovalFormValidationError(e?.errors || e, editForm, editApp)
       return
     }
     setEditSaving(true)

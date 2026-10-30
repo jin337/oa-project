@@ -49,6 +49,20 @@ export const removeColumn = (updateSelectedElementColumns, colId) =>
 export const updateColumn = (updateSelectedElementColumns, colId, patch) =>
   updateSelectedElementColumns((cols) => cols.map((c) => (c.id === colId ? { ...c, ...patch } : c)))
 
+// 合法表格单元格水平对齐值；合计行必须复用数据行的 bodyCellStyle，避免出现两套对齐来源
+const TABLE_CELL_ALIGNS = new Set(['left', 'center', 'right'])
+
+/** 合并列数据中的 bodyCellStyle 与历史 col.align；优先使用 bodyCellStyle.textAlign */
+const getColumnBodyCellStyle = (col) => {
+  const source =
+    col?.bodyCellStyle && typeof col.bodyCellStyle === 'object' ? col.bodyCellStyle : {}
+  const legacyAlign = TABLE_CELL_ALIGNS.has(col?.align) ? col.align : undefined
+  return {
+    ...source,
+    textAlign: TABLE_CELL_ALIGNS.has(source.textAlign) ? source.textAlign : legacyAlign,
+  }
+}
+
 // ==================== 表格运行时组件 ====================
 
 const SummaryRow = Table.Summary.Row
@@ -182,16 +196,13 @@ export const TableElementField = ({
           const vif = col.dynamic_states?.visible_if
           return vif ? !evalDynamicExpr(vif, globalVals) : false
         })
-        // 字段权限 perm=1（隐藏）：子表列不渲染（与主表字段隐藏一致）；
-        // 严格按 field + table_key 匹配，避免主表同名字段的权限误伤子表列
-        const permColumns = vifCols.filter((col) => {
-          const colKey = col.dataIndex || col.field_key
-          const fp = (fieldPerms || []).find(
+        // 子表列权限严格按 field + table_key 匹配，避免主表同名字段的权限误伤子表列；
+        // perm=1 不再隐藏整列，详情下保留列并将单元格值脱敏为 ***
+        const findColPerm = (colKey) =>
+          (fieldPerms || []).find(
             (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key),
           )
-          return !fp || fp.perm !== 1
-        })
-        const columns = permColumns.map((col, i) => {
+        const columns = vifCols.map((col, i) => {
           const colKey = col.dataIndex || col.field_key || `col_${i + 1}`
           const isDetail = pageType === 'detail'
           // 列标题兜底：优先 col.title，其次字段 label / name / field_key（兼容旧版本
@@ -209,7 +220,7 @@ export const TableElementField = ({
               </>
             ),
             dataIndex: colKey,
-            align: col.align || undefined,
+            bodyCellStyle: getColumnBodyCellStyle(col),
             width: col.width || undefined,
             // 按列配置的 element_type 从 renderPreviewConfig 映射渲染表单控件；
             // 行内控件由 FormItem 绑定嵌套字段路径（table_key[index].colKey）自动注入 value/onChange/disabled；
@@ -230,14 +241,12 @@ export const TableElementField = ({
                 )
               })
               const renderFn = rpc[col.element_type]
+              const colPerm = findColPerm(colKey)
+              const colMasked = pageType === 'detail' && colPerm?.perm === 1
+              if (colMasked) return <span>***</span>
               if (!renderFn) return <span>{cellValue ?? ''}</span>
               // 审批节点字段权限：仅待办审批（editable）详情（detail）下该列 perm=2（可编辑）→ 渲染可编辑控件
-              const colEditableByPerm =
-                editable &&
-                pageType === 'detail' &&
-                (fieldPerms || []).find(
-                  (p) => p && p.field === colKey && (!p.table_key || p.table_key === el.table_key),
-                )?.perm === 2
+              const colEditableByPerm = editable && pageType === 'detail' && colPerm?.perm === 2
               const cellEditable = isEditable || colEditableByPerm
               const colDS = col.dynamic_states
               // 单元格控件渲染（extra 可覆盖 hidden/disabled 等属性）
@@ -395,8 +404,8 @@ export const TableElementField = ({
                         }, 0)
                         values[rule.colKey] = Math.round(sum * 100) / 100
                       })
-                      // 合计行单元格样式：与数据行网格线保持一致（Arco body td 用 border-left + border-bottom
-                      // 勾勒表格线，而 tfoot 的 td 默认无边框，导致合计行最左侧缺边框），内容统一居中对齐
+                      // 合计行单元格保留粗体；水平对齐逐列复用 bodyCellStyle.textAlign，
+                      // 未配置时不强制覆盖，跟随 Arco 表格单元格默认左对齐
                       const summaryCellStyle = {
                         fontWeight: 600,
                         textAlign: 'center',
@@ -413,17 +422,23 @@ export const TableElementField = ({
                         <SummaryCell key="summary-label" style={summaryCellStyle}>
                           合计
                         </SummaryCell>,
-                        ...columns.map((col) => (
-                          <SummaryCell
-                            key={col.dataIndex || col.field_key || col.key || 'col'}
-                            style={{
-                              ...cellStyle,
-                              textAlign: col.align || 'center',
-                            }}
-                          >
-                            {values[col.dataIndex ?? col.field_key] ?? ''}
-                          </SummaryCell>
-                        )),
+                        ...columns.map((col) => {
+                          const summaryBodyStyle = getColumnBodyCellStyle(col)
+                          const summaryColKey = col.dataIndex ?? col.field_key
+                          const summaryMasked =
+                            pageType === 'detail' && findColPerm(summaryColKey)?.perm === 1
+                          return (
+                            <SummaryCell
+                              key={col.dataIndex || col.field_key || col.key || 'col'}
+                              style={{
+                                ...cellStyle,
+                                textAlign: summaryBodyStyle.textAlign,
+                              }}
+                            >
+                              {summaryMasked ? '***' : values[summaryColKey] ?? ''}
+                            </SummaryCell>
+                          )
+                        }),
                         ...(isEditable
                           ? [<SummaryCell key="summary-action" style={cellStyle} />]
                           : []),
@@ -510,8 +525,8 @@ export const renderTableSettings = ({
             <Select
               className="flex-1"
               size="mini"
-              value={col.align || undefined}
-              placeholder="对齐"
+              value={getColumnBodyCellStyle(col).textAlign || undefined}
+              placeholder="内容对齐方式"
               options={[
                 { label: '左对齐', value: 'left' },
                 { label: '居中', value: 'center' },
@@ -519,7 +534,21 @@ export const renderTableSettings = ({
               ]}
               onChange={(v) =>
                 updateSelectedElementColumns((cols) =>
-                  cols.map((c, i) => (i === idx ? { ...c, align: v } : c)),
+                  cols.map((c, i) => {
+                    if (i !== idx) return c
+                    const next = {
+                      ...c,
+                      bodyCellStyle: {
+                        ...(typeof c.bodyCellStyle === 'object' && c.bodyCellStyle
+                          ? c.bodyCellStyle
+                          : {}),
+                        textAlign: v || undefined,
+                      },
+                    }
+                    // 新配置统一保存在 bodyCellStyle.textAlign；移除旧的独立 align 字段
+                    delete next.align
+                    return next
+                  }),
                 )
               }
             />

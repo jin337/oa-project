@@ -884,7 +884,7 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	// 批量解析涉及用户 ID 的姓名（审批人 + 发起人）
 	assigneeNameMap := buildAssigneeNameMap(tasks, instance.CreatedBy)
 
-	// 当前执行节点的表单字段权限（审批详情页按权限隐藏/可编辑字段）
+	// 当前执行节点的表单字段权限（审批详情页：perm=1 脱敏展示，perm=2 可编辑字段）
 	// 优先使用应用最新流程配置中的节点权限（ExamineManage 修改后即时生效），
 	// 最新流程不可用时回退到实例冻结快照，保证历史实例仍能正常打开
 	fieldPerms := currentNodeFieldPerms(instance)
@@ -1085,7 +1085,7 @@ func mergeFlowRuntimeMembers(latest any, snapshot any) any {
 }
 
 // currentNodeFieldPerms 当前执行节点的表单字段权限：
-// 实例进行中时按 execution_path[current_node_idx] 定位节点，返回其 fieldPerms（[{field, perm}]）
+// 实例进行中时按 execution_path[current_node_idx] 定位节点，返回其 fieldPerms（[{field, perm}]；1-脱敏展示，2-可编辑）
 func currentNodeFieldPerms(instance model.ApprovalInstance) []interface{} {
 	if instance.Status != model.InstanceStatusRunning {
 		return nil

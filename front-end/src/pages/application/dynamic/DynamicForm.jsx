@@ -77,6 +77,14 @@ const apiOptionDeps = (el) => {
   return extractFormDeps([ds.params, ds.label].filter(Boolean).join(' '))
 }
 
+/** 审批详情字段权限：perm=1 脱敏展示（字段保留、值显示 ***），perm=2 可编辑 */
+const findFieldPerm = (fieldPerms, fieldKey, tableKey) =>
+  (fieldPerms || []).find((p) => {
+    if (!p || p.field !== fieldKey) return false
+    // 主表字段不关心 table_key；子表列必须按 table_key 精确匹配，避免同名字段互相误伤
+    return tableKey === undefined || !p.table_key || p.table_key === tableKey
+  })
+
 /**
  * 收集全部字段定义：顶层元素 + 各表（table）的列。
  * 列与元素同结构解析（element_type/data_source/actions/default_value/dynamic_states），
@@ -632,10 +640,11 @@ export const renderFormItemElement = (el, ctx) => {
   const isFormMode = pageType === 'form'
   const isDetailMode = pageType === 'detail'
   // 审批节点字段权限：仅待办审批（editable）详情（detail）场景下 perm=2（可编辑）的字段渲染可编辑控件
+  const fieldPerm = findFieldPerm(fieldPerms, el.field_key)
   const permEditable =
-    editable &&
-    pageType === 'detail' &&
-    (fieldPerms || []).find((p) => p && p.field === el.field_key)?.perm === 2
+    editable && pageType === 'detail' && fieldPerm?.perm === 2
+  // perm=1 不再整字段隐藏：保留字段标签，详情值统一展示为 ***
+  const masked = pageType === 'detail' && fieldPerm?.perm === 1
 
   // 仅在水平模式下计算栅格/Flex 布局（无标签元素按宽度分配，常规元素按全局标签宽度）
   let labelCol
@@ -666,7 +675,7 @@ export const renderFormItemElement = (el, ctx) => {
   //   detail/move-detail 纯文本）；常规控件走统一渲染配置中心
   const renderControl = () => {
     if (el.element_type === 'table') {
-      // 表格（子表）：透传字段权限，支持 detail 下按列 perm=2 渲染可编辑控件；
+      // 表格（子表）：透传字段权限，支持 detail 下按列 perm=2 渲染可编辑控件、perm=1 脱敏展示；
       // move-detail（画布详情预览）内部渲染模拟数据表格
       return (
         <TableElementField
@@ -678,6 +687,9 @@ export const renderFormItemElement = (el, ctx) => {
           ReadonlyValue={ReadonlyValue}
         />
       )
+    }
+    if (masked) {
+      return <span className="break-all whitespace-pre-wrap">***</span>
     }
     // detail / move-detail 只读：统一经 ReadonlyValue 回显（upload/deptselect/userselect 由内部自动分派），
     // value 由 FormItem 注入（move-detail 为 MoveDetailMode 注入的模拟数据）
@@ -858,8 +870,9 @@ import MoveFormMode from './modes/MoveFormMode'
  * @param {Function} onCanvasDragOver     画布模式：画布空白区拖拽悬停
  * @param {Function} onCanvasDrop         画布模式：画布空白区放置
  * @param {Function} onCanvasClick        画布模式：画布空白区点击（取消选中）
- * @param {Array}    fieldPerms           字段权限 [{field, perm}]：perm=1 隐藏（不渲染）、perm=2 可编辑（正常渲染）；
- *                                        未配置权限的字段默认渲染。审批详情场景由实例详情接口返回当前节点 field_perms。
+ * @param {Array}    fieldPerms           字段权限 [{field, perm, table_key}]：perm=1 脱敏展示（值显示 ***）、
+ *                                        perm=2 可编辑（正常渲染控件）；未配置权限的字段默认按只读/普通方式渲染。
+ *                                        审批详情场景由实例详情接口返回当前节点 field_perms。
  */
 export default function DynamicForm({
   app,
