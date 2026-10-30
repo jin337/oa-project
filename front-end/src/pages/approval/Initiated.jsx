@@ -22,7 +22,11 @@ import DynamicForm, {
   runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
+import {
+  buildInstanceSelfSelectMembers,
+  buildSelfSelectUserIDs,
+  getInitiatorNode,
+} from 'src/pages/application/examine/flowModel'
 import { handleApprovalFormValidationError } from 'src/pages/application/dynamic/utils/approvalFormValidation'
 import {
   colBillNo,
@@ -192,17 +196,8 @@ export default function Initiated() {
     try {
       const res = await approvalApi.getApprovalInstanceDetail(record.instance_id || record.id)
       const inst = res.data
-      // 从草稿暂存恢复自选成员：nodeId -> [userId] -> nodeId -> [{type,key,label}]
-      const draftMembers = inst.approval_draft_members || {}
-      const nameMap = inst.assignee_name_map || {}
-      const selfSel = {}
-      Object.entries(draftMembers).forEach(([nodeId, ids]) => {
-        selfSel[nodeId] = (Array.isArray(ids) ? ids : []).map((uid) => ({
-          type: 1,
-          key: `user_${uid}`,
-          label: nameMap[String(uid)] || `用户${uid}`,
-        }))
-      })
+      // 草稿暂存优先；无暂存时从流程快照恢复自选成员，保证提交参数不会丢失
+      const selfSel = buildInstanceSelfSelectMembers(inst)
       setSelfSelectMembers(selfSel)
       setEditApp({
         id: inst.app_id,
@@ -236,11 +231,14 @@ export default function Initiated() {
     try {
       const res = await approvalApi.getApprovalInstanceDetail(record.instance_id || record.id)
       const inst = res.data
+      // 复制时同步原单自选审批人/抄送人：既用于抽屉展示，也用于副本提交时构造成员参数
+      const selfSel = buildInstanceSelfSelectMembers(inst)
+      setSelfSelectMembers(selfSel)
       setEditApp({
         id: inst.app_id,
         name: inst.app_name,
         form_layout_json: inst.form_layout_json,
-        approval_flow_json: inst.approval_flow_json,
+        approval_flow_json: injectDraftMembers(inst.approval_flow_json, selfSel),
       })
       const bizData = stripCopyFields(inst.business_data || {})
       editForm.setFieldsValue(bizData)

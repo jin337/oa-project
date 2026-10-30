@@ -20,7 +20,11 @@ import DynamicForm, {
   runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
+import {
+  buildInstanceSelfSelectMembers,
+  buildSelfSelectUserIDs,
+  getInitiatorNode,
+} from 'src/pages/application/examine/flowModel'
 import { handleApprovalFormValidationError } from 'src/pages/application/dynamic/utils/approvalFormValidation'
 import {
   colBillNo,
@@ -122,18 +126,8 @@ export default function Drafts() {
       // 一次请求获取实例详情（含 business_data + form_layout_json）
       const res = await approvalApi.getApprovalInstanceDetail(record.instance_id)
       const inst = res.data
-      // 从草稿暂存 approval_draft_members（nodeId -> [userId]）恢复发起人自选审批人/抄送人，
-      // 姓名经 assignee_name_map 映射；应用最新审批流配置中自选节点 members 为空，需注入后供 DynamicFlowView 展示
-      const draftMembers = inst.approval_draft_members || {}
-      const nameMap = inst.assignee_name_map || {}
-      const selfSel = {}
-      Object.entries(draftMembers).forEach(([nodeId, ids]) => {
-        selfSel[nodeId] = (Array.isArray(ids) ? ids : []).map((uid) => ({
-          type: 1,
-          key: `user_${uid}`,
-          label: nameMap[String(uid)] || `用户${uid}`,
-        }))
-      })
+      // 草稿暂存优先；无暂存时从流程快照恢复自选成员，避免再次保存时被清空
+      const selfSel = buildInstanceSelfSelectMembers(inst)
       // 构造 app 配置：form_layout_json → form_layout_json 映射供 DynamicForm 使用，approval_flow_json → approval_flow_json 映射供 DynamicFlowView 使用
       setDrawerApp({
         id: inst.app_id,

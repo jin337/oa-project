@@ -131,6 +131,69 @@ export function getInitiatorNode(rawFlow) {
   return parsed.find((n) => n && n.type === 1) || null
 }
 
+/** 解析审批流 JSON 为节点数组；兼容字符串、数组与异常数据 */
+const parseFlowArray = (rawFlow) => {
+  if (Array.isArray(rawFlow)) return rawFlow
+  if (typeof rawFlow !== 'string' || !rawFlow) return null
+  try {
+    const parsed = JSON.parse(rawFlow)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+/** 判断节点是否为发起人自选（审批人 approverType=3，或抄送节点配置了自选） */
+export const isSelfSelectFlowNode = (node) =>
+  Boolean(node) && (node.approverType === 3 || (node.type === 3 && Number(node.selfSelect) > 0))
+
+/**
+ * 从实例详情恢复发起人自选成员状态：nodeId -> [{ type, key, label }]。
+ * 草稿暂存 approval_draft_members 优先；进行中/已结束实例从流程快照成员兜底，
+ * 用于“副本”复制、撤回编辑等场景把原单已选审批人/抄送人带入抽屉提交状态。
+ * @param {object} instance 审批实例详情
+ * @returns {Record<string, ApprovalMember[]>}
+ */
+export function buildInstanceSelfSelectMembers(instance) {
+  const result = {}
+  if (!instance) return result
+  const draftMembers = instance.approval_draft_members || {}
+  const nameMap = instance.assignee_name_map || {}
+  const nodes = parseFlowArray(instance.approval_flow_json) || []
+
+  const normalizeSnapshotMember = (member) => {
+    const normalized = typeof member === 'string' ? { type: 1, label: member } : { ...(member || {}) }
+    const userId = userIdFromKey(normalized.key)
+    if (!normalized.label && userId) {
+      normalized.label = nameMap[String(userId)] || `用户${userId}`
+    }
+    return normalized
+  }
+
+  const walk = (list) => {
+    ;(list || []).forEach((node) => {
+      if (!node) return
+      if (node.type === 4 && Array.isArray(node.branches)) {
+        node.branches.forEach((branch) => walk(branch?.children))
+      }
+      if (!isSelfSelectFlowNode(node)) return
+
+      const ids = Array.isArray(draftMembers[node.id]) ? draftMembers[node.id] : []
+      if (ids.length) {
+        result[node.id] = ids.map((uid) => ({
+          type: 1,
+          key: `user_${uid}`,
+          label: nameMap[String(uid)] || `用户${uid}`,
+        }))
+      } else if (Array.isArray(node.members) && node.members.length) {
+        result[node.id] = node.members.map(normalizeSnapshotMember)
+      }
+    })
+  }
+  walk(nodes)
+  return result
+}
+
 // ==================== 对象选择器数据转换（组织架构 / 角色接口） ====================
 
 /**
