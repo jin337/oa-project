@@ -127,7 +127,7 @@ export function updateApplicationVersionEffectiveAt(id, versionId, payload) {
   return request.put(`/application/${id}/versions/${versionId}/edit`, payload)
 }
 
-// PUT /application/:id/versions/:versionId 保存版本的三个 json 快照
+// PUT /application/:id/versions/:versionId 保存版本的四个 json 快照
 export function updateApplicationVersion(id, versionId, data) {
   return request.put(`/application/${id}/versions/${versionId}`, data)
 }

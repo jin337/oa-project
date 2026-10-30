@@ -269,7 +269,7 @@ func ApplicationVersionUpdateEffectiveAt(c *gin.Context) {
 	response.OKMsg(c, "更新成功")
 }
 
-// ApplicationVersionUpdate PUT /{APIPrefix}/application/:id/versions/:versionId 保存版本的三个 json 快照
+// ApplicationVersionUpdate PUT /{APIPrefix}/application/:id/versions/:versionId 保存版本的四个 json 快照
 func ApplicationVersionUpdate(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -281,15 +281,16 @@ func ApplicationVersionUpdate(c *gin.Context) {
 		return
 	}
 	var body struct {
-		FormLayoutJSON   interface{} `json:"form_layout_json"`
-		DetailLayoutJSON interface{} `json:"detail_layout_json"`
-		ApprovalFlowJSON interface{} `json:"approval_flow_json"`
+		FormLayoutJSON    interface{} `json:"form_layout_json"`
+		DetailLayoutJSON  interface{} `json:"detail_layout_json"`
+		ApprovalFlowJSON  interface{} `json:"approval_flow_json"`
+		ApprovalOtherJSON interface{} `json:"approval_other_json"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		response.Fail(c, response.CodeParamError, "请求体格式错误")
 		return
 	}
-	if err := service.UpdateApplicationVersionSnapshot(id, uint(versionID), body.FormLayoutJSON, body.DetailLayoutJSON, body.ApprovalFlowJSON); err != nil {
+	if err := service.UpdateApplicationVersionSnapshot(id, uint(versionID), body.FormLayoutJSON, body.DetailLayoutJSON, body.ApprovalFlowJSON, body.ApprovalOtherJSON); err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}

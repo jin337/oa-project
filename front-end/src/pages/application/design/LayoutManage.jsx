@@ -1,20 +1,20 @@
 import {
-  Button,
-  Empty,
-  InputNumber,
-  Message,
-  Popconfirm,
-  Radio,
-  Tabs,
-  Tooltip,
+    Button,
+    Empty,
+    InputNumber,
+    Message,
+    Popconfirm,
+    Radio,
+    Tabs,
+    Tooltip,
 } from '@arco-design/web-react'
 import { IconDelete, IconMenuFold, IconMenuUnfold, IconSync } from '@arco-design/web-react/icon'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import DynamicForm, {
-  BASE_LAYOUT_ELEMENTS,
-  DEFAULT_FORM_CONFIG,
-  parseLayoutJson,
-  renderElementSettings,
+    BASE_LAYOUT_ELEMENTS,
+    DEFAULT_FORM_CONFIG,
+    parseLayoutJson,
+    renderElementSettings,
 } from 'src/pages/application/dynamic/DynamicForm'
 
 const TabPane = Tabs.TabPane
@@ -38,7 +38,7 @@ const PAGE_OPTIONS = [
 const genId = () => `el_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
 /**
- * 表单设置布局组件（嵌入 DesignManage）：
+ * 表单布局组件（嵌入 DesignManage）：
  * 数据由父级统一请求（app / elements），这里只负责画布编排与本地布局状态。
  */
 const LayoutManage = forwardRef(function LayoutManage(
@@ -529,7 +529,6 @@ const LayoutManage = forwardRef(function LayoutManage(
       >
         <Tabs
           activeTab={panelKey}
-          onChange={setActivePanel}
           className="flex min-h-0 flex-1 flex-col py-px [&_.arco-tabs-pane]:overflow-y-auto"
         >
           {/* 表单全局设置 */}

@@ -97,6 +97,7 @@ func GetOrCreateDraftVersion(appID uint) (*model.ApplicationVersion, error) {
 		ver.FormLayoutJSON = active.FormLayoutJSON
 		ver.DetailLayoutJSON = active.DetailLayoutJSON
 		ver.ApprovalFlowJSON = active.ApprovalFlowJSON
+		ver.ApprovalOtherJSON = active.ApprovalOtherJSON
 	}
 	if e := tx.Create(&ver).Error; e != nil {
 		return nil, e
@@ -120,6 +121,7 @@ func ApplicationDetail(id uint) (*model.Application, *model.ApplicationVersion, 
 	app.FormLayoutJSON = mergeLayoutJSON(draft.FormLayoutJSON, id)
 	app.DetailLayoutJSON = mergeLayoutJSON(draft.DetailLayoutJSON, id)
 	app.ApprovalFlowJSON = draft.ApprovalFlowJSON
+	app.ApprovalOtherJSON = draft.ApprovalOtherJSON
 	return &app, draft, nil
 }
 
@@ -135,7 +137,7 @@ func isEmptyLayout(v interface{}) bool {
 	return len(elements) == 0
 }
 
-// ApplyActiveVersionSnapshot 运行时把 app 上的三个 json 替换成当前 active 版本快照；
+// ApplyActiveVersionSnapshot 运行时把 app 上的四个 json 替换成当前 active 版本快照；
 // 若没有 active 版本则保持原样。编辑页（ApplicationDetail）不调用本函数。
 func ApplyActiveVersionSnapshot(app *model.Application) {
 	if app == nil || app.CurrentVersionID == 0 {
@@ -148,6 +150,7 @@ func ApplyActiveVersionSnapshot(app *model.Application) {
 	app.FormLayoutJSON = mergeLayoutJSON(ver.FormLayoutJSON, app.ID)
 	app.DetailLayoutJSON = mergeLayoutJSON(ver.DetailLayoutJSON, app.ID)
 	app.ApprovalFlowJSON = ver.ApprovalFlowJSON
+	app.ApprovalOtherJSON = ver.ApprovalOtherJSON
 }
 
 // visibilityFlag 判断 ApplicationElement.Visibility 中指定开关是否为真（list/search），兼容 JSON 反序列化后的数字类型
@@ -470,6 +473,18 @@ func compactLayoutJSON(layout map[string]interface{}, appID uint) map[string]int
 	}
 	next := make(map[string]interface{}, len(layout)+1)
 	for k, v := range layout {
+		if k == "formConfig" {
+			if cfg, ok := v.(map[string]interface{}); ok {
+				cleanedConfig := make(map[string]interface{}, len(cfg))
+				for ck, cv := range cfg {
+					if ck != "withdrawWindow" {
+						cleanedConfig[ck] = cv
+					}
+				}
+				next[k] = cleanedConfig
+				continue
+			}
+		}
 		next[k] = v
 	}
 	next["elements"] = out
@@ -1414,8 +1429,8 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 	if req.SubTableName != nil {
 		app.SubTableName = *req.SubTableName
 	}
-	if req.FormLayoutJSON != nil || req.DetailLayoutJSON != nil || req.ApprovalFlowJSON != nil {
-		// 布局/审批流写「设计中」版本，不写 application 主表
+	if req.FormLayoutJSON != nil || req.DetailLayoutJSON != nil || req.ApprovalFlowJSON != nil || req.ApprovalOtherJSON != nil {
+		// 布局/审批流/其他设置写「设计中」版本，不写 application 主表
 		draft, err := GetOrCreateDraftVersion(app.ID)
 		if err != nil {
 			return nil, err
@@ -1429,7 +1444,10 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 		if req.ApprovalFlowJSON != nil {
 			draft.ApprovalFlowJSON = *req.ApprovalFlowJSON
 		}
-		if err := database.DB.Model(draft).Select("form_layout_json", "detail_layout_json", "approval_flow_json").Updates(draft).Error; err != nil {
+		if req.ApprovalOtherJSON != nil {
+			draft.ApprovalOtherJSON = *req.ApprovalOtherJSON
+		}
+		if err := database.DB.Model(draft).Select("form_layout_json", "detail_layout_json", "approval_flow_json", "approval_other_json").Updates(draft).Error; err != nil {
 			return nil, err
 		}
 	}
@@ -1679,6 +1697,7 @@ func PublishApplicationVersion(appID uint, curUserID uint, req *ApplicationVersi
 		newDraft.FormLayoutJSON = published.FormLayoutJSON
 		newDraft.DetailLayoutJSON = published.DetailLayoutJSON
 		newDraft.ApprovalFlowJSON = published.ApprovalFlowJSON
+		newDraft.ApprovalOtherJSON = published.ApprovalOtherJSON
 		return tx.Create(&newDraft).Error
 	})
 	if err != nil {
@@ -1787,8 +1806,8 @@ func UpdateApplicationVersionEffectiveAt(appID, versionID uint, effectiveAt time
 	return database.DB.Model(&ver).Updates(updates).Error
 }
 
-// UpdateApplicationVersionSnapshot 保存「设计中」版本的三个 json 快照
-func UpdateApplicationVersionSnapshot(appID, versionID uint, formLayout, detailLayout, approvalFlow interface{}) error {
+// UpdateApplicationVersionSnapshot 保存「设计中」版本的四个 json 快照
+func UpdateApplicationVersionSnapshot(appID, versionID uint, formLayout, detailLayout, approvalFlow, approvalOther interface{}) error {
 	var ver model.ApplicationVersion
 	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&ver).Error; err != nil {
 		return errors.New("版本不存在")
@@ -1803,7 +1822,10 @@ func UpdateApplicationVersionSnapshot(appID, versionID uint, formLayout, detailL
 		ver.DetailLayoutJSON = m
 	}
 	ver.ApprovalFlowJSON = approvalFlow
-	return database.DB.Model(&ver).Select("form_layout_json", "detail_layout_json", "approval_flow_json").Updates(ver).Error
+	if approvalOther != nil {
+		ver.ApprovalOtherJSON = approvalOther
+	}
+	return database.DB.Model(&ver).Select("form_layout_json", "detail_layout_json", "approval_flow_json", "approval_other_json").Updates(ver).Error
 }
 
 // DeleteApplicationVersion 仅允许删除「待生效」版本（物理删除，避免软删除行占唯一索引）

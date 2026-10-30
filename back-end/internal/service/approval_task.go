@@ -261,6 +261,42 @@ func taskApprovedAfterReturnTarget(task, target *model.ApprovalInstanceTask, pat
 	return task.OperatedAt.After(*target.OperatedAt)
 }
 
+// 转交链状态：无效/未完成/已完成。依次审批推进时，未完成链需要等待，
+// 已完成链才允许计入节点完成条件。
+const (
+	delegatedChainInvalid = iota
+	delegatedChainPending
+	delegatedChainApproved
+)
+
+// delegatedChainStatus 判断普通转交根任务的转交链状态。
+// 根任务状态为“已转交”本身不是普通 pending/approved；转交链待处理时占用原审批人，
+// 转交链通过后原配置审批人才视为完成。
+func delegatedChainStatus(root *model.ApprovalInstanceTask, children map[uint]*model.ApprovalInstanceTask) int {
+	if root == nil || root.DelegatedFrom != 0 || root.AddSignFrom != 0 || root.Status != model.TaskStatusDelegated {
+		return delegatedChainInvalid
+	}
+	visited := map[uint]bool{root.ID: true}
+	current := root
+	for {
+		next := children[current.ID]
+		if next == nil || visited[next.ID] {
+			return delegatedChainInvalid
+		}
+		visited[next.ID] = true
+		switch next.Status {
+		case model.TaskStatusPending, model.TaskStatusWaiting:
+			return delegatedChainPending
+		case model.TaskStatusApproved:
+			return delegatedChainApproved
+		case model.TaskStatusDelegated:
+			current = next
+		default:
+			return delegatedChainInvalid
+		}
+	}
+}
+
 // returnFromDisapproval 处理「不同意」入口下的退回：
 //   - return_mode=1：退回上一位已通过审批人；
 //   - return_mode=2：退回指定的前置已通过审批人；
@@ -929,18 +965,42 @@ func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *f
 		return fmt.Errorf("解析审批人失败: %w", err)
 	}
 
-	// 统计同节点仍有效的普通审批人（排除转交衍生任务、加签任务，以及退回后被取消/退回的历史任务）。
-	// 退回会保留历史任务行但将后续历史任务标记取消，因此不能按任务行数直接取下一人索引。
-	var activeTasks []model.ApprovalInstanceTask
+	// 统计同节点仍有效的普通审批人。退回会保留历史任务行并取消后续历史任务，
+	// 因此不能按任务行数直接取下一人索引；加签衍生任务另有独立等待/完成语义。
+	// 转交根任务（status=4）虽然不是普通 pending/approved，但其转交链仍在处理或已完成，
+	// 原配置审批人应视为已被占用，避免转交人审批后又向原审批人重复生成待办。
+	var nodeTasks []model.ApprovalInstanceTask
 	if err := tx.
-		Where("instance_id = ? AND node_id = ? AND delegated_from = 0 AND add_sign_from = 0 AND status IN (?, ?)",
-			instance.ID, node.ID, model.TaskStatusPending, model.TaskStatusApproved).
-		Find(&activeTasks).Error; err != nil {
+		Where("instance_id = ? AND node_id = ? AND add_sign_from = 0",
+			instance.ID, node.ID).
+		Find(&nodeTasks).Error; err != nil {
 		return err
 	}
 	activeAssignees := make(map[uint]bool, len(userIDs))
-	for _, active := range activeTasks {
-		activeAssignees[active.AssigneeID] = true
+	delegatedChildren := make(map[uint]*model.ApprovalInstanceTask)
+	var delegatedRoots []*model.ApprovalInstanceTask
+	for i := range nodeTasks {
+		taskRow := &nodeTasks[i]
+		if taskRow.DelegatedFrom != 0 {
+			delegatedChildren[taskRow.DelegatedFrom] = taskRow
+			continue
+		}
+		switch taskRow.Status {
+		case model.TaskStatusPending, model.TaskStatusApproved:
+			activeAssignees[taskRow.AssigneeID] = true
+		case model.TaskStatusDelegated:
+			delegatedRoots = append(delegatedRoots, taskRow)
+		}
+	}
+	pendingDelegatedChains := 0
+	for _, root := range delegatedRoots {
+		switch delegatedChainStatus(root, delegatedChildren) {
+		case delegatedChainPending:
+			activeAssignees[root.AssigneeID] = true
+			pendingDelegatedChains++
+		case delegatedChainApproved:
+			activeAssignees[root.AssigneeID] = true
+		}
 	}
 
 	// 本节点存在未完成的后加签任务（add_sign_type=2）：先等加签人处理，不轮后续审批人/不推进下一节点
@@ -949,7 +1009,7 @@ func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *f
 		Where("instance_id = ? AND node_id = ? AND add_sign_from > 0 AND add_sign_type = 2 AND status = ?",
 			instance.ID, node.ID, model.TaskStatusPending).
 		Count(&pendingAddSign)
-	if pendingAddSign > 0 {
+	if pendingAddSign > 0 || pendingDelegatedChains > 0 {
 		return nil
 	}
 

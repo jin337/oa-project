@@ -61,6 +61,16 @@ var migrations = []migration{
 		},
 		Seed: seedInitData,
 	},
+	{
+		Version: 2,
+		Name:    "add_approval_other_json",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(
+				&model.ApplicationVersion{},
+				&model.ApprovalInstance{},
+			)
+		},
+	},
 }
 
 // migrateLogger 迁移日志（可开关、可自定义路径）

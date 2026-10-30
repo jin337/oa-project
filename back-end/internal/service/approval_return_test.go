@@ -137,3 +137,72 @@ func TestTaskApprovedAfterReturnTarget(t *testing.T) {
 		})
 	}
 }
+
+func TestDelegatedChainStatus(t *testing.T) {
+	root := func(status int) *model.ApprovalInstanceTask {
+		return &model.ApprovalInstanceTask{
+			BaseModel: model.BaseModel{ID: 40},
+			Status:    status,
+		}
+	}
+
+	cases := []struct {
+		name     string
+		root     *model.ApprovalInstanceTask
+		children map[uint]*model.ApprovalInstanceTask
+		want     int
+	}{
+		{
+			name: "转交人已通过时原审批人视为完成",
+			root: root(model.TaskStatusDelegated),
+			children: map[uint]*model.ApprovalInstanceTask{
+				40: {BaseModel: model.BaseModel{ID: 51}, Status: model.TaskStatusApproved, DelegatedFrom: 40},
+			},
+			want: delegatedChainApproved,
+		},
+		{
+			name: "转交链仍待处理时原审批人未完成",
+			root: root(model.TaskStatusDelegated),
+			children: map[uint]*model.ApprovalInstanceTask{
+				40: {BaseModel: model.BaseModel{ID: 51}, Status: model.TaskStatusPending, DelegatedFrom: 40},
+			},
+			want: delegatedChainPending,
+		},
+		{
+			name: "多级转交最终待处理时仍未完成",
+			root: root(model.TaskStatusDelegated),
+			children: map[uint]*model.ApprovalInstanceTask{
+				40: {BaseModel: model.BaseModel{ID: 51}, Status: model.TaskStatusDelegated, DelegatedFrom: 40},
+				51: {BaseModel: model.BaseModel{ID: 52}, Status: model.TaskStatusPending, DelegatedFrom: 51},
+			},
+			want: delegatedChainPending,
+		},
+		{
+			name: "转交链被取消时视为无效",
+			root: root(model.TaskStatusDelegated),
+			children: map[uint]*model.ApprovalInstanceTask{
+				40: {BaseModel: model.BaseModel{ID: 51}, Status: model.TaskStatusCancelled, DelegatedFrom: 40},
+			},
+			want: delegatedChainInvalid,
+		},
+		{
+			name: "普通已通过根任务不进入转交链判断",
+			root: root(model.TaskStatusApproved),
+			want: delegatedChainInvalid,
+		},
+		{
+			name: "缺少转交子任务时视为无效",
+			root: root(model.TaskStatusDelegated),
+			want: delegatedChainInvalid,
+		},
+		{name: "nil 根任务安全返回无效", root: nil, want: delegatedChainInvalid},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := delegatedChainStatus(tc.root, tc.children); got != tc.want {
+				t.Fatalf("delegatedChainStatus() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}

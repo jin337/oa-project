@@ -392,27 +392,29 @@ type Application struct {
 	Status           int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	CurrentVersionID uint   `gorm:"default:0;index;comment:当前生效版本ID" json:"current_version_id"`
 	CurrentVersionNo string `gorm:"size:32;comment:当前生效版本号" json:"current_version_no"`
-	// 以下三个字段不映射数据库列（草稿已迁入 oa_application_versions 设计中行），
+	// 以下字段不映射数据库列（草稿已迁入 oa_application_versions 设计中行），
 	// 仅供运行时把 active 版本快照塞进内存对象给业务层使用。
-	FormLayoutJSON   map[string]interface{} `gorm:"-" json:"form_layout_json,omitempty"`
-	DetailLayoutJSON map[string]interface{} `gorm:"-" json:"detail_layout_json,omitempty"`
-	ApprovalFlowJSON any                    `gorm:"-" json:"approval_flow_json,omitempty"`
+	FormLayoutJSON    map[string]interface{} `gorm:"-" json:"form_layout_json,omitempty"`
+	DetailLayoutJSON  map[string]interface{} `gorm:"-" json:"detail_layout_json,omitempty"`
+	ApprovalFlowJSON  any                    `gorm:"-" json:"approval_flow_json,omitempty"`
+	ApprovalOtherJSON any                    `gorm:"-" json:"approval_other_json,omitempty"`
 }
 
 // ApplicationVersion 流程配置版本快照：每次「发布」把草稿快照成一条版本，
 // 到 effective_at 后由定时任务自动切换为当前生效版本。
 type ApplicationVersion struct {
 	BaseModel
-	ApplicationID    uint                   `gorm:"not null;uniqueIndex:uk_app_version;index;comment:应用ID" json:"application_id"`
-	VersionNo        string                 `gorm:"size:32;not null;uniqueIndex:uk_app_version;comment:版本号(应用内自增)" json:"version_no"`
-	Remark           string                 `gorm:"size:255;comment:版本说明" json:"remark"`
-	FormLayoutJSON   map[string]interface{} `gorm:"serializer:json;type:json;comment:表单页快照" json:"form_layout_json"`
-	DetailLayoutJSON map[string]interface{} `gorm:"serializer:json;type:json;comment:详情页快照" json:"detail_layout_json"`
-	ApprovalFlowJSON any                    `gorm:"serializer:json;type:json;comment:审批流快照" json:"approval_flow_json"`
-	Status           int                    `gorm:"default:3;index;comment:0待生效 1已生效 2已失效 3设计中(草稿)" json:"status"`
-	EffectiveAt      time.Time              `gorm:"comment:生效时间" json:"effective_at"`
-	ExpiredAt        *time.Time             `gorm:"comment:失效时间" json:"expired_at"`
-	CreatedBy        uint                   `gorm:"comment:创建人" json:"created_by"`
+	ApplicationID     uint                   `gorm:"not null;uniqueIndex:uk_app_version;index;comment:应用ID" json:"application_id"`
+	VersionNo         string                 `gorm:"size:32;not null;uniqueIndex:uk_app_version;comment:版本号(应用内自增)" json:"version_no"`
+	Remark            string                 `gorm:"size:255;comment:版本说明" json:"remark"`
+	FormLayoutJSON    map[string]interface{} `gorm:"serializer:json;type:json;comment:表单页快照" json:"form_layout_json"`
+	DetailLayoutJSON  map[string]interface{} `gorm:"serializer:json;type:json;comment:详情页快照" json:"detail_layout_json"`
+	ApprovalFlowJSON  any                    `gorm:"serializer:json;type:json;comment:审批流快照" json:"approval_flow_json"`
+	ApprovalOtherJSON any                    `gorm:"serializer:json;type:json;comment:审批其他设置快照" json:"approval_other_json"`
+	Status            int                    `gorm:"default:3;index;comment:0待生效 1已生效 2已失效 3设计中(草稿)" json:"status"`
+	EffectiveAt       time.Time              `gorm:"comment:生效时间" json:"effective_at"`
+	ExpiredAt         *time.Time             `gorm:"comment:失效时间" json:"expired_at"`
+	CreatedBy         uint                   `gorm:"comment:创建人" json:"created_by"`
 }
 
 const (
@@ -435,15 +437,16 @@ type ApplicationCreateReq struct {
 }
 
 type ApplicationUpdateReq struct {
-	Name             *string                 `json:"name" validate:"omitempty,min=2,max=64" label:"页面名称"`
-	Code             string                  `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"`
-	TableName        *string                 `json:"table_name" validate:"omitempty,max=128" label:"对应表"`
-	BillPrefix       *string                 `json:"bill_prefix" validate:"omitempty,max=32" label:"单号前缀"`
-	SubTableName     *string                 `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
-	Status           *int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
-	FormLayoutJSON   *map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
-	DetailLayoutJSON *map[string]interface{} `json:"detail_layout_json" validate:"omitempty" label:"详情页布局"`
-	ApprovalFlowJSON *any                    `json:"approval_flow_json" validate:"omitempty" label:"审批流配置"`
+	Name              *string                 `json:"name" validate:"omitempty,min=2,max=64" label:"页面名称"`
+	Code              string                  `json:"code" validate:"omitempty,min=2,max=64" label:"页面编码"`
+	TableName         *string                 `json:"table_name" validate:"omitempty,max=128" label:"对应表"`
+	BillPrefix        *string                 `json:"bill_prefix" validate:"omitempty,max=32" label:"单号前缀"`
+	SubTableName      *string                 `json:"sub_table_name" validate:"omitempty,max=255" label:"子表"`
+	Status            *int                    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
+	FormLayoutJSON    *map[string]interface{} `json:"form_layout_json" validate:"omitempty" label:"表单页布局"`
+	DetailLayoutJSON  *map[string]interface{} `json:"detail_layout_json" validate:"omitempty" label:"详情页布局"`
+	ApprovalFlowJSON  *any                    `json:"approval_flow_json" validate:"omitempty" label:"审批流配置"`
+	ApprovalOtherJSON *map[string]interface{} `json:"approval_other_json" validate:"omitempty" label:"审批其他设置"`
 }
 
 type ApplicationListReq struct {
@@ -718,6 +721,7 @@ type ApprovalInstance struct {
 	ApprovalFlowJSON     any               `gorm:"column:approval_flow_json;serializer:json;type:json;comment:审批流配置快照(提交时冻结)" json:"approval_flow_json"`
 	FormLayoutJSON       any               `gorm:"column:form_layout_json;serializer:json;type:json;comment:表单页布局快照(提交时冻结)" json:"form_layout_json,omitempty"`
 	DetailLayoutJSON     any               `gorm:"column:detail_layout_json;serializer:json;type:json;comment:详情页布局快照(提交时冻结)" json:"detail_layout_json,omitempty"`
+	ApprovalOtherJSON    any               `gorm:"column:approval_other_json;serializer:json;type:json;comment:审批其他设置快照(提交时冻结)" json:"approval_other_json,omitempty"`
 	ExecutionPath        []string          `gorm:"serializer:json;type:json;comment:条件评估后的命中节点ID链(JSON数组)" json:"execution_path,omitempty"`
 	CurrentNodeIdx       int               `gorm:"default:0;comment:当前执行到节点链的索引" json:"current_node_idx"`
 	Status               int               `gorm:"default:0;comment:实例状态 0进行中 1已通过 2已拒绝 3已驳回 4已作废 5已撤回 6草稿" json:"status"`
@@ -863,6 +867,8 @@ type ApprovalRecord struct {
 
 	// 实例状态原值（仅服务端内部用于推导下面的能力标记，不对外输出）
 	InstanceStatus int `json:"-"`
+	// 实例其他设置快照（仅服务端内部用于推导撤回时间窗，不对外输出）
+	ApprovalOtherSnapshot any `json:"-"`
 	// 抄送我的：抄送发起人 ID（内部字段，用于填名后清空，不对外输出）
 	CCByUserID uint `json:"-"`
 	// 操作能力标记：由实例状态计算，前端据此渲染「作废/撤回/编辑/删除」按钮

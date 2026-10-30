@@ -99,14 +99,7 @@ const ALL_COL_KEYS = [
   'approval_status',
 ]
 
-// 撤回时间窗：提交后 30 分钟内可撤回（与后端 ApprovalInstanceWithdraw 校验一致）
-const WITHDRAW_WINDOW_MS = 30 * 60 * 1000
-function isWithinWithdrawWindow(record) {
-  if (!record?.created_at) return true
-  const t = new Date(record.created_at).getTime()
-  if (Number.isNaN(t)) return true
-  return Date.now() - t <= WITHDRAW_WINDOW_MS
-}
+// 撤回时间窗由应用「其他设置 - 提交撤回时间」配置；列表按钮显隐以后端 can_withdraw 能力标记为准。
 
 /** 我的发起：展示当前用户发起的所有审批记录（排除草稿），支持查看详情、作废、撤回、已驳回/已撤回编辑 */
 export default function Initiated() {
@@ -505,7 +498,7 @@ export default function Initiated() {
           {
             key: 'withdraw',
             label: '撤回',
-            visible: r.can_withdraw && isWithinWithdrawWindow(r),
+            visible: r.can_withdraw,
             confirmText: '撤回后该申请将标记为已撤回，可继续编辑或重新提交，确定撤回？',
             onClick: () => handleWithdraw(r),
           },

@@ -398,6 +398,54 @@ func ApprovalCategoryItemDelete(id uint) error {
 
 // ==================== 审批列表（跨应用聚合） ====================
 
+// defaultWithdrawWindow 历史应用未配置撤回时间窗时的兼容默认值：提交后 30 分钟内可撤回。
+const defaultWithdrawWindow = 30 * time.Minute
+
+// parseWithdrawWindowDuration 从审批其他设置快照解析「提交撤回时间窗」。
+// 数据结构为 approval_other_json.withdrawWindow = { value, unit }，unit 支持 minute/hour/day。
+func parseWithdrawWindowDuration(otherConfig any) (time.Duration, bool) {
+	m, ok := otherConfig.(map[string]interface{})
+	if !ok {
+		return 0, false
+	}
+	window, ok := m["withdrawWindow"].(map[string]interface{})
+	if !ok {
+		return 0, false
+	}
+	value, ok := numericVal(window["value"])
+	if !ok || value <= 0 {
+		return 0, false
+	}
+	switch unit, _ := window["unit"].(string); unit {
+	case "minute":
+		return time.Duration(value) * time.Minute, true
+	case "hour":
+		return time.Duration(value) * time.Hour, true
+	case "day":
+		return time.Duration(value) * 24 * time.Hour, true
+	default:
+		return 0, false
+	}
+}
+
+// activeWithdrawDuration 读取应用当前生效版本的撤回时间窗；无配置或配置非法时回退默认 30 分钟。
+func activeWithdrawDuration(appID uint) time.Duration {
+	if appID == 0 {
+		return defaultWithdrawWindow
+	}
+	var ver model.ApplicationVersion
+	if err := database.DB.
+		Where("application_id = ? AND status = ?", appID, model.AppVersionStatusActive).
+		Order("id DESC").
+		First(&ver).Error; err != nil {
+		return defaultWithdrawWindow
+	}
+	if d, ok := parseWithdrawWindowDuration(ver.ApprovalOtherJSON); ok {
+		return d
+	}
+	return defaultWithdrawWindow
+}
+
 // buildApprovalRecord 从流程实例与应用构造列表聚合记录。
 // 各列表作用域（我的发起/草稿箱/我审批的/抄送我的）共用，保证字段口径与排序字段一致。
 func buildApprovalRecord(inst model.ApprovalInstance, app model.Application) model.ApprovalRecord {
@@ -406,26 +454,27 @@ func buildApprovalRecord(inst model.ApprovalInstance, app model.Application) mod
 	var item model.ApprovalCategoryItem
 	database.DB.Where("code = ?", app.Code).First(&item)
 	return model.ApprovalRecord{
-		ID:             inst.ID,
-		InstanceID:     inst.ID,
-		BusinessDataID: inst.BusinessDataID,
-		AppID:          app.ID,
-		AppCode:        app.Code,
-		AppName:        app.Name,
-		ItemName:       item.Name,
-		Status:         bizStatus,
-		StatusName:     approvalStatusName(bizStatus),
-		CreatedBy:      inst.CreatedBy,
-		CreatedAt:      &inst.CreatedAt,
-		FinishedAt:     inst.FinishedAt,
-		InstanceStatus: inst.Status,
+		ID:                    inst.ID,
+		InstanceID:            inst.ID,
+		BusinessDataID:        inst.BusinessDataID,
+		AppID:                 app.ID,
+		AppCode:               app.Code,
+		AppName:               app.Name,
+		ItemName:              item.Name,
+		Status:                bizStatus,
+		StatusName:            approvalStatusName(bizStatus),
+		CreatedBy:             inst.CreatedBy,
+		CreatedAt:             &inst.CreatedAt,
+		FinishedAt:            inst.FinishedAt,
+		InstanceStatus:        inst.Status,
+		ApprovalOtherSnapshot: inst.ApprovalOtherJSON,
 	}
 }
 
 // fillApprovalCapabilities 回填列表记录的操作能力标记（作废/撤回/编辑/删除）。
 //
 // 判据：
-//   - 可撤回：任意进行中的实例。进行中的单据一律只能撤回，不再提供作废。
+//   - 可撤回：进行中且仍处于应用「提交撤回时间」配置窗口内；窗口默认 30 分钟。
 //   - 可作废：仅「已撤回」——撤回后流程痕迹已清空，发起人此时才可宣告作废留痕。
 //     这条路径保证作废永远不会绕过审批人：走过审批的单据只能撤回，
 //     撤回后即使再作废，也已经留下了撤回这一动作的痕迹。
@@ -436,12 +485,25 @@ func fillApprovalCapabilities(records []model.ApprovalRecord) {
 	if len(records) == 0 {
 		return
 	}
-	// 回填能力标记
+	// 回填能力标记；进行中实例的撤回窗口按实例快照优先，旧快照缺失时回退当前生效版本配置
+	activeWindowCache := map[uint]time.Duration{}
 	for i := range records {
 		r := &records[i]
 		isRunning := r.InstanceStatus == model.InstanceStatusRunning
 		isWithdrawn := r.InstanceStatus == model.InstanceStatusWithdrawn
-		r.CanWithdraw = isRunning
+		r.CanWithdraw = false
+		if isRunning {
+			window, ok := parseWithdrawWindowDuration(r.ApprovalOtherSnapshot)
+			if !ok {
+				if cached, exists := activeWindowCache[r.AppID]; exists {
+					window = cached
+				} else {
+					window = activeWithdrawDuration(r.AppID)
+					activeWindowCache[r.AppID] = window
+				}
+			}
+			r.CanWithdraw = r.CreatedAt != nil && !r.CreatedAt.Add(window).Before(time.Now())
+		}
 		r.CanVoid = isWithdrawn
 		r.CanEdit = r.InstanceStatus == model.InstanceStatusReturned || isWithdrawn
 		// 删除仅对草稿开放，而草稿不出现在「我的发起」；已撤回需先编辑转为草稿再删除

@@ -6,8 +6,8 @@
  * 需要被外部或 DynamicForm.jsx 使用的符号均由 DynamicForm.jsx 原样再导出，调用方无需改动。
  */
 
-import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 import request from 'src/api/request'
+import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 
 import { evalDynamicExpr } from './evalExpression'
 
@@ -40,8 +40,12 @@ export const parseLayoutJson = (raw) => {
       data = raw ? JSON.parse(raw) : null
     }
     if (!data || typeof data !== 'object') return null
+    const incomingConfig = data.formConfig || {}
     return {
-      formConfig: { ...DEFAULT_FORM_CONFIG, ...(data.formConfig || {}) },
+      formConfig: {
+        ...DEFAULT_FORM_CONFIG,
+        ...incomingConfig,
+      },
       elements: Array.isArray(data.elements) ? data.elements : [],
     }
   } catch (e) {
@@ -418,7 +422,7 @@ export function serializeTimeFields(values, elements) {
 // ==================== 表单提交前后事件钩子 ====================
 
 /**
- * 安全执行用户在「表单设置布局」里填写的提交事件 JS。
+ * 安全执行用户在「表单布局」里填写的提交事件 JS。
  * 提交前签名：(form, request) => { ... return false; }
  * 提交后签名：(form, result, request) => { ... }
  * request 为自动带登录态的统一请求助手。

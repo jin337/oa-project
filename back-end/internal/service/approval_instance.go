@@ -324,17 +324,18 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		var creator model.User
 		database.DB.Select("dept_id").First(&creator, curUserID)
 		instance = model.ApprovalInstance{
-			AppID:            req.AppID,
-			BillNo:           readBillNo(ctx.app.TableName, req.BusinessDataID),
-			BusinessTable:    ctx.app.TableName,
-			BusinessDataID:   req.BusinessDataID,
-			ApprovalFlowJSON: buildSnapshotFlow(ctx.injectedNodes, ctx.endNode), // 含流程结束事件节点，由 GORM serializer:json 统一序列化
-			FormLayoutJSON:   ctx.app.FormLayoutJSON,
-			DetailLayoutJSON: ctx.app.DetailLayoutJSON,
-			ExecutionPath:    ctx.execPath,
-			CurrentNodeIdx:   0,
-			Status:           model.InstanceStatusRunning,
-			DeptID:           creator.DeptID,
+			AppID:             req.AppID,
+			BillNo:            readBillNo(ctx.app.TableName, req.BusinessDataID),
+			BusinessTable:     ctx.app.TableName,
+			BusinessDataID:    req.BusinessDataID,
+			ApprovalFlowJSON:  buildSnapshotFlow(ctx.injectedNodes, ctx.endNode), // 含流程结束事件节点，由 GORM serializer:json 统一序列化
+			FormLayoutJSON:    ctx.app.FormLayoutJSON,
+			DetailLayoutJSON:  ctx.app.DetailLayoutJSON,
+			ApprovalOtherJSON: ctx.app.ApprovalOtherJSON,
+			ExecutionPath:     ctx.execPath,
+			CurrentNodeIdx:    0,
+			Status:            model.InstanceStatusRunning,
+			DeptID:            creator.DeptID,
 			// 提交即进入审批流转，不持久化草稿暂存（approval_draft_members 仅草稿专用）；
 			// 撤回回退草稿时由 ApprovalInstanceWithdraw 从快照自选节点写回暂存
 		}
@@ -399,6 +400,7 @@ func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		ApprovalFlowJSON:     buildSnapshotFlow(ctx.injectedNodes, ctx.endNode),
 		FormLayoutJSON:       ctx.app.FormLayoutJSON,
 		DetailLayoutJSON:     ctx.app.DetailLayoutJSON,
+		ApprovalOtherJSON:    ctx.app.ApprovalOtherJSON,
 		ExecutionPath:        ctx.execPath,
 		CurrentNodeIdx:       0,
 		Status:               model.InstanceStatusDraft,
@@ -448,6 +450,7 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 		execPathBytes, _ := json.Marshal(ctx.execPath)
 		formLayoutBytes, _ := json.Marshal(ctx.app.FormLayoutJSON)
 		detailLayoutBytes, _ := json.Marshal(ctx.app.DetailLayoutJSON)
+		approvalOtherBytes, _ := json.Marshal(ctx.app.ApprovalOtherJSON)
 
 		// 5. 自选成员：本次未传（nil）视为清空暂存，传了则覆盖暂存
 		selfSelectJSON := "null"
@@ -468,6 +471,7 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 				"approval_flow_json":     string(injectedFlowBytes),
 				"form_layout_json":       string(formLayoutBytes),
 				"detail_layout_json":     string(detailLayoutBytes),
+				"approval_other_json":    string(approvalOtherBytes),
 				"execution_path":         string(execPathBytes),
 				"current_node_idx":       0,
 				"status":                 model.InstanceStatusDraft,
@@ -507,6 +511,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		return nil, err
 	}
 	instance = *owned
+	prevStatus := instance.Status
 	if err := ensureUserCanStartByAppID(curUserID, instance.AppID); err != nil {
 		return nil, err
 	}
@@ -545,24 +550,30 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 	execPathBytes, _ := json.Marshal(ctx.execPath)
 	formLayoutBytes, _ := json.Marshal(ctx.app.FormLayoutJSON)
 	detailLayoutBytes, _ := json.Marshal(ctx.app.DetailLayoutJSON)
+	approvalOtherBytes, _ := json.Marshal(ctx.app.ApprovalOtherJSON)
 
 	// 7. 事务：原子状态流转（草稿→进行中）+ 更新快照/路径 + 生成首个任务
 	err = withNotify(func(tx *gorm.DB) error {
 		// 原子守卫：仅当实例仍为草稿/已撤回时才更新，防止并发重复提交
+		updates := map[string]interface{}{
+			"approval_flow_json":     string(injectedFlowBytes),
+			"form_layout_json":       string(formLayoutBytes),
+			"detail_layout_json":     string(detailLayoutBytes),
+			"approval_other_json":    string(approvalOtherBytes),
+			"execution_path":         string(execPathBytes),
+			"current_node_idx":       0,
+			"status":                 model.InstanceStatusRunning,
+			"approval_draft_members": nil, // 草稿暂存提交后清空（成员已注入快照；撤回时由 Withdraw 写回）
+			"updated_by":             curUserID,
+		}
+		// 草稿首次正式提交时写入提交时间；已撤回后再次提交保留首次正式提交时间，不重置撤回窗口。
+		if prevStatus == model.InstanceStatusDraft {
+			updates["created_at"] = time.Now()
+		}
 		res := tx.Model(&model.ApprovalInstance{}).
 			Where("id = ? AND status IN ?", instanceID,
 				[]int{model.InstanceStatusDraft, model.InstanceStatusWithdrawn}).
-			Updates(map[string]interface{}{
-				"approval_flow_json":     string(injectedFlowBytes),
-				"form_layout_json":       string(formLayoutBytes),
-				"detail_layout_json":     string(detailLayoutBytes),
-				"execution_path":         string(execPathBytes),
-				"current_node_idx":       0,
-				"status":                 model.InstanceStatusRunning,
-				"approval_draft_members": nil,        // 草稿暂存提交后清空（成员已注入快照；撤回时由 Withdraw 写回）
-				"created_at":             time.Now(), // 重新提交时刷新申请时间，撤回 30 分钟窗口随之重新起算
-				"updated_by":             curUserID,
-			})
+			Updates(updates)
 		if res.Error != nil {
 			return res.Error
 		}
@@ -693,9 +704,14 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 		if err != nil {
 			return err
 		}
-		// 撤回时间窗口：提交后 30 分钟内允许撤回，超过不允许
-		if instance.CreatedAt.Add(30 * time.Minute).Before(time.Now()) {
-			return errors.New("提交已超过 30 分钟，不允许撤回")
+		// 撤回时间窗口：优先使用实例提交时冻结的其他设置快照；旧实例无快照时回退当前生效版本配置。
+		// 窗口从首次正式提交时间（instance.CreatedAt）起算，撤回后重新提交不重置该时间。
+		window, ok := parseWithdrawWindowDuration(instance.ApprovalOtherJSON)
+		if !ok {
+			window = activeWithdrawDuration(instance.AppID)
+		}
+		if instance.CreatedAt.Add(window).Before(time.Now()) {
+			return errors.New("提交已超过配置的撤回时间窗，不允许撤回")
 		}
 		// 1. 删除当前实例的全部审批任务（对齐钉钉：撤回=整条流程重来，
 		// 重新提交时从首节点全新生成任务，当前流程视图不再堆叠历史"已取消"任务）

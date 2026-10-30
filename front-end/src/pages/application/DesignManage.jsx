@@ -1,17 +1,17 @@
 import {
-  Button,
-  Card,
-  DatePicker,
-  Form,
-  Input,
-  Message,
-  Modal,
-  Popconfirm,
-  Radio,
-  Space,
-  Table,
-  Tabs,
-  Tag,
+    Button,
+    Card,
+    DatePicker,
+    Form,
+    Input,
+    Message,
+    Modal,
+    Popconfirm,
+    Radio,
+    Space,
+    Table,
+    Tabs,
+    Tag,
 } from '@arco-design/web-react'
 import { IconSwap } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -23,6 +23,7 @@ import { fetchAll } from 'src/api/fetchAll'
 import * as roleApi from 'src/api/role'
 import ExamineManage from 'src/pages/application/design/ExamineManage'
 import LayoutManage from 'src/pages/application/design/LayoutManage.jsx'
+import OtherManage from 'src/pages/application/design/OtherManage'
 import { transformDeptTree, transformRoleList } from 'src/pages/application/examine/flowModel'
 
 const TabPane = Tabs.TabPane
@@ -122,6 +123,7 @@ export default function DesignManage() {
   const [draftVersion, setDraftVersion] = useState(null)
   const layoutRef = useRef(null)
   const examineRef = useRef(null)
+  const otherRef = useRef(null)
 
   const loadElements = useCallback(async () => {
     const res = await fetchAll((p) => applicationApi.listApplicationElements(id, p))
@@ -158,6 +160,11 @@ export default function DesignManage() {
   const collectPayload = useCallback(() => {
     const layoutPayload = layoutRef.current?.getLayoutPayload?.() || {}
     const liveNodes = examineRef.current?.getNodes?.()
+    const approvalOther = otherRef.current?.getApprovalOther?.() || { withdrawWindow: { value: 30, unit: 'minute' } }
+    // 撤回时间窗已迁入专门字段，表单布局中不再保留旧的嵌套配置。
+    if (layoutPayload.form_layout_json?.formConfig) {
+      delete layoutPayload.form_layout_json.formConfig.withdrawWindow
+    }
     let savedFlow = app?.approval_flow_json
     if (typeof savedFlow === 'string') {
       try {
@@ -187,6 +194,7 @@ export default function DesignManage() {
     return {
       ...layoutPayload,
       approval_flow_json: flow,
+      approval_other_json: approvalOther,
     }
   }, [app])
 
@@ -320,6 +328,7 @@ export default function DesignManage() {
             form_layout_json: parseJson(previewVersion.form_layout_json),
             detail_layout_json: parseJson(previewVersion.detail_layout_json),
             approval_flow_json: parseJson(previewVersion.approval_flow_json),
+            approval_other_json: parseJson(previewVersion.approval_other_json),
           }
         : app,
     [app, previewVersion],
@@ -374,7 +383,7 @@ export default function DesignManage() {
           </div>
         }
       >
-        <TabPane key="layout" title="表单设置布局">
+        <TabPane key="layout" title="表单布局">
           <LayoutManage
             key={`layout-${previewVersion?.id || `draft-${draftTick}`}`}
             ref={layoutRef}
@@ -396,6 +405,13 @@ export default function DesignManage() {
             orgTree={orgTree}
             roleList={roleList}
             examineGroups={examineGroups}
+          />
+        </TabPane>
+        <TabPane key="other" title="其他设置">
+          <OtherManage
+            key={`other-${previewVersion?.id || `draft-${draftTick}`}`}
+            ref={otherRef}
+            app={effectiveApp}
           />
         </TabPane>
       </Tabs>
