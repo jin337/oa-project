@@ -154,6 +154,7 @@ func advanceToNextNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes [
 // advanceToNextNodeWith 推进到下一个节点：
 //   - 先推进索引并检查是否已处理完所有节点（是则直接终结，避免多余 UPDATE）
 //   - 未处理完则更新实例索引并递归生成新节点任务
+//
 // autoResult 仅在自动通过场景（空审批人 emptyHandler=1）传入"自动通过"，作为流程终结时的结果说明
 func advanceToNextNodeWith(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint, autoResult string) error {
 	instance.CurrentNodeIdx++
@@ -214,7 +215,36 @@ func rejectToInitiator(tx *gorm.DB, instance *model.ApprovalInstance, result str
 	return nil
 }
 
-// taskApprovedAfterReturnTarget 判断历史已通过任务是否位于退回目标之后。
+// isDerivedTask 判断任务是否由转交或加签产生；当前待办仍按节点权限操作，
+// 仅历史衍生审批人不作为退回候选。
+func isDerivedTask(t *model.ApprovalInstanceTask) bool {
+	return t != nil && (t.DelegatedFrom != 0 || t.AddSignFrom != 0)
+}
+
+// isOrdinaryApprovedTask 判断是否为可作为退回候选的普通已通过任务。
+// 转交、前/后加签衍生任务只保留审批痕迹，不允许作为退回目标。
+func isOrdinaryApprovedTask(t *model.ApprovalInstanceTask) bool {
+	return t != nil && t.Status == model.TaskStatusApproved && !isDerivedTask(t)
+}
+
+// returnCandidateNodeAllowed 判断候选任务所在节点是否允许作为退回位置。
+// 跨节点只能退回更早节点；同一节点仅依次审批允许回到前一位审批人，
+// 会签/或签不允许在同一节点内互相退回，避免部分成员未完成时绕过节点规则。
+func returnCandidateNodeAllowed(candidateIdx, currentIdx, strategy int) bool {
+	if candidateIdx < currentIdx {
+		return true
+	}
+	if candidateIdx > currentIdx {
+		return false
+	}
+	effectiveStrategy := strategy
+	if effectiveStrategy == 0 {
+		effectiveStrategy = 1
+	}
+	return effectiveStrategy == 1
+}
+
+// taskApprovedAfterReturnTarget 判断历史普通已通过任务是否位于退回目标之后。
 // 跨节点按执行路径序号判断；同一节点按操作时间判断。
 func taskApprovedAfterReturnTarget(task, target *model.ApprovalInstanceTask, pathIndex map[string]int) bool {
 	targetIdx, targetOK := pathIndex[target.NodeID]
@@ -283,11 +313,14 @@ func returnFromDisapproval(tx *gorm.DB, instance *model.ApprovalInstance, task *
 	}
 	validTargets := make([]model.ApprovalInstanceTask, 0, len(candidates))
 	for _, candidate := range candidates {
+		if !isOrdinaryApprovedTask(&candidate) {
+			continue
+		}
 		candidatePathIdx, candidatePathOK := pathIndex[candidate.NodeID]
 		if !candidatePathOK {
 			continue
 		}
-		if candidatePathIdx > curPathIdx {
+		if !returnCandidateNodeAllowed(candidatePathIdx, curPathIdx, curNode.Strategy) {
 			continue
 		}
 		if candidatePathIdx == curPathIdx && candidate.OperatedAt != nil && task.OperatedAt != nil &&
@@ -357,7 +390,8 @@ func returnFromDisapproval(tx *gorm.DB, instance *model.ApprovalInstance, task *
 	// 目标之后的历史通过任务保留行记录，但标记为已取消；目标重新通过后再生成新的待办。
 	var laterApproved []model.ApprovalInstanceTask
 	if err := tx.
-		Where("instance_id = ? AND status = ? AND id <> ?", instance.ID, model.TaskStatusApproved, target.ID).
+		Where("instance_id = ? AND status = ? AND id <> ? AND delegated_from = 0 AND add_sign_from = 0",
+			instance.ID, model.TaskStatusApproved, target.ID).
 		Find(&laterApproved).Error; err != nil {
 		return err
 	}
@@ -402,7 +436,7 @@ func returnFromDisapproval(tx *gorm.DB, instance *model.ApprovalInstance, task *
 		"current_node_idx": targetPathIdx,
 		"result":           "",
 		"finished_at":      nil,
-		"updated_by":      curUserID,
+		"updated_by":       curUserID,
 	}).Error; err != nil {
 		return err
 	}
@@ -927,17 +961,8 @@ func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *f
 		}
 	}
 	if nextIndex >= 0 {
-		// 还有后续审批人：生成下一个人的任务
-		nextTask := model.ApprovalInstanceTask{
-			InstanceID: instance.ID,
-			NodeID:     node.ID,
-			NodeName:   node.Label,
-			Sort:       instance.CurrentNodeIdx,
-			AssigneeID: userIDs[nextIndex],
-			Status:     model.TaskStatusPending,
-		}
-		nextTask.CreatedBy, nextTask.UpdatedBy = curUserID, curUserID
-		return tx.Create(&nextTask).Error
+		// 还有后续审批人：生成下一个人的待办，并复用统一通知逻辑
+		return createPendingTask(tx, instance, node.ID, node.Label, instance.CurrentNodeIdx, userIDs[nextIndex], curUserID)
 	}
 
 	// 该节点所有人已审批完 -> 推进到下一节点

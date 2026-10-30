@@ -182,12 +182,15 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   // 是否显示转交/加签按钮（有待办任务时）
   const showDelegateButtons = Boolean(currentTask?.id)
 
+  // 当前任务详情：待办列表只携带 id / instance_id，节点信息需从实例任务列表补全
+  const currentTaskDetail =
+    (instance?.approval_flow_tasks || []).find((t) => t.id === currentTask?.id) || currentTask
+
   // 当前任务所在节点的审批人操作权限（node.permissions：1-不同意/退回 / 2-转交 / 3-加签）
   // 快照为树形结构（条件分支的 children 内嵌节点），需递归查找；
   // 通过实例任务列表定位任务所属节点，旧快照无 permissions 时默认全部放行
-  const currentNodePerms = (() => {
+  const currentNode = (() => {
     const snapshot = instance?.approval_flow_json || []
-    const curTask = (instance?.approval_flow_tasks || []).find((t) => t.id === currentTask?.id)
     const findNode = (nodes, id) => {
       for (const n of nodes || []) {
         if (n.id === id) return n
@@ -197,20 +200,22 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
       }
       return null
     }
-    const node = findNode(snapshot, curTask?.node_id)
-    return node?.permissions?.length ? node.permissions : [1, 2, 3]
+    return findNode(snapshot, currentTaskDetail?.node_id)
   })()
+  const currentNodePerms = currentNode?.permissions?.length ? currentNode.permissions : [1, 2, 3]
+  const currentNodeStrategy = currentNode?.strategy || 1
 
   // 可退回候选：当前任务之前已通过的普通审批任务（排除转交、加签衍生任务与后续节点历史）
+  // 会签/或签不允许同节点互相退回；依次审批允许回到同节点前一位审批人。
   const priorApprovedTasks = useMemo(() => {
     const tasks = instance?.approval_flow_tasks || []
     const nameMap = instance?.assignee_name_map || {}
     const pathIndex = Object.fromEntries(
       (instance?.execution_path || []).map((nodeID, index) => [nodeID, index]),
     )
-    const curPathIdx = pathIndex[currentTask?.node_id]
-    const curOperatedAt = currentTask?.operated_at
-      ? new Date(currentTask.operated_at).getTime()
+    const curPathIdx = pathIndex[currentTaskDetail?.node_id]
+    const curOperatedAt = currentTaskDetail?.operated_at
+      ? new Date(currentTaskDetail.operated_at).getTime()
       : null
     return tasks
       .filter((t) => {
@@ -226,9 +231,9 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         if (candidatePathIdx === undefined) {
           return false
         }
-        if (curPathIdx !== undefined && candidatePathIdx > curPathIdx) {
-          return false
-        }
+        if (curPathIdx === undefined) return false
+        if (candidatePathIdx > curPathIdx) return false
+        if (candidatePathIdx === curPathIdx && currentNodeStrategy !== 1) return false
         if (
           curOperatedAt &&
           candidatePathIdx === curPathIdx &&
@@ -248,10 +253,11 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
           new Date(a.operated_at || 0).getTime() - new Date(b.operated_at || 0).getTime() ||
           a.id - b.id,
       )
-  }, [instance, currentTask?.id, currentTask?.node_id, currentTask?.operated_at])
+  }, [instance, currentTask?.id, currentTaskDetail?.node_id, currentTaskDetail?.operated_at, currentNodeStrategy])
   const lastApprovedTask = priorApprovedTasks[priorApprovedTasks.length - 1]
 
-  // 不同意/退回权限：permissions 含 1（对齐钉钉，不同意为审批人默认操作不受配置控制）
+  // 不同意/退回、转交、加签均按当前节点 permissions 控制；
+  // 转交/加签衍生待办仍保留完整操作能力，仅历史衍生审批人不作为退回候选。
   const canDisapprove = showApproveButtons && currentNodePerms.includes(1)
   const canDelegate = showDelegateButtons && currentNodePerms.includes(2)
   const canAddSign = showDelegateButtons && currentNodePerms.includes(3)
@@ -307,13 +313,14 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
 
   // ========== 不同意（退回上一步 / 指定前置审批人） ==========
   const openReturnModal = () => {
+    if (!canDisapprove) return
     setReturnMode(1)
     setReturnTargetId(undefined)
     setReturnVisible(true)
   }
 
   const handleReturnConfirm = async () => {
-    if (!currentTask) return
+    if (!currentTask || !canDisapprove) return
     if (!comment.trim()) {
       Message.warning('退回时必须填写退回意见')
       return
@@ -350,7 +357,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   }
 
   const handleDelegate = async (userId) => {
-    if (!userId || !currentTask) return
+    if (!userId || !currentTask || !canDelegate) return
     setOperating(true)
     try {
       await approvalApi.delegateApprovalTask(currentTask.instance_id, currentTask.id, {
@@ -374,7 +381,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   }
 
   const handleAddSigner = async (userId) => {
-    if (!userId || !currentTask) return
+    if (!userId || !currentTask || !canAddSign) return
     setOperating(true)
     try {
       await approvalApi.addSignApprovalTask(currentTask.instance_id, currentTask.id, {
@@ -598,6 +605,11 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
         {priorApprovedTasks.length === 0 && (
           <div className="mt-3 rounded bg-orange-50 px-3 py-2 text-xs leading-5 text-orange-600">
             首个审批节点或无前置审批人时，不支持退回前序审批人；将按现有规则退回发起人。
+          </div>
+        )}
+        {currentNodeStrategy !== 1 && priorApprovedTasks.length > 0 && (
+          <div className="mt-3 rounded bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-600">
+            会签/或签节点仅可退回更早审批节点，不支持退回本节点其他成员。
           </div>
         )}
       </Modal>
