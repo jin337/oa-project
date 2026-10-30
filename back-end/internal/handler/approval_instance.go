@@ -167,7 +167,7 @@ func parseTaskID(c *gin.Context) (uint, bool) {
 	return uint(id), true
 }
 
-// ApprovalInstanceTaskApprove PUT /{APIPrefix}/approval/instance/:id/task/:taskId/approve 审批操作（通过/拒绝/驳回）
+// ApprovalInstanceTaskApprove PUT /{APIPrefix}/approval/instance/:id/task/:taskId/approve 审批操作（同意；不同意入口选择退回方式）
 func ApprovalInstanceTaskApprove(c *gin.Context) {
 	instanceID, ok := parseID(c)
 	if !ok {

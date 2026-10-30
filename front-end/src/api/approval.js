@@ -98,7 +98,7 @@ export function deleteApprovalInstance(id) {
   return request.delete(`/approval/instance/${id}`)
 }
 
-// PUT /approval/instance/:instanceId/task/:taskId/approve 审批操作（同意/拒绝/驳回）
+// PUT /approval/instance/:instanceId/task/:taskId/approve 审批操作（同意；不同意入口下选择退回方式）
 export function approveApprovalTask(instanceId, taskId, data) {
   return request.put(`/approval/instance/${instanceId}/task/${taskId}/approve`, data)
 }

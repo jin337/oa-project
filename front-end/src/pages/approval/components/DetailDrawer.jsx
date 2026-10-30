@@ -5,7 +5,9 @@ import {
   Form,
   Input,
   Message,
+  Modal,
   Radio,
+  Select,
   Space,
   Spin,
 } from '@arco-design/web-react'
@@ -33,6 +35,7 @@ import {
 } from 'src/pages/application/examine/flowModel'
 import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
 import ApprovalTimeline from 'src/pages/approval/components/ApprovalTimeline.jsx'
+import { formatTime } from 'src/utils/format'
 
 /**
  * 审批记录动态详情 Drawer（公共组件）：
@@ -62,6 +65,10 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   const [addSignerVisible, setAddSignerVisible] = useState(false)
   // 加签类型：1-前加签（加签人先审，通过后本人再审） 2-后加签（本人通过后加签人再审）
   const [addSignType, setAddSignType] = useState(2)
+  // 不同意弹窗：1-退回上一位已通过审批人；2-退回指定前置审批人
+  const [returnVisible, setReturnVisible] = useState(false)
+  const [returnMode, setReturnMode] = useState(1)
+  const [returnTargetId, setReturnTargetId] = useState(undefined)
   const [flowCollapsed, setFlowCollapsed] = useState(false)
 
   // 选择器数据源：抽屉打开时统一加载一次（组织架构 + 角色，仅启用），
@@ -137,6 +144,9 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     if (!visible) {
       setDelegateVisible(false)
       setAddSignerVisible(false)
+      setReturnVisible(false)
+      setReturnMode(1)
+      setReturnTargetId(undefined)
     }
   }, [visible])
 
@@ -172,7 +182,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   // 是否显示转交/加签按钮（有待办任务时）
   const showDelegateButtons = Boolean(currentTask?.id)
 
-  // 当前任务所在节点的审批人操作权限（node.permissions：1-不同意 / 2-转交 / 3-加签）
+  // 当前任务所在节点的审批人操作权限（node.permissions：1-不同意/退回 / 2-转交 / 3-加签）
   // 快照为树形结构（条件分支的 children 内嵌节点），需递归查找；
   // 通过实例任务列表定位任务所属节点，旧快照无 permissions 时默认全部放行
   const currentNodePerms = (() => {
@@ -191,8 +201,58 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     return node?.permissions?.length ? node.permissions : [1, 2, 3]
   })()
 
-  // 退回权限：permissions 含 1（对齐钉钉，不同意为审批人默认操作不受配置控制）
-  const canReturn = showApproveButtons && currentNodePerms.includes(1)
+  // 可退回候选：当前任务之前已通过的普通审批任务（排除转交、加签衍生任务与后续节点历史）
+  const priorApprovedTasks = useMemo(() => {
+    const tasks = instance?.approval_flow_tasks || []
+    const nameMap = instance?.assignee_name_map || {}
+    const pathIndex = Object.fromEntries(
+      (instance?.execution_path || []).map((nodeID, index) => [nodeID, index]),
+    )
+    const curPathIdx = pathIndex[currentTask?.node_id]
+    const curOperatedAt = currentTask?.operated_at
+      ? new Date(currentTask.operated_at).getTime()
+      : null
+    return tasks
+      .filter((t) => {
+        if (
+          t.status !== 1 ||
+          t.id === currentTask?.id ||
+          t.delegated_from ||
+          t.add_sign_from
+        ) {
+          return false
+        }
+        const candidatePathIdx = pathIndex[t.node_id]
+        if (candidatePathIdx === undefined) {
+          return false
+        }
+        if (curPathIdx !== undefined && candidatePathIdx > curPathIdx) {
+          return false
+        }
+        if (
+          curOperatedAt &&
+          candidatePathIdx === curPathIdx &&
+          new Date(t.operated_at || 0).getTime() > curOperatedAt
+        ) {
+          return false
+        }
+        return true
+      })
+      .map((t) => ({
+        ...t,
+        displayName: nameMap[String(t.assignee_id)] || `用户${t.assignee_id}`,
+      }))
+      .sort(
+        (a, b) =>
+          (pathIndex[a.node_id] ?? 0) - (pathIndex[b.node_id] ?? 0) ||
+          new Date(a.operated_at || 0).getTime() - new Date(b.operated_at || 0).getTime() ||
+          a.id - b.id,
+      )
+  }, [instance, currentTask?.id, currentTask?.node_id, currentTask?.operated_at])
+  const lastApprovedTask = priorApprovedTasks[priorApprovedTasks.length - 1]
+
+  // 不同意/退回权限：permissions 含 1（对齐钉钉，不同意为审批人默认操作不受配置控制）
+  const canDisapprove = showApproveButtons && currentNodePerms.includes(1)
   const canDelegate = showDelegateButtons && currentNodePerms.includes(2)
   const canAddSign = showDelegateButtons && currentNodePerms.includes(3)
 
@@ -224,23 +284,56 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     return fullValues
   }
 
-  const handleApprove = async (action) => {
+  const handleApprove = async () => {
     if (!currentTask) return
-    // 不同意/退回意见必填（对齐钉钉）
-    if ((action === 2 || action === 3) && !comment.trim()) {
-      Message.warning(action === 3 ? '退回时必须填写退回意见' : '不同意时必须填写不同意意见')
+    setOperating(true)
+    try {
+      const businessData = buildModifiedBusinessData()
+      await approvalApi.approveApprovalTask(currentTask.instance_id, currentTask.id, {
+        action: 1,
+        comment: comment.trim() || undefined,
+        business_data: businessData,
+      })
+      Message.success('已同意')
+      setComment('')
+      onAction?.()
+      onCancel?.()
+    } catch {
+      // 错误已在请求层提示
+    } finally {
+      setOperating(false)
+    }
+  }
+
+  // ========== 不同意（退回上一步 / 指定前置审批人） ==========
+  const openReturnModal = () => {
+    setReturnMode(1)
+    setReturnTargetId(undefined)
+    setReturnVisible(true)
+  }
+
+  const handleReturnConfirm = async () => {
+    if (!currentTask) return
+    if (!comment.trim()) {
+      Message.warning('退回时必须填写退回意见')
+      return
+    }
+    if (returnMode === 2 && !returnTargetId) {
+      Message.warning('请选择要退回的审批人')
       return
     }
     setOperating(true)
     try {
       const businessData = buildModifiedBusinessData()
       await approvalApi.approveApprovalTask(currentTask.instance_id, currentTask.id, {
-        action,
-        comment: comment.trim() || undefined,
+        action: 3,
+        comment: comment.trim(),
         business_data: businessData,
+        return_mode: returnMode,
+        target_task_id: returnMode === 2 ? Number(returnTargetId) : undefined,
       })
-      const names = { 1: '已同意', 2: '不同意', 3: '已退回' }
-      Message.success(names[action] || '操作成功')
+      Message.success('已退回')
+      setReturnVisible(false)
       setComment('')
       onAction?.()
       onCancel?.()
@@ -327,28 +420,15 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
                 加签
               </Button>
             )}
-            {canReturn && (
-              <Button size="small" loading={operating} onClick={() => handleApprove(3)}>
-                退回
-              </Button>
-            )}
           </Space>
           {showApproveButtons && (
             <Space>
-              <Button
-                status="danger"
-                size="small"
-                loading={operating}
-                onClick={() => handleApprove(2)}
-              >
-                不同意
-              </Button>
-              <Button
-                type="primary"
-                size="small"
-                loading={operating}
-                onClick={() => handleApprove(1)}
-              >
+              {canDisapprove && (
+                <Button status="danger" size="small" loading={operating} onClick={openReturnModal}>
+                  不同意
+                </Button>
+              )}
+              <Button type="primary" size="small" loading={operating} onClick={handleApprove}>
                 同意
               </Button>
             </Space>
@@ -456,6 +536,71 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
           <Empty description={loadError ? '数据加载失败' : '暂无数据'} />
         )}
       </Drawer>
+
+      {/* 不同意 Modal：选择退回上一步或指定前置已通过审批人 */}
+      <Modal
+        title="选择退回方式"
+        visible={returnVisible}
+        onOk={handleReturnConfirm}
+        onCancel={() => setReturnVisible(false)}
+        okText="确认退回"
+        cancelText="取消"
+        confirmLoading={operating}
+        maskClosable={!operating}
+        unmountOnExit
+      >
+        <div className="mb-2 text-sm text-gray-600">退回意见（必填）</div>
+        <Input.TextArea
+          placeholder="请说明退回原因，便于前序审批人或发起人调整"
+          value={comment}
+          onChange={setComment}
+          maxLength={500}
+          showWordLimit
+          autoSize={{ minRows: 3, maxRows: 5 }}
+        />
+
+        <Radio.Group
+          direction="vertical"
+          value={returnMode}
+          onChange={setReturnMode}
+          className="mt-4 w-full"
+        >
+          <Radio value={1}>
+            <div className="inline-flex flex-col">
+              <div>退回上一步</div>
+              <div className="text-xs text-gray-500">
+                {lastApprovedTask
+                  ? `退回给「${lastApprovedTask.node_name} / ${lastApprovedTask.displayName}」重新审批`
+                  : '当前没有前置已通过审批人，确认后将退回发起人修改后重新提交'}
+              </div>
+            </div>
+          </Radio>
+          <Radio className={'mt-2'} value={2} disabled={!priorApprovedTasks.length}>
+            <div className="inline-flex flex-col">
+              <div>退回指定位置（已审批完的人）</div>
+              <div className="w-113">
+                <Select
+                  allowClear
+                  placeholder="请选择前置已审批人员"
+                  value={returnTargetId}
+                  onChange={setReturnTargetId}
+                  disabled={returnMode !== 2 || !priorApprovedTasks.length}
+                  options={priorApprovedTasks.map((task) => ({
+                    label: `${task.node_name}｜${task.displayName}｜${formatTime(task.operated_at)}`,
+                    value: task.id,
+                  }))}
+                />
+              </div>
+            </div>
+          </Radio>
+        </Radio.Group>
+
+        {priorApprovedTasks.length === 0 && (
+          <div className="mt-3 rounded bg-orange-50 px-3 py-2 text-xs leading-5 text-orange-600">
+            首个审批节点或无前置审批人时，不支持退回前序审批人；将按现有规则退回发起人。
+          </div>
+        )}
+      </Modal>
 
       {/* 转交 Modal：用户选择统一使用 PersonSelectorModal（组织架构单选） */}
       {delegateVisible && (

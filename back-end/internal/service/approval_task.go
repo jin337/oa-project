@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -210,6 +211,209 @@ func rejectToInitiator(tx *gorm.DB, instance *model.ApprovalInstance, result str
 		InstanceID: instance.ID,
 	}
 	notifyCreate(tx, n)
+	return nil
+}
+
+// taskApprovedAfterReturnTarget 判断历史已通过任务是否位于退回目标之后。
+// 跨节点按执行路径序号判断；同一节点按操作时间判断。
+func taskApprovedAfterReturnTarget(task, target *model.ApprovalInstanceTask, pathIndex map[string]int) bool {
+	targetIdx, targetOK := pathIndex[target.NodeID]
+	taskIdx, taskOK := pathIndex[task.NodeID]
+	if !targetOK || !taskOK {
+		return false
+	}
+	if taskIdx > targetIdx {
+		return true
+	}
+	if taskIdx != targetIdx || task.OperatedAt == nil || target.OperatedAt == nil {
+		return false
+	}
+	return task.OperatedAt.After(*target.OperatedAt)
+}
+
+// returnFromDisapproval 处理「不同意」入口下的退回：
+//   - return_mode=1：退回上一位已通过审批人；
+//   - return_mode=2：退回指定的前置已通过审批人；
+//   - 无前置已通过审批人时兜底退回发起人（实例进入已退回状态，等待发起人重新提交）。
+//
+// 回到前置审批人时实例仍为进行中：历史任务行保留，目标之后的历史通过任务标记取消，
+// 并为目标审批人新建一条待处理任务；目标重新通过后按正常节点策略继续流转。
+func returnFromDisapproval(tx *gorm.DB, instance *model.ApprovalInstance, task *model.ApprovalInstanceTask, req *model.ApprovalInstanceTaskApproveReq, curUserID uint) error {
+	comment := strings.TrimSpace(req.Comment)
+	if comment == "" {
+		return errors.New("退回时必须填写退回意见")
+	}
+
+	nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
+	if err != nil {
+		return err
+	}
+	curNode := findNodeByID(nodes, task.NodeID)
+	if curNode == nil {
+		return errors.New("当前审批节点不存在")
+	}
+	hasReturnPerm := false
+	for _, p := range curNode.Permissions {
+		if p == 1 {
+			hasReturnPerm = true
+			break
+		}
+	}
+	if !hasReturnPerm {
+		return errors.New("当前节点未开放退回权限")
+	}
+
+	// 候选只取普通审批任务（排除转交与加签衍生任务），且必须位于当前任务之前。
+	// 节点位置以 execution_path 索引为准；同节点按操作时间判断先后。
+	pathIndex := make(map[string]int, len(instance.ExecutionPath))
+	for i, nodeID := range instance.ExecutionPath {
+		pathIndex[nodeID] = i
+	}
+	curPathIdx, curPathOK := pathIndex[task.NodeID]
+	if !curPathOK {
+		return errors.New("当前审批节点不在执行路径中")
+	}
+	var candidates []model.ApprovalInstanceTask
+	if err := tx.
+		Where("instance_id = ? AND status = ? AND id <> ? AND delegated_from = 0 AND add_sign_from = 0",
+			instance.ID, model.TaskStatusApproved, task.ID).
+		Order("sort ASC, operated_at ASC, id ASC").
+		Find(&candidates).Error; err != nil {
+		return err
+	}
+	validTargets := make([]model.ApprovalInstanceTask, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidatePathIdx, candidatePathOK := pathIndex[candidate.NodeID]
+		if !candidatePathOK {
+			continue
+		}
+		if candidatePathIdx > curPathIdx {
+			continue
+		}
+		if candidatePathIdx == curPathIdx && candidate.OperatedAt != nil && task.OperatedAt != nil &&
+			candidate.OperatedAt.After(*task.OperatedAt) {
+			continue
+		}
+		validTargets = append(validTargets, candidate)
+	}
+	sort.SliceStable(validTargets, func(i, j int) bool {
+		left, right := validTargets[i], validTargets[j]
+		if pathIndex[left.NodeID] != pathIndex[right.NodeID] {
+			return pathIndex[left.NodeID] < pathIndex[right.NodeID]
+		}
+		leftTime, rightTime := time.Time{}, time.Time{}
+		if left.OperatedAt != nil {
+			leftTime = *left.OperatedAt
+		}
+		if right.OperatedAt != nil {
+			rightTime = *right.OperatedAt
+		}
+		if !leftTime.Equal(rightTime) {
+			return leftTime.Before(rightTime)
+		}
+		return left.ID < right.ID
+	})
+
+	if len(validTargets) == 0 {
+		if req.ReturnMode == 2 {
+			return errors.New("暂无可退回的前置审批人")
+		}
+		return rejectToInitiator(tx, instance, comment, curUserID)
+	}
+
+	var target model.ApprovalInstanceTask
+	switch req.ReturnMode {
+	case 2:
+		found := false
+		for _, candidate := range validTargets {
+			if candidate.ID == req.TargetTaskID {
+				target = candidate
+				found = true
+				break
+			}
+		}
+		if !found {
+			return errors.New("退回目标审批人不存在或不可选择")
+		}
+	case 0, 1:
+		target = validTargets[len(validTargets)-1]
+	default:
+		return errors.New("非法的退回方式")
+	}
+
+	now := time.Now()
+
+	// 取消当前所有待处理/加签等待任务；当前任务已由调用方标记为已退回。
+	if err := tx.Model(&model.ApprovalInstanceTask{}).
+		Where("instance_id = ? AND status IN (?, ?)", instance.ID, model.TaskStatusPending, model.TaskStatusWaiting).
+		Updates(map[string]interface{}{
+			"status":     model.TaskStatusCancelled,
+			"updated_at": now,
+			"updated_by": curUserID,
+		}).Error; err != nil {
+		return err
+	}
+
+	// 目标之后的历史通过任务保留行记录，但标记为已取消；目标重新通过后再生成新的待办。
+	var laterApproved []model.ApprovalInstanceTask
+	if err := tx.
+		Where("instance_id = ? AND status = ? AND id <> ?", instance.ID, model.TaskStatusApproved, target.ID).
+		Find(&laterApproved).Error; err != nil {
+		return err
+	}
+	for _, later := range laterApproved {
+		if !taskApprovedAfterReturnTarget(&later, &target, pathIndex) {
+			continue
+		}
+		if err := tx.Model(&later).Updates(map[string]interface{}{
+			"status":     model.TaskStatusCancelled,
+			"updated_at": now,
+			"updated_by": curUserID,
+		}).Error; err != nil {
+			return err
+		}
+	}
+
+	// 为目标审批人新建待处理任务，旧通过任务继续作为时间线历史记录。
+	newTask := model.ApprovalInstanceTask{
+		InstanceID: instance.ID,
+		NodeID:     target.NodeID,
+		NodeName:   target.NodeName,
+		Sort:       target.Sort,
+		AssigneeID: target.AssigneeID,
+		Status:     model.TaskStatusPending,
+	}
+	newTask.CreatedBy, newTask.UpdatedBy = curUserID, curUserID
+	if err := tx.Create(&newTask).Error; err != nil {
+		return err
+	}
+
+	targetPathIdx, targetPathOK := pathIndex[target.NodeID]
+	if !targetPathOK {
+		return errors.New("退回目标审批人不在执行路径中")
+	}
+
+	instance.Status = model.InstanceStatusRunning
+	instance.CurrentNodeIdx = targetPathIdx
+	instance.Result = ""
+	instance.FinishedAt = nil
+	if err := tx.Model(instance).Updates(map[string]interface{}{
+		"status":           model.InstanceStatusRunning,
+		"current_node_idx": targetPathIdx,
+		"result":           "",
+		"finished_at":      nil,
+		"updated_by":      curUserID,
+	}).Error; err != nil {
+		return err
+	}
+
+	notifyCreate(tx, model.Notification{
+		UserID:     target.AssigneeID,
+		Type:       1,
+		Title:      getInstanceAppName(instance),
+		Msg:        "审批被退回，请重新审批",
+		InstanceID: instance.ID,
+	})
 	return nil
 }
 
@@ -560,31 +764,8 @@ func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.App
 		switch req.Action {
 		case model.TaskStatusApproved: // 通过
 			return handleNodeApproval(tx, &instance, task, curUserID)
-		case model.TaskStatusRejected: // 拒绝
-			return finishInstance(tx, &instance, model.InstanceStatusRejected, req.Comment, curUserID)
-		case model.TaskStatusReturned: // 退回：校验节点开放退回权限（permissions 含 1）；退回意见必填
-			if strings.TrimSpace(req.Comment) == "" {
-				return errors.New("退回时必须填写退回意见")
-			}
-			nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
-			if err != nil {
-				return err
-			}
-			curNode := findNodeByID(nodes, task.NodeID)
-			if curNode == nil {
-				return errors.New("当前审批节点不存在")
-			}
-			hasReturnPerm := false
-			for _, p := range curNode.Permissions {
-				if p == 1 {
-					hasReturnPerm = true
-					break
-				}
-			}
-			if !hasReturnPerm {
-				return errors.New("当前节点未开放退回权限")
-			}
-			return rejectToInitiator(tx, &instance, req.Comment, curUserID)
+		case model.TaskStatusReturned: // 不同意入口：退回上一步 / 指定前置审批人；无前置审批人时退回发起人
+			return returnFromDisapproval(tx, &instance, task, req, curUserID)
 		default:
 			return errors.New("非法的操作类型")
 		}
@@ -708,17 +889,26 @@ func handleNodeApproval(tx *gorm.DB, instance *model.ApprovalInstance, task *mod
 
 // handleSequentialNext 依次审批：检查同节点是否还有后续审批人
 func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *flowNode, allNodes []flowNode, curUserID uint, task *model.ApprovalInstanceTask) error {
-	// 统计同节点已生成的任务数（排除转交衍生任务 delegated_from>0 与加签任务 add_sign_from>0）
-	var taskCount int64
-	tx.Model(&model.ApprovalInstanceTask{}).
-		Where("instance_id = ? AND node_id = ? AND delegated_from = 0 AND add_sign_from = 0", instance.ID, node.ID).
-		Count(&taskCount)
-
 	// 解析该节点的全部审批人
 	userIDs, err := resolveApproverUserIDs(*node, nil)
 	if err != nil {
 		return fmt.Errorf("解析审批人失败: %w", err)
 	}
+
+	// 统计同节点仍有效的普通审批人（排除转交衍生任务、加签任务，以及退回后被取消/退回的历史任务）。
+	// 退回会保留历史任务行但将后续历史任务标记取消，因此不能按任务行数直接取下一人索引。
+	var activeTasks []model.ApprovalInstanceTask
+	if err := tx.
+		Where("instance_id = ? AND node_id = ? AND delegated_from = 0 AND add_sign_from = 0 AND status IN (?, ?)",
+			instance.ID, node.ID, model.TaskStatusPending, model.TaskStatusApproved).
+		Find(&activeTasks).Error; err != nil {
+		return err
+	}
+	activeAssignees := make(map[uint]bool, len(userIDs))
+	for _, active := range activeTasks {
+		activeAssignees[active.AssigneeID] = true
+	}
+
 	// 本节点存在未完成的后加签任务（add_sign_type=2）：先等加签人处理，不轮后续审批人/不推进下一节点
 	var pendingAddSign int64
 	tx.Model(&model.ApprovalInstanceTask{}).
@@ -729,14 +919,21 @@ func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *f
 		return nil
 	}
 
-	if int(taskCount) < len(userIDs) {
+	nextIndex := -1
+	for idx, userID := range userIDs {
+		if !activeAssignees[userID] {
+			nextIndex = idx
+			break
+		}
+	}
+	if nextIndex >= 0 {
 		// 还有后续审批人：生成下一个人的任务
 		nextTask := model.ApprovalInstanceTask{
 			InstanceID: instance.ID,
 			NodeID:     node.ID,
 			NodeName:   node.Label,
 			Sort:       instance.CurrentNodeIdx,
-			AssigneeID: userIDs[taskCount],
+			AssigneeID: userIDs[nextIndex],
 			Status:     model.TaskStatusPending,
 		}
 		nextTask.CreatedBy, nextTask.UpdatedBy = curUserID, curUserID

@@ -776,8 +776,10 @@ type ApprovalInstanceResubmitReq struct {
 
 // ApprovalInstanceTaskApproveReq 审批操作请求
 type ApprovalInstanceTaskApproveReq struct {
-	Action       int                    `json:"action" validate:"required,oneof=1 2 3" label:"操作"` // 1-通过 2-拒绝 3-退回
+	Action       int                    `json:"action" validate:"required,oneof=1 3" label:"操作"` // 1-通过；3-不同意入口下的退回（终态不通过不再由审批动作产生）
 	Comment      string                 `json:"comment" validate:"omitempty,max=500" label:"审批意见"`
+	ReturnMode   int                    `json:"return_mode" validate:"omitempty,oneof=1 2" label:"退回方式"` // 1-退回上一位已通过审批人；2-退回指定已通过审批人
+	TargetTaskID uint                   `json:"target_task_id" validate:"omitempty,gt=0" label:"退回目标任务ID"`
 	BusinessData map[string]interface{} `json:"business_data" validate:"omitempty" label:"业务数据"` // 审批人修改后的业务数据（字段权限 perm=2 可编辑字段），可选
 }
 
