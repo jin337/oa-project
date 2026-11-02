@@ -818,15 +818,19 @@ func ApprovalDashboardSummary(curUserID uint, timeRange string) (*model.Approval
 	return sum, nil
 }
 
-// ApprovalDashboardFlows 工作台「流程监控」：与我相关的所有申请（待办/我发起/经我处理/抄送我，全量不分页）
+// dashboardFlowsLimit 「流程监控」单 scope 全量拉取上限：接口无分页契约，一次返回全部相关申请，
+// 上限仅作 SQL LIMIT 防御（避免极端数据量下的资源问题），不对外暴露分页参数。
+const dashboardFlowsLimit = 100000
+
+// ApprovalDashboardFlows 工作台「流程监控」：与我相关的所有申请（待办/我发起/经我处理/抄送我，无分页、全量返回）
 // 按实例去重合并，每条记录携带归属 Scopes（按 dashboardScopePriority 顺序去重）。
-// timeRange 为时间筛选（today/7d/month/year/all，空等价 all）。
+// timeRange 为时间筛选（today/week/month/year/all，空等价 all）。
 // 输出按实例 ID 倒序（与列表页一致），前端按 Scopes[0] 跳转对应页面打开详情抽屉。
 func ApprovalDashboardFlows(curUserID uint, timeRange string) ([]model.ApprovalFlowRecord, error) {
 	byInst := map[uint]*model.ApprovalFlowRecord{}
 	for _, scope := range dashboardScopePriority {
 		list, _, err := ApprovalList(curUserID, &model.ApprovalListReq{
-			BaseListReq: model.BaseListReq{Page: 1, Size: 500},
+			BaseListReq: model.BaseListReq{Page: 1, Size: dashboardFlowsLimit},
 			Scope:       scope,
 			TimeRange:   timeRange,
 		})
