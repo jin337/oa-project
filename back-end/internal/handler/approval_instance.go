@@ -232,3 +232,20 @@ func ApprovalInstanceTaskDelegate(c *gin.Context) {
 	}
 	response.OKMsg(c, "转交成功")
 }
+
+// ApprovalInstanceTaskRecall PUT /{APIPrefix}/approval/instance/:id/task/:taskId/recall 审核撤回（审批人撤回自己的操作）
+func ApprovalInstanceTaskRecall(c *gin.Context) {
+	instanceID, ok := parseID(c)
+	if !ok {
+		return
+	}
+	taskID, ok := parseTaskID(c)
+	if !ok {
+		return
+	}
+	if err := service.ApprovalTaskRecall(middleware.CurrentUserID(c), instanceID, taskID); err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	response.OKMsg(c, "撤回成功")
+}

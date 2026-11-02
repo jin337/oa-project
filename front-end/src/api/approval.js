@@ -103,6 +103,11 @@ export function approveApprovalTask(instanceId, taskId, data) {
   return request.put(`/approval/instance/${instanceId}/task/${taskId}/approve`, data)
 }
 
+// PUT /approval/instance/:instanceId/task/:taskId/recall 审核撤回（审批人撤回自己的操作）
+export function recallApprovalTask(instanceId, taskId) {
+  return request.put(`/approval/instance/${instanceId}/task/${taskId}/recall`)
+}
+
 // PUT /approval/instance/:instanceId/task/:taskId/delegate 转交
 export function delegateApprovalTask(instanceId, taskId, data) {
   return request.put(`/approval/instance/${instanceId}/task/${taskId}/delegate`, data)

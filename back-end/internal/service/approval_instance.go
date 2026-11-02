@@ -698,11 +698,24 @@ func ApprovalInstanceVoid(curUserID, instanceID uint) error {
 // 落为「已撤回」，保留在「我的发起」列表中，同时取消所有待处理任务。
 // 已撤回实例可继续编辑（保存后转为正式草稿进草稿箱）或重新提交、删除。
 // 流程快照与发起人自选成员保留，重新提交时按当时表单数据重新评估执行路径。
+// 撤回前置条件（严格口径）：实例下不允许存在任何已被操作的审批任务（审核记录）——
+// 只要任一任务状态脱离「待处理」（已通过/已拒绝/已驳回/已转交/加签等待/已取消等），
+// 即视为已有人介入审核，发起人不可再撤回，避免撤销审批人已产生的审核痕迹。
 func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		instance, err := loadOwnedInstance(tx, curUserID, instanceID, "撤回", model.InstanceStatusRunning)
 		if err != nil {
 			return err
+		}
+		// 无审核记录才可撤回：任一任务已脱离待处理即拒绝（比时间窗更前置的硬性条件）
+		var operatedCount int64
+		if err := tx.Model(&model.ApprovalInstanceTask{}).
+			Where("instance_id = ? AND status <> ?", instance.ID, model.TaskStatusPending).
+			Count(&operatedCount).Error; err != nil {
+			return err
+		}
+		if operatedCount > 0 {
+			return errors.New("该申请已有审核记录，不允许撤回")
 		}
 		// 撤回时间窗口：优先使用实例提交时冻结的其他设置快照；旧实例无快照时回退当前生效版本配置。
 		// 窗口从首次正式提交时间（instance.CreatedAt）起算，撤回后重新提交不重置该时间。
@@ -923,6 +936,8 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 		AssigneeNameMap:  assigneeNameMap,
 		FieldPerms:       fieldPerms,
 	}
+	// 审核撤回能力标记：当前登录审批人能否撤回自己的各次操作
+	FillTaskRecallFlags(curUserID, &instance, tasks, result.Tasks)
 	// 审批流配置返回应用最新值（ExamineManage 修改后详情即时生效），与 detail_layout_json 策略一致；
 	// fieldPerms 已按实例冻结快照计算完毕（currentNodeFieldPerms），此处覆盖输出不影响字段权限判定
 	if latestFlowJSON != nil {

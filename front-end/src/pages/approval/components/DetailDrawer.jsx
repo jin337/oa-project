@@ -41,7 +41,8 @@ import { formatTime } from 'src/utils/format'
  * 审批记录动态详情 Drawer（公共组件）：
  * - 通过 record.instance_id 一次性请求流程实例详情接口
  * - 复用接口返回的 business_data 渲染动态详情，复用 detail_layout_json 构建布局
- * - 集成审批操作按钮：同意/不同意（需 currentTask）、转交、加签（撤回仅在我的申请页）
+ * - 集成审批操作按钮：同意/不同意（需 currentTask）、转交、加签
+ *   （审核撤回入口在「经我处理」列表操作列，详情内不重复展示）
  *
  * @param {object} props.record        列表记录（含 instance_id / data_id / app_id 等）
  * @param {boolean} props.visible      Drawer 是否可见

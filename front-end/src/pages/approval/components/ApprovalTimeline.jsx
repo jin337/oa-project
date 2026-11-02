@@ -9,7 +9,7 @@ import {
   IconStamp,
   IconUser,
 } from '@arco-design/web-react/icon'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import {
   hasExpandableMember,
@@ -224,13 +224,9 @@ export default function ApprovalTimeline({
     }
   }, [visible, needsMemberDirectory])
 
-  useEffect(() => {
-    if (!visible || !instanceId) return
-    let cancelled = false
-
-    // 处理实例数据：解析节点链、设置任务、解析用户姓名
-    const processInstanceData = (data) => {
-      if (cancelled) return
+  // 将实例数据解析进组件状态（任务 / 流程节点 / 用户姓名），供初次加载与审核撤回后刷新共用
+  const applyInstanceData = useCallback(
+    (data) => {
       setInstance(data)
       setTasks(data.approval_flow_tasks || [])
 
@@ -257,47 +253,59 @@ export default function ApprovalTimeline({
 
       // 用户姓名：优先使用外部传入的映射（已解析），否则逐个查询
       if (externalNameMap) {
-        if (!cancelled) setUserNameMap(externalNameMap)
-      } else {
-        // 收集所有涉及的用户 ID（tasks 审批人 + 加签发起人 + 节点成员引用）
-        const userIds = new Set()
-        ;(data.approval_flow_tasks || []).forEach((t) => {
-          if (t.assignee_id) userIds.add(t.assignee_id)
-          // 加签任务的 created_by 是发起加签的人，时间线需要显示「由XX加签」
-          if (t.add_sign_from > 0 && t.created_by) userIds.add(t.created_by)
-        })
-        if (data.created_by) userIds.add(data.created_by)
-        // 从节点 members 中提取人员引用（approverType=3 自选节点注入的 key 格式为 user_{id}）
-        nodes.forEach((n) => {
-          ;(n.members || []).forEach((m) => {
-            if (m.type === 1 && m.key) {
-              const uid = m.key.replace('user_', '')
-              if (uid) userIds.add(uid)
-            }
-          })
-        })
-
-        // 无外部姓名映射时的兜底：逐个查询
-        if (userIds.size > 0) {
-          const nameMap = {}
-          Promise.all(
-            Array.from(userIds).map((uid) =>
-              import('src/api/user').then(({ getUser }) =>
-                getUser(uid)
-                  .then((r) => {
-                    const u = r.data
-                    nameMap[uid] = u?.profile?.nickname || u?.username || `用户#${uid}`
-                  })
-                  .catch(() => {
-                    nameMap[uid] = `用户#${uid}`
-                  }),
-              ),
-            ),
-          ).then(() => {
-            if (!cancelled) setUserNameMap(nameMap)
-          })
-        }
+        setUserNameMap(externalNameMap)
+        return
       }
+      // 收集所有涉及的用户 ID（tasks 审批人 + 加签发起人 + 节点成员引用）
+      const userIds = new Set()
+      ;(data.approval_flow_tasks || []).forEach((t) => {
+        if (t.assignee_id) userIds.add(t.assignee_id)
+        // 加签任务的 created_by 是发起加签的人，时间线需要显示「由XX加签」
+        if (t.add_sign_from > 0 && t.created_by) userIds.add(t.created_by)
+      })
+      if (data.created_by) userIds.add(data.created_by)
+      // 从节点 members 中提取人员引用（approverType=3 自选节点注入的 key 格式为 user_{id}）
+      nodes.forEach((n) => {
+        ;(n.members || []).forEach((m) => {
+          if (m.type === 1 && m.key) {
+            const uid = m.key.replace('user_', '')
+            if (uid) userIds.add(uid)
+          }
+        })
+      })
+
+      // 无外部姓名映射时的兜底：逐个查询
+      if (userIds.size > 0) {
+        const nameMap = {}
+        Promise.all(
+          Array.from(userIds).map((uid) =>
+            import('src/api/user').then(({ getUser }) =>
+              getUser(uid)
+                .then((r) => {
+                  const u = r.data
+                  nameMap[uid] = u?.profile?.nickname || u?.username || `用户#${uid}`
+                })
+                .catch(() => {
+                  nameMap[uid] = `用户#${uid}`
+                }),
+            ),
+          ),
+        ).then(() => {
+          setUserNameMap(nameMap)
+        })
+      }
+    },
+    [externalNameMap],
+  )
+
+  useEffect(() => {
+    if (!visible || !instanceId) return
+    let cancelled = false
+
+    // 处理实例数据：解析节点链、设置任务、解析用户姓名
+    const processInstanceData = (data) => {
+      if (cancelled) return
+      applyInstanceData(data)
     }
 
     // 外部已提供数据时跳过 API 请求
@@ -329,8 +337,9 @@ export default function ApprovalTimeline({
     return () => {
       cancelled = true
     }
-  }, [visible, instanceId, externalNameMap, initialData])
+  }, [visible, instanceId, externalNameMap, initialData, applyInstanceData])
 
+  // 审核撤回入口已迁移至「经我处理」列表操作列（Workplace.jsx），时间线仅作只读流转展示。
   if (loading) {
     return <div className="py-4 text-center text-gray-400">加载审批流程...</div>
   }

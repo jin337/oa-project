@@ -36,10 +36,11 @@ func registerApprovalRoutes(api *gin.RouterGroup) {
 			instance.PUT("/:id/withdraw", handler.ApprovalInstanceWithdraw)                  // 撤回
 			instance.PUT("/:id/void", handler.ApprovalInstanceVoid)                          // 作废
 			instance.PUT("/:id/resubmit", handler.ApprovalInstanceResubmit)                  // 已驳回重新提交
-			instance.POST("/:id/manual-cc", handler.ApprovalInstanceManualCC)              // 手动抄送指定用户
+			instance.POST("/:id/manual-cc", handler.ApprovalInstanceManualCC)                // 手动抄送指定用户
 			instance.PUT("/:id/task/:taskId/approve", handler.ApprovalInstanceTaskApprove)   // 审批操作
 			instance.PUT("/:id/task/:taskId/add-sign", handler.ApprovalInstanceTaskAddSign)  // 加签（前/后）
 			instance.PUT("/:id/task/:taskId/delegate", handler.ApprovalInstanceTaskDelegate) // 转交
+			instance.PUT("/:id/task/:taskId/recall", handler.ApprovalInstanceTaskRecall)     // 审核撤回（审批人撤回自己的操作）
 			instance.DELETE("/:id", handler.ApprovalInstanceDelete)                          // 删除
 		}
 	}

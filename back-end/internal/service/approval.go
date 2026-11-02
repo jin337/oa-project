@@ -401,14 +401,17 @@ func ApprovalCategoryItemDelete(id uint) error {
 // defaultWithdrawWindow 历史应用未配置撤回时间窗时的兼容默认值：提交后 30 分钟内可撤回。
 const defaultWithdrawWindow = 30 * time.Minute
 
-// parseWithdrawWindowDuration 从审批其他设置快照解析「提交撤回时间窗」。
-// 数据结构为 approval_other_json.withdrawWindow = { value, unit }，unit 支持 minute/hour/day。
-func parseWithdrawWindowDuration(otherConfig any) (time.Duration, bool) {
+// defaultRecallWindow 未配置审核撤回时间时的默认值：审批人操作后 30 分钟内可撤回自己的操作。
+const defaultRecallWindow = 30 * time.Minute
+
+// parseWindowDurationByKey 从审批其他设置快照按指定键解析时间窗。
+// 数据结构为 approval_other_json.<key> = { value, unit }，unit 支持 minute/hour/day，value 必须为正数。
+func parseWindowDurationByKey(otherConfig any, key string) (time.Duration, bool) {
 	m, ok := otherConfig.(map[string]interface{})
 	if !ok {
 		return 0, false
 	}
-	window, ok := m["withdrawWindow"].(map[string]interface{})
+	window, ok := m[key].(map[string]interface{})
 	if !ok {
 		return 0, false
 	}
@@ -428,6 +431,16 @@ func parseWithdrawWindowDuration(otherConfig any) (time.Duration, bool) {
 	}
 }
 
+// parseWithdrawWindowDuration 从审批其他设置快照解析「提交撤回时间窗」。
+func parseWithdrawWindowDuration(otherConfig any) (time.Duration, bool) {
+	return parseWindowDurationByKey(otherConfig, "withdrawWindow")
+}
+
+// parseRecallWindowDuration 从审批其他设置快照解析「审核撤回时间窗」（审批人撤回自己的操作）。
+func parseRecallWindowDuration(otherConfig any) (time.Duration, bool) {
+	return parseWindowDurationByKey(otherConfig, "recallWindow")
+}
+
 // activeWithdrawDuration 读取应用当前生效版本的撤回时间窗；无配置或配置非法时回退默认 30 分钟。
 func activeWithdrawDuration(appID uint) time.Duration {
 	if appID == 0 {
@@ -444,6 +457,24 @@ func activeWithdrawDuration(appID uint) time.Duration {
 		return d
 	}
 	return defaultWithdrawWindow
+}
+
+// activeRecallDuration 读取应用当前生效版本的审核撤回时间窗；无配置或配置非法时回退默认 30 分钟。
+func activeRecallDuration(appID uint) time.Duration {
+	if appID == 0 {
+		return defaultRecallWindow
+	}
+	var ver model.ApplicationVersion
+	if err := database.DB.
+		Where("application_id = ? AND status = ?", appID, model.AppVersionStatusActive).
+		Order("id DESC").
+		First(&ver).Error; err != nil {
+		return defaultRecallWindow
+	}
+	if d, ok := parseRecallWindowDuration(ver.ApprovalOtherJSON); ok {
+		return d
+	}
+	return defaultRecallWindow
 }
 
 // buildApprovalRecord 从流程实例与应用构造列表聚合记录。
@@ -474,7 +505,8 @@ func buildApprovalRecord(inst model.ApprovalInstance, app model.Application) mod
 // fillApprovalCapabilities 回填列表记录的操作能力标记（作废/撤回/编辑/删除）。
 //
 // 判据：
-//   - 可撤回：进行中且仍处于应用「提交撤回时间」配置窗口内；窗口默认 30 分钟。
+//   - 可撤回：进行中、实例下无任何已操作审批任务（严格口径：任一任务脱离「待处理」即视为
+//     审核记录）、且仍处于应用「提交撤回时间」配置窗口内；窗口默认 30 分钟。
 //   - 可作废：仅「已撤回」——撤回后流程痕迹已清空，发起人此时才可宣告作废留痕。
 //     这条路径保证作废永远不会绕过审批人：走过审批的单据只能撤回，
 //     撤回后即使再作废，也已经留下了撤回这一动作的痕迹。
@@ -484,6 +516,24 @@ func buildApprovalRecord(inst model.ApprovalInstance, app model.Application) mod
 func fillApprovalCapabilities(records []model.ApprovalRecord) {
 	if len(records) == 0 {
 		return
+	}
+	// 已操作任务计数（严格口径：status 脱离待处理即视为审核记录），按实例分组一次查出
+	operatedCounts := map[uint]int64{}
+	instanceIDs := make([]uint, 0, len(records))
+	for _, r := range records {
+		instanceIDs = append(instanceIDs, r.InstanceID)
+	}
+	var operatedRows []struct {
+		InstanceID uint
+		Cnt        int64
+	}
+	if err := database.DB.Model(&model.ApprovalInstanceTask{}).
+		Select("instance_id, COUNT(*) AS cnt").
+		Where("instance_id IN ? AND status <> ?", instanceIDs, model.TaskStatusPending).
+		Group("instance_id").Scan(&operatedRows).Error; err == nil {
+		for _, row := range operatedRows {
+			operatedCounts[row.InstanceID] = row.Cnt
+		}
 	}
 	// 回填能力标记；进行中实例的撤回窗口按实例快照优先，旧快照缺失时回退当前生效版本配置
 	activeWindowCache := map[uint]time.Duration{}
@@ -502,7 +552,9 @@ func fillApprovalCapabilities(records []model.ApprovalRecord) {
 					activeWindowCache[r.AppID] = window
 				}
 			}
-			r.CanWithdraw = r.CreatedAt != nil && !r.CreatedAt.Add(window).Before(time.Now())
+			r.CanWithdraw = r.CreatedAt != nil &&
+				!r.CreatedAt.Add(window).Before(time.Now()) &&
+				operatedCounts[r.InstanceID] == 0
 		}
 		r.CanVoid = isWithdrawn
 		r.CanEdit = r.InstanceStatus == model.InstanceStatusReturned || isWithdrawn
@@ -853,6 +905,8 @@ func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.A
 
 	fillApprovalUserInfo(records)
 	fillRecordNodeName(records)
+	// 审核撤回入口能力（仅「经我处理」列表）：当前用户是否存在可撤回的任务
+	FillApprovedListRecallFlags(curUserID, records)
 	return records, total, nil
 }
 

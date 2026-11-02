@@ -827,6 +827,8 @@ type ApprovalInstanceTaskResult struct {
 	AddSignType   int        `json:"add_sign_type"`
 	// CreatedBy 加签发起人（add_sign_from>0 时记录是谁发起的加签）；普通任务为审批人本人
 	CreatedBy uint `json:"created_by"`
+	// CanRecall 当前登录审批人能否撤回自己该次操作（审核撤回：窗口内且为实例最后一次操作）
+	CanRecall bool `json:"can_recall"`
 }
 
 // ApprovalInstanceDetailResult 实例详情响应（含任务列表+审批记录）
@@ -876,6 +878,11 @@ type ApprovalRecord struct {
 	CanWithdraw bool `json:"can_withdraw"` // 可撤回：进行中
 	CanEdit     bool `json:"can_edit"`     // 可编辑：已驳回 / 已撤回
 	CanDelete   bool `json:"can_delete"`   // 可删除：已撤回（草稿在草稿箱页面处理）
+
+	// 审核撤回（经我处理列表）：当前用户在该实例内是否存在可撤回的任务，以及对应任务 ID。
+	// 与详情页任务级 can_recall 同口径：窗口内、本人操作是实例内最后一次操作、或签通过除外。
+	CanRecall    bool `json:"can_recall"`
+	RecallTaskID uint `json:"recall_task_id,omitempty"`
 }
 
 // ApprovalListReq 审批列表请求（分页）

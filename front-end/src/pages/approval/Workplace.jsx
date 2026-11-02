@@ -1,5 +1,6 @@
-import { Button, Card, Table } from '@arco-design/web-react'
+import { Button, Card, Message, Modal, Space, Table } from '@arco-design/web-react'
 import { useState } from 'react'
+import * as approvalApi from 'src/api/approval'
 import {
   colBillNo,
   colCreatedAt,
@@ -34,6 +35,7 @@ const ALL_COL_KEYS = [
 /** 经我处理：展示当前用户已处理完毕的历史审批记录，只读查看详情 */
 export default function Workplace() {
   const [ccRecord, setCCRecord] = useState(null)
+  const [recalling, setRecalling] = useState(false)
   const {
     list,
     total,
@@ -56,6 +58,28 @@ export default function Workplace() {
     sizeMenu,
   } = useApprovalList('approved', { title: PAGE_TITLE, colKeys: ALL_COL_KEYS })
 
+  // 审核撤回：确认后调用接口并刷新列表（仅本人操作、窗口内、最后一次操作时后端才放行）
+  const handleRecall = (r) => {
+    Modal.confirm({
+      title: '撤回审批操作',
+      content: `确定撤回本次审批操作吗？撤回后任务将恢复待处理，可重新审批。`,
+      okText: '确认撤回',
+      cancelText: '取消',
+      onOk: async () => {
+        setRecalling(true)
+        try {
+          await approvalApi.recallApprovalTask(r.instance_id, r.recall_task_id)
+          Message.success('撤回成功')
+          fetchList()
+        } catch {
+          // 错误已在请求层提示
+        } finally {
+          setRecalling(false)
+        }
+      },
+    })
+  }
+
   const columns = [
     colIndex,
     colItem(openDetail),
@@ -72,9 +96,22 @@ export default function Workplace() {
       width: 70,
       align: 'center',
       render: (_, r) => (
-        <Button type="text" size="small" onClick={() => setCCRecord(r)}>
-          抄送
-        </Button>
+        <Space>
+          {r.can_recall && r.recall_task_id && (
+            <Button
+              type="text"
+              size="small"
+              status="warning"
+              loading={recalling}
+              onClick={() => handleRecall(r)}
+            >
+              撤回
+            </Button>
+          )}
+          <Button type="text" size="small" onClick={() => setCCRecord(r)}>
+            抄送
+          </Button>
+        </Space>
       ),
     },
   ]
