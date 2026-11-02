@@ -52,6 +52,8 @@ export default function Workplace() {
     setKeyword,
     handleSearch,
     handleReset,
+    statusFilter,
+    setStatusFilter,
     tableSize,
     visibleCols,
     setVisibleCols,
@@ -126,6 +128,11 @@ export default function Workplace() {
         onSearch={handleSearch}
         onReset={handleReset}
         onRefresh={fetchList}
+        statusFilter={statusFilter}
+        setStatusFilter={(v) => {
+          setStatusFilter(v)
+          setPage(1)
+        }}
         sizeMenu={sizeMenu}
         visibleCols={visibleCols}
         setVisibleCols={setVisibleCols}

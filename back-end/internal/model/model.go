@@ -890,6 +890,7 @@ type ApprovalListReq struct {
 	BaseListReq
 	Scope   string `json:"scope" form:"scope" validate:"required" label:"范围"`
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty,max=64" label:"关键词"`
+	Status  int    `json:"status" form:"status" validate:"omitempty,min=0,max=8" label:"审核状态"`
 }
 
 // Notification 站内通知

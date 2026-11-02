@@ -30,6 +30,9 @@ export function useApprovalList(scope, { title = '', withTask = false, colKeys =
   const [keyword, setKeyword] = useState('')
   const [appliedKeyword, setAppliedKeyword] = useState('')
 
+  // 状态筛选：选中即生效（'' = 全部），驱动列表并回到第一页
+  const [statusFilter, setStatusFilter] = useState('')
+
   // 表格密度 & 列可见性
   const [tableSize, setTableSize] = useState('default')
   const [visibleCols, setVisibleCols] = useState(colKeys)
@@ -49,6 +52,7 @@ export function useApprovalList(scope, { title = '', withTask = false, colKeys =
     try {
       const params = { page, size, scope }
       if (appliedKeyword) params.keyword = appliedKeyword
+      if (statusFilter !== '') params.status = statusFilter
       const res = await approvalApi.getApprovalList(params)
       // 忽略过期响应（快速连续搜索/翻页时，后发先至的旧请求不应覆盖新数据）
       if (reqId !== reqIdRef.current) return
@@ -59,7 +63,7 @@ export function useApprovalList(scope, { title = '', withTask = false, colKeys =
     } finally {
       if (reqId === reqIdRef.current) setLoading(false)
     }
-  }, [page, size, scope, appliedKeyword])
+  }, [page, size, scope, appliedKeyword, statusFilter])
 
   useEffect(() => {
     fetchList()
@@ -71,10 +75,11 @@ export function useApprovalList(scope, { title = '', withTask = false, colKeys =
     setPage(1)
   }
 
-  // 重置：清空关键词并回到第一页
+  // 重置：清空关键词与状态筛选并回到第一页
   const handleReset = () => {
     setKeyword('')
     setAppliedKeyword('')
+    setStatusFilter('')
     setPage(1)
   }
 
@@ -127,6 +132,9 @@ export function useApprovalList(scope, { title = '', withTask = false, colKeys =
     appliedKeyword,
     handleSearch,
     handleReset,
+    // 状态筛选
+    statusFilter,
+    setStatusFilter,
     // 密度 & 列设置
     tableSize,
     setTableSize,

@@ -674,6 +674,49 @@ func applyApprovalKeyword(db *gorm.DB, keyword string) *gorm.DB {
 		Where("(ka.name LIKE ? OR ku.username LIKE ? OR kp.nickname LIKE ? OR oa_approval_instances.bill_no LIKE ?)", like, like, like, like)
 }
 
+// approvalStatusToInstanceStatuses 业务审核状态 -> 流程实例状态集合（列表状态筛选用）。
+// 列表记录展示的业务状态由实例状态推导（instanceStatusToBizStatus），筛选时反向映射回实例状态做 SQL 过滤，
+// 保证总数与分页口径一致。业务状态 0（草稿）与 1（待审核）在三页列表（发起/经我处理/抄送）均不出现，
+// 且 0 同时是请求默认值，语义与「未选择」冲突，因此不参与映射。
+func approvalStatusToInstanceStatuses(bizStatus int) []int {
+	switch bizStatus {
+	case model.ApprovalStatusReviewing: // 2 审核中
+		return []int{model.InstanceStatusRunning}
+	case model.ApprovalStatusPassed: // 3 已审核
+		return []int{model.InstanceStatusPassed}
+	case model.ApprovalStatusRejected: // 4 不同意
+		return []int{model.InstanceStatusRejected}
+	case model.ApprovalStatusReturned: // 5 已退回
+		return []int{model.InstanceStatusReturned}
+	case model.ApprovalStatusVoided: // 6 已作废
+		return []int{model.InstanceStatusVoided}
+	case model.ApprovalStatusWithdrawn: // 8 已撤回
+		return []int{model.InstanceStatusWithdrawn}
+	default:
+		return nil
+	}
+}
+
+// applyApprovalStatus 审批列表状态过滤：按业务审核状态映射实例状态集合追加 WHERE。
+// 依赖查询引用实例表别名 oa_approval_instances；bizStatus <= 0（未选择）时不过滤。
+func applyApprovalStatus(db *gorm.DB, bizStatus int) *gorm.DB {
+	statuses := approvalStatusToInstanceStatuses(bizStatus)
+	if len(statuses) == 0 {
+		return db
+	}
+	return db.Where("oa_approval_instances.status IN ?", statuses)
+}
+
+// containsInt 整数切片包含判断（cc 列表内存过滤用）
+func containsInt(list []int, v int) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
 // ApprovalList 审批列表跨应用聚合查询：
 //   - todo      我的待办  ：从 approval_task 表查 assignee_id=当前用户 AND status=待处理
 //   - initiated 我的发起  ：从 approval_instance 表查 created_by=当前用户（非草稿）
@@ -776,15 +819,19 @@ func approvalListInitiated(curUserID uint, req *model.ApprovalListReq) ([]model.
 	userIDs := []uint{curUserID}
 
 	var total int64
-	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
-		Where("oa_approval_instances.created_by IN ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", userIDs, model.InstanceStatusDraft).
+	if err := applyApprovalStatus(
+		applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
+			Where("oa_approval_instances.created_by IN ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", userIDs, model.InstanceStatusDraft),
+		req.Status).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var instances []model.ApprovalInstance
-	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
-		Where("oa_approval_instances.created_by IN ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", userIDs, model.InstanceStatusDraft).
+	if err := applyApprovalStatus(
+		applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
+			Where("oa_approval_instances.created_by IN ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", userIDs, model.InstanceStatusDraft),
+		req.Status).
 		Order("oa_approval_instances.id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
 		Find(&instances).Error; err != nil {
@@ -892,10 +939,12 @@ func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.A
 	// 总数：当前用户已处理任务的去重实例数（JOIN 实例表过滤已删除实例的孤儿任务）。
 	// operated_at IS NOT NULL：排除「已前置审批，自动通过」记录（无 operated_at，非本人真实操作）。
 	var total int64
-	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstanceTask{}).
-		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
-		req.Keyword).
-		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ? AND oa_approval_instance_tasks.operated_at IS NOT NULL", curUserID, handled).
+	if err := applyApprovalStatus(
+		applyApprovalKeyword(database.DB.Model(&model.ApprovalInstanceTask{}).
+			Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
+			req.Keyword).
+			Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ? AND oa_approval_instance_tasks.operated_at IS NOT NULL", curUserID, handled),
+		req.Status).
 		Distinct("oa_approval_instance_tasks.instance_id").
 		Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -907,11 +956,13 @@ func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.A
 		LastOp     *time.Time
 	}
 	var groups []handledGroup
-	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstanceTask{}).
-		Select("oa_approval_instance_tasks.instance_id, MAX(oa_approval_instance_tasks.operated_at) AS last_op").
-		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
-		req.Keyword).
-		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ? AND oa_approval_instance_tasks.operated_at IS NOT NULL", curUserID, handled).
+	if err := applyApprovalStatus(
+		applyApprovalKeyword(database.DB.Model(&model.ApprovalInstanceTask{}).
+			Select("oa_approval_instance_tasks.instance_id, MAX(oa_approval_instance_tasks.operated_at) AS last_op").
+			Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
+			req.Keyword).
+			Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ? AND oa_approval_instance_tasks.operated_at IS NOT NULL", curUserID, handled),
+		req.Status).
 		Group("oa_approval_instance_tasks.instance_id").
 		Order("last_op DESC, oa_approval_instance_tasks.instance_id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
@@ -990,6 +1041,10 @@ func approvalListCC(curUserID uint, req *model.ApprovalListReq) ([]model.Approva
 		seen[id] = true
 		var inst model.ApprovalInstance
 		if err := database.DB.First(&inst, id).Error; err == nil && !inst.DeletedAt.Valid {
+			// 状态筛选（与解析命中、记录表命中统一在并集处过滤，保证 total 与列表口径一致）
+			if req.Status > 0 && !containsInt(approvalStatusToInstanceStatuses(req.Status), inst.Status) {
+				return
+			}
 			hit = append(hit, inst)
 		}
 	}

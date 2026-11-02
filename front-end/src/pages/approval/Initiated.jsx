@@ -11,7 +11,8 @@ import {
   Table,
 } from '@arco-design/web-react'
 import { IconDoubleLeft, IconDoubleRight, IconDown } from '@arco-design/web-react/icon'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import * as approvalApi from 'src/api/approval'
 import DynamicFlowView from 'src/pages/application/dynamic/DynamicFlowView'
 import DynamicForm, {
@@ -119,11 +120,26 @@ export default function Initiated() {
     setKeyword,
     handleSearch,
     handleReset,
+    statusFilter,
+    setStatusFilter,
     tableSize,
     visibleCols,
     setVisibleCols,
     sizeMenu,
   } = useApprovalList('initiated', { title: PAGE_TITLE, colKeys: ALL_COL_KEYS })
+
+  // 从工作台「流程监控」点击跳转而来：自动打开对应详情抽屉（一次性消费 location.state）
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const rec = location.state?.openDetail
+    if (rec) {
+      openDetail(rec)
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // openDetail 为 hook 返回的稳定引用，仅需在 state 变化时触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state?.openDetail])
 
   // 将草稿暂存的自选成员（nodeId -> [{ type, key, label }]）注入审批流节点 members，供 DynamicFlowView 展示已选人
   const injectDraftMembers = (flowSnapshot, membersMap) => {
@@ -559,6 +575,11 @@ export default function Initiated() {
         onSearch={handleSearch}
         onReset={handleReset}
         onRefresh={fetchList}
+        statusFilter={statusFilter}
+        setStatusFilter={(v) => {
+          setStatusFilter(v)
+          setPage(1)
+        }}
         sizeMenu={sizeMenu}
         visibleCols={visibleCols}
         setVisibleCols={setVisibleCols}
