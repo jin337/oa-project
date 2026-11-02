@@ -51,6 +51,18 @@ export function getApprovalList(params) {
   return request.get('/approval/list', { params })
 }
 
+// GET /approval/dashboard/summary 工作台「全部事项」四类计数
+// params: { time_range: 'today'|'7d'|'month'|'year'|'all' }
+export function getApprovalDashboardSummary(params) {
+  return request.get('/approval/dashboard/summary', { params })
+}
+
+// GET /approval/dashboard/flows 工作台「流程监控」与我相关的所有申请（全量，含 scopes 归属，点击跳对应页面开抽屉）
+// params: { time_range: 'today'|'7d'|'month'|'year'|'all' }
+export function getApprovalDashboardFlows(params) {
+  return request.get('/approval/dashboard/flows', { params })
+}
+
 // ========== 流程实例（/approval/instance） ==========
 
 // POST /approval/instance 发起审批

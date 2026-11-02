@@ -13,6 +13,9 @@ func registerApprovalRoutes(api *gin.RouterGroup) {
 	approval.Use(middleware.JWTAuth())
 	{
 		approval.GET("/list", handler.ApprovalList) // 审批列表
+		// 工作台独立接口
+		approval.GET("/dashboard/summary", handler.ApprovalDashboardSummary) // 全部事项计数
+		approval.GET("/dashboard/flows", handler.ApprovalDashboardFlows)     // 流程监控（与我相关的所有申请）
 		// 审批分类 & 申请项（管理操作需 approval:edit）
 		category := approval.Group("/category")
 		{

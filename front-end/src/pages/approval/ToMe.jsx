@@ -1,5 +1,6 @@
 import { Button, Card, Table } from '@arco-design/web-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   colBillNo,
   colCCByName,
@@ -59,6 +60,19 @@ export default function ToMe() {
     setVisibleCols,
     sizeMenu,
   } = useApprovalList('cc', { title: PAGE_TITLE, colKeys: ALL_COL_KEYS })
+
+  // 从工作台「流程监控」点击跳转而来：自动打开对应详情抽屉（一次性消费 location.state）
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const rec = location.state?.openDetail
+    if (rec) {
+      openDetail(rec)
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // openDetail 为 hook 返回的稳定引用，仅需在 state 变化时触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
 
   const columns = [
     colIndex,

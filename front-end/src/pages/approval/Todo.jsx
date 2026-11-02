@@ -1,5 +1,6 @@
 import { Button, Card, Table } from '@arco-design/web-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   colBillNo,
   colCreatedAt,
@@ -57,6 +58,20 @@ export default function Todo() {
 
   // 待办：点击「模块」列打开详情时需携带当前任务 ID，用于 Drawer 内审批
   const openDetailWithTask = (r) => openDetail(r, { id: r.id, instance_id: r.instance_id })
+
+  // 从工作台「流程监控」点击跳转而来：自动打开对应详情抽屉（一次性消费 location.state）
+  const location = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const rec = location.state?.openDetail
+    if (rec) {
+      // 待办记录 ID 为任务 ID：携带任务参数，Drawer 内可直接审批
+      openDetail(rec, { id: rec.id, instance_id: rec.instance_id })
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // openDetail 为 hook 返回的稳定引用，仅需在 state 变化时触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
 
   const columns = [
     colIndex,

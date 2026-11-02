@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -752,23 +753,140 @@ func ApprovalList(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalR
 	return list, total, nil
 }
 
+// approvalTimeRange 计算时间范围下界（按实例发起时间 created_at 过滤，统一「当天/本周/本月/本年」为自然日区间）。
+// 本周 = 本周一零点（周一为一周起点）。返回 nil 表示不过滤（all/空）。
+func approvalTimeRange(timeRange string) *time.Time {
+	now := time.Now()
+	loc := now.Location()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	switch timeRange {
+	case "today":
+		return &todayStart
+	case "week":
+		// 距本周一的天数：周一=0 ... 周日=6
+		offset := (int(now.Weekday()) + 6) % 7
+		start := todayStart.AddDate(0, 0, -offset)
+		return &start
+	case "month":
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
+		return &start
+	case "year":
+		start := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, loc)
+		return &start
+	}
+	return nil
+}
+
+// applyApprovalTime 追加时间范围过滤（按实例发起时间 oa_approval_instances.created_at 下界）。
+// 调用方 DB 必须已关联 oa_approval_instances 表（todo/initiated/approved 均 JOIN 或直接查实例表）。
+func applyApprovalTime(db *gorm.DB, req *model.ApprovalListReq) *gorm.DB {
+	start := approvalTimeRange(req.TimeRange)
+	if start == nil {
+		return db
+	}
+	return db.Where("oa_approval_instances.created_at >= ?", *start)
+}
+
+// dashboardScopePriority 工作台「流程监控」记录的归属优先级：待办 > 我发起 > 经我处理 > 抄送我。
+// 记录同时命中多个作用域时，保留首个（优先级最高）作用域版本的记录，并在 Scopes 中列出全部命中。
+var dashboardScopePriority = []string{"todo", "initiated", "approved", "cc"}
+
+// ApprovalDashboardSummary 工作台「全部事项」四类计数：复用审批列表四个 scope 的 total（同一查询口径），
+// timeRange 为时间筛选（today/7d/month/year/all，空等价 all）。
+func ApprovalDashboardSummary(curUserID uint, timeRange string) (*model.ApprovalDashboardSummary, error) {
+	sum := &model.ApprovalDashboardSummary{}
+	for _, scope := range dashboardScopePriority {
+		_, total, err := ApprovalList(curUserID, &model.ApprovalListReq{
+			BaseListReq: model.BaseListReq{Page: 1, Size: 1},
+			Scope:       scope,
+			TimeRange:   timeRange,
+		})
+		if err != nil {
+			return nil, err
+		}
+		switch scope {
+		case "todo":
+			sum.Todo = total
+		case "initiated":
+			sum.Initiated = total
+		case "approved":
+			sum.Approved = total
+		case "cc":
+			sum.CC = total
+		}
+	}
+	return sum, nil
+}
+
+// ApprovalDashboardFlows 工作台「流程监控」：与我相关的所有申请（待办/我发起/经我处理/抄送我，全量不分页）
+// 按实例去重合并，每条记录携带归属 Scopes（按 dashboardScopePriority 顺序去重）。
+// timeRange 为时间筛选（today/7d/month/year/all，空等价 all）。
+// 输出按实例 ID 倒序（与列表页一致），前端按 Scopes[0] 跳转对应页面打开详情抽屉。
+func ApprovalDashboardFlows(curUserID uint, timeRange string) ([]model.ApprovalFlowRecord, error) {
+	byInst := map[uint]*model.ApprovalFlowRecord{}
+	for _, scope := range dashboardScopePriority {
+		list, _, err := ApprovalList(curUserID, &model.ApprovalListReq{
+			BaseListReq: model.BaseListReq{Page: 1, Size: 500},
+			Scope:       scope,
+			TimeRange:   timeRange,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, rec := range list {
+			if rec.InstanceID == 0 {
+				continue
+			}
+			entry, ok := byInst[rec.InstanceID]
+			if !ok {
+				byInst[rec.InstanceID] = &model.ApprovalFlowRecord{ApprovalRecord: rec, Scopes: []string{scope}}
+				continue
+			}
+			dup := false
+			for _, s := range entry.Scopes {
+				if s == scope {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				entry.Scopes = append(entry.Scopes, scope)
+			}
+		}
+	}
+
+	instIDs := make([]int, 0, len(byInst))
+	for id := range byInst {
+		instIDs = append(instIDs, int(id))
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(instIDs)))
+
+	out := make([]model.ApprovalFlowRecord, 0, len(instIDs))
+	for _, id := range instIDs {
+		out = append(out, *byInst[uint(id)])
+	}
+	return out, nil
+}
+
 // approvalListTodo 待办列表：从 approval_task 表查询当前用户的待处理任务
 func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
 	// JOIN 实例表过滤已删除实例的孤儿任务，保证 total 与列表一致
 	var total int64
-	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstanceTask{}).
+	if err := applyApprovalTime(applyApprovalKeyword(database.DB.Model(&model.ApprovalInstanceTask{}).
 		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
 		req.Keyword).
-		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status = ?", curUserID, model.TaskStatusPending).
+		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status = ?", curUserID, model.TaskStatusPending),
+		req).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var tasks []model.ApprovalInstanceTask
-	if err := applyApprovalKeyword(database.DB.
+	if err := applyApprovalTime(applyApprovalKeyword(database.DB.
 		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
 		req.Keyword).
-		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status = ?", curUserID, model.TaskStatusPending).
+		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status = ?", curUserID, model.TaskStatusPending),
+		req).
 		Order("oa_approval_instance_tasks.id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
 		Find(&tasks).Error; err != nil {
@@ -819,19 +937,21 @@ func approvalListInitiated(curUserID uint, req *model.ApprovalListReq) ([]model.
 	userIDs := []uint{curUserID}
 
 	var total int64
-	if err := applyApprovalStatus(
+	if err := applyApprovalTime(applyApprovalStatus(
 		applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
 			Where("oa_approval_instances.created_by IN ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", userIDs, model.InstanceStatusDraft),
-		req.Status).
+		req.Status),
+		req).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var instances []model.ApprovalInstance
-	if err := applyApprovalStatus(
+	if err := applyApprovalTime(applyApprovalStatus(
 		applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
 			Where("oa_approval_instances.created_by IN ? AND oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ?", userIDs, model.InstanceStatusDraft),
-		req.Status).
+		req.Status),
+		req).
 		Order("oa_approval_instances.id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
 		Find(&instances).Error; err != nil {
@@ -939,12 +1059,13 @@ func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.A
 	// 总数：当前用户已处理任务的去重实例数（JOIN 实例表过滤已删除实例的孤儿任务）。
 	// operated_at IS NOT NULL：排除「已前置审批，自动通过」记录（无 operated_at，非本人真实操作）。
 	var total int64
-	if err := applyApprovalStatus(
+	if err := applyApprovalTime(applyApprovalStatus(
 		applyApprovalKeyword(database.DB.Model(&model.ApprovalInstanceTask{}).
 			Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
 			req.Keyword).
 			Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ? AND oa_approval_instance_tasks.operated_at IS NOT NULL", curUserID, handled),
-		req.Status).
+		req.Status),
+		req).
 		Distinct("oa_approval_instance_tasks.instance_id").
 		Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -956,13 +1077,14 @@ func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.A
 		LastOp     *time.Time
 	}
 	var groups []handledGroup
-	if err := applyApprovalStatus(
+	if err := applyApprovalTime(applyApprovalStatus(
 		applyApprovalKeyword(database.DB.Model(&model.ApprovalInstanceTask{}).
 			Select("oa_approval_instance_tasks.instance_id, MAX(oa_approval_instance_tasks.operated_at) AS last_op").
 			Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
 			req.Keyword).
 			Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ? AND oa_approval_instance_tasks.operated_at IS NOT NULL", curUserID, handled),
-		req.Status).
+		req.Status),
+		req).
 		Group("oa_approval_instance_tasks.instance_id").
 		Order("last_op DESC, oa_approval_instance_tasks.instance_id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).
@@ -1019,8 +1141,9 @@ func approvalListCC(curUserID uint, req *model.ApprovalListReq) ([]model.Approva
 	parseHit := map[uint]bool{}
 	userKey := fmt.Sprintf("\"user_%d\"", curUserID)
 	var instances []model.ApprovalInstance
-	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
-		Where("oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ? AND oa_approval_instances.approval_flow_json LIKE ?", model.InstanceStatusDraft, "%"+userKey+"%").
+	if err := applyApprovalTime(applyApprovalKeyword(database.DB.Model(&model.ApprovalInstance{}), req.Keyword).
+		Where("oa_approval_instances.deleted_at IS NULL AND oa_approval_instances.status != ? AND oa_approval_instances.approval_flow_json LIKE ?", model.InstanceStatusDraft, "%"+userKey+"%"),
+		req).
 		Order("oa_approval_instances.id DESC").
 		Find(&instances).Error; err != nil {
 		return nil, 0, err
@@ -1043,6 +1166,10 @@ func approvalListCC(curUserID uint, req *model.ApprovalListReq) ([]model.Approva
 		if err := database.DB.First(&inst, id).Error; err == nil && !inst.DeletedAt.Valid {
 			// 状态筛选（与解析命中、记录表命中统一在并集处过滤，保证 total 与列表口径一致）
 			if req.Status > 0 && !containsInt(approvalStatusToInstanceStatuses(req.Status), inst.Status) {
+				return
+			}
+			// 时间范围筛选（按实例发起时间，与 SQL 侧 scope 同一口径）
+			if start := approvalTimeRange(req.TimeRange); start != nil && inst.CreatedAt.Before(*start) {
 				return
 			}
 			hit = append(hit, inst)

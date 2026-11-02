@@ -156,3 +156,42 @@ func ApprovalList(c *gin.Context) {
 	}
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
 }
+
+// ==================== 工作台（独立接口） ====================
+
+// dashboardTimeRangeReq 工作台时间筛选 query 参数
+type dashboardTimeRangeReq struct {
+	TimeRange string `json:"time_range" form:"time_range" validate:"omitempty,oneof=today week month year all" label:"时间范围"`
+}
+
+// ApprovalDashboardSummary GET /{APIPrefix}/approval/dashboard/summary 工作台「全部事项」四类计数
+// query: time_range=today|7d|month|year|all（可选，空等价 all）
+func ApprovalDashboardSummary(c *gin.Context) {
+	var req dashboardTimeRangeReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	sum, err := service.ApprovalDashboardSummary(middleware.CurrentUserID(c), req.TimeRange)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, sum)
+}
+
+// ApprovalDashboardFlows GET /{APIPrefix}/approval/dashboard/flows 工作台「流程监控」与我相关的所有申请（全量）
+// query: time_range=today|7d|month|year|all（可选，空等价 all）
+func ApprovalDashboardFlows(c *gin.Context) {
+	var req dashboardTimeRangeReq
+	if msg := vtrans.Validate(c, &req); msg != "" {
+		response.Fail(c, response.CodeParamError, msg)
+		return
+	}
+	list, err := service.ApprovalDashboardFlows(middleware.CurrentUserID(c), req.TimeRange)
+	if err != nil {
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	response.OK(c, map[string]interface{}{"list": list})
+}

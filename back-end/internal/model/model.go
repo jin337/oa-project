@@ -885,12 +885,29 @@ type ApprovalRecord struct {
 	RecallTaskID uint `json:"recall_task_id,omitempty"`
 }
 
+// ApprovalDashboardSummary 工作台「全部事项」四类计数（与列表 scope 同一口径）
+type ApprovalDashboardSummary struct {
+	Todo      int64 `json:"todo"`      // 我的待办
+	Initiated int64 `json:"initiated"` // 我的发起
+	Approved  int64 `json:"approved"`  // 经我处理
+	CC        int64 `json:"cc"`        // 抄送我的
+}
+
+// ApprovalFlowRecord 工作台「流程监控」记录：审批列表记录 + 与我相关的归属作用域。
+// Scopes 按「待办 > 我发起 > 经我处理 > 抄送我」优先级去重排列，前端取第一个跳转对应页面打开详情抽屉。
+type ApprovalFlowRecord struct {
+	ApprovalRecord
+	Scopes []string `json:"scopes"`
+}
+
 // ApprovalListReq 审批列表请求（分页）
 type ApprovalListReq struct {
 	BaseListReq
 	Scope   string `json:"scope" form:"scope" validate:"required" label:"范围"`
 	Keyword string `json:"keyword" form:"keyword" validate:"omitempty,max=64" label:"关键词"`
 	Status  int    `json:"status" form:"status" validate:"omitempty,min=0,max=8" label:"审核状态"`
+	// 时间范围：today 当天 / week 本周 / month 本月 / year 本年 / all 所有（空等价 all）；按实例发起时间筛选
+	TimeRange string `json:"time_range" form:"time_range" validate:"omitempty,oneof=today week month year all" label:"时间范围"`
 }
 
 // Notification 站内通知
