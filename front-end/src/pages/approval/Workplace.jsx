@@ -133,7 +133,7 @@ export default function Workplace() {
         colKeys={ALL_COL_KEYS}
       />
       <Table
-        rowKey={(r) => r.data_id ?? r.id}
+        rowKey={(r) => r.id ?? r.data_id}
         columns={visibleColumns}
         data={list}
         loading={loading}
