@@ -72,6 +72,87 @@ func getInstanceAppName(instance *model.ApprovalInstance) string {
 	return app.Name
 }
 
+// preApprovedAssigneeIDs 返回实例内已真实操作（operated_at 非空）过的审批人 ID 集合。
+// 用于前置审批模式下跨节点重复审批人的自动通过判定：
+// 转交人、加签人等衍生任务的真实操作同样计入；前置自动通过记录（operated_at 为空）不计入。
+func preApprovedAssigneeIDs(tx *gorm.DB, instanceID uint) (map[uint]bool, error) {
+	var assigneeIDs []uint
+	if err := tx.Model(&model.ApprovalInstanceTask{}).
+		Where("instance_id = ? AND operated_at IS NOT NULL", instanceID).
+		Distinct("assignee_id").
+		Pluck("assignee_id", &assigneeIDs).Error; err != nil {
+		return nil, err
+	}
+	set := make(map[uint]bool, len(assigneeIDs))
+	for _, id := range assigneeIDs {
+		set[id] = true
+	}
+	return set, nil
+}
+
+// createAutoApprovedTask 创建一条「已前置审批，自动通过」任务记录：
+//   - status=已通过，但 operated_at 为空 → 不是真实操作：
+//     不可被审核撤回、不进入「经我处理」列表（列表查询要求 operated_at 非空）、不推送待办通知；
+//   - comment 携带标记，审批详情时间线据此展示「自动通过」并保留可追溯说明。
+func createAutoApprovedTask(tx *gorm.DB, instance *model.ApprovalInstance, nodeID, nodeName string, sort int, assigneeID, curUserID uint, comment string) error {
+	task := model.ApprovalInstanceTask{
+		InstanceID: instance.ID,
+		NodeID:     nodeID,
+		NodeName:   nodeName,
+		Sort:       sort,
+		AssigneeID: assigneeID,
+		Status:     model.TaskStatusApproved,
+		Comment:    comment,
+	}
+	task.CreatedBy, task.UpdatedBy = curUserID, curUserID
+	return tx.Create(&task).Error
+}
+
+// containsUint 判断切片中是否包含目标值
+func containsUint(list []uint, target uint) bool {
+	for _, v := range list {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}
+
+// postLastNodeIdx 返回执行路径中每个审批人「最后出现」的审批节点索引（后置审批判定用）。
+// 只统计审批节点（type=2）；抄送节点（type=3）不生成审批任务，不计入。
+// 判定基准为实例创建/重新提交时冻结的 execution_path 快照：条件分支命中已随表单数据固定，
+// 运行时路径不变，因此「最后出现节点」可静态判定。
+func postLastNodeIdx(instance *model.ApprovalInstance, allNodes []flowNode, userIDs []uint) map[uint]int {
+	last := make(map[uint]int, len(userIDs))
+	for _, uid := range userIDs {
+		last[uid] = -1
+	}
+	for i, nodeID := range instance.ExecutionPath {
+		node := findNodeByID(allNodes, nodeID)
+		if node == nil || node.Type != 2 {
+			continue
+		}
+		memberIDs, err := resolveApproverUserIDs(*node, nil)
+		if err != nil {
+			continue
+		}
+		for _, uid := range userIDs {
+			if containsUint(memberIDs, uid) {
+				last[uid] = i
+			}
+		}
+	}
+	return last
+}
+
+// autoApprovedComment 按审批模式生成自动通过记录/推进结果的标准文案
+func autoApprovedComment(mode, suffix string) string {
+	if mode == "post" {
+		return "已后置审批，" + suffix
+	}
+	return "已前置审批，" + suffix
+}
+
 // generateTasksForCurrentNode 为当前节点生成审批任务
 func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, allNodes []flowNode, curUserID uint, autoResult string) error {
 	// 解析执行路径
@@ -132,14 +213,62 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 		strategy = 1 // 默认依次审批
 	}
 
-	switch strategy {
-	case 1: // 依次审批：只生成第一个人的任务
-		return createPendingTask(tx, instance, nodeID, node.Label, idx, userIDs[0], curUserID)
-	case 2, 3: // 会签 / 或签：同时生成所有人的任务
+	// 审批模式：同一审批人跨节点出现时的合并策略（正交于节点内依次/会签/或签）：
+	//   顺序（默认）——每个出现节点各生成待办、各审一次；
+	//   前置 pre——只在首次出现节点真实审批，后续节点该人卡位自动通过；
+	//   后置 post——更早节点该人卡位自动通过，只在最后出现节点真实审批。
+	// 自动通过记录无 operated_at：不可撤回、不进经我处理、不推送通知；时间线保留标记。
+	mode := parseApprovalMode(instance.ApprovalOtherJSON)
+	autoIDs, remainIDs := []uint{}, userIDs
+	if mode == "pre" {
+		operated, err := preApprovedAssigneeIDs(tx, instance.ID)
+		if err != nil {
+			return fmt.Errorf("查询已审批人失败: %w", err)
+		}
+		autoIDs, remainIDs = nil, nil
 		for _, uid := range userIDs {
+			if operated[uid] {
+				autoIDs = append(autoIDs, uid)
+			} else {
+				remainIDs = append(remainIDs, uid)
+			}
+		}
+	} else if mode == "post" {
+		lastIdx := postLastNodeIdx(instance, allNodes, userIDs)
+		autoIDs, remainIDs = nil, nil
+		for _, uid := range userIDs {
+			if lastIdx[uid] != idx {
+				autoIDs = append(autoIDs, uid)
+			} else {
+				remainIDs = append(remainIDs, uid)
+			}
+		}
+	}
+	for _, uid := range autoIDs {
+		if err := createAutoApprovedTask(tx, instance, nodeID, node.Label, idx, uid, curUserID, autoApprovedComment(mode, "自动通过")); err != nil {
+			return err
+		}
+	}
+
+	switch strategy {
+	case 1: // 依次审批：只生成第一个未审批人的任务（前置/后置模式下已卡位人顺延跳过）
+		if len(remainIDs) > 0 {
+			return createPendingTask(tx, instance, nodeID, node.Label, idx, remainIDs[0], curUserID)
+		}
+		if len(autoIDs) > 0 {
+			// 本节点全员已在其他节点卡位自动通过：节点自动通过，直接推进
+			return advanceToNextNode(tx, instance, allNodes, curUserID, autoApprovedComment(mode, "自动通过"))
+		}
+		return nil
+	case 2, 3: // 会签 / 或签：未卡位人同时生成待办；已卡位人已生成自动通过记录
+		for _, uid := range remainIDs {
 			if err := createPendingTask(tx, instance, nodeID, node.Label, idx, uid, curUserID); err != nil {
 				return err
 			}
+		}
+		if len(remainIDs) == 0 && len(autoIDs) > 0 {
+			// 本节点全员已在其他节点卡位自动通过：节点自动通过，直接推进
+			return advanceToNextNode(tx, instance, allNodes, curUserID, autoApprovedComment(mode, "自动通过"))
 		}
 	}
 
@@ -444,6 +573,41 @@ func returnFromDisapproval(tx *gorm.DB, instance *model.ApprovalInstance, task *
 		}
 	}
 
+	targetPathIdx, targetPathOK := pathIndex[target.NodeID]
+	if !targetPathOK {
+		return errors.New("退回目标审批人不在执行路径中")
+	}
+
+	// 前置/后置审批模式：目标审批人若已在实例内真实操作过，则退回后不重复审批——
+	// 生成自动通过记录（无 operated_at，不可撤回），并从目标节点继续推进，
+	// 后续节点任务生成同样应用对应模式的卡位过滤（已前置/后置审批人自动通过）。
+	if mode := parseApprovalMode(instance.ApprovalOtherJSON); mode == "pre" || mode == "post" {
+		operated, err := preApprovedAssigneeIDs(tx, instance.ID)
+		if err != nil {
+			return err
+		}
+		if operated[target.AssigneeID] {
+			returnComment := autoApprovedComment(mode, "退回后不重复审批")
+			if err := createAutoApprovedTask(tx, instance, target.NodeID, target.NodeName, target.Sort, target.AssigneeID, curUserID, returnComment); err != nil {
+				return err
+			}
+			instance.Status = model.InstanceStatusRunning
+			instance.CurrentNodeIdx = targetPathIdx
+			instance.Result = ""
+			instance.FinishedAt = nil
+			if err := tx.Model(instance).Updates(map[string]interface{}{
+				"status":           model.InstanceStatusRunning,
+				"current_node_idx": targetPathIdx,
+				"result":           "",
+				"finished_at":      nil,
+				"updated_by":       curUserID,
+			}).Error; err != nil {
+				return err
+			}
+			return advanceToNextNode(tx, instance, nodes, curUserID, returnComment)
+		}
+	}
+
 	// 为目标审批人新建待处理任务，旧通过任务继续作为时间线历史记录。
 	newTask := model.ApprovalInstanceTask{
 		InstanceID: instance.ID,
@@ -456,11 +620,6 @@ func returnFromDisapproval(tx *gorm.DB, instance *model.ApprovalInstance, task *
 	newTask.CreatedBy, newTask.UpdatedBy = curUserID, curUserID
 	if err := tx.Create(&newTask).Error; err != nil {
 		return err
-	}
-
-	targetPathIdx, targetPathOK := pathIndex[target.NodeID]
-	if !targetPathOK {
-		return errors.New("退回目标审批人不在执行路径中")
 	}
 
 	instance.Status = model.InstanceStatusRunning

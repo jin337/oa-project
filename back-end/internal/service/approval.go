@@ -11,6 +11,7 @@ package service
 // ============================================================
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -441,6 +442,33 @@ func parseRecallWindowDuration(otherConfig any) (time.Duration, bool) {
 	return parseWindowDurationByKey(otherConfig, "recallWindow")
 }
 
+// parseApprovalMode 从审批其他设置快照解析审批模式：
+//   - "pre"        前置审批：同一审批人跨节点出现时，只在首次出现的节点生成真实待办，
+//     后续节点该人卡位自动通过（生成无 operated_at 的「已通过」记录，时间线留痕、不可撤回）。
+//   - "post"       后置审批：同一审批人跨节点出现时，只在最后出现的节点生成真实待办，
+//     更早节点该人卡位自动通过（自动通过记录规则与前置完全一致）。
+//   - 其他值/未配置 顺序审批（默认）：每个出现节点各生成待办、各审一次（历史行为）。
+func parseApprovalMode(otherConfig any) string {
+	// 快照存储为 JSON 字符串（ApprovalInstance / ApplicationVersion 的 ApprovalOtherJSON）
+	if s, ok := otherConfig.(string); ok && s != "" {
+		var m map[string]interface{}
+		if err := json.Unmarshal([]byte(s), &m); err != nil {
+			return "sequential"
+		}
+		otherConfig = m
+	}
+	m, ok := otherConfig.(map[string]interface{})
+	if !ok {
+		return "sequential"
+	}
+	if v, ok := m["approvalMode"].(string); ok {
+		if v == "pre" || v == "post" {
+			return v
+		}
+	}
+	return "sequential"
+}
+
 // activeWithdrawDuration 读取应用当前生效版本的撤回时间窗；无配置或配置非法时回退默认 30 分钟。
 func activeWithdrawDuration(appID uint) time.Duration {
 	if appID == 0 {
@@ -861,12 +889,13 @@ func approvalListFromInstances(curUserID uint, req *model.ApprovalListReq) ([]mo
 func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
 	handled := []int{model.TaskStatusApproved, model.TaskStatusRejected, model.TaskStatusReturned}
 
-	// 总数：当前用户已处理任务的去重实例数（JOIN 实例表过滤已删除实例的孤儿任务）
+	// 总数：当前用户已处理任务的去重实例数（JOIN 实例表过滤已删除实例的孤儿任务）。
+	// operated_at IS NOT NULL：排除「已前置审批，自动通过」记录（无 operated_at，非本人真实操作）。
 	var total int64
 	if err := applyApprovalKeyword(database.DB.Model(&model.ApprovalInstanceTask{}).
 		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
 		req.Keyword).
-		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ?", curUserID, handled).
+		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ? AND oa_approval_instance_tasks.operated_at IS NOT NULL", curUserID, handled).
 		Distinct("oa_approval_instance_tasks.instance_id").
 		Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -882,7 +911,7 @@ func approvalListApproved(curUserID uint, req *model.ApprovalListReq) ([]model.A
 		Select("oa_approval_instance_tasks.instance_id, MAX(oa_approval_instance_tasks.operated_at) AS last_op").
 		Joins("JOIN oa_approval_instances ON oa_approval_instances.id = oa_approval_instance_tasks.instance_id AND oa_approval_instances.deleted_at IS NULL"),
 		req.Keyword).
-		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ?", curUserID, handled).
+		Where("oa_approval_instance_tasks.assignee_id = ? AND oa_approval_instance_tasks.status IN ? AND oa_approval_instance_tasks.operated_at IS NOT NULL", curUserID, handled).
 		Group("oa_approval_instance_tasks.instance_id").
 		Order("last_op DESC, oa_approval_instance_tasks.instance_id DESC").
 		Offset(req.Offset()).Limit(req.Limit()).

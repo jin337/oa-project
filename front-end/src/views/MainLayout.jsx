@@ -168,7 +168,7 @@ function HeaderBar() {
         className="flex shrink-0 cursor-pointer items-center gap-2"
         onClick={() => navigate('/')}
       >
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#165dff] text-lg text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#165dff] text-lg text-white">
           <IconStorage />
         </div>
         <Typography.Text className="text-lg! font-semibold!">{APP_NAME}</Typography.Text>

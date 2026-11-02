@@ -1,4 +1,4 @@
-import { Form, InputNumber, Select, Space } from '@arco-design/web-react'
+import { Form, InputNumber, Radio, Select, Space } from '@arco-design/web-react'
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 
 const WITHDRAW_WINDOW_UNIT_OPTIONS = [
@@ -34,11 +34,16 @@ const normalizeWindow = (incoming = {}, fallback) => {
 const normalizeWithdrawWindow = (incoming = {}) => normalizeWindow(incoming, DEFAULT_WITHDRAW_WINDOW)
 const normalizeRecallWindow = (incoming = {}) => normalizeWindow(incoming, DEFAULT_RECALL_WINDOW)
 
+const DEFAULT_APPROVAL_MODE = 'sequential'
+const APPROVAL_MODE_OPTIONS = ['pre', 'post']
+const normalizeApprovalMode = (incoming) => (APPROVAL_MODE_OPTIONS.includes(incoming) ? incoming : DEFAULT_APPROVAL_MODE)
+
 /**
  * 其他设置组件（嵌入 DesignManage 页面级 Tabs）：
- * 承载提交撤回时间窗与审核撤回时间窗；数据独立写入 approval_other_json。
+ * 承载审批模式、提交撤回时间窗与审核撤回时间窗；数据独立写入 approval_other_json。
  */
 const OtherManage = forwardRef(function OtherManage({ app = null }, ref) {
+    const [approvalMode, setApprovalMode] = useState(DEFAULT_APPROVAL_MODE)
     const [withdrawWindow, setWithdrawWindow] = useState(DEFAULT_WITHDRAW_WINDOW)
     const [recallWindow, setRecallWindow] = useState(DEFAULT_RECALL_WINDOW)
 
@@ -46,6 +51,7 @@ const OtherManage = forwardRef(function OtherManage({ app = null }, ref) {
         const otherConfig = parseJsonValue(app?.approval_other_json)
         const legacyLayout = parseJsonValue(app?.form_layout_json)
         const configured = otherConfig?.withdrawWindow || legacyLayout?.formConfig?.withdrawWindow
+        setApprovalMode(normalizeApprovalMode(otherConfig?.approvalMode))
         setWithdrawWindow(normalizeWithdrawWindow(configured))
         setRecallWindow(normalizeRecallWindow(otherConfig?.recallWindow))
     }, [app])
@@ -53,9 +59,9 @@ const OtherManage = forwardRef(function OtherManage({ app = null }, ref) {
     useImperativeHandle(
         ref,
         () => ({
-            getApprovalOther: () => ({ withdrawWindow, recallWindow }),
+            getApprovalOther: () => ({ approvalMode, withdrawWindow, recallWindow }),
         }),
-        [withdrawWindow, recallWindow],
+        [approvalMode, withdrawWindow, recallWindow],
     )
 
     const handleValueChange = (value) => {
@@ -94,7 +100,17 @@ const OtherManage = forwardRef(function OtherManage({ app = null }, ref) {
 
     return (
         <div className="p-3">
-            <Form layout="horizontal">
+            <Form layout="horizontal" labelCol = {{ style: { flexBasis: 140 } }} wrapperCol = {{ style: { flexBasis: `calc(100% - ${140}px)` } }}>
+                <Form.Item
+                    label="审批模式"
+                    extra="同一审批人出现在多个审批节点时：顺序审批=每个节点各审一次；前置审批=只在首次出现的节点审批，后续节点自动通过；后置审批=只在最后出现的节点审批，更早节点自动通过。自动通过均时间线留痕、退回后不重复审批。默认顺序审批。"
+                >
+                    <Radio.Group value={approvalMode} onChange={setApprovalMode}>
+                        <Radio value="sequential">顺序审批</Radio>
+                        <Radio value="pre">前置审批</Radio>
+                        <Radio value="post">后置审批</Radio>
+                    </Radio.Group>
+                </Form.Item>
                 <Form.Item
                     label="提交撤回时间"
                     extra="无审核记录的申请，自首次正式提交时间起算；撤回后重新提交不重置计时。超过该时间后，「我的发起」不再显示撤回按钮；历史未配置时默认 30 分钟。"

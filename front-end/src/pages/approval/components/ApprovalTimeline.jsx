@@ -439,7 +439,15 @@ export default function ApprovalTimeline({
                           </div>
                         )
                       }
-                      const meta = TASK_STATUS_META[task.status] || TASK_STATUS_META[0]
+                      // 自动通过记录（前置「已前置审批…」/ 后置「已后置审批…」/ 退回不重复审批）：
+                      // status 虽为已通过但不是本人真实操作，标签显示为「自动通过」（灰色）
+                      // 以区别于真实审批，comment 保留可追溯说明。
+                      const meta =
+                        task.status === 1 &&
+                        task.comment &&
+                        (task.comment.includes('自动通过') || task.comment.includes('不重复审批'))
+                          ? { label: '自动通过', color: 'gray' }
+                          : TASK_STATUS_META[task.status] || TASK_STATUS_META[0]
                       return (
                         <div key={entry.key} className="mt-1.5 rounded-md bg-gray-100 p-2">
                           <div className="flex items-center justify-between gap-2">
