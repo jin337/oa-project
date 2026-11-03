@@ -36,7 +36,6 @@ func Setup() *gin.Engine {
 	registerApplicationRoutes(api)       // 流程配置
 	registerApprovalRoutes(api)          // 审批
 	registerUploadRoutes(api)            // 上传
-	registerUtilRoutes(api)              // 工具
 	registerNotificationRoutes(api)     // 通知
 
 	// 注入运行时路由快照（供接口管理一键导入后端路由）

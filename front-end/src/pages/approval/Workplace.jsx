@@ -12,6 +12,8 @@ import {
   colItem,
   colNodeName,
   colStatus,
+  colSummarys,
+  colTotalmoney,
 } from 'src/pages/approval/components/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
 import CCModal from 'src/pages/approval/components/CCModal'
@@ -27,6 +29,8 @@ const ALL_COL_KEYS = [
   'dept_name',
   'created_name',
   'bill_no',
+  'summarys',
+  'totalmoney',
   'node_name',
   'created_at',
   'finished_at',
@@ -99,6 +103,8 @@ export default function Workplace() {
   const columns = [
     colIndex,
     colItem(openDetail),
+    colSummarys,
+    colTotalmoney,
     colBillNo,
     colDept,
     colNodeName,

@@ -1208,6 +1208,9 @@ func createBizTable(tableName string, withParent bool, comment string) error {
 	// 主表：单号列（提交审核时由后端生成，见 bill_no.go），唯一索引兜底防重号
 	if !withParent {
 		b.WriteString("`bill_no` varchar(64) DEFAULT NULL COMMENT '单号',")
+		// 主表：摘要列与总金额列（新增流程建表即自动带上，供表单填写摘要与金额合计）
+		b.WriteString("`summarys` varchar(255) DEFAULT NULL COMMENT '摘要',")
+		b.WriteString("`totalmoney` decimal(12,2) DEFAULT NULL COMMENT '总金额',")
 	}
 	b.WriteString("PRIMARY KEY (`id`),")
 	if !withParent {

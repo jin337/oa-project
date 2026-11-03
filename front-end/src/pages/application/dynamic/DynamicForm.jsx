@@ -216,7 +216,7 @@ const JS_EVENT_GLOBALS = [
 /**
  * 编译并执行 JS 事件脚本（action_type='js_event'），返回脚本对 form 快照产生的字段 diff。
  * 作用域：form（可直接读写）、item（选中项数据）、request（统一请求助手）、
- *         TransNumberToUpper（数字转大写）、CalculateExpression（数学表达式求值）。
+ *         TransNumberToUpper（数字转大写）、CalculateExpression（数学表达式求值 / 日期时间差）。
  * 安全：use strict + 参数白名单注入 + 敏感全局标识符遮蔽；异常仅记录，不影响表单。
  * @param {string} script 脚本源码（同步执行，可写 form.xxx / 调用工具函数）
  * @param {object} form 表单值快照（调用方传入 JSON 深拷贝，脚本的写入在此对象上发生）

@@ -8,8 +8,7 @@
  *   TransNumberToUpper(12.34)    -> '壹拾贰元叁角肆分'
  *   TransNumberToUpper(-5.6)     -> '负伍元陆角'
  *
- * 与后端 /utils/calculate 的 number_to_upper 语义一致（整数 + 角/分，无角无分补「整」），
- * 前端同步可用，便于 JS 事件脚本直接调用。
+ * 语义：整数 + 角/分，无角无分补「整」，便于 JS 事件脚本直接调用。
  */
 
 const CN_NUM = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']

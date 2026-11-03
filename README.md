@@ -197,9 +197,6 @@ Nginx 托管 `dist/`：history 模式回退 `try_files ... /index.html`、`/v1/a
 | `${}` | 字符串插值 | url / label 拼接 |
 
 - **核心配置**：`data_source`（静态 / 接口 / 引用接口管理）、`actions`（on_mount / on_change / on_blur → set_value / fetch_and_fill）、`dynamic_states`（visible_if / disabled_if）、`default_value`、`validation_rule`、`columns`（子表）
-- **公共计算/转换接口** `POST /utils/calculate`：
-  - `number_to_upper`：数字转大写金额（`100000` → `壹拾万元整`）
-  - `calc`：表达式计算（`(100+2)*3 % 7` → `5`，支持 `+ - * / % ()`，小数/负数/空格自动处理）
 
 ### 审批流程
 

@@ -12,9 +12,11 @@ import {
   colItem,
   colNodeName,
   colStatus,
+  colSummarys,
+  colTotalmoney,
 } from 'src/pages/approval/components/approvalColumns'
-import CCModal from 'src/pages/approval/components/CCModal'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
+import CCModal from 'src/pages/approval/components/CCModal'
 import ApprovalDetailDrawer from 'src/pages/approval/components/DetailDrawer'
 import { useApprovalList } from 'src/pages/approval/components/useApprovalList'
 
@@ -28,6 +30,8 @@ const ALL_COL_KEYS = [
   'created_name',
   'cc_by_name',
   'bill_no',
+  'summarys',
+  'totalmoney',
   'node_name',
   'created_at',
   'finished_at',
@@ -77,6 +81,8 @@ export default function ToMe() {
   const columns = [
     colIndex,
     colItem(openDetail),
+    colSummarys,
+    colTotalmoney,
     colBillNo,
     colDept,
     colNodeName,

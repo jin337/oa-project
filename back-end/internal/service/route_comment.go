@@ -272,7 +272,7 @@ func joinRoutePath(parent, path string) string {
 }
 
 // LoadRouteModuleCategories 解析 router/router.go 的 Setup()，读取 registerXxxRoutes(api) // 分类
-// 行尾注释，返回 注册函数名 → 分类名（如 registerUtilRoutes → "工具"、registerNotificationRoutes → "通知"）。
+// 行尾注释，返回 注册函数名 → 分类名（如 registerNotificationRoutes → "通知"）。
 // 未写行尾注释的模块不在结果中（其下接口分类留空）。
 func LoadRouteModuleCategories() map[string]string {
 	cats := make(map[string]string)

@@ -332,27 +332,47 @@ const CONFIG_HELP_CONTENT = (
           填充后可手工修改，请求参数右侧「格式化」按钮可补键值双引号；运行时以实际请求参数为准；
         </div>
         <div>目标字段的来源是「接口响应里的字段路径」（点路径），如 {'user.city_name'}；</div>
-        <div>公共计算 / 转换接口 {'POST /utils/calculate'} 支持的类型：</div>
+      </li>
+      <li>
+        <b className="text-gray-700">JS事件</b>
+        ：使用 JavaScript 脚本直接读写表单字段，适合复杂计算 / 批量赋值等「直接赋值」难以表达的场景；
+        <div className="mt-1">
+          脚本在「脚本内容」中编写（如{' '}
+          {'form.total = Number(form.price) * Number(form.quantity)'}
+          ），运行时「数字元素」字段已是数值类型（{'100'} → 100），可直接参与数学运算；
+          脚本异常仅记录、不影响表单；
+        </div>
+        <div className="mt-1">可用的注入变量与工具函数：</div>
         <ul className="list-disc pl-4">
           <li className="mt-1">
-            <b className="text-gray-700">{'number_to_upper'}</b>：数字转大写金额，请求{' '}
-            {'{"type":"number_to_upper","value":100000}'} → 返回 {'{"result":"壹拾万元整"}'}；
-            金额为空（不传 / null / 空串 / 纯空白）时返回 {'{"result":""}'}，不报错；{'0'}{' '}
-            返回「零元整」； 非数字内容（如 {'"abc"'}）仍报错；
+            <b className="text-gray-700">{'form'}</b>
+            ：表单值快照，可读写——写 {'form.xxx'} 即写回对应字段，并继续触发目标字段的「值改变触发」
+            （写回触发元素自身除外），链路最多 5 跳；
           </li>
           <li>
-            <b className="text-gray-700">{'calc'}</b>：表达式计算（支持加减乘除取模和括号），请求{' '}
-            {'{"type":"calc","value":"(100+2)*3 % 7"}'} → 返回 {'{"result":5}'}；
+            <b className="text-gray-700">{'item'}</b>
+            ：触发元素当前选中项数据（select / treeSelect 等）；
           </li>
           <li>
-            <b className="text-gray-700">{'calc'}</b>：日期相减，请求{' '}
-            {'{"type":"calc","value":"2026-10-13-2026-10-12"}'} → 返回 {'{"result":1}'}；
-            形如「日期(时间) - 日期(时间)」时按绝对时间差返回<b className="text-gray-700">天</b>
-            （保留 2 位小数、允许负数；如 {'2026-10-13 12:00:00 - 2026-10-12 06:00:00'} → {'1.25'}
-            ）； 任一侧为空（如 {'2026-10-13-'} / {'-2026-10-13'}）按空值计算，返回 {'0'}；
+            <b className="text-gray-700">{'request'}</b>
+            ：统一请求助手，如 {'request({ url, method, params })'}，参数支持 {'${form.xxx}'} 与{' '}
+            {'${item.xxx}'} 插值；
           </li>
-          <li>支持的运算：+、-、*、/、%、()；支持小数、负数，空格自动忽略；</li>
+          <li>
+            <b className="text-gray-700">{'TransNumberToUpper'}</b>
+            ：数字转大写金额，如 {'TransNumberToUpper(100000)'} → {'壹拾万元整'}；
+          </li>
+          <li>
+            <b className="text-gray-700">{'CalculateExpression'}</b>
+            ：数学表达式求值 / 日期(时间)差值，如{' '}
+            {'CalculateExpression("(1+2)*3")'} → 9、{'CalculateExpression("2026-10-13-2026-10-12")'} → 1
+            （含时间按真实时长折算为天，如 30 小时 = 1.25）；
+          </li>
         </ul>
+        <div className="mt-1">
+          安全：脚本在受控作用域内以 {'use strict'} 执行，{'window'} / {'document'} / {'fetch'}{' '}
+          等宿主全局被遮蔽为 undefined，无法触达浏览器能力；
+        </div>
       </li>
       <li>
         <b className="text-gray-700">子表汇总</b>

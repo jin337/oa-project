@@ -23,12 +23,12 @@ import DynamicForm, {
   runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
+import { handleApprovalFormValidationError } from 'src/pages/application/dynamic/utils/approvalFormValidation'
 import {
   buildInstanceSelfSelectMembers,
   buildSelfSelectUserIDs,
   getInitiatorNode,
 } from 'src/pages/application/examine/flowModel'
-import { handleApprovalFormValidationError } from 'src/pages/application/dynamic/utils/approvalFormValidation'
 import {
   colBillNo,
   colCreatedAt,
@@ -38,6 +38,8 @@ import {
   colIndex,
   colNodeName,
   colStatus,
+  colSummarys,
+  colTotalmoney,
 } from 'src/pages/approval/components/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
 import CCModal from 'src/pages/approval/components/CCModal'
@@ -94,6 +96,8 @@ const ALL_COL_KEYS = [
   'dept_name',
   'created_name',
   'bill_no',
+  'summarys',
+  'totalmoney',
   'node_name',
   'created_at',
   'finished_at',
@@ -485,6 +489,8 @@ export default function Initiated() {
         </Button>
       ),
     },
+    colSummarys,
+    colTotalmoney,
     colBillNo,
     colDept,
     colNodeName,

@@ -27,6 +27,8 @@ import {
 } from 'src/pages/application/examine/flowModel'
 import { handleApprovalFormValidationError } from 'src/pages/application/dynamic/utils/approvalFormValidation'
 import {
+  colSummarys,
+  colTotalmoney,
   colBillNo,
   colCreatedAt,
   colCreatedName,
@@ -46,6 +48,8 @@ const ALL_COL_KEYS = [
   'dept_name',
   'created_name',
   'bill_no',
+  'summarys',
+  'totalmoney',
   'created_at',
   'approval_status',
 ]
@@ -285,6 +289,8 @@ export default function Drafts() {
         </Button>
       ),
     },
+    colSummarys,
+    colTotalmoney,
     colBillNo,
     colDept,
     colCreatedName,
@@ -380,9 +386,13 @@ export default function Drafts() {
                 onClick={() => setFlowCollapsed((v) => !v)}
               />
             </div>
-            <div className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pl-4 pr-8' : 'px-4'} py-3`}>
+            <div
+              className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pr-8 pl-4' : 'px-4'} py-3`}
+            >
               <div className="min-w-188">
-                <div className='text-center mb-3 text-xl font-bold'>{drawerApp?.item_name || drawerApp?.name || ''}</div>
+                <div className="mb-3 text-center text-xl font-bold">
+                  {drawerApp?.item_name || drawerApp?.name || ''}
+                </div>
                 <DynamicForm
                   app={drawerApp}
                   form={drawerForm}

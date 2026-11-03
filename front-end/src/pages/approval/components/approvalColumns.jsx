@@ -49,6 +49,22 @@ export const colDept = {
   width: 110,
   render: (v) => v || '-',
 }
+// 摘要列
+export const colSummarys = {
+  title: '摘要',
+  key: 'summarys',
+  dataIndex: 'summarys',
+  width: 200,
+  render: (v) => v || '-',
+}
+// 总金额列
+export const colTotalmoney = {
+  title: '总金额',
+  key: 'totalmoney',
+  dataIndex: 'totalmoney',
+  width: 110,
+  render: (v) => v || '-',
+}
 
 // 申请人列
 export const colCreatedName = {

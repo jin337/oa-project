@@ -10,6 +10,8 @@ import {
   colItem,
   colNodeName,
   colStatus,
+  colSummarys,
+  colTotalmoney,
 } from 'src/pages/approval/components/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
 import CCModal from 'src/pages/approval/components/CCModal'
@@ -26,6 +28,8 @@ const ALL_COL_KEYS = [
   'dept_name',
   'created_name',
   'bill_no',
+  'summarys',
+  'totalmoney',
   'created_at',
   'approval_status',
 ]
@@ -79,6 +83,8 @@ export default function Todo() {
       ...colItem(openDetailWithTask),
       // 待办模块点击要带任务
     },
+    colSummarys,
+    colTotalmoney,
     colBillNo,
     colDept,
     colNodeName,
