@@ -35,6 +35,7 @@ import { SIZE_OPTIONS } from 'src/config/app'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 import { useTabs } from 'src/store/tab-context'
 import { formatJsonQuotes } from 'src/utils/json'
+import JsEditor from 'src/components/JsEditor'
 import { ELEMENT_RENDER_CONFIG } from './dynamic/DynamicForm'
 
 const FormItem = Form.Item
@@ -131,9 +132,10 @@ const ACTION_TRIGGERS = [
 const ACTION_TYPE_OPTIONS = [
   { value: 'set_value', label: '直接赋值' },
   { value: 'fetch_and_fill', label: '请求并填充' },
+  { value: 'js_event', label: 'JS事件' },
 ]
 
-// 「子表汇总」选项：仅当流程配置了子表（sub_table_name）时才加入动作类型下拉
+// 「子表汇总」选项：仅「子表元素 + 元素类型=数字输入」时加入动作类型下拉（见 actionTypeOptions）
 const SUM_TABLE_ACTION_OPTION = { value: 'sum_table', label: '子表汇总' }
 
 const ACTION_TRIGGER_KEYS = ['on_mount', 'on_change', 'on_blur']
@@ -354,17 +356,16 @@ const CONFIG_HELP_CONTENT = (
       </li>
       <li>
         <b className="text-gray-700">子表汇总</b>
-        ：把某张子表某一列的合计写回当前元素（仅当流程配置了子表时可选）；
+        ：仅「子表的数字输入」元素可选（把子表某一列的合计写回主表）；
         <div className="mt-1">
-          来源子表 / 来源列：选择参与合计的子表及其列，如 {'clfbx_detail'} 的 {'fymoney'}；
+          目标字段：选择主表字段；当该子表数据变化时，把本列各行的合计写入所选主表字段；
         </div>
-        <div>目标字段就是当前正在配置的这个元素自身，因此只配来源，不用再选目标；</div>
         <div>
           触发时机与「初始化 / 值改变 /
           失焦」无关：只要该子表数据变化就重算，改金额、添加行、删除行都会覆盖；
         </div>
         <div>
-          合计值等于当前值时不重复写入；写入后本元素的「值改变触发」照常执行，可继续下一步（如算出总金额后自动生成大写金额）；
+          合计值等于当前值时不重复写入；写入后主表目标字段的「值改变触发」照常执行，可继续下一步（如算出总金额后自动生成大写金额）；
         </div>
       </li>
     </ul>
@@ -424,9 +425,11 @@ function buildActionsFromValues(actions) {
             .map((m) => ({ source: m.source || '', target: m.target || '' }))
           if (tm.length) item.target_mapping = tm
         } else if (a.action_type === 'sum_table') {
-          // 子表汇总：只存来源（目标字段就是配置该动作的元素自身）
-          if (a.table_key) item.table_key = a.table_key
-          if (a.source_field) item.source_field = a.source_field
+          // 子表汇总：只存主表目标字段（配置在子表数字输入元素上，汇总源即该元素所在子表的本列）
+          if (a.target_field) item.target_field = a.target_field
+        } else if (a.action_type === 'js_event') {
+          // JS事件：保存脚本源码（空白脚本不落库）
+          if (a.script && String(a.script).trim()) item.script = a.script
         }
         return item
       })
@@ -477,18 +480,24 @@ export default function ElementManage() {
   const dataSourceType = Form.useWatch('data_source.type', form)
   // 数据源是否引用接口管理（api_ref=1 时 url/method 由接口管理回填并禁用）
   const dsApiRef = Form.useWatch('data_source.api_ref', form)
-  // 子表名列表（取自流程的 sub_table_name）：决定「子表汇总」是否可选，并提供来源子表选项。
+  // 子表名列表（取自流程的 sub_table_name）：决定「子表汇总」的可选范围。
   // 必须在下面的 actionTypeOptions（useMemo）之前声明，否则会命中暂时性死区报错。
   const [subTables, setSubTables] = useState([])
+  // 主表名：供「子表汇总」目标字段选项（主表所有字段）加载
+  const [mainTableKey, setMainTableKey] = useState('')
 
   // 事件驱动 actions：监听整个对象以联动渲染每条规则的 action_type 分支
   const actionsWatch = Form.useWatch('actions', form)
 
-  // 动作类型下拉选项：流程没有配置子表时不提供「子表汇总」
+  // 当前编辑元素的物理表 / 元素类型：仅「子表元素 + 数字输入」时提供「子表汇总」
+  const drawerTableKey = Form.useWatch('table_key', form)
+  const drawerElementType = Form.useWatch('element_type', form)
+  const canSumTable = subTables.includes(drawerTableKey) && drawerElementType === 'number'
+
+  // 动作类型下拉选项：仅子表的数字输入元素提供「子表汇总」
   const actionTypeOptions = useMemo(
-    () =>
-      subTables.length ? [...ACTION_TYPE_OPTIONS, SUM_TABLE_ACTION_OPTION] : ACTION_TYPE_OPTIONS,
-    [subTables],
+    () => (canSumTable ? [...ACTION_TYPE_OPTIONS, SUM_TABLE_ACTION_OPTION] : ACTION_TYPE_OPTIONS),
+    [canSumTable],
   )
 
   // 接口引用选择弹窗：null=关闭；{ target:'ds' }=数据源；{ target:'action', trigger, index }=联动动作
@@ -525,6 +534,7 @@ export default function ElementManage() {
       tableOptionsCache.current = cached
       setTableOptions(options)
       setSubTables(subs)
+      setMainTableKey(app?.table_name || '')
       return cached
     } catch (e) {
       return null
@@ -1586,14 +1596,24 @@ export default function ElementManage() {
                               </>
                             )}
 
-                            {/* sum_table：子表汇总（目标字段 = 当前正在配置的元素自身） */}
+                            {/* sum_table：子表汇总（配置在子表的数字输入元素上，目标为主表字段） */}
                             {actionType === 'sum_table' && (
-                              <SumTableActionFields
-                                field={item.field}
-                                subTables={subTables}
-                                appId={id}
-                                tableKey={actionsWatch?.[trigger.key]?.[index]?.table_key}
-                              />
+                              <SumTableActionFields field={item.field} appId={id} mainTableKey={mainTableKey} />
+                            )}
+
+                            {/* js_event：JS事件（使用 JsEditor 组件编辑脚本） */}
+                            {actionType === 'js_event' && (
+                              <FormItem
+                                label="脚本内容"
+                                field={item.field + '.script'}
+                                rules={[{ required: true, message: '请输入脚本内容' }]}
+                              >
+                                <JsEditor
+                                  placeholder={'// 输入脚本，如：\n// form.amount = Number(form.price) * Number(form.quantity)'}
+                                  minRows={6}
+                                  maxRows={12}
+                                />
+                              </FormItem>
                             )}
                           </div>
                         )
@@ -1626,22 +1646,22 @@ export default function ElementManage() {
 }
 
 /**
- * 「子表汇总」动作配置：选择来源子表与来源列。
- * 目标字段就是当前正在配置的这个元素自身（合计结果写回该字段），所以这里只配来源。
- * 表单值路径形如 actions.on_change.0.table_key / source_field。
+ * 「子表汇总」动作配置：选择主表目标字段。
+ * 配置位置：子表的数字输入元素上；运行时把该元素所在子表中本列各行的合计写入所选主表字段。
+ * 表单值路径形如 actions.on_change.0.target_field。
  */
-function SumTableActionFields({ field, subTables, appId, tableKey }) {
+function SumTableActionFields({ field, appId, mainTableKey }) {
   const [fields, setFields] = useState([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!tableKey) {
+    if (!mainTableKey) {
       setFields([])
       return
     }
     let cancelled = false
     setLoading(true)
-    fetchAll((p) => applicationApi.listTableFields(appId, p, tableKey))
+    fetchAll((p) => applicationApi.listTableFields(appId, p, mainTableKey))
       .then((res) => {
         // fetchAll 返回的是响应结构（与原接口一致），字段列表在 res.data.list
         if (!cancelled) setFields(res?.data?.list || [])
@@ -1655,39 +1675,24 @@ function SumTableActionFields({ field, subTables, appId, tableKey }) {
     return () => {
       cancelled = true
     }
-  }, [appId, tableKey])
+  }, [appId, mainTableKey])
 
   return (
-    <Row gutter={16}>
-      <Col span={12}>
-        <FormItem
-          label="来源子表"
-          field={`${field}.table_key`}
-          rules={[{ required: true, message: '请选择来源子表' }]}
-        >
-          <Select
-            placeholder="请选择来源子表"
-            options={subTables.map((t) => ({ label: t, value: t }))}
-          />
-        </FormItem>
-      </Col>
-      <Col span={12}>
-        <FormItem
-          label="来源列"
-          field={`${field}.source_field`}
-          rules={[{ required: true, message: '请选择来源列' }]}
-        >
-          <Select showSearch placeholder="请选择来源列" loading={loading}>
-            {fields.map((f) => (
-              <Select.Option key={f.name} value={f.name}>
-                {f.name}
-                {f.comment ? `（${f.comment}）` : ''}
-              </Select.Option>
-            ))}
-          </Select>
-        </FormItem>
-      </Col>
-    </Row>
+    <FormItem
+      label="目标字段"
+      field={`${field}.target_field`}
+      rules={[{ required: true, message: '请选择目标字段' }]}
+      extra="该子表数据变化时，把本列各行的合计写入所选主表字段"
+    >
+      <Select showSearch placeholder="请选择主表字段" loading={loading}>
+        {fields.map((f) => (
+          <Select.Option key={f.name} value={f.name}>
+            {f.name}
+            {f.comment ? `（${f.comment}）` : ''}
+          </Select.Option>
+        ))}
+      </Select>
+    </FormItem>
   )
 }
 

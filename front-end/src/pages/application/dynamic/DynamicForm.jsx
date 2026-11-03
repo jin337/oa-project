@@ -6,6 +6,8 @@ import { useAuth } from 'src/store/auth-context'
 import { API_PREFIX } from 'src/utils/constants'
 
 import { evalDynamicExpr } from './utils/evalExpression'
+import { TransNumberToUpper } from './utils/amountToUpper'
+import { CalculateExpression } from './utils/calculateExpression'
 import {
   DEFAULT_FORM_CONFIG,
   OPTION_ELEMENT_TYPES,
@@ -141,6 +143,107 @@ const MAX_LINK_DEPTH = 5
 // 子表汇总写入的来源标记：刻意与任何 field_key 都不相等，
 // 使目标字段自身的 on_change 照常继续执行（如 number_to_upper 生成大写金额）
 const SUM_TABLE_SOURCE = '__sum_table__'
+
+// 数值归一：js_event 执行前把表单快照中「数字元素」字段转成数值类型。
+// 表单 number 输入的值在 store 中为字符串（如 '100'），若脚本写
+//   CalculateExpression(form.airmoney + form.shipmoney + ...)
+// 则 '+' 先做字符串拼接（'100'+'0'... = '10000000'），结果完全错误。
+// 归一后脚本里 form.airmoney 是 number 100，'+' 恢复数学加法的语义。
+// 空串/undefined/null 保持不变（避免把未填字段误写成 0）。
+const normalizeNumeric = (v) => {
+  if (v === '' || v === null || v === undefined) return v
+  if (typeof v === 'number') return v
+  const n = Number(v)
+  return Number.isNaN(n) ? v : n
+}
+
+/**
+ * 就地归一 form 快照中数字元素字段：顶层 field_key 与子表行内列（tableKey[i].colKey）。
+ * @param {object} form 深拷贝后的表单值快照（可安全修改）
+ * @param {Set<string>} numberKeys 顶层数字元素 field_key 集合
+ * @param {Map<string, Set<string>>} tableNumberCols 子表数字列：tableKey -> 列 dataIndex 集合
+ */
+const normalizeFormNumbers = (form, numberKeys, tableNumberCols) => {
+  if (!form || typeof form !== 'object') return
+  numberKeys.forEach((k) => {
+    if (k in form) form[k] = normalizeNumeric(form[k])
+  })
+  tableNumberCols.forEach((cols, tKey) => {
+    const rows = form[tKey]
+    if (!Array.isArray(rows)) return
+    rows.forEach((row) => {
+      if (!row || typeof row !== 'object') return
+      cols.forEach((c) => {
+        if (c in row) row[c] = normalizeNumeric(row[c])
+      })
+    })
+  })
+}
+
+// JS 事件脚本可用的白名单变量（new Function 参数注入）：
+// form=表单值快照 / item=触发元素选中项数据 / request=统一请求助手 / TransNumberToUpper=数字转大写
+// 其余列出的敏感全局标识符一律以 undefined 遮蔽——脚本内引用这些名字命中参数绑定，
+// 无法触达 window/document/fetch/eval/Function/require 等宿主能力（比字符串黑名单更可靠：
+// 黑名单只匹配源码文本，拼接可绕过；这里是词法绑定遮蔽，拼接也拿不到真实全局）。
+const JS_EVENT_GLOBALS = [
+  'window',
+  'document',
+  'globalThis',
+  'self',
+  'top',
+  'parent',
+  'fetch',
+  'XMLHttpRequest',
+  'WebSocket',
+  'EventSource',
+  'localStorage',
+  'sessionStorage',
+  'indexedDB',
+  // 注意：参数名不能用保留字/特殊名——'import'（保留字）与 'eval'（strict 模式参数非法）均不可注入；
+  // eval 的信任边界与表单提交钩子（compileHook）一致：脚本由管理员在元素配置中填写，属可信脚本。
+  'Function',
+  'setTimeout',
+  'setInterval',
+  'requestAnimationFrame',
+  'process',
+  'require',
+  'module',
+  'navigator',
+  'location',
+  'history',
+]
+
+/**
+ * 编译并执行 JS 事件脚本（action_type='js_event'），返回脚本对 form 快照产生的字段 diff。
+ * 作用域：form（可直接读写）、item（选中项数据）、request（统一请求助手）、
+ *         TransNumberToUpper（数字转大写）、CalculateExpression（数学表达式求值）。
+ * 安全：use strict + 参数白名单注入 + 敏感全局标识符遮蔽；异常仅记录，不影响表单。
+ * @param {string} script 脚本源码（同步执行，可写 form.xxx / 调用工具函数）
+ * @param {object} form 表单值快照（调用方传入 JSON 深拷贝，脚本的写入在此对象上发生）
+ * @param {object} item 触发元素选中项数据（可为空对象）
+ * @returns {object} 脚本写入后相对空白的差异字段集合
+ */
+const runJsEventScript = (script, form, item) => {
+  const out = {}
+  if (!script || typeof script !== 'string' || !script.trim()) return out
+  const paramNames = [
+    'form',
+    'item',
+    'request',
+    'TransNumberToUpper',
+    'CalculateExpression',
+    ...JS_EVENT_GLOBALS,
+  ]
+  const undefArgs = JS_EVENT_GLOBALS.map(() => undefined)
+  try {
+    const fn = new Function(...paramNames, `"use strict";\n${script}`)
+    fn(form, item, request, TransNumberToUpper, CalculateExpression, ...undefArgs)
+  } catch (e) {
+    console.warn('[js_event] 脚本执行失败:', e)
+  }
+  return out
+}
+
 
 /** 给联动写入的字段打标记：记录写入值、触发字段与链路深度（onValuesChange 据此判断是否继续下一跳） */
 const stampWrites = (patch, fromKey, depth) => {
@@ -414,6 +517,51 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
             colCtx ? `${colCtx.tableKey}[${colCtx.index}].${colCtx.fieldKey}` : el?.field_key,
             depth,
           )
+        } else if (action.action_type === 'js_event') {
+          // JS 事件：在受限作用域执行用户脚本（form/item/request/TransNumberToUpper），
+          // 脚本对 form 的写入经 diff 回写表单 store，链路标记与 set_value 一致（防循环 + 继续触发目标字段联动）。
+          const script = typeof action.script === 'string' ? action.script : ''
+          if (script.trim()) {
+            let formSnap
+            try {
+              formSnap = JSON.parse(JSON.stringify(allValues || {}))
+            } catch {
+              formSnap = null
+            }
+            if (formSnap) {
+              // 数字元素字段归一为数值类型：脚本内 '+' 对数字字段恢复数学加法语义，
+              // 避免字符串拼接（'100'+'0'...='10000000'）导致的合计错误。
+              const numberKeys = new Set()
+              const tableNumberCols = new Map()
+              elementsRef.current?.forEach((e) => {
+                if (e?.element_type === 'number') {
+                  numberKeys.add(e.field_key)
+                } else if (e?.element_type === 'table' && Array.isArray(e.columns)) {
+                  const cols = new Set()
+                  e.columns.forEach((c) => {
+                    if (c?.element_type === 'number') cols.add(c.dataIndex || c.field_key)
+                  })
+                  if (cols.size) tableNumberCols.set(e.table_key || e.id, cols)
+                }
+              })
+              normalizeFormNumbers(formSnap, numberKeys, tableNumberCols)
+              const beforeSnap = JSON.parse(JSON.stringify(formSnap))
+              runJsEventScript(script, formSnap, currentObj)
+              const patch = {}
+              Object.keys(formSnap).forEach((k) => {
+                if (JSON.stringify(formSnap[k]) !== JSON.stringify(beforeSnap[k])) {
+                  patch[k] = formSnap[k]
+                }
+              })
+              if (Object.keys(patch).length) {
+                const fromKey = colCtx
+                  ? `${colCtx.tableKey}[${colCtx.index}].${colCtx.fieldKey}`
+                  : el?.field_key
+                linkWrittenRef.current = stampWrites(patch, fromKey, depth)
+                formRef.current?.setFieldsValue?.(patch)
+              }
+            }
+          }
         }
       }
     },
@@ -529,27 +677,43 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
         }
       })
 
-      // 子表汇总（action_type='sum_table'）：目标字段 = 配置该动作的元素自身，
-      // 值 = 来源子表 table_key 中 source_field 列的合计。
-      // 不挂在某个触发时机下，而是只要表单值变化就重算——这样改金额、添加行、删除行都能覆盖；
+      // 子表汇总（action_type='sum_table'）：配置在子表的数字输入元素上，
+      // 值 = 该元素所在子表（el.table_key）中本列（el.field_key）各行的合计，
+      // 写入所选主表字段（a.target_field）。
+      // 不挂在某个触发时机下，而是只要表单值变化就重算——改金额、添加行、删除行都能覆盖；
       // 新值等于当前值时跳过写入，保证幂等，避免写入后再次触发 onValuesChange 造成循环。
       const sumPatch = {}
-      elementsRef.current.forEach((el) => {
-        if (!el?.field_key || !el.actions || typeof el.actions !== 'object') return
-        Object.values(el.actions).forEach((list) => {
+      // 子表汇总（action_type='sum_table'）：配置在子表的数字输入元素上，
+      // 值 = 该元素所在子表（sumTableKey）中本列（fieldKey）各行的合计，
+      // 写入所选主表字段（a.target_field）。
+      // 不挂在某个触发时机下，而是只要表单值变化就重算——改金额、添加行、删除行都能覆盖；
+      // 新值等于当前值时跳过写入，保证幂等，避免写入后再次触发 onValuesChange 造成循环。
+      const collectSumTable = (sumTableKey, fieldKey, actions) => {
+        if (!sumTableKey || !fieldKey || !actions || typeof actions !== 'object') return
+        Object.values(actions).forEach((list) => {
           if (!Array.isArray(list)) return
           list.forEach((a) => {
-            if (a?.action_type !== 'sum_table' || !a.table_key || !a.source_field) return
-            const rows = allValues?.[a.table_key]
+            if (a?.action_type !== 'sum_table' || !a.target_field) return
+            const rows = allValues?.[sumTableKey]
             const sum = (Array.isArray(rows) ? rows : []).reduce(
-              (acc, row) => acc + (Number(row?.[a.source_field]) || 0),
+              (acc, row) => acc + (Number(row?.[fieldKey]) || 0),
               0,
             )
-            if (sum !== formRef.current?.getFieldValue?.(el.field_key)) {
-              sumPatch[el.field_key] = sum
+            if (sum !== formRef.current?.getFieldValue?.(a.target_field)) {
+              sumPatch[a.target_field] = sum
             }
           })
         })
+      }
+      // 顶层元素（主表元素一般不配 sum_table，保留通用性）；子表列行值路径为 tableKey[index].colKey
+      elementsRef.current.forEach((el) => {
+        collectSumTable(el.table_key, el.field_key, el.actions)
+        if (el.element_type === 'table' && Array.isArray(el.columns)) {
+          const tableKey = el.table_key || el.id || ''
+          el.columns.forEach((col) =>
+            collectSumTable(tableKey, col.dataIndex || col.field_key, col.actions),
+          )
+        }
       })
       if (Object.keys(sumPatch).length) {
         linkWrittenRef.current = stampWrites(sumPatch, SUM_TABLE_SOURCE, 0)
