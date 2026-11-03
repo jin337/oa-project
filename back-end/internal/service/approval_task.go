@@ -73,12 +73,14 @@ func getInstanceAppName(instance *model.ApprovalInstance) string {
 }
 
 // preApprovedAssigneeIDs 返回实例内已真实操作（operated_at 非空）过的审批人 ID 集合。
-// 用于前置审批模式下跨节点重复审批人的自动通过判定：
-// 转交人、加签人等衍生任务的真实操作同样计入；前置自动通过记录（operated_at 为空）不计入。
+// 用于前置审批模式下跨节点重复审批人的自动通过判定与退回「不重复审批」判定。
+// 只统计原始卡片（delegated_from=0 且 add_sign_from=0）的真实操作：
+// 转交人、加签人等衍生任务的操作不计入——他们不是节点配置中的重复成员，
+// 不触发自动通过，退回后仍应生成真实待办再次审批。
 func preApprovedAssigneeIDs(tx *gorm.DB, instanceID uint) (map[uint]bool, error) {
 	var assigneeIDs []uint
 	if err := tx.Model(&model.ApprovalInstanceTask{}).
-		Where("instance_id = ? AND operated_at IS NOT NULL", instanceID).
+		Where("instance_id = ? AND operated_at IS NOT NULL AND delegated_from = 0 AND add_sign_from = 0", instanceID).
 		Distinct("assignee_id").
 		Pluck("assignee_id", &assigneeIDs).Error; err != nil {
 		return nil, err
@@ -146,11 +148,16 @@ func postLastNodeIdx(instance *model.ApprovalInstance, allNodes []flowNode, user
 }
 
 // autoApprovedComment 按审批模式生成自动通过记录/推进结果的标准文案
+// 前置/后置审批：带模式前缀说明跨节点卡位原因；顺序审批：只显示「自动通过」，
+// 不出现「已前置/已后置审批」字样（顺序模式跨节点重复成员按后置语义处理但并非后置审批）。
 func autoApprovedComment(mode, suffix string) string {
+	if mode == "pre" {
+		return "已前置审批，" + suffix
+	}
 	if mode == "post" {
 		return "已后置审批，" + suffix
 	}
-	return "已前置审批，" + suffix
+	return suffix
 }
 
 // generateTasksForCurrentNode 为当前节点生成审批任务
@@ -214,9 +221,10 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 	}
 
 	// 审批模式：同一审批人跨节点出现时的合并策略（正交于节点内依次/会签/或签）：
-	//   顺序（默认）——每个出现节点各生成待办、各审一次；
 	//   前置 pre——只在首次出现节点真实审批，后续节点该人卡位自动通过；
-	//   后置 post——更早节点该人卡位自动通过，只在最后出现节点真实审批。
+	//   后置 post——更早节点该人卡位自动通过，只在最后出现节点真实审批；
+	//   顺序（默认，mode 为空）——与后置一致：跨节点重复成员只在最后出现节点真实审批，
+	//   更早节点自动通过（自动通过记录仅显示「自动通过」，不带模式前缀）。
 	// 自动通过记录无 operated_at：不可撤回、不进经我处理、不推送通知；时间线保留标记。
 	mode := parseApprovalMode(instance.ApprovalOtherJSON)
 	autoIDs, remainIDs := []uint{}, userIDs
@@ -233,7 +241,8 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 				remainIDs = append(remainIDs, uid)
 			}
 		}
-	} else if mode == "post" {
+	} else {
+		// post 与顺序（mode==""）统一：只在最后出现节点真实审批
 		lastIdx := postLastNodeIdx(instance, allNodes, userIDs)
 		autoIDs, remainIDs = nil, nil
 		for _, uid := range userIDs {
@@ -356,6 +365,16 @@ func isOrdinaryApprovedTask(t *model.ApprovalInstanceTask) bool {
 	return t != nil && t.Status == model.TaskStatusApproved && !isDerivedTask(t)
 }
 
+// returnCandidateAllowedTask 判断任务是否可作为退回候选：已完成审批动作
+//（已通过 / 已转交）。与 isOrdinaryApprovedTask 不同，此处包含加签与转交衍生任务——
+// 加签人、转交人等所有实际完成审批的历史审批人都是合法的退回位置。
+func returnCandidateAllowedTask(t *model.ApprovalInstanceTask) bool {
+	if t == nil {
+		return false
+	}
+	return t.Status == model.TaskStatusApproved || t.Status == model.TaskStatusDelegated
+}
+
 // returnCandidateNodeAllowed 判断候选任务所在节点是否允许作为退回位置。
 // 跨节点只能退回更早节点；同一节点仅依次审批允许回到前一位审批人，
 // 会签/或签不允许在同一节点内互相退回，避免部分成员未完成时绕过节点规则。
@@ -458,7 +477,8 @@ func returnFromDisapproval(tx *gorm.DB, instance *model.ApprovalInstance, task *
 		return errors.New("当前节点未开放退回权限")
 	}
 
-	// 候选只取普通审批任务（排除转交与加签衍生任务），且必须位于当前任务之前。
+	// 候选取已完成审批动作的任务（已通过 / 已转交），并包含加签与转交衍生任务——
+	// 加签人、转交人等所有实际完成审批的历史审批人都应可作为退回位置；
 	// 节点位置以 execution_path 索引为准；同节点按操作时间判断先后。
 	pathIndex := make(map[string]int, len(instance.ExecutionPath))
 	for i, nodeID := range instance.ExecutionPath {
@@ -470,15 +490,15 @@ func returnFromDisapproval(tx *gorm.DB, instance *model.ApprovalInstance, task *
 	}
 	var candidates []model.ApprovalInstanceTask
 	if err := tx.
-		Where("instance_id = ? AND status = ? AND id <> ? AND delegated_from = 0 AND add_sign_from = 0",
-			instance.ID, model.TaskStatusApproved, task.ID).
+		Where("instance_id = ? AND status IN (?, ?) AND id <> ? AND operated_at IS NOT NULL AND assignee_id <> ?",
+			instance.ID, model.TaskStatusApproved, model.TaskStatusDelegated, task.ID, curUserID).
 		Order("sort ASC, operated_at ASC, id ASC").
 		Find(&candidates).Error; err != nil {
 		return err
 	}
 	validTargets := make([]model.ApprovalInstanceTask, 0, len(candidates))
 	for _, candidate := range candidates {
-		if !isOrdinaryApprovedTask(&candidate) {
+		if !returnCandidateAllowedTask(&candidate) {
 			continue
 		}
 		candidatePathIdx, candidatePathOK := pathIndex[candidate.NodeID]
@@ -578,15 +598,20 @@ func returnFromDisapproval(tx *gorm.DB, instance *model.ApprovalInstance, task *
 		return errors.New("退回目标审批人不在执行路径中")
 	}
 
-	// 前置/后置审批模式：目标审批人若已在实例内真实操作过，则退回后不重复审批——
-	// 生成自动通过记录（无 operated_at，不可撤回），并从目标节点继续推进，
-	// 后续节点任务生成同样应用对应模式的卡位过滤（已前置/后置审批人自动通过）。
+	// 前置/后置审批模式：「不重复审批」仅适用于目标审批人在实例内存在自动通过记录的
+	// 重复成员——他们因前后置审批被跳过真实审批（如 status=Approved 且 operated_at 为空），
+	// 被退回时同样不再重复审批。
+	// 真实操作过的审批人（含退回动作生成的待办通过记录）被退回时永远生成真实待办重新审批：
+	// 否则退回目标会被自动通过跳过，形成「退回 → 自动通过 → 无待办」的无止境循环。
 	if mode := parseApprovalMode(instance.ApprovalOtherJSON); mode == "pre" || mode == "post" {
-		operated, err := preApprovedAssigneeIDs(tx, instance.ID)
-		if err != nil {
+		var autoPassed int64
+		if err := tx.Model(&model.ApprovalInstanceTask{}).
+			Where("instance_id = ? AND assignee_id = ? AND status = ? AND operated_at IS NULL AND delegated_from = 0 AND add_sign_from = 0",
+				instance.ID, target.AssigneeID, model.TaskStatusApproved).
+			Count(&autoPassed).Error; err != nil {
 			return err
 		}
-		if operated[target.AssigneeID] {
+		if autoPassed > 0 {
 			returnComment := autoApprovedComment(mode, "退回后不重复审批")
 			if err := createAutoApprovedTask(tx, instance, target.NodeID, target.NodeName, target.Sort, target.AssigneeID, curUserID, returnComment); err != nil {
 				return err
@@ -1056,6 +1081,42 @@ func handleNodeApproval(tx *gorm.DB, instance *model.ApprovalInstance, task *mod
 		}
 	}
 
+	// 链式后加签激活：任何任务（含前加签 / 转交衍生任务）通过时，
+	// 激活「以本任务为来源的后加签任务」（add_sign_from=本任务、add_sign_type=2、等待态）。
+	// 原审批人（AddSignFrom==0）通过时上面已按节点激活本节点全部 waiting 后加签，
+	// 此处再次查询已无等待任务，不会重复激活 / 重复通知；
+	// 而衍生任务（如前加签）通过时，其上挂的后加签依赖本段才能进入待办。
+	var chained []model.ApprovalInstanceTask
+	if err := tx.Where("add_sign_from = ? AND add_sign_type = 2 AND status = ?",
+		task.ID, model.TaskStatusWaiting).Find(&chained).Error; err != nil {
+		return err
+	}
+	if len(chained) > 0 {
+		ids := make([]uint, 0, len(chained))
+		for _, w := range chained {
+			ids = append(ids, w.ID)
+		}
+		if err := tx.Model(&model.ApprovalInstanceTask{}).
+			Where("id IN ?", ids).
+			Updates(map[string]interface{}{
+				"status":     model.TaskStatusPending,
+				"updated_at": time.Now(),
+				"updated_by": curUserID,
+			}).Error; err != nil {
+			return err
+		}
+		appName := getInstanceAppName(instance)
+		for _, w := range chained {
+			notifyCreate(tx, model.Notification{
+				UserID:     w.AssigneeID,
+				Type:       1,
+				Title:      appName,
+				Msg:        "您有新的审批待办",
+				InstanceID: instance.ID,
+			})
+		}
+	}
+
 	// 加签任务完成：前加签恢复原审批人任务待处理；后加签继续走节点策略逻辑
 	//（依次=轮后续审批人 / 会签=统计剩余审批人 / 或签=直接推进）
 	if task.AddSignFrom > 0 && task.AddSignType == 1 {
@@ -1159,6 +1220,38 @@ func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *f
 			pendingDelegatedChains++
 		case delegatedChainApproved:
 			activeAssignees[root.AssigneeID] = true
+			// 转交链已完成：承接人（链尾任务）已实际审批通过。
+			// 若承接人恰好是本节点配置成员，其配置位置视为已被占位——
+			// 同节点仅需一次真实审批，配置位置以自动通过记录体现（一次审批、两次通过），
+			// 避免向同一人再次生成待办造成「同节点两个同一人」。
+			tail := root
+			for {
+				child, ok := delegatedChildren[tail.ID]
+				if !ok {
+					break
+				}
+				tail = child
+			}
+			if tail.Status == model.TaskStatusApproved {
+				activeAssignees[tail.AssigneeID] = true
+				if containsUint(userIDs, tail.AssigneeID) {
+					// 该配置成员尚无自己的普通任务行（未以自身身份审过）→ 补自动通过记录
+					hasOwn := false
+					for i := range nodeTasks {
+						r := &nodeTasks[i]
+						if r.DelegatedFrom == 0 && r.AddSignFrom == 0 && r.AssigneeID == tail.AssigneeID {
+							hasOwn = true
+							break
+						}
+					}
+					if !hasOwn {
+						mode := parseApprovalMode(instance.ApprovalOtherJSON)
+						if err := createAutoApprovedTask(tx, instance, node.ID, node.Label, instance.CurrentNodeIdx, tail.AssigneeID, curUserID, autoApprovedComment(mode, "自动通过")); err != nil {
+							return err
+						}
+					}
+				}
+			}
 		}
 	}
 

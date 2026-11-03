@@ -130,6 +130,11 @@ function splitNodePeople(nodePeople, nodeTasks) {
 
   const byAssignee = new Map()
   nodeTasks.forEach((task) => {
+    // 转交 / 加签衍生任务不作为「该成员的正常任务」参与配置成员消费：
+    // 若转交目标恰好也是本节点配置成员（如依次审批时 A 转交 B、B 又在同一节点），
+    // 混入分组会把衍生卡片错误渲染在来源审批人之前；统一走下方
+    // 「按来源任务就近插入（转交/后加签紧跟来源之后，前加签插到来源之前）」。
+    if (task.delegated_from > 0 || task.add_sign_from > 0) return
     const key = String(task.assignee_id)
     if (!byAssignee.has(key)) byAssignee.set(key, [])
     byAssignee.get(key).push(task)

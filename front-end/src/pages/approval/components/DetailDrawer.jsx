@@ -206,8 +206,10 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
   const currentNodePerms = currentNode?.permissions?.length ? currentNode.permissions : [1, 2, 3]
   const currentNodeStrategy = currentNode?.strategy || 1
 
-  // 可退回候选：当前任务之前已通过的普通审批任务（排除转交、加签衍生任务与后续节点历史）
-  // 会签/或签不允许同节点互相退回；依次审批允许回到同节点前一位审批人。
+  // 可退回候选：当前任务之前已完成审批动作的任务（已通过 / 已转交），
+  // 包含加签与转交衍生任务——加签人、转交人等所有实际完成审批的历史审批人
+  // 都是合法的退回位置；后续节点历史不参与。会签/或签不允许同节点互相退回；
+  // 依次审批允许回到同节点前一位审批人。
   const priorApprovedTasks = useMemo(() => {
     const tasks = instance?.approval_flow_tasks || []
     const nameMap = instance?.assignee_name_map || {}
@@ -221,10 +223,13 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
     return tasks
       .filter((t) => {
         if (
-          t.status !== 1 ||
+          ![1, 4].includes(t.status) ||
           t.id === currentTask?.id ||
-          t.delegated_from ||
-          t.add_sign_from
+          // 前置/后置审批「自动通过」记录无 operated_at（非本人真实操作），不作为退回位置
+          !t.operated_at ||
+          // 当前审批人自己的历史记录不作为退回位置：被退回回来重审的人
+          // 不应再次退回到自己（否则形成「退回给自己」的无止境循环）
+          t.assignee_id === currentTaskDetail?.assignee_id
         ) {
           return false
         }
@@ -254,7 +259,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
           new Date(a.operated_at || 0).getTime() - new Date(b.operated_at || 0).getTime() ||
           a.id - b.id,
       )
-  }, [instance, currentTask?.id, currentTaskDetail?.node_id, currentTaskDetail?.operated_at, currentNodeStrategy])
+  }, [instance, currentTask?.id, currentTaskDetail?.node_id, currentTaskDetail?.operated_at, currentTaskDetail?.assignee_id, currentNodeStrategy])
   const lastApprovedTask = priorApprovedTasks[priorApprovedTasks.length - 1]
 
   // 不同意/退回、转交、加签均按当前节点 permissions 控制；
