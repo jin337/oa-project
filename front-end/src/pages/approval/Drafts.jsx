@@ -20,21 +20,22 @@ import DynamicForm, {
   runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
+import { handleApprovalFormValidationError } from 'src/pages/application/dynamic/utils/approvalFormValidation'
 import {
   buildInstanceSelfSelectMembers,
   buildSelfSelectUserIDs,
   getInitiatorNode,
 } from 'src/pages/application/examine/flowModel'
-import { handleApprovalFormValidationError } from 'src/pages/application/dynamic/utils/approvalFormValidation'
 import {
-  colSummarys,
-  colTotalmoney,
   colBillNo,
   colCreatedAt,
   colCreatedName,
   colDept,
   colIndex,
+  colItem,
   colStatus,
+  colSummarys,
+  colTotalmoney,
 } from 'src/pages/approval/components/approvalColumns'
 import ApprovalTableToolbar from 'src/pages/approval/components/ApprovalTableToolbar'
 import { useApprovalList } from 'src/pages/approval/components/useApprovalList'
@@ -46,11 +47,11 @@ const ALL_COL_KEYS = [
   'index',
   'item_name',
   'dept_name',
-  'created_name',
   'bill_no',
+  'created_name',
+  'created_at',
   'summarys',
   'totalmoney',
-  'created_at',
   'approval_status',
 ]
 
@@ -278,23 +279,13 @@ export default function Drafts() {
 
   const columns = [
     colIndex,
-    {
-      title: '模块',
-      key: 'item_name',
-      dataIndex: 'item_name',
-      // 未从申请项发起（无 item_name）时回退展示流程配置名称
-      render: (v, r) => (
-        <Button type="text" size="small" className="-ml-4!" onClick={() => openDraftEdit(r)}>
-          {v || r?.app_name || '-'}
-        </Button>
-      ),
-    },
-    colSummarys,
-    colTotalmoney,
-    colBillNo,
+    colItem(openDraftEdit),
     colDept,
+    colBillNo,
     colCreatedName,
     colCreatedAt,
+    colSummarys,
+    colTotalmoney,
     colStatus,
     {
       title: '操作',

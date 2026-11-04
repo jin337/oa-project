@@ -24,13 +24,13 @@ const PAGE_TITLE = '我的待办'
 const ALL_COL_KEYS = [
   'index',
   'item_name',
-  'node_name',
   'dept_name',
-  'created_name',
   'bill_no',
+  'created_name',
+  'created_at',
   'summarys',
   'totalmoney',
-  'created_at',
+  'node_name',
   'approval_status',
 ]
 
@@ -79,17 +79,14 @@ export default function Todo() {
 
   const columns = [
     colIndex,
-    {
-      ...colItem(openDetailWithTask),
-      // 待办模块点击要带任务
-    },
-    colSummarys,
-    colTotalmoney,
-    colBillNo,
+    colItem(openDetailWithTask),
     colDept,
-    colNodeName,
+    colBillNo,
     colCreatedName,
     colCreatedAt,
+    colSummarys,
+    colTotalmoney,
+    colNodeName,
     colStatus,
     {
       title: '操作',

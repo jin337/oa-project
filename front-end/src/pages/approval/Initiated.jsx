@@ -36,6 +36,7 @@ import {
   colDept,
   colFinishedAt,
   colIndex,
+  colItem,
   colNodeName,
   colStatus,
   colSummarys,
@@ -94,13 +95,13 @@ const ALL_COL_KEYS = [
   'index',
   'item_name',
   'dept_name',
-  'created_name',
   'bill_no',
+  'created_name',
+  'created_at',
+  'finished_at',
   'summarys',
   'totalmoney',
   'node_name',
-  'created_at',
-  'finished_at',
   'approval_status',
 ]
 
@@ -477,26 +478,15 @@ export default function Initiated() {
 
   const columns = [
     colIndex,
-    {
-      title: '模块',
-      key: 'item_name',
-      dataIndex: 'item_name',
-      // 未从申请项发起（无 item_name）时回退展示流程配置名称；
-      // 已驳回/已撤回可编辑的记录点击模块直接进入编辑，否则打开详情抽屉
-      render: (v, r) => (
-        <Button type="text" size="small" className="-ml-4!" onClick={() => openDetail(r)}>
-          {v || r?.app_name || '-'}
-        </Button>
-      ),
-    },
-    colSummarys,
-    colTotalmoney,
-    colBillNo,
+    colItem(openDetail),
     colDept,
-    colNodeName,
+    colBillNo,
     colCreatedName,
     colCreatedAt,
     colFinishedAt,
+    colSummarys,
+    colTotalmoney,
+    colNodeName,
     colStatus,
     {
       title: '操作',

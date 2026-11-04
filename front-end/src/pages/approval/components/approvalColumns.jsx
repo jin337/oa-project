@@ -24,6 +24,7 @@ export const colItem = (openDetail) => ({
   title: '模块',
   key: 'item_name',
   dataIndex: 'item_name',
+  width: 150,
   // 未从申请项发起（无 item_name）时回退展示流程配置名称
   render: (v, r) => (
     <Button type="text" size="small" className="-ml-4!" onClick={() => openDetail(r)}>
@@ -54,7 +55,6 @@ export const colSummarys = {
   title: '摘要',
   key: 'summarys',
   dataIndex: 'summarys',
-  width: 200,
   render: (v) => v || '-',
 }
 // 总金额列
@@ -62,7 +62,7 @@ export const colTotalmoney = {
   title: '总金额',
   key: 'totalmoney',
   dataIndex: 'totalmoney',
-  width: 110,
+  width: 120,
   render: (v) => v || '-',
 }
 
