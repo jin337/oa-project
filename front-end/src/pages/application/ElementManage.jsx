@@ -44,6 +44,65 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 const CollapseItem = Collapse.Item
 
+// 字段下拉搜索：同时匹配字段名（name）与字段注释（comment）
+function matchFieldKeyword(inputValue, option) {
+  const q = String(inputValue || '').trim().toLowerCase()
+  if (!q) return true
+  const props = option?.props ?? option ?? {}
+  const name = String(props.value ?? '').toLowerCase()
+  const comment = String(props.extra?.comment ?? '').toLowerCase()
+  return name.includes(q) || comment.includes(q)
+}
+
+// 赋值目标字段下拉（set_value 映射目标 / fetch_and_fill 目标字段）：
+// Arco Select 按 option value 去重，主表与子表重名列（如 dept_name）只显示在首个分组。
+// 故 Option value 用「表名::字段名」唯一化以完整展示各表字段；选中/回显时与表单存储的
+// 纯字段名互相转换，保证存储与运行时（target 即表单字段路径）语义不变。
+function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading }) {
+  const flat = []
+  ;(groups || []).forEach((g) => {
+    ;(g.fields || []).forEach((f) => {
+      flat.push({ key: `${g.tableKey}::${f.name}`, name: f.name, comment: f.comment || '' })
+    })
+  })
+  const displayValue = value ? flat.find((o) => o.name === value)?.key : undefined
+  return (
+    <Select
+      showSearch
+      filterOption={(input, option) => {
+        const q = String(input || '').trim().toLowerCase()
+        if (!q) return true
+        const props = option?.props ?? option ?? {}
+        const name = String(props.extra?.name ?? '').toLowerCase()
+        const comment = String(props.extra?.comment ?? '').toLowerCase()
+        return name.includes(q) || comment.includes(q)
+      }}
+      placeholder="请选择字段"
+      loading={loading}
+      value={displayValue}
+      onChange={(v) => onChange(v ? String(v).split('::')[1] : v)}
+    >
+      {(groups || []).map((g) => (
+        <Select.OptGroup
+          key={g.tableKey || 'other'}
+          label={g.tableKey === mainTableKey ? `主表 - ${g.tableKey}` : `子表 - ${g.tableKey}`}
+        >
+          {(g.fields || []).map((f) => (
+            <Select.Option
+              key={`${g.tableKey}::${f.name}`}
+              value={`${g.tableKey}::${f.name}`}
+              extra={{ name: f.name, comment: f.comment || '' }}
+            >
+              {f.name}
+              {f.comment ? `（${f.comment}）` : ''}
+            </Select.Option>
+          ))}
+        </Select.OptGroup>
+      ))}
+    </Select>
+  )
+}
+
 const MODULE_LABEL = '表单元素管理'
 
 // 可配置列 key（操作列固定显示，不参与列设置）
@@ -403,10 +462,10 @@ function normalizeActionsForForm(actions) {
         item.params && typeof item.params === 'object' ? JSON.stringify(item.params, null, 2) : ''
       if (!Array.isArray(item.target_mapping)) item.target_mapping = []
       if (a.action_type === 'set_value') {
-        if (Array.isArray(a.value)) {
-          item.value = a.value.map((v) => ({ ...v }))
+        if (Array.isArray(a.value_mapping)) {
+          item.value_mapping = a.value_mapping.map((v) => ({ ...v }))
         } else {
-          item.value = []
+          item.value_mapping = []
         }
       }
       return item
@@ -425,10 +484,10 @@ function buildActionsFromValues(actions) {
       .map((a) => {
         const item = { action_type: a.action_type }
         if (a.action_type === 'set_value') {
-          const value = (Array.isArray(a.value) ? a.value : [])
+          const value = (Array.isArray(a.value_mapping) ? a.value_mapping : [])
             .filter((v) => v && (v.source || v.target))
             .map((v) => ({ source: v.source || '', target: v.target || '' }))
-          if (value.length) item.value = value
+          if (value.length) item.value_mapping = value
         } else if (a.action_type === 'fetch_and_fill') {
           if (a.api_url) item.api_url = a.api_url
           if (a.method) item.method = a.method
@@ -532,13 +591,24 @@ export default function ElementManage() {
   // 级联选项：表列表 & 字段列表
   const [tableOptions, setTableOptions] = useState([])
   const [fieldOptions, setFieldOptions] = useState([])
-  const [loadingFields, setLoadingFields] = useState(false)
+  // 所有表字段（按主表/子表分组），供「赋值映射」「请求并填充」等跨表赋值目标选择
+  const [allFieldGroups, setAllFieldGroups] = useState([])
+  const [loadingAllFields, setLoadingAllFields] = useState(false)
+  // 全部表字段（主表 + 子表）页面级数据：按当前页面 id 加载一次（id 变化即重新加载），
+  // 不跨页面保留缓存（避免多个表单元素管理页签切换时串用其它应用的表字段）
+  const allFieldGroupsLoadedRef = useRef(null)
+  const allFieldGroupsInflightRef = useRef(null)
 
-  // 加载分类（表名）选项：主表 + 子表（流程表结构很少变动，结果缓存避免重复请求）
-  const tableOptionsCache = useRef(null)
+  // 加载分类（表名）选项：主表 + 子表。页面级数据：仅当前页面 id 复用，
+  // 切换页签（id 变化）重新加载，避免多个表单元素管理页签串用其它应用的表结构
+  const tableOptionsLoadedRef = useRef(null)
+  const tableOptionsInflightRef = useRef(null)
   const loadTableOptions = useCallback(async () => {
-    if (tableOptionsCache.current) return tableOptionsCache.current
-    try {
+    if (tableOptionsLoadedRef.current?.id === id) {
+      return tableOptionsLoadedRef.current
+    }
+    if (tableOptionsInflightRef.current) return tableOptionsInflightRef.current
+    tableOptionsInflightRef.current = (async () => {
       const res = await applicationApi.getApplication(id)
       const app = res.data?.application || res.data
       const options = []
@@ -551,13 +621,23 @@ export default function ElementManage() {
         .filter(Boolean)
       subs.forEach((t) => options.push({ label: `${t}（子表）`, value: t }))
       const cached = { app, options }
-      tableOptionsCache.current = cached
-      setTableOptions(options)
-      setSubTables(subs)
-      setMainTableKey(app?.table_name || '')
+      tableOptionsLoadedRef.current = { id, app, options }
+      return cached
+    })()
+    try {
+      const cached = await tableOptionsInflightRef.current
+      setTableOptions(cached.options)
+      setSubTables((cached.app?.sub_table_name || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean))
+      setMainTableKey(cached.app?.table_name || '')
       return cached
     } catch (e) {
+      tableOptionsLoadedRef.current = null
       return null
+    } finally {
+      tableOptionsInflightRef.current = null
     }
   }, [id])
 
@@ -623,33 +703,64 @@ export default function ElementManage() {
     setPage(1)
   }
 
-  // 加载指定表的所有字段（取消分页限制）
-  const loadFieldOptions = useCallback(
-    async (tableName) => {
-      if (!tableName) {
-        setFieldOptions([])
-        return
-      }
-      setLoadingFields(true)
-      try {
-        const res = await fetchAll((p) => applicationApi.listTableFields(id, p, tableName))
-        setFieldOptions(res.data.list || [])
-      } catch (e) {
-        setFieldOptions([])
-      } finally {
-        setLoadingFields(false)
-      }
+  // 对应字段级联：从已加载的全部表字段中取指定表的字段（不再发请求）
+  const applyFieldOptions = useCallback(
+    (tableName) => {
+      const g = allFieldGroups.find((x) => x.tableKey === tableName)
+      setFieldOptions(g ? g.fields : [])
     },
-    [id],
+    [allFieldGroups],
   )
 
-  // 分类变化：重置字段与名称，加载新字段列表
+  // 分类变化：重置字段与名称，按当前物理表切换对应字段选项
   const handleTableChange = (tableName) => {
     form.setFieldsValue({ field_key: undefined, label: '' })
-    setFieldOptions([])
-    loadFieldOptions(tableName)
+    applyFieldOptions(tableName)
   }
 
+  // 加载全部表字段（主表 + 子表）一次请求返回，按表分组，供跨表赋值目标下拉与对应字段级联使用。
+  // 页面级语义：仅当前页面 id 的数据可复用（避免新增/编辑重复请求），id 变化重新加载；
+  // 进行中请求合并（页面挂载加载与抽屉打开并发时共享一次请求），完成后不保留跨页面缓存
+  const loadAllFieldGroups = useCallback(async () => {
+    if (allFieldGroupsLoadedRef.current?.id === id) {
+      return allFieldGroupsLoadedRef.current.groups
+    }
+    if (allFieldGroupsInflightRef.current) return allFieldGroupsInflightRef.current
+    allFieldGroupsInflightRef.current = (async () => {
+      const res = await fetchAll((p) => applicationApi.listTableFields(id, p))
+      const list = res.data.list || []
+      const groups = []
+      list.forEach((f) => {
+        const tn = f.table_name || ''
+        let g = groups.find((x) => x.tableKey === tn)
+        if (!g) {
+          g = { tableKey: tn, fields: [] }
+          groups.push(g)
+        }
+        g.fields.push(f)
+      })
+      allFieldGroupsLoadedRef.current = { id, groups }
+      return groups
+    })()
+    setLoadingAllFields(true)
+    try {
+      const groups = await allFieldGroupsInflightRef.current
+      setAllFieldGroups(groups)
+      return groups
+    } catch (e) {
+      allFieldGroupsLoadedRef.current = null
+      setAllFieldGroups([])
+      return []
+    } finally {
+      allFieldGroupsInflightRef.current = null
+      setLoadingAllFields(false)
+    }
+  }, [id])
+
+  // 页面挂载 / 切换页签（id 变化）时加载一次全部表字段
+  useEffect(() => {
+    loadAllFieldGroups()
+  }, [id, loadAllFieldGroups])
   // 字段变化：自动用字段注释填充名称（仍可手动修改）
   const handleFieldChange = (fieldKey) => {
     const field = fieldOptions.find((f) => f.name === fieldKey)
@@ -735,7 +846,11 @@ export default function ElementManage() {
     const app = cached?.app || null
     if (app?.table_name) {
       form.setFieldsValue({ table_key: app.table_name })
-      await loadFieldOptions(app.table_name)
+    }
+    const groups = await loadAllFieldGroups()
+    if (app?.table_name) {
+      const g = groups.find((x) => x.tableKey === app.table_name)
+      setFieldOptions(g ? g.fields : [])
     }
     setDrawerVisible(true)
   }
@@ -763,8 +878,10 @@ export default function ElementManage() {
     })
     // 数据源逐字段路径写入，避免上一条记录的子键残留在表单里
     form.setFieldsValue(dataSourceFormFields(record.data_source))
+    const groups = await loadAllFieldGroups()
     if (record.table_key) {
-      await loadFieldOptions(record.table_key)
+      const g = groups.find((x) => x.tableKey === record.table_key)
+      setFieldOptions(g ? g.fields : [])
     }
     setDrawerVisible(true)
   }
@@ -1118,12 +1235,13 @@ export default function ElementManage() {
               >
                 <Select
                   showSearch
+                  filterOption={matchFieldKeyword}
                   placeholder="请选择字段"
-                  loading={loadingFields}
+                  loading={loadingAllFields}
                   onChange={handleFieldChange}
                 >
                   {fieldOptions.map((f) => (
-                    <Select.Option key={f.name} value={f.name}>
+                    <Select.Option key={f.name} value={f.name} extra={{ comment: f.comment || '' }}>
                       {f.name}
                       {f.comment ? `（${f.comment}）` : ''}
                     </Select.Option>
@@ -1429,7 +1547,7 @@ export default function ElementManage() {
                             {actionType === 'set_value' && (
                               <>
                                 <div className="mb-2 text-gray-500">赋值映射</div>
-                                <Form.List field={item.field + '.value'}>
+                                <Form.List field={item.field + '.value_mapping'}>
                                   {(valueFields, { add: addValue, remove: removeValue }) => (
                                     <>
                                       {valueFields.map((vf, vfIndex) => (
@@ -1447,18 +1565,11 @@ export default function ElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Select
-                                              showSearch
-                                              placeholder="请选择字段"
-                                              loading={loadingFields}
-                                            >
-                                              {fieldOptions.map((f) => (
-                                                <Select.Option key={f.name} value={f.name}>
-                                                  {f.name}
-                                                  {f.comment ? `（${f.comment}）` : ''}
-                                                </Select.Option>
-                                              ))}
-                                            </Select>
+                                            <TargetFieldSelect
+                                              groups={allFieldGroups}
+                                              mainTableKey={mainTableKey}
+                                              loading={loadingAllFields}
+                                            />
                                           </FormItem>
                                           <Button
                                             status="danger"
@@ -1585,18 +1696,11 @@ export default function ElementManage() {
                                             noStyle
                                             className="mb-0! flex-1"
                                           >
-                                            <Select
-                                              showSearch
-                                              placeholder="请选择字段"
-                                              loading={loadingFields}
-                                            >
-                                              {fieldOptions.map((f) => (
-                                                <Select.Option key={f.name} value={f.name}>
-                                                  {f.name}
-                                                  {f.comment ? `（${f.comment}）` : ''}
-                                                </Select.Option>
-                                              ))}
-                                            </Select>
+                                            <TargetFieldSelect
+                                              groups={allFieldGroups}
+                                              mainTableKey={mainTableKey}
+                                              loading={loadingAllFields}
+                                            />
                                           </FormItem>
                                           <Button status="danger" onClick={() => removeTm(tmIndex)}>
                                             删除
@@ -1704,9 +1808,9 @@ function SumTableActionFields({ field, appId, mainTableKey }) {
       rules={[{ required: true, message: '请选择目标字段' }]}
       extra="该子表数据变化时，把本列各行的合计写入所选主表字段"
     >
-      <Select showSearch placeholder="请选择主表字段" loading={loading}>
+      <Select showSearch filterOption={matchFieldKeyword} placeholder="请选择主表字段" loading={loading}>
         {fields.map((f) => (
-          <Select.Option key={f.name} value={f.name}>
+          <Select.Option key={f.name} value={f.name} extra={{ comment: f.comment || '' }}>
             {f.name}
             {f.comment ? `（${f.comment}）` : ''}
           </Select.Option>

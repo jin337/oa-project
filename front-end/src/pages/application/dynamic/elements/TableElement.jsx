@@ -236,8 +236,8 @@ export const TableElementField = ({
                 return (col.actions?.on_change || []).some(
                   (a) =>
                     a.action_type === 'set_value' &&
-                    Array.isArray(a.value) &&
-                    a.value.some((m) => m?.target === hKey),
+                    Array.isArray(a.value_mapping) &&
+                    a.value_mapping.some((m) => m?.target === hKey),
                 )
               })
               const renderFn = rpc[col.element_type]

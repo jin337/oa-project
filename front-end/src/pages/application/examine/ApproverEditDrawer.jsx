@@ -12,6 +12,16 @@ import {
 } from 'src/pages/application/design/constants'
 import { normalizeMembers } from 'src/pages/application/examine/flowModel'
 
+// 表单字段下拉搜索：同时匹配字段标识（field_key）与字段名称（label）
+function matchFieldOption(inputValue, option) {
+  const q = String(inputValue || '').trim().toLowerCase()
+  if (!q) return true
+  const props = option?.props ?? option ?? {}
+  const fieldKey = String(props.value ?? '').toLowerCase()
+  const label = String(props.extra?.label ?? '').toLowerCase()
+  return fieldKey.includes(q) || label.includes(q)
+}
+
 /**
  * 审批人节点设置抽屉：审批对象 / 审批方式 / 容错与权限 / 表单字段权限 四个配置模块。
  * @param {{
@@ -243,6 +253,8 @@ export function ApproverEditDrawer({
                 <div key={i} className="mb-2 flex items-center gap-2">
                   <Select
                     style={{ flex: 1 }}
+                    showSearch
+                    filterOption={matchFieldOption}
                     value={fp.field || undefined}
                     placeholder="选择表单字段"
                     onChange={(v) => updateFieldPerm(i, 'field', v)}
@@ -250,8 +262,12 @@ export function ApproverEditDrawer({
                     {fieldGroups.map((g) => (
                       <Select.OptGroup key={g.tableKey || 'other'} label={groupLabel(g.tableKey)}>
                         {g.fields.map((f) => (
-                          <Select.Option key={f.field_key} value={f.field_key}>
-                            {f.label || f.field_key}
+                          <Select.Option
+                            key={f.field_key}
+                            value={f.field_key}
+                            extra={{ label: f.label || '' }}
+                          >
+                            {f.label}（{f.field_key}）
                           </Select.Option>
                         ))}
                       </Select.OptGroup>

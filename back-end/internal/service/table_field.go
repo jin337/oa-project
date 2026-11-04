@@ -156,15 +156,44 @@ func columnDefSQL(col *model.TableColumn) string {
 	return strings.Join(parts, " ")
 }
 
-// TableFieldList 查询指定物理业务表（主表或子表）实际存在的列，支持按字段名模糊匹配与分页
+// TableFieldList 查询物理业务表（主表或子表）实际存在的列，支持按字段名模糊匹配与分页。
+// tableName 为空时返回该应用全部表（主表 + 各子表）字段，每条记录带所属业务表名 table_name。
 func TableFieldList(appID uint, tableName string, req *model.TableFieldListReq) ([]model.TableColumn, int64, error) {
-	real, err := getApplicationBizTableBy(appID, tableName)
-	if err != nil {
-		return nil, 0, err
-	}
-	all, err := queryColumns(real)
-	if err != nil {
-		return nil, 0, err
+	all := make([]model.TableColumn, 0, 64)
+	if tableName == "" {
+		app, _, err := ApplicationDetail(appID)
+		if err != nil {
+			return nil, 0, err
+		}
+		names := []string{app.TableName}
+		for _, sub := range strings.Split(app.SubTableName, ",") {
+			if sub = strings.TrimSpace(sub); sub != "" {
+				names = append(names, sub)
+			}
+		}
+		for _, n := range names {
+			cols, err := queryColumns(bizTableName(n))
+			if err != nil {
+				return nil, 0, err
+			}
+			for i := range cols {
+				cols[i].TableName = n
+			}
+			all = append(all, cols...)
+		}
+	} else {
+		real, err := getApplicationBizTableBy(appID, tableName)
+		if err != nil {
+			return nil, 0, err
+		}
+		cols, err := queryColumns(real)
+		if err != nil {
+			return nil, 0, err
+		}
+		for i := range cols {
+			cols[i].TableName = tableName
+		}
+		all = append(all, cols...)
 	}
 	filtered := make([]model.TableColumn, 0, len(all))
 	for _, c := range all {

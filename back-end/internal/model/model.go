@@ -506,8 +506,9 @@ type ApplicationByCodeResult struct {
 }
 
 // TableColumn 物理业务表列定义（来源：information_schema.columns）
-// ID 为列名，作为前端编辑/删除的路径标识
+// ID 为列名，作为前端编辑/删除的路径标识；TableName 为该列所属业务表名（仅在一次返回全部表字段时填充）
 type TableColumn struct {
+	TableName    string `json:"table_name"`
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	Type         string `json:"type"`
@@ -540,7 +541,7 @@ type TableFieldUpdateReq struct {
 type TableFieldListReq struct {
 	BaseListReq
 	Name      string `json:"name" form:"name" validate:"omitempty" label:"字段名称"`
-	TableName string `json:"table_name" form:"table_name" validate:"required" label:"表名"` // 主表或子表
+	TableName string `json:"table_name" form:"table_name" validate:"omitempty" label:"表名"` // 主表或子表；为空时返回该应用全部表（主表+子表）字段
 }
 
 type TableFieldDeleteReq struct {

@@ -42,10 +42,10 @@ export function deleteApplication(id) {
 
 // ========== 表字段管理（/application/:appId/fields） ==========
 
-// GET /application/:appId/fields?table_name=xxx 字段列表
+// GET /application/:appId/fields 字段列表；tableName 为空时返回该应用全部表（主表+子表）字段
 export function listTableFields(appId, params, tableName) {
   return request.get(`/application/${appId}/fields`, {
-    params: { ...params, table_name: tableName },
+    params: { ...params, ...(tableName ? { table_name: tableName } : {}) },
   })
 }
 

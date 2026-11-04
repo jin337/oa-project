@@ -1,4 +1,4 @@
-import { Button, Typography } from '@arco-design/web-react'
+import { Button, Tooltip, Typography } from '@arco-design/web-react'
 import { ApprovalStatusTag } from 'src/pages/approval/components/approvalStatus.jsx'
 import { formatTime } from 'src/utils/format'
 
@@ -55,7 +55,11 @@ export const colSummarys = {
   title: '摘要',
   key: 'summarys',
   dataIndex: 'summarys',
-  render: (v) => v || '-',
+  render: (v) => (
+    <Tooltip content={v || '-'}>
+      <Typography.Ellipsis>{v || '-'}</Typography.Ellipsis>
+    </Tooltip>
+  ),
 }
 // 总金额列
 export const colTotalmoney = {
@@ -98,7 +102,7 @@ export const colCreatedAt = {
   title: '申请时间',
   key: 'created_at',
   dataIndex: 'created_at',
-  width: 180,
+  width: 190,
   render: formatTime,
 }
 
@@ -107,7 +111,7 @@ export const colFinishedAt = {
   title: '完成时间',
   key: 'finished_at',
   dataIndex: 'finished_at',
-  width: 180,
+  width: 190,
   render: formatTime,
 }
 

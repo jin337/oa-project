@@ -469,7 +469,7 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
         const sel = findOptionByValue(opts, currentVal)
         const currentObj = sel?.raw || { [colCtx?.fieldKey || el?.field_key]: currentVal }
         if (action.action_type === 'set_value') {
-          const list = Array.isArray(action.value) ? action.value : []
+          const list = Array.isArray(action.value_mapping) ? action.value_mapping : []
           const patch = {}
           for (const m of list) {
             if (m?.target) {

@@ -3,6 +3,16 @@ import { IconClose, IconPlus } from '@arco-design/web-react/icon'
 import { useMemo, useState } from 'react'
 import { OPERATOR_OPTIONS, RELATION_OPTIONS } from 'src/pages/application/design/constants'
 
+// 表单字段下拉搜索：同时匹配字段标识（field_key）与字段名称（label）
+function matchFieldOption(inputValue, option) {
+  const q = String(inputValue || '').trim().toLowerCase()
+  if (!q) return true
+  const props = option?.props ?? option ?? {}
+  const fieldKey = String(props.value ?? '').toLowerCase()
+  const label = String(props.extra?.label ?? '').toLowerCase()
+  return fieldKey.includes(q) || label.includes(q)
+}
+
 /**
  * 条件分支设置抽屉：配置条件关系与具体条件表达式（字段来源于流程表单元素列表）。
  * 字段按所属表（table_key：主表 / 子表）分组展示，条件规则中记录 table_key 以区分字段来源表。
@@ -129,6 +139,8 @@ export function ConditionEditDrawer({
                 <div key={i} className="mb-2 flex items-center gap-2">
                   <Select
                     style={{ flex: 1 }}
+                    showSearch
+                    filterOption={matchFieldOption}
                     value={r.field}
                     placeholder="选择字段"
                     onChange={(v) => updateRuleField(i, v)}
@@ -136,7 +148,11 @@ export function ConditionEditDrawer({
                     {fieldGroups.map((g) => (
                       <Select.OptGroup key={g.tableKey || 'other'} label={groupLabel(g.tableKey)}>
                         {g.fields.map((f) => (
-                          <Select.Option key={f.field_key} value={f.field_key}>
+                          <Select.Option
+                            key={f.field_key}
+                            value={f.field_key}
+                            extra={{ label: f.label || '' }}
+                          >
                             {f.label}（{f.field_key}）
                           </Select.Option>
                         ))}

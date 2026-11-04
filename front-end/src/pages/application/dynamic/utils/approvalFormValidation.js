@@ -23,8 +23,8 @@ export function handleApprovalFormValidationError(errors, form, app) {
     Object.values(actions).forEach((list) => {
       if (!Array.isArray(list)) return
       list.forEach((action) => {
-        if (action?.action_type !== 'set_value' || !Array.isArray(action.value) || !el.field_key) return
-        action.value.forEach((mapping) => {
+        if (action?.action_type !== 'set_value' || !Array.isArray(action.value_mapping) || !el.field_key) return
+        action.value_mapping.forEach((mapping) => {
           if (mapping?.target) {
             targetToSource[mapping.target] = {
               sourceField: el.field_key,
