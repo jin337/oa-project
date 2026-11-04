@@ -11,6 +11,7 @@ package service
 // ============================================================
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -592,8 +593,8 @@ func fillApprovalCapabilities(records []model.ApprovalRecord) {
 	}
 }
 
-// fillApprovalBillNo 回填审批列表的「单号」（业务主表 bill_no）：
-// 按业务表分组批量查询，避免逐条回表造成的 N+1；业务表缺少 bill_no 列时该表跳过。
+// fillApprovalBillNo 回填审批列表的「单号 / 摘要 / 总金额」（业务主表 bill_no / summarys / totalmoney 列）：
+// 按业务表分组批量查询，避免逐条回表造成的 N+1；业务表缺少对应列时该字段跳过（历史表未补列，不阻断）。
 func fillApprovalBillNo(records []model.ApprovalRecord) {
 	if len(records) == 0 {
 		return
@@ -627,26 +628,54 @@ func fillApprovalBillNo(records []model.ApprovalRecord) {
 		grouped[table] = append(grouped[table], r.BusinessDataID)
 	}
 
-	// 3. 分组查询单号
+	// 3. 分组查询单号 / 摘要 / 总金额（各列存在性独立判断，缺列的表跳过该字段）
 	billOf := make(map[string]string)
+	summarysOf := make(map[string]string)
+	totalOf := make(map[string]*float64)
 	for table, ids := range grouped {
 		real := bizTableName(table)
 		cols, err := queryColumnSet(real)
-		if err != nil || !cols[billNoColumn] {
+		if err != nil {
 			continue
 		}
-		var rows []struct {
-			ID     uint
-			BillNo string
+		hasBill := cols[billNoColumn]
+		hasSummarys := cols[summarysColumn]
+		hasTotal := cols[totalMoneyColumn]
+		if !hasBill && !hasSummarys && !hasTotal {
+			continue
 		}
-		if err := database.DB.
-			Raw("SELECT `id`, IFNULL(`"+billNoColumn+"`, '') AS bill_no FROM `"+real+"` WHERE `id` IN ?", ids).
-			Scan(&rows).Error; err != nil {
+		var b strings.Builder
+		b.WriteString("SELECT `id`")
+		if hasBill {
+			b.WriteString(", IFNULL(`" + billNoColumn + "`, '') AS bill_no")
+		}
+		if hasSummarys {
+			b.WriteString(", IFNULL(`" + summarysColumn + "`, '') AS summarys")
+		}
+		if hasTotal {
+			b.WriteString(", `" + totalMoneyColumn + "` AS total_money")
+		}
+		b.WriteString(" FROM `" + real + "` WHERE `id` IN ?")
+		var rows []struct {
+			ID         uint
+			BillNo     string
+			Summarys   string
+			TotalMoney sql.NullFloat64
+		}
+		if err := database.DB.Raw(b.String(), ids).Scan(&rows).Error; err != nil {
 			continue
 		}
 		for _, row := range rows {
-			if row.BillNo != "" {
-				billOf[fmt.Sprintf("%s:%d", table, row.ID)] = row.BillNo
+			key := fmt.Sprintf("%s:%d", table, row.ID)
+			if hasBill && row.BillNo != "" {
+				billOf[key] = row.BillNo
+			}
+			if hasSummarys && row.Summarys != "" {
+				summarysOf[key] = row.Summarys
+			}
+			if hasTotal && row.TotalMoney.Valid {
+				v := row.TotalMoney.Float64
+				totalOf[key] = &v
 			}
 		}
 	}
@@ -657,7 +686,10 @@ func fillApprovalBillNo(records []model.ApprovalRecord) {
 		if table == "" {
 			continue
 		}
-		records[i].BillNo = billOf[fmt.Sprintf("%s:%d", table, records[i].BusinessDataID)]
+		key := fmt.Sprintf("%s:%d", table, records[i].BusinessDataID)
+		records[i].BillNo = billOf[key]
+		records[i].Summarys = summarysOf[key]
+		records[i].TotalMoney = totalOf[key]
 	}
 }
 

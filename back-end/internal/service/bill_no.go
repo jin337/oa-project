@@ -28,6 +28,11 @@ import (
 // billNoColumn 业务主表承载单号的列名
 const billNoColumn = "bill_no"
 
+// summarysColumn / totalMoneyColumn 业务主表自动承载「摘要/总金额」的列名
+//（新流程建表自动创建，见 application.go createBizTable 主表分支）
+const summarysColumn = "summarys"
+const totalMoneyColumn = "totalmoney"
+
 // billSequenceTable 单号序列表名（含配置的表前缀）
 func billSequenceTable() string {
 	return bizTablePrefix() + "bill_sequences"

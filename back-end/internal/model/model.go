@@ -860,6 +860,8 @@ type ApprovalRecord struct {
 	CreatedName    string                 `json:"created_name"`          // 发起人姓名
 	CCByName       string                 `json:"cc_by_name,omitempty"`  // 抄送我的：发起抄送的人姓名（手动抄送/抄送节点触发者）
 	BillNo         string                 `json:"bill_no"`               // 业务单号（提交审核时生成，展示在申请人之后）
+	Summarys       string                 `json:"summarys"`              // 业务摘要（业务主表 summarys 列，新流程建表自动带）
+	TotalMoney     *float64               `json:"totalmoney"`            // 总金额（业务主表 totalmoney 列，新流程建表自动带；未填写为 null）
 	DeptID         uint                   `json:"dept_id"`               // 发起人部门 ID（快照）
 	DeptName       string                 `json:"dept_name"`             // 发起人部门名称
 	FinishedAt     *time.Time             `json:"finished_at"`           // 完成时间
