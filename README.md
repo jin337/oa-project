@@ -198,6 +198,11 @@ Nginx 托管 `dist/`：history 模式回退 `try_files ... /index.html`、`/v1/a
 
 - **核心配置**：`data_source`（静态 / 接口 / 引用接口管理）、`actions`（on_mount / on_change / on_blur → set_value / fetch_and_fill）、`dynamic_states`（visible_if / disabled_if）、`default_value`、`validation_rule`、`columns`（子表）
 
+- **赋值对象（主表 / 子表）**：`set_value.value_mapping` 与 `fetch_and_fill.target_mapping` 的每条映射为 `{ source, target, table_name }`。`target` 是字段名，`table_name` 是赋值对象所属业务表（配置界面用 OptGroup 区分主表/子表后写入）：
+  - `table_name` 为主表（或为空，旧数据）→ 写主表字段；
+  - `table_name` 命中子表 → 子表行内触发且同表时写当前行，否则写该子表所有行；
+  - 旧数据（无 `table_name`）保持原语义：子表行内触发写同行、主表触发写主表字段。
+
 ### 审批流程
 
 实例状态机（`oa_approval_instances.status`，对齐钉钉）：

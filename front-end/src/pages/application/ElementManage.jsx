@@ -56,16 +56,21 @@ function matchFieldKeyword(inputValue, option) {
 
 // 赋值目标字段下拉（set_value 映射目标 / fetch_and_fill 目标字段）：
 // Arco Select 按 option value 去重，主表与子表重名列（如 dept_name）只显示在首个分组。
-// 故 Option value 用「表名::字段名」唯一化以完整展示各表字段；选中/回显时与表单存储的
-// 纯字段名互相转换，保证存储与运行时（target 即表单字段路径）语义不变。
-function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading }) {
+// 故 Option value 用「表名::字段名」唯一化以完整展示各表字段；表单存储拆成两项：
+// target 存纯字段名（运行时即表单字段路径），table_name 存所属物理表名（经 onTable 回调写入）。
+// 运行时据此区分赋值对象是主表字段还是子表行字段；table_name 为空的旧数据保持原语义。
+function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading, tableName, onTable }) {
   const flat = []
   ;(groups || []).forEach((g) => {
     ;(g.fields || []).forEach((f) => {
-      flat.push({ key: `${g.tableKey}::${f.name}`, name: f.name, comment: f.comment || '' })
+      flat.push({ key: `${g.tableKey}::${f.name}`, tableKey: g.tableKey, name: f.name, comment: f.comment || '' })
     })
   })
-  const displayValue = value ? flat.find((o) => o.name === value)?.key : undefined
+  // 回显：优先按 table_name 精确定位分组（主/子表重名列不串）；无 table_name 的旧数据按字段名兜底
+  const displayValue = value
+    ? (tableName ? flat.find((o) => o.key === `${tableName}::${value}`)?.key : undefined) ||
+      flat.find((o) => o.name === value)?.key
+    : undefined
   return (
     <Select
       showSearch
@@ -80,7 +85,16 @@ function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading }) {
       placeholder="请选择字段"
       loading={loading}
       value={displayValue}
-      onChange={(v) => onChange(v ? String(v).split('::')[1] : v)}
+      onChange={(v) => {
+        if (!v) {
+          onChange?.(v)
+          onTable?.('')
+          return
+        }
+        const [tk, name] = String(v).split('::')
+        onChange?.(name)
+        onTable?.(tk || '')
+      }}
     >
       {(groups || []).map((g) => (
         <Select.OptGroup
@@ -486,7 +500,12 @@ function buildActionsFromValues(actions) {
         if (a.action_type === 'set_value') {
           const value = (Array.isArray(a.value_mapping) ? a.value_mapping : [])
             .filter((v) => v && (v.source || v.target))
-            .map((v) => ({ source: v.source || '', target: v.target || '' }))
+            .map((v) => ({
+              source: v.source || '',
+              target: v.target || '',
+              // 赋值对象所属表（主/子表区分）；空串=旧数据，运行时保持原语义
+              table_name: v.table_name || '',
+            }))
           if (value.length) item.value_mapping = value
         } else if (a.action_type === 'fetch_and_fill') {
           if (a.api_url) item.api_url = a.api_url
@@ -501,7 +520,12 @@ function buildActionsFromValues(actions) {
           }
           const tm = (Array.isArray(a.target_mapping) ? a.target_mapping : [])
             .filter((m) => m && (m.source || m.target))
-            .map((m) => ({ source: m.source || '', target: m.target || '' }))
+            .map((m) => ({
+              source: m.source || '',
+              target: m.target || '',
+              // 填充目标所属表（主/子表区分）；空串=旧数据，运行时保持原语义
+              table_name: m.table_name || '',
+            }))
           if (tm.length) item.target_mapping = tm
         } else if (a.action_type === 'sum_table') {
           // 子表汇总：只存主表目标字段（配置在子表数字输入元素上，汇总源即该元素所在子表的本列）
@@ -1552,6 +1576,10 @@ export default function ElementManage() {
                                     <>
                                       {valueFields.map((vf, vfIndex) => (
                                         <div key={vf.key} className="mb-2 flex items-center gap-2">
+                                          {/* 注册赋值目标所属表（主/子表区分），仅入表单 store 不占界面 */}
+                                          <FormItem field={`${vf.field}.table_name`} hidden>
+                                            <Input />
+                                          </FormItem>
                                           <FormItem
                                             field={vf.field + '.source'}
                                             noStyle
@@ -1569,6 +1597,14 @@ export default function ElementManage() {
                                               groups={allFieldGroups}
                                               mainTableKey={mainTableKey}
                                               loading={loadingAllFields}
+                                              tableName={
+                                                actionsWatch?.[trigger.key]?.[index]?.value_mapping?.[
+                                                  vfIndex
+                                                ]?.table_name
+                                              }
+                                              onTable={(tn) =>
+                                                form.setFieldValue(`${vf.field}.table_name`, tn || '')
+                                              }
                                             />
                                           </FormItem>
                                           <Button
@@ -1683,6 +1719,10 @@ export default function ElementManage() {
                                     <>
                                       {tmFields.map((tm, tmIndex) => (
                                         <div key={tm.key} className="mb-2 flex items-center gap-2">
+                                          {/* 注册填充目标所属表（主/子表区分），仅入表单 store 不占界面 */}
+                                          <FormItem field={`${tm.field}.table_name`} hidden>
+                                            <Input />
+                                          </FormItem>
                                           <FormItem
                                             field={tm.field + '.source'}
                                             noStyle
@@ -1700,6 +1740,14 @@ export default function ElementManage() {
                                               groups={allFieldGroups}
                                               mainTableKey={mainTableKey}
                                               loading={loadingAllFields}
+                                              tableName={
+                                                actionsWatch?.[trigger.key]?.[index]?.target_mapping?.[
+                                                  tmIndex
+                                                ]?.table_name
+                                              }
+                                              onTable={(tn) =>
+                                                form.setFieldValue(`${tm.field}.table_name`, tn || '')
+                                              }
                                             />
                                           </FormItem>
                                           <Button status="danger" onClick={() => removeTm(tmIndex)}>

@@ -237,7 +237,11 @@ export const TableElementField = ({
                   (a) =>
                     a.action_type === 'set_value' &&
                     Array.isArray(a.value_mapping) &&
-                    a.value_mapping.some((m) => m?.target === hKey),
+                    a.value_mapping.some(
+                      // 映射目标需落在本子表（旧数据无 table_name 时按本表理解），
+                      // 否则主表同名字段的赋值映射会被误挂到本列单元格
+                      (m) => m?.target === hKey && (!m.table_name || m.table_name === el.table_key),
+                    ),
                 )
               })
               const renderFn = rpc[col.element_type]

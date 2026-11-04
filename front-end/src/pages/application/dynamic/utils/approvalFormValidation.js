@@ -17,16 +17,40 @@ export function handleApprovalFormValidationError(errors, form, app) {
   const targetToSource = {}
   const fieldLabels = {}
 
+  // 子表集合：table 元素的 table_key（与运行时 DynamicForm 判定口径一致）
+  const subTables = new Set()
+  elements.forEach((el) => {
+    if (el?.element_type === 'table' && (el.table_key || el.id)) subTables.add(el.table_key || el.id)
+  })
+
+  // 映射目标定位键：带 table_name 且指向子表 → "表名.字段"（错误字段形如 表名[i].字段）；
+  // 无 table_name（旧数据）或指向主表 → 纯字段名（原语义）
+  const targetKey = (mapping) => {
+    if (!mapping?.target) return null
+    const tn = mapping.table_name
+    if (tn && subTables.has(tn)) return `${tn}.${mapping.target}`
+    return String(mapping.target)
+  }
+
   elements.forEach((el) => {
     if (el.field_key) fieldLabels[el.field_key] = el.label || el.field_key
+    // 子表列标签：错误字段为 表名[i].列 时用于提示文案
+    if (el.element_type === 'table') {
+      const tk = el.table_key || el.id
+      ;(el.columns || []).forEach((c) => {
+        const ck = c.dataIndex || c.field_key
+        if (ck) fieldLabels[`${tk}.${ck}`] = c.label || c.title || ck
+      })
+    }
     const actions = el.actions || {}
     Object.values(actions).forEach((list) => {
       if (!Array.isArray(list)) return
       list.forEach((action) => {
         if (action?.action_type !== 'set_value' || !Array.isArray(action.value_mapping) || !el.field_key) return
         action.value_mapping.forEach((mapping) => {
-          if (mapping?.target) {
-            targetToSource[mapping.target] = {
+          const key = targetKey(mapping)
+          if (key) {
+            targetToSource[key] = {
               sourceField: el.field_key,
               sourceLabel: el.label || el.field_key,
             }
@@ -38,9 +62,11 @@ export function handleApprovalFormValidationError(errors, form, app) {
 
   const setObj = {}
   Object.keys(errors).forEach((field) => {
-    const source = targetToSource[field]
+    // 错误字段归一：子表嵌套字段 table_key[3].col → table_key.col，再查归因映射
+    const normalized = field.replace(/\[\d+\]/g, '')
+    const source = targetToSource[field] || targetToSource[normalized]
     if (!source) return
-    const targetLabel = fieldLabels[field] || field
+    const targetLabel = fieldLabels[field] || fieldLabels[normalized] || normalized
     const message = `请先选择「${source.sourceLabel}」：必填项「${targetLabel}」由「${source.sourceLabel}」联动生成`
     const previousMessage = setObj[source.sourceField]?.error?.message
     setObj[source.sourceField] = {

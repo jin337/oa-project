@@ -221,7 +221,7 @@ export default function MenuManage() {
   )
 
   const columns = [
-    { key: 'name', title: '菜单名称', dataIndex: 'name', width: 300 },
+    { key: 'name', title: '名称', dataIndex: 'name', width: 300 },
     {
       key: 'type',
       title: '类型',
@@ -402,23 +402,6 @@ export default function MenuManage() {
         >
           <Row gutter={20}>
             <Col span={12}>
-              <FormItem
-                label="菜单名称"
-                field="name"
-                rules={[
-                  { required: true, message: '请输入菜单名称' },
-                  { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
-                ]}
-              >
-                <Input placeholder="如：用户管理" />
-              </FormItem>
-            </Col>
-            <Col span={12}>
-              <FormItem label="上级菜单" field="parent_id">
-                <TreeSelect placeholder="不选则为顶级菜单" allowClear treeData={toTreeData(tree)} />
-              </FormItem>
-            </Col>
-            <Col span={12}>
               <FormItem label="类型" field="type" triggerPropName="value">
                 <Select>
                   <Select.Option value={1}>目录</Select.Option>
@@ -427,10 +410,43 @@ export default function MenuManage() {
                 </Select>
               </FormItem>
             </Col>
+            <Col span={12}>
+              <FormItem label="上级" field="parent_id">
+                <TreeSelect placeholder="不选则为顶级菜单" allowClear treeData={toTreeData(tree)} />
+              </FormItem>
+            </Col>
+            <Col span={12}>
+              <FormItem
+                label="名称"
+                field="name"
+                rules={[
+                  { required: true, message: '请输入名称' },
+                  { minLength: 2, maxLength: 64, message: '长度 2-64 个字符' },
+                ]}
+              >
+                <Input placeholder="如：用户管理" />
+              </FormItem>
+            </Col>
             {formType === 2 && (
               <Col span={12}>
                 <FormItem label="路由地址" field="path">
                   <Input placeholder="如：/system/user" />
+                </FormItem>
+              </Col>
+            )}
+            <Col span={12}>
+              <FormItem
+                label="权限标识"
+                field="perm"
+                rules={[{ required: true, message: '请输入权限标识' }]}
+              >
+                <Input placeholder="如：system:user:add" />
+              </FormItem>
+            </Col>
+            {formType !== 3 && (
+              <Col span={12}>
+                <FormItem label="图标" field="icon">
+                  <IconSelect />
                 </FormItem>
               </Col>
             )}
@@ -457,18 +473,6 @@ export default function MenuManage() {
                 </Col>
               </>
             )}
-            <Col span={12}>
-              <FormItem label="权限标识" field="perm">
-                <Input placeholder="如：system:user:add" />
-              </FormItem>
-            </Col>
-            {formType !== 3 && (
-              <Col span={12}>
-                <FormItem label="图标" field="icon">
-                  <IconSelect />
-                </FormItem>
-              </Col>
-            )}
             {formType !== 3 && (
               <Col span={12}>
                 <FormItem label="是否隐藏" field="hidden" triggerPropName="value">
@@ -484,7 +488,7 @@ export default function MenuManage() {
                 <InputNumber min={1} placeholder="数字越小越靠前" />
               </FormItem>
             </Col>
-            <Col span={12}>
+            <Col span={formType !== 2 ? 12 : 24}>
               <FormItem label="状态" field="status" triggerPropName="value">
                 <Select>
                   <Select.Option value={1}>启用</Select.Option>

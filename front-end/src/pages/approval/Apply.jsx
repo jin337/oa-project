@@ -36,8 +36,8 @@ import DynamicForm, {
   runOnSubmitBefore,
   serializeTimeFields,
 } from 'src/pages/application/dynamic/DynamicForm'
-import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
 import { handleApprovalFormValidationError } from 'src/pages/application/dynamic/utils/approvalFormValidation'
+import { buildSelfSelectUserIDs, getInitiatorNode } from 'src/pages/application/examine/flowModel'
 
 import IconSelect, { MenuIcon } from 'src/components/icon-select'
 import { usePermission } from 'src/hooks/usePermission'
@@ -57,7 +57,9 @@ const Col = Grid.Col
  */
 export default function Apply() {
   const { hasPerm } = usePermission()
+  const canAdd = hasPerm('approval:add')
   const canEdit = hasPerm('approval:edit')
+  const canDelete = hasPerm('approval:delete')
   // 分类 & 申请项数据
   const [categories, setCategories] = useState([])
   const [items, setItems] = useState([])
@@ -107,10 +109,7 @@ export default function Apply() {
   // 加载申请项列表：管理权限用户请求全量并带 can_start 标记；普通浏览仍由后端按发起人权限过滤
   const fetchItems = useCallback(async () => {
     try {
-      const res = await fetchAll(
-        approvalApi.listApprovalItems,
-        canEdit ? { manage: 1 } : undefined,
-      )
+      const res = await fetchAll(approvalApi.listApprovalItems, canEdit ? { manage: 1 } : undefined)
       setItems(res.data?.list || [])
     } catch (e) {
       // 错误已在请求层提示
@@ -378,7 +377,7 @@ export default function Apply() {
       className="h-full"
       title="审批申请"
       extra={
-        canEdit && (
+        (canEdit || canAdd || canDelete) && (
           <Space>
             {/* 管理模式开关：进入后展示管理操作，退出后恢复普通浏览 */}
             <Button
@@ -388,7 +387,7 @@ export default function Apply() {
             >
               {isManaging ? '完成管理' : '管理'}
             </Button>
-            {isManaging && (
+            {isManaging && canAdd && (
               <Button type="primary" icon={<IconPlus />} onClick={openCreateCategory}>
                 新增分类
               </Button>
@@ -411,25 +410,29 @@ export default function Apply() {
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <span className="text-base font-medium">{c.name}</span>
-                    {isManaging && canEdit && (
+                    {isManaging && (
                       <>
-                        <Button
-                          size="mini"
-                          type="text"
-                          icon={<IconEdit />}
-                          onClick={() => openEditCategory(c)}
-                        />
-                        <Popconfirm
-                          title="确定删除该分类吗？"
-                          onOk={() => handleCategoryDelete(c)}
-                          position="bl"
-                        >
-                          <Button size="mini" type="text" status="danger" icon={<IconDelete />} />
-                        </Popconfirm>
+                        {canEdit && (
+                          <Button
+                            size="mini"
+                            type="text"
+                            icon={<IconEdit />}
+                            onClick={() => openEditCategory(c)}
+                          />
+                        )}
+                        {canDelete && (
+                          <Popconfirm
+                            title="确定删除该分类吗？"
+                            onOk={() => handleCategoryDelete(c)}
+                            position="bl"
+                          >
+                            <Button size="mini" type="text" status="danger" icon={<IconDelete />} />
+                          </Popconfirm>
+                        )}
                       </>
                     )}
                   </div>
-                  {isManaging && canEdit && (
+                  {isManaging && canAdd && (
                     <Button
                       size="small"
                       type="secondary"
@@ -462,29 +465,33 @@ export default function Apply() {
                                 {item.name}
                               </div>
                             </div>
-                            {isManaging && canEdit && (
+                            {isManaging && (
                               <div
                                 className="flex shrink-0 items-center"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <Button
-                                  size="mini"
-                                  type="text"
-                                  icon={<IconEdit />}
-                                  onClick={() => openEditItem(item)}
-                                />
-                                <Popconfirm
-                                  title="确定删除该申请项吗？"
-                                  onOk={() => handleItemDelete(item)}
-                                  position="br"
-                                >
+                                {canEdit && (
                                   <Button
                                     size="mini"
                                     type="text"
-                                    status="danger"
-                                    icon={<IconDelete />}
+                                    icon={<IconEdit />}
+                                    onClick={() => openEditItem(item)}
                                   />
-                                </Popconfirm>
+                                )}
+                                {canDelete && (
+                                  <Popconfirm
+                                    title="确定删除该申请项吗？"
+                                    onOk={() => handleItemDelete(item)}
+                                    position="br"
+                                  >
+                                    <Button
+                                      size="mini"
+                                      type="text"
+                                      status="danger"
+                                      icon={<IconDelete />}
+                                    />
+                                  </Popconfirm>
+                                )}
                               </div>
                             )}
                           </div>
@@ -632,10 +639,10 @@ export default function Apply() {
               />
             </div>
             <div
-              className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pl-4 pr-8' : 'px-4'} py-3`}
+              className={`max-h-full flex-1 overflow-y-auto ${flowCollapsed ? 'pr-8 pl-4' : 'px-4'} py-3`}
             >
               <div className="min-w-188">
-                <div className='text-center mb-3 text-xl font-bold'>{drawerTitle}</div>
+                <div className="mb-3 text-center text-xl font-bold">{drawerTitle}</div>
                 <DynamicForm
                   app={drawerApp}
                   form={drawerForm}

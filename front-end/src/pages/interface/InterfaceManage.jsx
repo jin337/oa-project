@@ -217,7 +217,12 @@ const EMPTY_FORM = {
 
 export default function InterfaceManage() {
   const { hasPerm } = usePermission()
+  const canAdd = hasPerm('interface:add')
   const canEdit = hasPerm('interface:edit')
+  const canDelete = hasPerm('interface:delete')
+  const canDebug = hasPerm('interface:debug')
+  const canSearch = hasPerm('interface:search')
+  const canAsync = hasPerm('interface:aync')
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -560,7 +565,7 @@ export default function InterfaceManage() {
       width: 80,
       align: 'center',
       render: (status, record) =>
-        canEdit ? (
+        canDelete && canEdit ? (
           <Switch
             size="small"
             checked={status === 1}
@@ -573,19 +578,23 @@ export default function InterfaceManage() {
           <Tag color="red">停用</Tag>
         ),
     },
-    canEdit && {
+    (canDebug || canEdit || canDelete) && {
       key: 'action',
       title: '操作',
       width: 120,
       render: (_, record) => (
         <Space>
-          <Button size="mini" onClick={() => setDebugTarget(record)}>
-            调试
-          </Button>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          {record.status !== 1 && (
+          {canDebug && (
+            <Button size="mini" onClick={() => setDebugTarget(record)}>
+              调试
+            </Button>
+          )}
+          {canEdit && (
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+          )}
+          {canDelete && record.status !== 1 && (
             <Popconfirm
               position="lb"
               focusLock
@@ -643,7 +652,7 @@ export default function InterfaceManage() {
     <Card
       title="接口管理"
       extra={
-        canEdit && (
+        canAsync && (
           <Button icon={<IconSync />} onClick={handleImportRoutes}>
             同步后端路由
           </Button>
@@ -651,62 +660,64 @@ export default function InterfaceManage() {
       }
     >
       {/* 搜索区域：关键字（接口名称 / 对外路径）+ 方法 + 定义方式 */}
-      <div className="mb-3">
-        <Space wrap>
-          <Input
-            className="w-55!"
-            placeholder="按接口名称 / 对外路径搜索"
-            allowClear
-            value={keyword}
-            onChange={setKeyword}
-            onPressEnter={handleSearch}
-          />
-          <Select
-            className="w-55!"
-            placeholder="请求方法"
-            allowClear
-            value={keywordMethod || undefined}
-            onChange={(v) => setKeywordMethod(v || '')}
-            options={METHOD_OPTIONS}
-          />
-          <Select
-            className="w-55!"
-            placeholder="定义方式"
-            allowClear
-            value={keywordType || undefined}
-            onChange={(v) => setKeywordType(v || '')}
-            options={TYPE_OPTIONS}
-          />
-          <Select
-            className="w-55!"
-            placeholder="分类"
-            allowClear
-            showSearch
-            value={keywordCategory || undefined}
-            onChange={(v) => setKeywordCategory(v || '')}
-            options={categoryOptions}
-          />
-          <Select
-            className="w-55!"
-            placeholder="状态"
-            allowClear
-            value={keywordStatus}
-            onChange={(v) => setKeywordStatus(v)}
-            options={[
-              { label: '启用', value: 1 },
-              { label: '停用', value: 0 },
-            ]}
-          />
-          <Button type="primary" onClick={handleSearch}>
-            搜索
-          </Button>
-          <Button onClick={handleReset}>重置</Button>
-        </Space>
-      </div>
+      {canSearch && (
+        <div className="mb-3">
+          <Space wrap>
+            <Input
+              className="w-55!"
+              placeholder="按接口名称 / 对外路径搜索"
+              allowClear
+              value={keyword}
+              onChange={setKeyword}
+              onPressEnter={handleSearch}
+            />
+            <Select
+              className="w-55!"
+              placeholder="请求方法"
+              allowClear
+              value={keywordMethod || undefined}
+              onChange={(v) => setKeywordMethod(v || '')}
+              options={METHOD_OPTIONS}
+            />
+            <Select
+              className="w-55!"
+              placeholder="定义方式"
+              allowClear
+              value={keywordType || undefined}
+              onChange={(v) => setKeywordType(v || '')}
+              options={TYPE_OPTIONS}
+            />
+            <Select
+              className="w-55!"
+              placeholder="分类"
+              allowClear
+              showSearch
+              value={keywordCategory || undefined}
+              onChange={(v) => setKeywordCategory(v || '')}
+              options={categoryOptions}
+            />
+            <Select
+              className="w-55!"
+              placeholder="状态"
+              allowClear
+              value={keywordStatus}
+              onChange={(v) => setKeywordStatus(v)}
+              options={[
+                { label: '启用', value: 1 },
+                { label: '停用', value: 0 },
+              ]}
+            />
+            <Button type="primary" onClick={handleSearch}>
+              搜索
+            </Button>
+            <Button onClick={handleReset}>重置</Button>
+          </Space>
+        </div>
+      )}
 
       {/* 工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {canEdit ? (
+        {canAdd ? (
           <Button type="primary" onClick={openCreate}>
             新增接口
           </Button>
@@ -932,7 +943,7 @@ export default function InterfaceManage() {
           )}
         </Form>
         {/* 内嵌试调：仅编辑已保存的接口可用 */}
-        {!isNew && (
+        {!isNew && canDebug && (
           <div className="mt-2">
             <Alert type="info" title="保存后可发起试调" />
             <Divider orientation="left">试调</Divider>

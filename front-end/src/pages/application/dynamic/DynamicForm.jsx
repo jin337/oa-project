@@ -14,7 +14,6 @@ import {
   buildValidationRules,
   extractFormDeps,
   findOptionByValue,
-  getByPath,
   parseDefaultValue,
   parseLayoutJson,
   resolveExpr,
@@ -245,6 +244,56 @@ const runJsEventScript = (script, form, item) => {
 }
 
 
+/**
+ * 联动填充取值：按点路径从响应数据取值，路径中间命中数组时做「投影」——
+ * 对数组每个元素继续取该段，得到各元素该字段的数组（如 dept_ids 为多部门数组，
+ * source=dept_ids.name 返回各部门名组成的数组）。
+ * 普通 getByPath 对数组取 .name 会得到 undefined，导致来源是多对多数组时填充被整体跳过。
+ */
+const resolveFillSource = (data, source) => {
+  const segs = String(source || '').split('.').filter(Boolean)
+  if (!segs.length) return undefined
+  let cur = data
+  for (const k of segs) {
+    if (cur == null) return undefined
+    if (Array.isArray(cur)) cur = cur.map((x) => (x == null ? undefined : x[k]))
+    else cur = cur[k]
+  }
+  return cur
+}
+
+/**
+ * 子表整表填充累积（set_value / fetch_and_fill 共用）：
+ * 首次遇到该子表时，以当前行数组为底拷贝（保留各行其他列已有值）。
+ * 值为数组（如多部门投影）→ 按下标逐行写入，长度超出当前行数则补空行展开明细；
+ * 值为标量 → 写入所有现有行（0 行不凭空造行，保持原语义）。
+ */
+const accumulateSubFill = (subRows, m, v, allValues) => {
+  if (!subRows[m.table_name]) {
+    const cur = Array.isArray(allValues?.[m.table_name]) ? allValues[m.table_name] : []
+    subRows[m.table_name] = cur.map((r) => ({ ...(r || {}) }))
+  }
+  const rows = subRows[m.table_name]
+  if (Array.isArray(v)) {
+    while (rows.length < v.length) rows.push({})
+    v.forEach((val, i) => {
+      rows[i][m.target] = val
+    })
+  } else {
+    rows.forEach((r) => {
+      r[m.target] = v
+    })
+  }
+}
+
+/** 子表填充写回：与表单当前数组不同才整体替换（整体替换驱动 Form.List 行数变化），写入 patch */
+const commitSubFills = (subRows, patch, getFieldValue) => {
+  Object.keys(subRows).forEach((t) => {
+    const cur = getFieldValue(t)
+    if (JSON.stringify(cur) !== JSON.stringify(subRows[t])) patch[t] = subRows[t]
+  })
+}
+
 /** 给联动写入的字段打标记：记录写入值、触发字段与链路深度（onValuesChange 据此判断是否继续下一跳） */
 const stampWrites = (patch, fromKey, depth) => {
   const out = {}
@@ -425,8 +474,17 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
     }
   }, [])
 
+  /** 子表 key 集合（table_key，兜底元素 id）：映射带 table_name 时据此区分赋值对象属主表还是子表 */
+  const collectSubTableKeys = useCallback(() => {
+    const keys = new Set()
+    elementsRef.current?.forEach((e) => {
+      if (e?.element_type === 'table' && (e.table_key || e.id)) keys.add(e.table_key || e.id)
+    })
+    return keys
+  }, [])
+
   /** 执行 fetch_and_fill 动作：请求接口并按 target_mapping 填充目标字段（fromKey/depth 用于联动链路标记） */
-  const runFetchFill = useCallback(async (action, allValues, currentObj, fromKey, depth) => {
+  const runFetchFill = useCallback(async (action, allValues, currentObj, fromKey, depth, colCtx) => {
     // vars：form = 表单值；item = 选中项数据（api_url 中显式写 ${item.xxx} 引用）
     const vars = { form: allValues || {}, item: currentObj }
     // 先解析 URL 中的 ${form.xxx} / ${item.xxx} 路径模板，避免 ${} 被请求层整体编码
@@ -434,14 +492,32 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
       const res = await requestDynamicApi(action, vars)
       const data = res?.data ?? res
       const mapping = Array.isArray(action.target_mapping) ? action.target_mapping : []
+      const subTables = collectSubTableKeys()
       const patch = {}
+      // 子表整表写：tableKey → 行对象数组副本（跨多条映射累积同一子表），
+      // 用于「主表触发填充子表」——数组来源（如多部门 dept_ids.name）按行下标分配、
+      // 行数不足则追加空行展开明细；写回时整体替换子表数组，驱动 Form.List 渲染出行数变化。
+      const subRows = {}
       for (const m of mapping) {
-        if (m?.target) {
-          // source 为响应数据字段路径（点路径，如 profile.nickname）
-          const v = getByPath(data, String(m.source || ''))
-          if (v !== undefined) patch[m.target] = v
+        if (!m?.target) continue
+        // source 为响应数据字段路径；路径中间命中数组时投影为元素字段数组
+        const v = resolveFillSource(data, m.source)
+        if (v === undefined) continue
+        const isSub = !!m.table_name && subTables.has(m.table_name)
+        // 行内触发（colCtx 命中本子表）写当前行单元格；跨表/主表触发写整个子表数组
+        const inRowTrigger = isSub && colCtx && colCtx.tableKey === m.table_name
+        if (isSub && !inRowTrigger) {
+          accumulateSubFill(subRows, m, v, allValues)
+        } else {
+          // 主表字段（无 table_name / table_name 命中主表）或子表行内触发（写当前行）
+          const tk = inRowTrigger
+            ? `${colCtx.tableKey}[${colCtx.index}].${m.target}`
+            : m.target
+          if (v !== formRef.current?.getFieldValue?.(tk)) patch[tk] = v
         }
       }
+      // 子表整表写回：与当前数组不同才写，避免无效写入触发 onValuesChange 造成循环
+      commitSubFills(subRows, patch, (t) => formRef.current?.getFieldValue?.(t))
       if (Object.keys(patch).length) {
         linkWrittenRef.current = stampWrites(patch, fromKey, depth)
         formRef.current?.setFieldsValue?.(patch)
@@ -449,12 +525,13 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
     } catch (e) {
       // 填充失败不打断流程
     }
-  }, [])
+  }, [collectSubTableKeys])
 
   /** 执行某元素指定触发时机的全部动作（set_value / fetch_and_fill）；colCtx 为子表列上下文（tableKey/index/fieldKey） */
   const runActions = useCallback(
     (trigger, el, allValues, colCtx, depth = 0) => {
       const actions = Array.isArray(el.actions?.[trigger]) ? el.actions[trigger] : []
+      const subTables = collectSubTableKeys()
       for (const action of actions) {
         if (!action?.action_type) continue
         // 触发字段当前值 + 选中项完整数据（set_value / fetch_and_fill 共用）：
@@ -471,13 +548,25 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
         if (action.action_type === 'set_value') {
           const list = Array.isArray(action.value_mapping) ? action.value_mapping : []
           const patch = {}
+          // 子表整表写累积（跨映射条目合并同一子表）
+          const subRows = {}
+          // 触发字段完整路径（列场景 tableKey[index].colKey，普通场景 field_key）
+          const triggerKey = colCtx
+            ? `${colCtx.tableKey}[${colCtx.index}].${colCtx.fieldKey}`
+            : el?.field_key
           for (const m of list) {
             if (m?.target) {
               // 保护：目标字段等于触发字段自身时跳过写入。
               // 选项型字段（select/radio/treeselect 等）的值应为选项 value（如 id），
               // 若把选中项文本（如 username）覆盖到自身，值将不再匹配任何选项，
               // 导致 label 无法渲染、校验误报"不能为空"。
-              const selfTarget = colCtx ? colCtx.fieldKey === m.target : m.target === el.field_key
+              // 注意按「完整字段路径」比较而非纯字段名：加了 table_name 后，同名列可以合法地
+              // 写到另一张表（如子表列触发 → 主表同名字段），此时不应被自身保护拦掉。
+              // 旧数据（无 table_name）目标就落在触发字段所在表/行，路径比较与原语义等价。
+              const selfTarget = colCtx
+                ? `${colCtx.tableKey}[${colCtx.index}].${m.target}` === triggerKey &&
+                  (!m.table_name || m.table_name === colCtx.tableKey)
+                : m.target === el.field_key && !subTables.has(m.table_name)
               if (selfTarget) continue
               const src = m.source
               let v
@@ -485,21 +574,39 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
                 // 拼接表达式：form = 表单值；item = 触发元素选中项数据
                 v = resolveExpr(src, { form: allValues, item: currentObj })
               } else if (src != null) {
-                // 独立路径：item.xxx 取选中项字段 / form.xxx 取表单字段；无前缀按选中项字段取
-                const r = resolvePath(src, { form: allValues, item: currentObj })
-                v = r.matched ? r.value : getByPath(currentObj, src)
+                // 独立路径：item.xxx 取选中项字段 / form.xxx 取表单字段；无前缀按选中项字段取。
+                // 路径中间命中数组时做投影（与 fetch_and_fill 同口径，支持多部门等多对多来源）
+                const srcStr = String(src)
+                if (srcStr.startsWith('form.')) v = resolveFillSource(allValues, srcStr.slice(5))
+                else if (srcStr.startsWith('item.')) v = resolveFillSource(currentObj, srcStr.slice(5))
+                else v = resolveFillSource(currentObj, srcStr)
                 if (v === undefined || v === null) v = ''
               }
-              // 目标字段：列场景为同行 target（tableKey[索引].target，与 Arco Form.List 字段路径一致）
-              const targetKey = colCtx
-                ? `${colCtx.tableKey}[${colCtx.index}].${m.target}`
-                : m.target
-              // 与当前值相同则跳过，避免无效写入反复触发 onValuesChange 造成循环
-              if (v !== undefined && v !== formRef.current?.getFieldValue?.(targetKey)) {
-                patch[targetKey] = v
+              // 目标字段：按映射的目标表确定写入位置。
+              // 无 table_name（旧数据）：保持原语义——子表行内触发写同行、主表触发写主表字段；
+              // 子表目标（table_name 命中子表）——子表行内触发且同表写当前行，否则（主表/跨子表触发）
+              // 按数组下标逐行分配、行数不足补空行展开明细；
+              // 其余（主表名/未知表）：写入主表字段
+              const isSub = !!m.table_name && subTables.has(m.table_name)
+              const inRowTrigger = isSub && colCtx && colCtx.tableKey === m.table_name
+              if (isSub && !inRowTrigger) {
+                accumulateSubFill(subRows, m, v, allValues)
+              } else {
+                // 行内单元格路径：旧数据（无 table_name）沿用触发行；子表目标且同表触发写当前行；
+                // 主表目标（table_name=主表名）即使列场景触发也写主表字段
+                const targetKey =
+                  colCtx && (!m.table_name || inRowTrigger)
+                    ? `${colCtx.tableKey}[${colCtx.index}].${m.target}`
+                    : m.target
+                // 与当前值相同则跳过，避免无效写入反复触发 onValuesChange 造成循环
+                if (v !== undefined && v !== formRef.current?.getFieldValue?.(targetKey)) {
+                  patch[targetKey] = v
+                }
               }
             }
           }
+          // 子表整表写回：与当前数组不同才整体替换（行数变化由 Form.List 依据数组渲染）
+          commitSubFills(subRows, patch, (t) => formRef.current?.getFieldValue?.(t))
           if (Object.keys(patch).length) {
             // 触发字段 key：列场景为同行 tableKey[索引].列，普通场景为 field_key
             const fromKey = colCtx
@@ -509,13 +616,15 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
             formRef.current?.setFieldsValue?.(patch)
           }
         } else if (action.action_type === 'fetch_and_fill') {
-          // 传入选中项完整数据：api_url 中的 ${item.xxx} / ${form.xxx} 均可解析
+          // 传入选中项完整数据：api_url 中的 ${item.xxx} / ${form.xxx} 均可解析；
+          // colCtx 用于 target_mapping 目标为子表字段且同行触发时定位触发行（写当前行，否则写子表所有行）
           runFetchFill(
             action,
             allValues,
             currentObj,
             colCtx ? `${colCtx.tableKey}[${colCtx.index}].${colCtx.fieldKey}` : el?.field_key,
             depth,
+            colCtx,
           )
         } else if (action.action_type === 'js_event') {
           // JS 事件：在受限作用域执行用户脚本（form/item/request/TransNumberToUpper），
@@ -565,7 +674,7 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
         }
       }
     },
-    [runFetchFill],
+    [runFetchFill, collectSubTableKeys],
   )
 
   // 用 ref 持有最新回调，避免 useEffect 依赖链（on_mount 仅随 elements 变化执行一次）
