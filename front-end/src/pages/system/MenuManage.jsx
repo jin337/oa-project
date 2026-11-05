@@ -81,7 +81,9 @@ const EMPTY_FORM = {
 
 export default function MenuManage() {
   const { hasPerm } = usePermission()
+  const canAdd = hasPerm('system:menu:add')
   const canEdit = hasPerm('system:menu:edit')
+  const canDelete = hasPerm('system:menu:delete')
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(false)
 
@@ -272,7 +274,7 @@ export default function MenuManage() {
       align: 'center',
       width: 80,
       render: (status, record) =>
-        canEdit ? (
+        canEdit && canDelete ? (
           <Switch
             size="small"
             checked={status === 1}
@@ -285,21 +287,23 @@ export default function MenuManage() {
           <Tag color="red">停用</Tag>
         ),
     },
-    canEdit && {
+    (canAdd || canEdit || canDelete) && {
       key: 'action',
       title: '操作',
       width: 150,
       render: (_, record) => (
         <Space>
-          {record.type !== 3 && (
+          {record.type !== 3 && canAdd && (
             <Button size="mini" onClick={() => openCreate(record.id)}>
               新增子菜单
             </Button>
           )}
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          {record.status !== 1 && (
+          {canEdit && (
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+          )}
+          {record.status !== 1 && canDelete && (
             <>
               {record.children?.length > 0 ? (
                 <Tooltip content="存在子节点，请先删除子节点">
@@ -346,7 +350,7 @@ export default function MenuManage() {
     <Card title="菜单管理">
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {canEdit ? (
+        {canAdd ? (
           <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
             新增菜单
           </Button>

@@ -54,7 +54,9 @@ const EMPTY_FORM = {
 
 export default function DeptManage() {
   const { hasPerm } = usePermission()
+  const canAdd = hasPerm('system:dept:add')
   const canEdit = hasPerm('system:dept:edit')
+  const canDelete = hasPerm('system:dept:delete')
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(false)
 
@@ -231,19 +233,23 @@ export default function DeptManage() {
           <Tag color="red">停用</Tag>
         ),
     },
-    canEdit && {
+    (canAdd || canEdit || canDelete) && {
       key: 'action',
       title: '操作',
       width: 150,
       render: (_, record) => (
         <Space>
-          <Button size="mini" onClick={() => openCreate(record.id)}>
-            新增子部门
-          </Button>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          {record.status !== 1 && (
+          {canAdd && (
+            <Button size="mini" onClick={() => openCreate(record.id)}>
+              新增子部门
+            </Button>
+          )}
+          {canEdit && (
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+          )}
+          {canDelete && canEdit && record.status !== 1 && (
             <>
               {record.children?.length > 0 ? (
                 <Tooltip content="存在子节点，请先删除子节点">
@@ -290,7 +296,7 @@ export default function DeptManage() {
     <Card title="部门管理">
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {canEdit ? (
+        {canAdd ? (
           <Button type="primary" icon={<IconPlus />} onClick={() => openCreate()}>
             新增部门
           </Button>

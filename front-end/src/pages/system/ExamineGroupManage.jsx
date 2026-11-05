@@ -43,7 +43,11 @@ const EMPTY_FORM = {
 
 export default function ExamineGroupManage() {
   const { hasPerm } = usePermission()
+  const canAdd = hasPerm('system:examine:add')
   const canEdit = hasPerm('system:examine:edit')
+  const canDelete = hasPerm('system:examine:delete')
+  const canSearch = hasPerm('system:examine:search')
+
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -256,16 +260,18 @@ export default function ExamineGroupManage() {
           <Tag color="red">停用</Tag>
         ),
     },
-    canEdit && {
+    (canAdd || canEdit || canDelete) && {
       key: 'action',
       title: '操作',
       width: 80,
       render: (_, record) => (
         <Space>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          {record.status !== 1 && (
+          {canEdit && (
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+          )}
+          {canDelete && canEdit && record.status !== 1 && (
             <Popconfirm
               position="lb"
               focusLock
@@ -301,26 +307,28 @@ export default function ExamineGroupManage() {
   return (
     <Card title="审核人员组">
       {/* 搜索区域 */}
-      <div className="mb-3">
-        <Space wrap>
-          <Input
-            className="w-55!"
-            placeholder="按组名称搜索"
-            allowClear
-            value={keyword}
-            onChange={setKeyword}
-            onPressEnter={handleSearch}
-          />
-          <Button type="primary" onClick={handleSearch}>
-            搜索
-          </Button>
-          <Button onClick={handleReset}>重置</Button>
-        </Space>
-      </div>
+      {canSearch && (
+        <div className="mb-3">
+          <Space wrap>
+            <Input
+              className="w-55!"
+              placeholder="按组名称搜索"
+              allowClear
+              value={keyword}
+              onChange={setKeyword}
+              onPressEnter={handleSearch}
+            />
+            <Button type="primary" onClick={handleSearch}>
+              搜索
+            </Button>
+            <Button onClick={handleReset}>重置</Button>
+          </Space>
+        </div>
+      )}
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {canEdit ? (
+        {canAdd ? (
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
             新增审核人员组
           </Button>

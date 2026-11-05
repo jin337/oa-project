@@ -62,7 +62,14 @@ export default function ApplicationManage() {
   const navigate = useNavigate()
   const { addTab } = useTabs()
   const { hasPerm } = usePermission()
+  const canAdd = hasPerm('application:add')
   const canEdit = hasPerm('application:edit')
+  const canDelete = hasPerm('application:delete')
+  const canSearch = hasPerm('application:search')
+  const canList = hasPerm('application:list')
+  const canTables = hasPerm('application:tables')
+  const canElements = hasPerm('application:elements')
+  const canDesign = hasPerm('application:design')
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -408,7 +415,7 @@ export default function ApplicationManage() {
           <Tag color="red">停用</Tag>
         ),
     },
-    canEdit && {
+    (canEdit || canList || canTables || canElements || canDesign) && {
       key: 'action',
       title: '操作',
       width: 150,
@@ -416,26 +423,32 @@ export default function ApplicationManage() {
         // 「更多」下拉菜单：仅子页面入口；编辑 / 删除保持平铺展示
         const actionMenu = (
           <Menu onClickMenuItem={(key) => handleActionMenu(key, record)}>
-            <MenuItem key="tables">表字段管理</MenuItem>
-            <MenuItem key="elements">表单元素管理</MenuItem>
-            <MenuItem key="design">表单设计</MenuItem>
+            {canTables && <MenuItem key="tables">表字段管理</MenuItem>}
+            {canElements && <MenuItem key="elements">表单元素管理</MenuItem>}
+            {canDesign && <MenuItem key="design">表单设计</MenuItem>}
           </Menu>
         )
         return (
           <Space>
-            <Dropdown trigger="click" droplist={actionMenu} position="br">
-              <Button size="mini" type="text">
-                配置
-                <IconDown />
+            {(canTables || canElements || canDesign) && (
+              <Dropdown trigger="click" droplist={actionMenu} position="br">
+                <Button size="mini" type="text">
+                  配置
+                  <IconDown />
+                </Button>
+              </Dropdown>
+            )}
+            {canEdit && (
+              <Button size="mini" onClick={() => openEdit(record)}>
+                编辑
               </Button>
-            </Dropdown>
-            <Button size="mini" onClick={() => openEdit(record)}>
-              编辑
-            </Button>
-            <Button size="mini" onClick={() => openListPage(record)}>
-              数据
-            </Button>
-            {record.status !== 1 && (
+            )}
+            {canList && (
+              <Button size="mini" onClick={() => openListPage(record)}>
+                数据
+              </Button>
+            )}
+            {record.status !== 1 && canEdit && canDelete && (
               <Popconfirm
                 disabled={record.status === 1}
                 position="lb"
@@ -474,26 +487,28 @@ export default function ApplicationManage() {
   return (
     <Card title="流程配置">
       {/* 搜索区域 */}
-      <div className="mb-3">
-        <Space wrap>
-          <Input
-            className="w-55!"
-            placeholder="按名称 / 编码搜索"
-            allowClear
-            value={keyword}
-            onChange={setKeyword}
-            onPressEnter={handleSearch}
-          />
-          <Button type="primary" onClick={handleSearch}>
-            搜索
-          </Button>
-          <Button onClick={handleReset}>重置</Button>
-        </Space>
-      </div>
+      {canSearch && (
+        <div className="mb-3">
+          <Space wrap>
+            <Input
+              className="w-55!"
+              placeholder="按名称 / 编码搜索"
+              allowClear
+              value={keyword}
+              onChange={setKeyword}
+              onPressEnter={handleSearch}
+            />
+            <Button type="primary" onClick={handleSearch}>
+              搜索
+            </Button>
+            <Button onClick={handleReset}>重置</Button>
+          </Space>
+        </div>
+      )}
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {canEdit ? (
+        {canAdd ? (
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
             新增流程
           </Button>
@@ -713,7 +728,11 @@ export default function ApplicationManage() {
                     >
                       编辑
                     </Button>
-                    <Popconfirm title="确认删除该待生效版本？" position="left"  onOk={() => deleteVersion(record)}>
+                    <Popconfirm
+                      title="确认删除该待生效版本？"
+                      position="left"
+                      onOk={() => deleteVersion(record)}
+                    >
                       <Button size="mini" status="danger">
                         删除
                       </Button>

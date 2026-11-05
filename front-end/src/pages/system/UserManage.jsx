@@ -114,7 +114,12 @@ function normalizeUserPayload(values) {
 
 export default function UserManage() {
   const { hasPerm } = usePermission()
+  const canAdd = hasPerm('system:user:add')
   const canEdit = hasPerm('system:user:edit')
+  const canDelete = hasPerm('system:user:delete')
+  const canSearch = hasPerm('system:user:search')
+  const canReset = hasPerm('system:user:reset')
+  const canProfile = hasPerm('system:user:profile')
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -398,7 +403,7 @@ export default function UserManage() {
           </Tag>
         )),
     },
-    { key: 'phone', title: '手机号', dataIndex: 'phone', render: (v) => v || '-',width: 140 },
+    { key: 'phone', title: '手机号', dataIndex: 'phone', render: (v) => v || '-', width: 140 },
     {
       key: 'created_at',
       title: '创建时间',
@@ -413,7 +418,7 @@ export default function UserManage() {
       width: 80,
       align: 'center',
       render: (status, record) =>
-        canEdit && record.id !== 1 ? (
+        canEdit && canDelete && record.id !== 1 ? (
           <Switch
             size="small"
             checked={status === 1}
@@ -426,19 +431,23 @@ export default function UserManage() {
           <Tag color="red">停用</Tag>
         ),
     },
-    canEdit && {
+    (canEdit || canReset || canProfile || canDelete) && {
       key: 'action',
       title: '操作',
       width: 120,
       render: (_, record) => (
         <Space>
-          <Button size="mini" onClick={() => openResetPassword(record)}>
-            重置密码
-          </Button>
-          <Button size="mini" onClick={() => openDetail(record)}>
-            用户档案
-          </Button>
-          {record.status !== 1 && record.id !== 1 && (
+          {canReset && (
+            <Button size="mini" onClick={() => openResetPassword(record)}>
+              重置密码
+            </Button>
+          )}
+          {canProfile && (
+            <Button size="mini" onClick={() => openDetail(record)}>
+              用户档案
+            </Button>
+          )}
+          {record.status !== 1 && record.id !== 1 && canEdit && canDelete && (
             <Popconfirm
               position="lb"
               focusLock
@@ -475,44 +484,46 @@ export default function UserManage() {
   return (
     <Card title="用户管理">
       {/* 搜索区域 */}
-      <div className="mb-3">
-        <Space wrap>
-          <Input
-            className="w-55!"
-            placeholder="按用户名搜索"
-            allowClear
-            value={keyword}
-            onChange={setKeyword}
-            onPressEnter={handleSearch}
-          />
-          <TreeSelect
-            multiple
-            className="w-55!"
-            placeholder="按部门筛选（可多选）"
-            allowClear
-            treeData={toTreeData(deptTree)}
-            value={deptFilter}
-            onChange={setDeptFilter}
-          />
-          <Select
-            mode="multiple"
-            className="w-55!"
-            placeholder="按角色筛选（可多选）"
-            allowClear
-            value={roleFilter}
-            onChange={setRoleFilter}
-            options={(allRoles || []).map((r) => ({ label: r.name, value: r.id }))}
-          />
-          <Button type="primary" onClick={handleSearch}>
-            搜索
-          </Button>
-          <Button onClick={handleReset}>重置</Button>
-        </Space>
-      </div>
+      {canSearch && (
+        <div className="mb-3">
+          <Space wrap>
+            <Input
+              className="w-55!"
+              placeholder="按用户名搜索"
+              allowClear
+              value={keyword}
+              onChange={setKeyword}
+              onPressEnter={handleSearch}
+            />
+            <TreeSelect
+              multiple
+              className="w-55!"
+              placeholder="按部门筛选（可多选）"
+              allowClear
+              treeData={toTreeData(deptTree)}
+              value={deptFilter}
+              onChange={setDeptFilter}
+            />
+            <Select
+              mode="multiple"
+              className="w-55!"
+              placeholder="按角色筛选（可多选）"
+              allowClear
+              value={roleFilter}
+              onChange={setRoleFilter}
+              options={(allRoles || []).map((r) => ({ label: r.name, value: r.id }))}
+            />
+            <Button type="primary" onClick={handleSearch}>
+              搜索
+            </Button>
+            <Button onClick={handleReset}>重置</Button>
+          </Space>
+        </div>
+      )}
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        {canEdit ? (
+        {canAdd ? (
           <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
             新增用户
           </Button>
