@@ -213,7 +213,7 @@ export default function ApplicationManage() {
   // 打开动态列表页：配置完成后才可使用的成果入口，openSubPage 同款方式（预添加页签 + 定制标题 + 跳转）
   // 编码通过 location.state 传递（不暴露于 URL），并写入 sessionStorage 兜底刷新/页签切换
   const openListPage = (record) => {
-    const path = '/application/list'
+    const path = `/application/${record.id}/list`
     const linkApp = `${record.code}:list`
     sessionStorage.setItem(`link_app:${path}`, linkApp)
     addTab({ path, title: `列表页 - ${record.name}` })

@@ -205,7 +205,7 @@ func seedInitData(db *gorm.DB) error {
 		{ParentID: applicationPage.ID, Name: "表字段管理", Type: model.MenuTypeMenu, Path: "/application/:id/tables", Perm: "application:tables", Sort: 1, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "表单元素管理", Type: model.MenuTypeMenu, Path: "/application/:id/elements", Perm: "application:elements", Sort: 2, Status: 1, Hidden: 1},
 		{ParentID: applicationPage.ID, Name: "表单设计", Type: model.MenuTypeMenu, Path: "/application/:id/design", Perm: "application:design", Sort: 3, Status: 1, Hidden: 1},
-		{ParentID: applicationPage.ID, Name: "数据", Type: model.MenuTypeMenu, Path: "/application/list", Perm: "application:list", Sort: 5, Status: 1, Hidden: 1},
+		{ParentID: applicationPage.ID, Name: "数据", Type: model.MenuTypeMenu, Path: "/application/:id/list", Perm: "application:list", Sort: 5, Status: 1, Hidden: 1},
 		// 审批管理
 		{ParentID: approvalDir.ID, Name: "申请", Type: model.MenuTypeMenu, Path: "/approval/apply", Perm: "approval:apply", Sort: 1, Status: 1, Hidden: 0},
 		{ParentID: approvalDir.ID, Name: "我的发起", Type: model.MenuTypeMenu, Path: "/approval/initiated", Perm: "approval:initiated", Sort: 2, Status: 1, Hidden: 0},

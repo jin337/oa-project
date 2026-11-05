@@ -8,10 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RequirePermission 权限校验中间件：校验当前登录用户是否拥有指定按钮权限标识（perm）。
+// RequirePermission 权限校验中间件：校验当前登录用户是否拥有指定权限标识（perm）。
 // 可传入多个权限标识，命中任意一个即放行（如新建流程的设计链路需 add 或 edit 任一）。
-// 权限来源：用户启用角色（status=1）关联的按钮菜单（type=3, status=1）的 perm 标识；
-// 超级管理员（角色 code=admin）默认拥有全部权限，直接放行。
+// 权限来源：用户启用角色（status=1）关联的启用菜单（status=1，不区分目录/页面/按钮类型）的 perm 标识，
+// 与前端登录时下发的 perms 集合（service.UserMenus）口径完全一致——
+// 页面级菜单（如 application:tables）的 perm 同样参与接口鉴权。
+// 超级管理员（角色 is_super）默认拥有全部权限，直接放行。
 func RequirePermission(perms ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := CurrentUserID(c)
@@ -34,14 +36,14 @@ func HasPermission(userID uint, perm string) bool {
 	return hasAnyPermission(userID, []string{perm})
 }
 
-// hasAnyPermission 查询用户启用角色所关联的按钮权限标识，命中列表中任意一个返回 true
+// hasAnyPermission 查询用户启用角色所关联的菜单权限标识（与前端 perms 集合口径一致），命中列表中任意一个返回 true
 func hasAnyPermission(userID uint, perms []string) bool {
 	if len(perms) == 0 {
 		return true
 	}
 	var user model.User
 	if err := database.DB.Preload("Roles", "status = ?", 1).
-		Preload("Roles.Menus", "type = ? AND status = ?", model.MenuTypeButton, 1).
+		Preload("Roles.Menus", "status = 1").
 		First(&user, userID).Error; err != nil {
 		return false
 	}

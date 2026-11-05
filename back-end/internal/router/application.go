@@ -12,12 +12,12 @@ func registerApplicationRoutes(api *gin.RouterGroup) {
 	applications := api.Group("/application")
 	applications.Use(middleware.JWTAuth())
 	{
-		applications.GET("", handler.ApplicationList)                                                              // 流程列表
-		applications.POST("", middleware.RequirePermission("application:add"), handler.ApplicationCreate)          // 新建流程
-		applications.GET("/by-code/:code", handler.ApplicationByCode)                                              // 按编码查询流程（申请/审批人读取）
-		applications.GET("/:id", handler.ApplicationDetail)                                                        // 流程详情
-		applications.PUT("/:id", middleware.RequirePermission("application:edit"), handler.ApplicationUpdate)      // 修改流程
-		applications.DELETE("/:id", middleware.RequirePermission("application:delete"), handler.ApplicationDelete) // 删除流程
+		applications.GET("", handler.ApplicationList)                                                                               // 流程列表
+		applications.POST("", middleware.RequirePermission("application:add"), handler.ApplicationCreate)                           // 新建流程
+		applications.GET("/by-code/:code", handler.ApplicationByCode)                                                               // 按编码查询流程（申请/审批人读取）
+		applications.GET("/:id", handler.ApplicationDetail)                                                                         // 流程详情
+		applications.PUT("/:id", middleware.RequirePermission("application:edit", "application:design"), handler.ApplicationUpdate) // 修改流程
+		applications.DELETE("/:id", middleware.RequirePermission("application:delete"), handler.ApplicationDelete)                  // 删除流程
 		// 表字段管理：表字段页改结构需 application:tables；元素页/设计页读取字段列表供下拉选择
 		applications.GET("/:id/fields", middleware.RequirePermission("application:tables", "application:elements", "application:design"), handler.TableFieldList) // 表字段列表
 		applications.POST("/:id/fields", middleware.RequirePermission("application:tables"), handler.TableFieldCreate)                                            // 新增表字段
