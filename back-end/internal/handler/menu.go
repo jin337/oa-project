@@ -51,6 +51,7 @@ func MenuCreate(c *gin.Context) {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
+	middleware.InvalidatePermCache() // 菜单权限点新增，重新分配关系可能受影响
 	response.OK(c, menu)
 }
 
@@ -70,6 +71,7 @@ func MenuUpdate(c *gin.Context) {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
+	middleware.InvalidatePermCache() // 菜单 perm/状态变更直接影响鉴权集合
 	response.OK(c, menu)
 }
 
@@ -83,5 +85,6 @@ func MenuDelete(c *gin.Context) {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
+	middleware.InvalidatePermCache() // 菜单删除影响角色关联的权限集合
 	response.OKMsg(c, "删除成功")
 }

@@ -101,6 +101,7 @@ func UserAssignRoles(c *gin.Context) {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
+	middleware.InvalidatePermCache() // 用户角色重分配，该用户权限缓存必须失效
 	response.OKMsg(c, "分配角色成功")
 }
 

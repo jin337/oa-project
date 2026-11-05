@@ -926,3 +926,31 @@ type Notification struct {
 }
 
 func (Notification) TableName() string { return "oa_notifications" }
+
+// OperationLog 操作审计日志：记录所有非 GET 写操作（登录/授权/配置变更/删除等）
+// 由 middleware.OperationLog 异步落库；GET 查询不记录，避免噪音与存储膨胀
+type OperationLog struct {
+	ID        uint      `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time `json:"created_at" gorm:"index;comment:操作时间"`
+	UserID    uint      `json:"user_id" gorm:"index;comment:操作人ID(未登录为0)"`
+	Username  string    `json:"username" gorm:"size:64;comment:操作人用户名快照"`
+	Method    string    `json:"method" gorm:"size:10;comment:请求方法"`
+	Path      string    `json:"path" gorm:"size:191;index;comment:请求路径"`
+	Query     string    `json:"query" gorm:"size:512;comment:URL查询参数"`
+	Body      string    `json:"body" gorm:"size:2000;comment:请求体(截断;敏感接口脱敏)"`
+	Status    int       `json:"status" gorm:"comment:HTTP状态码"`
+	IP        string    `json:"ip" gorm:"size:64;comment:客户端IP"`
+	ElapsedMs int64     `json:"elapsed_ms" gorm:"comment:耗时(毫秒)"`
+}
+
+func (OperationLog) TableName() string { return "oa_operation_logs" }
+
+// OperationLogListReq 操作审计日志查询请求（分页+筛选）
+type OperationLogListReq struct {
+	BaseListReq
+	Username string `json:"username" form:"username" validate:"omitempty,max=64" label:"操作人"`
+	Method   string `json:"method" form:"method" validate:"omitempty,oneof=POST PUT DELETE PATCH" label:"请求方法"`
+	Path     string `json:"path" form:"path" validate:"omitempty,max=191" label:"路径"`
+	Start    string `json:"start" form:"start" validate:"omitempty,len=10" label:"开始日期"`
+	End      string `json:"end" form:"end" validate:"omitempty,len=10" label:"结束日期"`
+}

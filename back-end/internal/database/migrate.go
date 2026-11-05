@@ -53,9 +53,10 @@ var migrations = []migration{
 				&model.ApprovalInstance{},
 				&model.ApprovalInstanceTask{},
 				&model.ApprovalCCRecord{},
-				&model.Notification{},
 				&model.ExamineGroup{},
 				&model.ApiDefinition{},
+				&model.Notification{},
+				&model.OperationLog{},
 				&MigrateVersion{},
 			)
 		},
@@ -71,6 +72,47 @@ var migrations = []migration{
 			)
 		},
 	},
+	{
+		Version: 3,
+		Name:    "add_operation_log_menu",
+		// v1 已含 OperationLog 建表（新环境生效）；本版本为「已应用过 v1 的存量环境」补建：
+		// AutoMigrate 幂等，新环境重跑无副作用；同时幂等补种操作审计菜单
+		Up: func(db *gorm.DB) error {
+			if err := db.AutoMigrate(&model.OperationLog{}); err != nil {
+				return err
+			}
+			return seedAuditLogMenu(db)
+		},
+		Seed: seedAuditLogMenu,
+	},
+}
+
+// seedAuditLogMenu 操作审计菜单：系统管理目录下「操作审计」页面（perm=system:audit）
+// 幂等：已存在则跳过；创建后绑定超级管理员
+func seedAuditLogMenu(db *gorm.DB) error {
+	var menu model.Menu
+	if err := db.Where("perm = ?", "system:audit").First(&menu).Error; err == nil {
+		return nil // 已存在，跳过
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	// 挂在「系统管理」目录下
+	var systemDir model.Menu
+	if err := db.Where("perm = ? AND type = ?", "system", model.MenuTypeDir).First(&systemDir).Error; err != nil {
+		return errors.New("系统管理目录不存在，无法创建操作审计菜单")
+	}
+	menu = model.Menu{
+		ParentID: systemDir.ID, Name: "操作审计", Type: model.MenuTypeMenu,
+		Path: "/system/audit", Perm: "system:audit", Sort: 6, Status: 1, Hidden: 0,
+	}
+	if err := db.Create(&menu).Error; err != nil {
+		return err
+	}
+	var adminRole model.Role
+	if err := db.Where("is_super = ?", true).First(&adminRole).Error; err != nil {
+		return nil // 无超管角色（极端情况）：仅建菜单不绑定
+	}
+	return db.Model(&adminRole).Association("Menus").Append(&menu)
 }
 
 // migrateLogger 迁移日志（可开关、可自定义路径）

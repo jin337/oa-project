@@ -4,9 +4,71 @@ import (
 	"back-end/internal/database"
 	"back-end/internal/model"
 	"back-end/internal/pkg/response"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+// ==================== 权限集合进程内缓存 ====================
+//
+// 背景：hasAnyPermission 每次受保护请求都要 Preload 角色+菜单（2~3 次 join 查询），
+// 权限数据变更频率极低（角色/菜单/用户角色调整）而读取频率为每请求一次，适合缓存。
+// 策略：按用户缓存「超管标记 + 权限码集合」，TTL 兜底过期 + 变更点显式失效。
+// 单实例部署下失效即时生效；多实例横向扩容时依赖 TTL（5 分钟）收敛，如需强一致可升级 Redis pub/sub。
+
+const permCacheTTL = 5 * time.Minute
+
+type permCacheEntry struct {
+	isSuper   bool
+	perms     map[string]bool
+	expiresAt time.Time
+}
+
+var (
+	permCacheMu    sync.RWMutex
+	permCacheStore = map[uint]*permCacheEntry{}
+)
+
+// InvalidatePermCache 清空全部用户权限缓存（角色/菜单/用户角色关系任何变更后调用）。
+// 全清而非逐用户失效：角色变更影响面难以精确枚举（多对多），全清代价仅一次缓存重建，简单可靠。
+func InvalidatePermCache() {
+	permCacheMu.Lock()
+	permCacheStore = map[uint]*permCacheEntry{}
+	permCacheMu.Unlock()
+}
+
+// loadPermEntry 读取（或重建）用户权限缓存条目：超管短路 + 权限码集合
+func loadPermEntry(userID uint) *permCacheEntry {
+	permCacheMu.RLock()
+	entry := permCacheStore[userID]
+	permCacheMu.RUnlock()
+	if entry != nil && entry.expiresAt.After(time.Now()) {
+		return entry
+	}
+	var user model.User
+	if err := database.DB.Preload("Roles", "status = ?", 1).
+		Preload("Roles.Menus", "status = 1").
+		First(&user, userID).Error; err != nil {
+		// 查询失败（含用户不存在）：返回空权限且不缓存，下次请求重新查
+		return &permCacheEntry{perms: map[string]bool{}, expiresAt: time.Now().Add(time.Minute)}
+	}
+	entry = &permCacheEntry{perms: map[string]bool{}, expiresAt: time.Now().Add(permCacheTTL)}
+	for _, role := range user.Roles {
+		if role.IsSuper {
+			entry.isSuper = true
+		}
+		for _, m := range role.Menus {
+			if m.Perm != "" {
+				entry.perms[m.Perm] = true
+			}
+		}
+	}
+	permCacheMu.Lock()
+	permCacheStore[userID] = entry
+	permCacheMu.Unlock()
+	return entry
+}
 
 // RequirePermission 权限校验中间件：校验当前登录用户是否拥有指定权限标识（perm）。
 // 可传入多个权限标识，命中任意一个即放行（如新建流程的设计链路需 add 或 edit 任一）。
@@ -41,22 +103,13 @@ func hasAnyPermission(userID uint, perms []string) bool {
 	if len(perms) == 0 {
 		return true
 	}
-	var user model.User
-	if err := database.DB.Preload("Roles", "status = ?", 1).
-		Preload("Roles.Menus", "status = 1").
-		First(&user, userID).Error; err != nil {
-		return false
+	entry := loadPermEntry(userID)
+	if entry.isSuper {
+		return true // 超级管理员全量放行
 	}
-	for _, role := range user.Roles {
-		if role.IsSuper {
-			return true // 超级管理员全量放行
-		}
-		for _, menu := range role.Menus {
-			for _, perm := range perms {
-				if menu.Perm == perm {
-					return true
-				}
-			}
+	for _, perm := range perms {
+		if entry.perms[perm] {
+			return true
 		}
 	}
 	return false

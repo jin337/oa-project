@@ -22,6 +22,7 @@ func Login(c *gin.Context) {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
+	middleware.InvalidatePermCache() // 登录时全量失效：多实例 TTL 未同步场景下，保证本次会话鉴权用最新权限
 	response.OK(c, res)
 }
 

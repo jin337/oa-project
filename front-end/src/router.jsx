@@ -8,6 +8,7 @@ import {
   useRoutes,
 } from 'react-router-dom'
 import { useAuth } from 'src/store/auth-context'
+import ErrorBoundary from 'src/components/ErrorBoundary'
 import { getToken } from 'src/utils/auth'
 import { BASE_PATH } from 'src/utils/constants'
 import MainLayout from 'src/views/MainLayout.jsx'
@@ -21,6 +22,7 @@ const RoleManage = lazy(() => import('src/pages/system/RoleManage.jsx'))
 const MenuManage = lazy(() => import('src/pages/system/MenuManage.jsx'))
 const DeptManage = lazy(() => import('src/pages/system/DeptManage.jsx'))
 const ExamineGroupManage = lazy(() => import('src/pages/system/ExamineGroupManage.jsx'))
+const OperationLogManage = lazy(() => import('src/pages/system/OperationLogManage.jsx'))
 // 接口管理
 const InterfaceManage = lazy(() => import('src/pages/interface/InterfaceManage.jsx'))
 
@@ -54,9 +56,14 @@ function PageLoading() {
   )
 }
 
-// 懒加载页面统一包一层 Suspense
+// 懒加载页面统一包一层 Suspense；外层包错误边界：
+// 页面组件渲染期抛错时降级为「重试/刷新」提示，不再整页白屏（本次页签缓存的隐藏页也各自隔离）
 function Page({ children }) {
-  return <Suspense fallback={<PageLoading />}>{children}</Suspense>
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoading />}>{children}</Suspense>
+    </ErrorBoundary>
+  )
 }
 
 /**
@@ -74,6 +81,7 @@ const PAGE_MAP = [
   { pattern: '/system/menu', component: MenuManage },
   { pattern: '/system/dept', component: DeptManage },
   { pattern: '/system/examine', component: ExamineGroupManage },
+  { pattern: '/system/audit', component: OperationLogManage },
   // 接口管理
   { pattern: '/interface', component: InterfaceManage },
   // 个人中心
@@ -240,8 +248,10 @@ function AppRouter() {
 
 export default function AppRouterProvider() {
   return (
-    <BrowserRouter basename={BASE_PATH}>
-      <AppRouter />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter basename={BASE_PATH}>
+        <AppRouter />
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }

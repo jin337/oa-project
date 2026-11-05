@@ -25,6 +25,9 @@ func Setup() *gin.Engine {
 
 	// 业务路由统一注册在配置的前缀下（config.Server.APIPrefix，唯一真值见 config-*.yaml 的 server.api_prefix）
 	api := r.Group(config.Cfg.Server.APIPrefix)
+	// 操作审计：记录 api 分组全部非 GET 写操作（登录/授权/配置/数据变更）。
+	// 身份在各组 JWTAuth 执行后写入上下文，本中间件位于外层、c.Next 返回时读取
+	api.Use(middleware.OperationLog())
 
 	registerAuthRoutes(api)              // 认证
 	registerUserRoutes(api)              // 用户
@@ -36,7 +39,8 @@ func Setup() *gin.Engine {
 	registerApplicationRoutes(api)       // 流程配置
 	registerApprovalRoutes(api)          // 审批
 	registerUploadRoutes(api)            // 上传
-	registerNotificationRoutes(api)     // 通知
+	registerNotificationRoutes(api)      // 通知
+	registerOperationLogRoutes(api)      // 操作审计日志
 
 	// 注入运行时路由快照（供接口管理一键导入后端路由）
 	middleware.SetRouteSnapshot(r.Routes())
