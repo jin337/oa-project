@@ -202,11 +202,8 @@ func UserUpdatePassword(curUserID, id uint, req *model.UpdatePasswordReq) error 
 	}).Error
 }
 
-// UserResetPassword 重置密码（管理员操作）：无需校验旧密码，直接加密新密码入库
+// UserResetPassword 重置密码：无需校验旧密码，直接加密新密码入库
 func UserResetPassword(curUserID, id uint, req *model.ResetPasswordReq) error {
-	if !isAdmin(curUserID) {
-		return errors.New("无权限：仅管理员可重置密码")
-	}
 	var user model.User
 	if err := database.DB.First(&user, id).Error; err != nil {
 		return errors.New("用户不存在")

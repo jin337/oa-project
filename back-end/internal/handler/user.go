@@ -193,7 +193,7 @@ func UserSwitchDept(c *gin.Context) {
 	response.OKMsg(c, "切换部门成功")
 }
 
-// UserResetPassword PUT /{APIPrefix}/users/:id/reset-password 重置密码（管理员操作）
+// UserResetPassword PUT /{APIPrefix}/users/:id/reset-password 重置密码
 func UserResetPassword(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -207,7 +207,7 @@ func UserResetPassword(c *gin.Context) {
 	err := service.UserResetPassword(middleware.CurrentUserID(c), id, &req)
 	if err != nil {
 		code := response.CodeServerError
-		if err.Error() == "无权限：仅管理员可重置密码" {
+		if err.Error() == "无权限重置他人密码" {
 			code = response.CodeForbidden
 		} else if err.Error() == "用户不存在" {
 			code = response.CodeNotFound
