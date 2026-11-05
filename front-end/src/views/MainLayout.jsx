@@ -11,11 +11,12 @@ import {
 } from '@arco-design/web-react'
 import { IconHome, IconStorage, IconUser } from '@arco-design/web-react/icon'
 import { useMemo } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import * as userApi from 'src/api/user'
 import { MenuIcon } from 'src/components/icon-select'
 import { APP_NAME } from 'src/config/app.js'
 import { useMenuMeta } from 'src/hooks/useMenuMeta'
+import KeepAliveOutlet from 'src/pages/layout/keep-alive-outlet'
 import NotificationBell from 'src/pages/layout/notification-bell'
 import TabsBar from 'src/pages/layout/tabs-bar'
 import { useAuth } from 'src/store/auth-context'
@@ -82,7 +83,7 @@ function ContentBreadcrumb() {
   const crumbs = active?.breadcrumbs
   if (!crumbs || !crumbs.length) return null
   return (
-    <Breadcrumb className="mb-3">
+    <Breadcrumb className="mb-3 px-4">
       <Breadcrumb.Item key="/">
         <IconHome />
       </Breadcrumb.Item>
@@ -222,6 +223,26 @@ function HeaderBar() {
   )
 }
 
+/**
+ * 内容区：面包屑 + 页面出口容器。
+ * 放在 TabProvider 内部以便消费 useTabs；
+ * 高度按页面类型区分：工作台（/）不渲染面包屑，内容区可多占面包屑那一行高度（124px），
+ * 其余页面预留面包屑行高（160px）。
+ */
+function ContentArea() {
+  const { activeTab } = useTabs()
+  const isHome = activeTab === '/'
+  return (
+    <Content className="flex-1 overflow-auto bg-gray-50 py-4">
+      {/* 面包屑：由当前激活页签的 breadcrumbs 驱动 */}
+      <ContentBreadcrumb />
+      <div className={`w-full ${isHome ? 'h-[calc(100vh-124px)]' : 'h-[calc(100vh-160px)]'}`}>
+        <KeepAliveOutlet />
+      </div>
+    </Content>
+  )
+}
+
 export default function MainLayout() {
   return (
     <TabProvider>
@@ -229,13 +250,7 @@ export default function MainLayout() {
         <HeaderBar />
         {/* 页签栏 */}
         <TabsBar />
-        <Content className="flex-1 overflow-auto bg-gray-50 p-4">
-          {/* 面包屑：由当前激活页签的 breadcrumbs 驱动 */}
-          <ContentBreadcrumb />
-          <div className="h-[calc(100vh-160px)] w-full">
-            <Outlet />
-          </div>
-        </Content>
+        <ContentArea />
       </Layout>
     </TabProvider>
   )

@@ -120,7 +120,7 @@ export default function Dashboard() {
   }, [flowTimeRange])
 
   return (
-    <div className="space-y-4">
+    <div className="w-full overflow-x-hidden">
       <Row gutter={16}>
         {/* 左侧 */}
         <Col span={18}>
@@ -202,7 +202,7 @@ export default function Dashboard() {
                         key={r.instance_id ?? i}
                         role="button"
                         tabIndex={0}
-                        className={`cursor-pointer py-3 px-4 transition-colors hover:bg-[rgb(var(--arcoblue-1))] ${i > 0 ? 'border-t border-solid border-[rgb(var(--gray-2))]' : ''}`}
+                        className={`cursor-pointer px-4 py-3 transition-colors hover:bg-[rgb(var(--arcoblue-1))] ${i > 0 ? 'border-t border-solid border-[rgb(var(--gray-2))]' : ''}`}
                         onClick={() => {
                           // 按记录归属跳转对应页面打开详情抽屉（待办需携带任务参数，后端 scopes[0] 为最高优先级归属）
                           const target = SCOPE_PATH[r.scopes?.[0]] || SCOPE_PATH.initiated
