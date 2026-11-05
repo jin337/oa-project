@@ -9,9 +9,10 @@ import (
 )
 
 // RequirePermission 权限校验中间件：校验当前登录用户是否拥有指定按钮权限标识（perm）。
+// 可传入多个权限标识，命中任意一个即放行（如新建流程的设计链路需 add 或 edit 任一）。
 // 权限来源：用户启用角色（status=1）关联的按钮菜单（type=3, status=1）的 perm 标识；
 // 超级管理员（角色 code=admin）默认拥有全部权限，直接放行。
-func RequirePermission(perm string) gin.HandlerFunc {
+func RequirePermission(perms ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := CurrentUserID(c)
 		if userID == 0 {
@@ -19,7 +20,7 @@ func RequirePermission(perm string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if hasPermission(userID, perm) {
+		if hasAnyPermission(userID, perms) {
 			c.Next()
 			return
 		}
@@ -30,11 +31,14 @@ func RequirePermission(perm string) gin.HandlerFunc {
 
 // HasPermission 查询用户是否拥有指定按钮权限标识，供服务层/处理器做非强制拦截的展示控制。
 func HasPermission(userID uint, perm string) bool {
-	return hasPermission(userID, perm)
+	return hasAnyPermission(userID, []string{perm})
 }
 
-// hasPermission 查询用户启用角色所关联的按钮权限标识，命中指定 perm 返回 true
-func hasPermission(userID uint, perm string) bool {
+// hasAnyPermission 查询用户启用角色所关联的按钮权限标识，命中列表中任意一个返回 true
+func hasAnyPermission(userID uint, perms []string) bool {
+	if len(perms) == 0 {
+		return true
+	}
 	var user model.User
 	if err := database.DB.Preload("Roles", "status = ?", 1).
 		Preload("Roles.Menus", "type = ? AND status = ?", model.MenuTypeButton, 1).
@@ -46,8 +50,10 @@ func hasPermission(userID uint, perm string) bool {
 			return true // 超级管理员全量放行
 		}
 		for _, menu := range role.Menus {
-			if menu.Perm == perm {
-				return true
+			for _, perm := range perms {
+				if menu.Perm == perm {
+					return true
+				}
 			}
 		}
 	}

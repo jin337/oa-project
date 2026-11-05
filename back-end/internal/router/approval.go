@@ -16,18 +16,18 @@ func registerApprovalRoutes(api *gin.RouterGroup) {
 		// 工作台独立接口
 		approval.GET("/dashboard/summary", handler.ApprovalDashboardSummary) // 全部事项计数
 		approval.GET("/dashboard/flows", handler.ApprovalDashboardFlows)     // 流程监控（与我相关的所有申请）
-		// 审批分类 & 申请项（管理操作需 approval:edit）
+		// 审批分类 & 申请项（管理操作按 approval:add / approval:edit / approval:delete 细分）
 		category := approval.Group("/category")
 		{
-			category.GET("", handler.ApprovalCategoryList)                                                         // 审批分类列表
-			category.POST("", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryCreate)       // 新建审批分类
-			category.PUT("/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryUpdate)    // 修改审批分类
-			category.DELETE("/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryDelete) // 删除审批分类
+			category.GET("", handler.ApprovalCategoryList)                                                           // 审批分类列表
+			category.POST("", middleware.RequirePermission("approval:add"), handler.ApprovalCategoryCreate)          // 新建审批分类
+			category.PUT("/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryUpdate)      // 修改审批分类
+			category.DELETE("/:id", middleware.RequirePermission("approval:delete"), handler.ApprovalCategoryDelete) // 删除审批分类
 			// 申请项
-			category.GET("/item", handler.ApprovalCategoryItemList)                                                         // 申请项列表
-			category.POST("/item", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryItemCreate)       // 新建申请项
-			category.PUT("/item/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryItemUpdate)    // 修改申请项
-			category.DELETE("/item/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryItemDelete) // 删除申请项
+			category.GET("/item", handler.ApprovalCategoryItemList)                                                           // 申请项列表
+			category.POST("/item", middleware.RequirePermission("approval:add"), handler.ApprovalCategoryItemCreate)          // 新建申请项
+			category.PUT("/item/:id", middleware.RequirePermission("approval:edit"), handler.ApprovalCategoryItemUpdate)      // 修改申请项
+			category.DELETE("/item/:id", middleware.RequirePermission("approval:delete"), handler.ApprovalCategoryItemDelete) // 删除申请项
 		}
 		// 流程实例
 		instance := approval.Group("/instance")

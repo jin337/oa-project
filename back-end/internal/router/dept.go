@@ -12,11 +12,11 @@ func registerDeptRoutes(api *gin.RouterGroup) {
 	depts := api.Group("/depts")
 	depts.Use(middleware.JWTAuth())
 	{
-		depts.GET("", handler.DeptTree)       // 部门树
-		depts.GET("/users", handler.DeptUsers) // 部门下用户列表
-		depts.POST("", middleware.RequirePermission("system:dept:edit"), handler.DeptCreate)    // 新建部门
-		depts.GET("/:id", handler.DeptDetail) // 部门详情
-		depts.PUT("/:id", middleware.RequirePermission("system:dept:edit"), handler.DeptUpdate) // 修改部门
-		depts.DELETE("/:id", middleware.RequirePermission("system:dept:edit"), handler.DeptDelete) // 删除部门
+		depts.GET("", handler.DeptTree)                                                              // 部门树
+		depts.GET("/users", handler.DeptUsers)                                                       // 部门下用户列表
+		depts.POST("", middleware.RequirePermission("system:dept:add"), handler.DeptCreate)          // 新建部门
+		depts.GET("/:id", handler.DeptDetail)                                                        // 部门详情
+		depts.PUT("/:id", middleware.RequirePermission("system:dept:edit"), handler.DeptUpdate)      // 修改部门
+		depts.DELETE("/:id", middleware.RequirePermission("system:dept:delete"), handler.DeptDelete) // 删除部门
 	}
 }

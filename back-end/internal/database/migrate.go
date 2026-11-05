@@ -220,19 +220,50 @@ func seedInitData(db *gorm.DB) error {
 	collectMenuIDs(pageMenus...)
 
 	// 按钮/权限标识：挂在所属页面菜单下（type=3 不参与路由，仅用于按钮级权限判断）
+	// 与菜单管理页重置后的细粒度权限保持一致：新增 add / 编辑 edit / 删除 delete / 搜索 search 等
 	buttons := []model.Menu{
+		// 用户设置页（个人中心）：编辑资料、修改密码
+		{ParentID: userProfile.ID, Name: "编辑", Type: model.MenuTypeButton, Perm: "profile:edit", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: userProfile.ID, Name: "修改密码", Type: model.MenuTypeButton, Perm: "profile:psw", Sort: 2, Status: 1, Hidden: 0},
 		// 系统管理（pageMenus: 0 用户管理 / 1 角色管理 / 2 菜单管理 / 3 部门管理 / 4 审核人员组）
-		{ParentID: pageMenus[0].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:user:edit", Sort: 1, Status: 1, Hidden: 0},
-		{ParentID: pageMenus[1].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:role:edit", Sort: 1, Status: 1, Hidden: 0},
-		{ParentID: pageMenus[2].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:menu:edit", Sort: 1, Status: 1, Hidden: 0},
-		{ParentID: pageMenus[3].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:dept:edit", Sort: 1, Status: 1, Hidden: 0},
-		{ParentID: pageMenus[4].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "system:examine:edit", Sort: 1, Status: 1, Hidden: 0},
-		// 流程配置页：管理按钮
-		{ParentID: applicationPage.ID, Name: "管理", Type: model.MenuTypeButton, Perm: "application:edit", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[0].ID, Name: "新增", Type: model.MenuTypeButton, Perm: "system:user:add", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[0].ID, Name: "编辑", Type: model.MenuTypeButton, Perm: "system:user:edit", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[0].ID, Name: "删除", Type: model.MenuTypeButton, Perm: "system:user:delete", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[0].ID, Name: "搜索", Type: model.MenuTypeButton, Perm: "system:user:search", Sort: 4, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[0].ID, Name: "详情", Type: model.MenuTypeButton, Perm: "system:user:detail", Sort: 5, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[0].ID, Name: "重置密码", Type: model.MenuTypeButton, Perm: "system:user:reset", Sort: 6, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[0].ID, Name: "用户档案", Type: model.MenuTypeButton, Perm: "system:user:profile", Sort: 7, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[1].ID, Name: "新增", Type: model.MenuTypeButton, Perm: "system:role:add", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[1].ID, Name: "编辑", Type: model.MenuTypeButton, Perm: "system:role:edit", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[1].ID, Name: "删除", Type: model.MenuTypeButton, Perm: "system:role:delete", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[1].ID, Name: "搜索", Type: model.MenuTypeButton, Perm: "system:role:search", Sort: 4, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[1].ID, Name: "分配菜单", Type: model.MenuTypeButton, Perm: "system:role:assign", Sort: 5, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[2].ID, Name: "新增", Type: model.MenuTypeButton, Perm: "system:menu:add", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[2].ID, Name: "编辑", Type: model.MenuTypeButton, Perm: "system:menu:edit", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[2].ID, Name: "删除", Type: model.MenuTypeButton, Perm: "system:menu:delete", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[3].ID, Name: "新增", Type: model.MenuTypeButton, Perm: "system:dept:add", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[3].ID, Name: "编辑", Type: model.MenuTypeButton, Perm: "system:dept:edit", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[3].ID, Name: "删除", Type: model.MenuTypeButton, Perm: "system:dept:delete", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[4].ID, Name: "新增", Type: model.MenuTypeButton, Perm: "system:examine:add", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[4].ID, Name: "编辑", Type: model.MenuTypeButton, Perm: "system:examine:edit", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[4].ID, Name: "删除", Type: model.MenuTypeButton, Perm: "system:examine:delete", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[4].ID, Name: "搜索", Type: model.MenuTypeButton, Perm: "system:examine:search", Sort: 4, Status: 1, Hidden: 0},
+		// 流程配置页：增删改查按钮（子页面 tables/elements/design/list 已在页面菜单中定义）
+		{ParentID: applicationPage.ID, Name: "新增", Type: model.MenuTypeButton, Perm: "application:add", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: applicationPage.ID, Name: "编辑", Type: model.MenuTypeButton, Perm: "application:edit", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: applicationPage.ID, Name: "删除", Type: model.MenuTypeButton, Perm: "application:delete", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: applicationPage.ID, Name: "搜索", Type: model.MenuTypeButton, Perm: "application:search", Sort: 4, Status: 1, Hidden: 0},
 		// 审批-申请页：管理按钮
-		{ParentID: pageMenus[10].ID, Name: "管理", Type: model.MenuTypeButton, Perm: "approval:edit", Sort: 1, Status: 1, Hidden: 0},
-		// 接口管理页：管理按钮
-		{ParentID: interfacePage.ID, Name: "管理", Type: model.MenuTypeButton, Perm: "interface:edit", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[10].ID, Name: "新增", Type: model.MenuTypeButton, Perm: "approval:add", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[10].ID, Name: "编辑", Type: model.MenuTypeButton, Perm: "approval:edit", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: pageMenus[10].ID, Name: "删除", Type: model.MenuTypeButton, Perm: "approval:delete", Sort: 3, Status: 1, Hidden: 0},
+		// 接口管理页：增删改查 + 调试 + 同步后端路由（interface:aync 与前端门控口径一致）
+		{ParentID: interfacePage.ID, Name: "新增", Type: model.MenuTypeButton, Perm: "interface:add", Sort: 1, Status: 1, Hidden: 0},
+		{ParentID: interfacePage.ID, Name: "编辑", Type: model.MenuTypeButton, Perm: "interface:edit", Sort: 2, Status: 1, Hidden: 0},
+		{ParentID: interfacePage.ID, Name: "删除", Type: model.MenuTypeButton, Perm: "interface:delete", Sort: 3, Status: 1, Hidden: 0},
+		{ParentID: interfacePage.ID, Name: "搜索", Type: model.MenuTypeButton, Perm: "interface:search", Sort: 4, Status: 1, Hidden: 0},
+		{ParentID: interfacePage.ID, Name: "调试", Type: model.MenuTypeButton, Perm: "interface:debug", Sort: 5, Status: 1, Hidden: 0},
+		{ParentID: interfacePage.ID, Name: "同步后端路由", Type: model.MenuTypeButton, Perm: "interface:aync", Sort: 6, Status: 1, Hidden: 0},
 	}
 	if err := db.Create(&buttons).Error; err != nil {
 		return err
