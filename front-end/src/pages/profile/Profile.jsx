@@ -13,17 +13,22 @@ import {
 } from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
 import * as userApi from 'src/api/user'
+import { usePermission } from 'src/hooks/usePermission'
 import { useAuth } from 'src/store/auth-context'
 
 const FormItem = Form.Item
 const TabPane = Tabs.TabPane
 
 export default function Profile() {
+  const { hasPerm } = usePermission()
+  const canPsw = hasPerm('profile:psw')
+  const canEdit = hasPerm('profile:edit')
   const { user, refreshProfile } = useAuth()
 
   // 基础信息表单
   const [infoForm] = Form.useForm()
   const [infoSaving, setInfoSaving] = useState(false)
+  const [infoEdit, setInfoEdit] = useState(false) // 是否显示基础信息编辑表单
 
   // 安全设置（修改密码）表单
   const [pwdForm] = Form.useForm()
@@ -69,6 +74,7 @@ export default function Profile() {
       // 错误已在请求层提示
     } finally {
       setInfoSaving(false)
+      setInfoEdit(false) // 关闭编辑表单
     }
   }
 
@@ -155,114 +161,173 @@ export default function Profile() {
         <Tabs type="rounded" defaultActiveTab="info">
           {/* 基础信息 */}
           <TabPane key="info" title="基础信息">
-            <Form form={infoForm} layout="horizontal" autoComplete="off" className="max-w-md">
-              <FormItem
-                label="姓名"
-                field="nickname"
-                rules={[{ maxLength: 64, message: '姓名不能超过 64 个字符' }]}
-              >
-                <Input placeholder="请输入姓名" allowClear />
-              </FormItem>
-              <FormItem label="性别" field="gender">
-                <Radio.Group>
-                  <Radio value={1}>男</Radio>
-                  <Radio value={2}>女</Radio>
-                </Radio.Group>
-              </FormItem>
-              <FormItem
-                label="邮箱"
-                field="email"
-                rules={[{ type: 'email', message: '邮箱格式不正确' }]}
-              >
-                <Input placeholder="请输入邮箱" allowClear />
-              </FormItem>
-              <FormItem label="手机号" field="phone">
-                <Input placeholder="请输入手机号" allowClear />
-              </FormItem>
-              <FormItem label="出生日期" field="birthday">
-                <DatePicker placeholder="请选择出生日期" allowClear className="w-full" />
-              </FormItem>
-              <FormItem
-                label="联系地址"
-                field="address"
-                rules={[{ maxLength: 255, message: '联系地址不能超过 255 个字符' }]}
-              >
-                <Input placeholder="请输入联系地址" allowClear />
-              </FormItem>
-              <FormItem label="入职日期" field="join_date">
-                <DatePicker placeholder="请选择入职日期" allowClear className="w-full" />
-              </FormItem>
-              <FormItem
-                label="紧急联系人"
-                field="emergency_contact"
-                rules={[{ maxLength: 64, message: '紧急联系人不能超过 64 个字符' }]}
-              >
-                <Input placeholder="请输入紧急联系人" allowClear />
-              </FormItem>
-              <FormItem label=" ">
-                <Button type="primary" loading={infoSaving} onClick={handleSaveInfo}>
-                  保存修改
-                </Button>
-              </FormItem>
-            </Form>
+            {infoEdit ? (
+              <Form form={infoForm} layout="horizontal" autoComplete="off" className="max-w-md">
+                <FormItem
+                  label="姓名"
+                  field="nickname"
+                  rules={[{ maxLength: 64, message: '姓名不能超过 64 个字符' }]}
+                >
+                  <Input placeholder="请输入姓名" allowClear />
+                </FormItem>
+                <FormItem label="性别" field="gender">
+                  <Radio.Group>
+                    <Radio value={1}>男</Radio>
+                    <Radio value={2}>女</Radio>
+                  </Radio.Group>
+                </FormItem>
+                <FormItem
+                  label="邮箱"
+                  field="email"
+                  rules={[{ type: 'email', message: '邮箱格式不正确' }]}
+                >
+                  <Input placeholder="请输入邮箱" allowClear />
+                </FormItem>
+                <FormItem label="手机号" field="phone">
+                  <Input placeholder="请输入手机号" allowClear />
+                </FormItem>
+                <FormItem label="出生日期" field="birthday">
+                  <DatePicker placeholder="请选择出生日期" allowClear className="w-full" />
+                </FormItem>
+                <FormItem
+                  label="联系地址"
+                  field="address"
+                  rules={[{ maxLength: 255, message: '联系地址不能超过 255 个字符' }]}
+                >
+                  <Input placeholder="请输入联系地址" allowClear />
+                </FormItem>
+                <FormItem label="入职日期" field="join_date">
+                  <DatePicker placeholder="请选择入职日期" allowClear className="w-full" />
+                </FormItem>
+                <FormItem
+                  label="紧急联系人"
+                  field="emergency_contact"
+                  rules={[{ maxLength: 64, message: '紧急联系人不能超过 64 个字符' }]}
+                >
+                  <Input placeholder="请输入紧急联系人" allowClear />
+                </FormItem>
+                <FormItem label=" ">
+                  <Button type="primary" loading={infoSaving} onClick={handleSaveInfo}>
+                    保存修改
+                  </Button>
+                </FormItem>
+              </Form>
+            ) : (
+              <>
+                <Descriptions
+                  column={1}
+                  size="large"
+                  labelStyle={{ textAlign: 'right' }}
+                  data={[
+                    {
+                      label: '姓名',
+                      value: user?.profile?.nickname || '-',
+                    },
+                    {
+                      label: '性别',
+                      value:
+                        user?.profile?.gender === 1
+                          ? '男'
+                          : user?.profile?.gender === 2
+                            ? '女'
+                            : '-',
+                    },
+                    {
+                      label: '邮箱',
+                      value: user?.email || '-',
+                    },
+                    {
+                      label: '手机号',
+                      value: user?.phone || '-',
+                    },
+                    {
+                      label: '出生日期',
+                      value: user?.profile?.birthday || '-',
+                    },
+                    {
+                      label: '联系地址',
+                      value: user?.profile?.address || '-',
+                    },
+                    {
+                      label: '入职日期',
+                      value: user?.profile?.join_date || '-',
+                    },
+                    {
+                      label: '紧急联系人',
+                      value: user?.profile?.emergency_contact || '-',
+                    },
+                    canEdit && {
+                      label: '',
+                      value: (
+                        <Button className="ml-2" type="primary" onClick={() => setInfoEdit(true)}>
+                          修改
+                        </Button>
+                      ),
+                    },
+                  ]}
+                />
+              </>
+            )}
           </TabPane>
 
           {/* 安全设置 */}
-          <TabPane key="security" title="安全设置">
-            <Form form={pwdForm} layout="vertical" autoComplete="off" className="max-w-md">
-              <FormItem
-                label="旧密码"
-                field="old_password"
-                rules={[
-                  { required: true, message: '请输入旧密码' },
-                  { minLength: 6, message: '密码至少 6 个字符' },
-                ]}
-              >
-                <Input.Password placeholder="请输入旧密码" />
-              </FormItem>
-              <FormItem
-                label="新密码"
-                field="new_password"
-                rules={[
-                  { required: true, message: '请输入新密码' },
-                  { minLength: 6, message: '密码至少 6 个字符' },
-                ]}
-              >
-                <Input.Password placeholder="请输入新密码" />
-              </FormItem>
-              <FormItem
-                label="确认新密码"
-                field="confirm_password"
-                rules={[
-                  { required: true, message: '请再次输入新密码' },
-                  {
-                    validator: (value, cb) => {
-                      if (value !== pwdForm.getFieldValue('new_password')) {
-                        cb('两次输入的密码不一致')
-                      } else {
-                        cb()
-                      }
+          {canPsw && (
+            <TabPane key="security" title="安全设置">
+              <Form form={pwdForm} layout="vertical" autoComplete="off" className="max-w-md">
+                <FormItem
+                  label="旧密码"
+                  field="old_password"
+                  rules={[
+                    { required: true, message: '请输入旧密码' },
+                    { minLength: 6, message: '密码至少 6 个字符' },
+                  ]}
+                >
+                  <Input.Password placeholder="请输入旧密码" />
+                </FormItem>
+                <FormItem
+                  label="新密码"
+                  field="new_password"
+                  rules={[
+                    { required: true, message: '请输入新密码' },
+                    { minLength: 6, message: '密码至少 6 个字符' },
+                  ]}
+                >
+                  <Input.Password placeholder="请输入新密码" />
+                </FormItem>
+                <FormItem
+                  label="确认新密码"
+                  field="confirm_password"
+                  rules={[
+                    { required: true, message: '请再次输入新密码' },
+                    {
+                      validator: (value, cb) => {
+                        if (value !== pwdForm.getFieldValue('new_password')) {
+                          cb('两次输入的密码不一致')
+                        } else {
+                          cb()
+                        }
+                      },
                     },
-                  },
-                ]}
-              >
-                <Input.Password
-                  placeholder="请再次输入新密码"
-                  onChange={() => {
-                    // 新密码变化时重新校验确认密码
-                    if (pwdForm.getFieldValue('confirm_password')) {
-                      pwdForm.validate(['confirm_password']).catch(() => {})
-                    }
-                  }}
-                />
-              </FormItem>
-              <FormItem>
-                <Button type="primary" loading={pwdSaving} onClick={handleSavePassword}>
-                  修改密码
-                </Button>
-              </FormItem>
-            </Form>
-          </TabPane>
+                  ]}
+                >
+                  <Input.Password
+                    placeholder="请再次输入新密码"
+                    onChange={() => {
+                      // 新密码变化时重新校验确认密码
+                      if (pwdForm.getFieldValue('confirm_password')) {
+                        pwdForm.validate(['confirm_password']).catch(() => {})
+                      }
+                    }}
+                  />
+                </FormItem>
+                <FormItem>
+                  <Button type="primary" loading={pwdSaving} onClick={handleSavePassword}>
+                    修改密码
+                  </Button>
+                </FormItem>
+              </Form>
+            </TabPane>
+          )}
         </Tabs>
       </Card>
     </div>
