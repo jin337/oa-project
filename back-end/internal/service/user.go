@@ -265,7 +265,7 @@ func UserProfileUpdate(curUserID, userID uint, req *model.UpdateProfileReq) (*mo
 	return &profile, nil
 }
 
-// isAdmin 判断用户是否拥有管理员角色（code=admin）
+// isAdmin 判断用户是否拥有管理员角色
 func isAdmin(userID uint) bool {
 	var user model.User
 	if err := database.DB.Preload("Roles").First(&user, userID).Error; err != nil {

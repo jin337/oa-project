@@ -9,7 +9,7 @@ server:
   request_timeout: 10
 
   jwt:
-    secret: "test-secret-please-change-me"
+    secret: "9f2c4a7e1b8d3f6a0c5e2b7d9f1a3c5e7b9d2f4a6c8e0b1d3f5a7c9e2b4d6f2f9p"
     expire: 24
     issuer: "back-end"                      # token 签发者
 
