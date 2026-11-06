@@ -70,6 +70,22 @@ func main() {
 		}
 	}()
 
+	// 6.2 定时清理超过保留天数的操作审计日志（server.operation_log.retain_days，0=永久保留则不注册）
+	if cfg.Server.OperationLog.RetainDays > 0 {
+		go func() {
+			interval := time.Duration(cfg.Server.OperationLog.CleanupIntervalHours) * time.Hour
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for range ticker.C {
+				if n, err := service.OperationLogCleanup(); err != nil {
+					logger.Errorf("审计日志清理失败: %v", err)
+				} else if n > 0 {
+					logger.Infof("审计日志清理 %d 条（保留 %d 天）", n, cfg.Server.OperationLog.RetainDays)
+				}
+			}
+		}()
+	}
+
 	// 6.1 每分钟检查一次：到了生效时间的流程版本自动激活
 	go func() {
 		ticker := time.NewTicker(time.Minute)

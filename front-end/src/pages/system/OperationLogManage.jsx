@@ -6,6 +6,7 @@ import {
   Dropdown,
   Input,
   Menu,
+  Message,
   Popover,
   Select,
   Space,
@@ -55,16 +56,22 @@ export default function OperationLogManage() {
   const [tableSize, setTableSize] = useState('default')
   const [visibleCols, setVisibleCols] = useState(ALL_COL_KEYS)
 
+  // 生效筛选条件 → 请求参数（列表与导出共用，保证口径一致）
+  const buildFilterParams = useCallback((fromApplied) => {
+    const params = {}
+    if (fromApplied.username) params.username = fromApplied.username
+    if (fromApplied.method) params.method = fromApplied.method
+    if (fromApplied.path) params.path = fromApplied.path
+    if (fromApplied.start) params.start = fromApplied.start
+    if (fromApplied.end) params.end = fromApplied.end
+    return params
+  }, [])
+
   const fetchList = useCallback(
     async (p = page, s = size) => {
       setLoading(true)
       try {
-        const params = { page: p, size: s }
-        if (applied.username) params.username = applied.username
-        if (applied.method) params.method = applied.method
-        if (applied.path) params.path = applied.path
-        if (applied.start) params.start = applied.start
-        if (applied.end) params.end = applied.end
+        const params = { page: p, size: s, ...buildFilterParams(applied) }
         const res = await operationLogApi.listOperationLogs(params)
         setList(res.data.list || [])
         setTotal(res.data.total || 0)
@@ -74,8 +81,54 @@ export default function OperationLogManage() {
         setLoading(false)
       }
     },
-    [page, size, applied],
+    [page, size, applied, buildFilterParams],
   )
+
+  // 导出：按已生效筛选条件下载 xlsx。
+  // 响应为 blob：type 为 JSON 时说明后端返回的是业务错误（如权限/参数），解析后提示；
+  // 正常时从 Content-Disposition 无法直接取（拦截器只回 data），统一用本地时间命名。
+  const [exporting, setExporting] = useState(false)
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const blob = await operationLogApi.exportOperationLogs(buildFilterParams(applied))
+      if (blob && blob.type && blob.type.includes('application/json')) {
+        const text = await blob.text()
+        let msg = '导出失败'
+        try {
+          msg = JSON.parse(text).msg || msg
+        } catch {
+          /* 非法 JSON 用默认提示 */
+        }
+        Message.error(msg)
+        return
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      // 本地时间戳命名（formatTime 只接受 ISO 字符串，不适用于 Date.now）
+      const now = new Date()
+      const pad = (n) => String(n).padStart(2, '0')
+      const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+      a.download = `操作日志_${stamp}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      // 后端单次导出上限 5 万行：筛选结果超出时仅导出最新部分，明确告知用户
+      if (total > 50000) {
+        Message.warning(
+          `共 ${total} 条记录，超出单次导出上限，仅导出最近 5 万条；可缩小时间/条件范围分批导出`,
+        )
+      } else {
+        Message.success('导出成功')
+      }
+    } catch (e) {
+      // 网络层错误已在请求拦截器提示
+    } finally {
+      setExporting(false)
+    }
+  }
 
   useEffect(() => {
     fetchList()
@@ -126,7 +179,7 @@ export default function OperationLogManage() {
       key: 'created_at',
       title: '操作时间',
       dataIndex: 'created_at',
-      width: 140,
+      width: 180,
       render: (v) => formatTime(v),
     },
     {
@@ -148,12 +201,36 @@ export default function OperationLogManage() {
       key: 'path',
       title: '路径',
       dataIndex: 'path',
-      width: 260,
       render: (v) => (
         <Typography.Ellipsis showTooltip style={{ maxWidth: 260 }}>
           {v || '-'}
         </Typography.Ellipsis>
       ),
+    },
+    {
+      key: 'detail',
+      title: '请求参数',
+      dataIndex: 'query',
+      width: 300,
+      render: (_, r) => {
+        // 登录/密码等凭据类接口请求体已脱敏，仅展示 URL 查询参数
+        const text = [r.query && `?${r.query}`, r.body && `body: ${r.body}`]
+          .filter(Boolean)
+          .join(' ')
+        // 表格 auto 布局下最后一列会被拉伸，列 width 不生效；
+        // 必须用 style.maxWidth 给 Ellipsis 一个受限宽度，才会出现省略号并启用内置 tooltip
+        return (
+          <Typography.Ellipsis
+            showTooltip={{
+              content: <div className="max-h-60 overflow-auto px-2 py-3">{text}</div>,
+              className: '[&_.arco-tooltip-content]:p-0!',
+            }}
+            style={{ maxWidth: 300 }}
+          >
+            {text || '-'}
+          </Typography.Ellipsis>
+        )
+      },
     },
     {
       key: 'status',
@@ -176,25 +253,6 @@ export default function OperationLogManage() {
       dataIndex: 'elapsed_ms',
       width: 90,
       render: (v) => `${v} ms`,
-    },
-    {
-      key: 'detail',
-      title: '请求参数',
-      dataIndex: 'query',
-      width: 320,
-      render: (_, r) => {
-        // 登录/密码等凭据类接口请求体已脱敏，仅展示 URL 查询参数
-        const text = [r.query && `?${r.query}`, r.body && `body: ${r.body}`]
-          .filter(Boolean)
-          .join(' ')
-        // 表格 auto 布局下最后一列会被拉伸，列 width 不生效；
-        // 必须用 style.maxWidth 给 Ellipsis 一个受限宽度，才会出现省略号并启用内置 tooltip
-        return (
-          <Typography.Ellipsis showTooltip style={{ maxWidth: 320 }}>
-            {text || '-'}
-          </Typography.Ellipsis>
-        )
-      },
     },
   ]
 
@@ -266,6 +324,9 @@ export default function OperationLogManage() {
           仅记录写操作（新增/修改/删除/登录等）；凭据类接口请求体已脱敏
         </Typography.Text>
         <Space>
+          <Button size="small" loading={exporting} onClick={handleExport}>
+            导出
+          </Button>
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>

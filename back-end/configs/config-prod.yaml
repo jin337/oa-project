@@ -32,6 +32,10 @@ server:
       - Content-Type
       - Authorization
 
+  operation_log:              # 操作审计日志留存策略
+    retain_days: 365          # 生产按合规惯例至少保留一年；0=永久保留（不执行清理）
+    cleanup_interval_hours: 24 # 清理任务执行间隔（小时）
+
 mysql:
   host: 127.0.0.1
   port: 3306

@@ -29,6 +29,13 @@ type ServerConfig struct {
 	JWT            JWTConfig   `yaml:"jwt"`
 	Log            LogConfig   `yaml:"log"`
 	Cors           CorsConfig  `yaml:"cors"`
+	OperationLog   OperationLogConfig `yaml:"operation_log"` // 操作审计日志留存策略
+}
+
+// OperationLogConfig 操作审计日志留存：超过保留天数的记录由后台定时任务删除
+type OperationLogConfig struct {
+	RetainDays           int `yaml:"retain_days"`            // 保留天数，0=永久保留（不执行清理）
+	CleanupIntervalHours int `yaml:"cleanup_interval_hours"` // 清理任务执行间隔（小时），非法值回退 24
 }
 
 type JWTConfig struct {
@@ -96,6 +103,7 @@ func defaultConfig() *Config {
 				AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 				AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
 			},
+			OperationLog: OperationLogConfig{RetainDays: 180, CleanupIntervalHours: 24},
 		},
 		MySQL: MySQLConfig{
 			Host: "127.0.0.1", Port: 3306,
@@ -148,6 +156,10 @@ func Load() *Config {
 	}
 	if cfg.MySQL.Migrate.Mode != "full" && cfg.MySQL.Migrate.Mode != "incremental" {
 		cfg.MySQL.Migrate.Mode = "incremental"
+	}
+	// 审计日志留存兜底：间隔非法回退 24 小时；RetainDays=0 合法（永久保留，不执行清理）
+	if cfg.Server.OperationLog.CleanupIntervalHours <= 0 {
+		cfg.Server.OperationLog.CleanupIntervalHours = 24
 	}
 
 	Cfg = cfg
