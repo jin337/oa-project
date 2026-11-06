@@ -39,7 +39,24 @@ func UserList(curUserID uint, req *model.UserListReq) ([]model.User, int64, erro
 	// 供前端选择器（如审核人员组-审核人下拉）展示昵称，避免列表接口缺 profile 导致回退 username
 	err := db.Preload("Roles").Preload("Dept").Preload("DeptIDs").Preload("Profile").
 		Order("id ASC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
-	return list, total, err
+	if err != nil {
+		return nil, 0, err
+	}
+	// 登录锁定状态装配（进程内计数派生，一次性批量查询避免逐行加锁）：
+	// 前端据此在操作列显示「解除锁定」；锁定数据不落库，仅列表接口输出
+	if len(list) > 0 {
+		names := make([]string, 0, len(list))
+		for i := range list {
+			names = append(names, list[i].Username)
+		}
+		locked := middleware.LoginLockedRemaining(names)
+		for i := range list {
+			if _, ok := locked[list[i].Username]; ok {
+				list[i].LoginLocked = true
+			}
+		}
+	}
+	return list, total, nil
 }
 
 // UserDetail 用户详情
@@ -216,6 +233,17 @@ func UserResetPassword(curUserID, id uint, req *model.ResetPasswordReq) error {
 		"password":   string(hash),
 		"updated_by": curUserID,
 	}).Error
+}
+
+// UserUnlockLogin 管理员解除登录锁定：清除该账号的进程内失败计数与锁定期。
+// 锁定为进程内状态（不落库），故无需写库；返回 unlocked 表示此前是否确实处于锁定中，
+// 供 handler 区分「已解除」与「本就未锁定」（到期自动解锁的竞态场景）
+func UserUnlockLogin(id uint) (unlocked bool, err error) {
+	var user model.User
+	if err := database.DB.First(&user, id).Error; err != nil {
+		return false, errors.New("用户不存在")
+	}
+	return middleware.AdminUnlockLogin(user.Username), nil
 }
 
 // UserProfileGet 获取用户员工档案（1:1），不存在时返回空档案便于前端初始化

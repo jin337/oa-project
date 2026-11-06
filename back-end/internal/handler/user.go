@@ -218,3 +218,26 @@ func UserResetPassword(c *gin.Context) {
 	}
 	response.OKMsg(c, "重置密码成功")
 }
+
+// UserUnlockLogin PUT /{APIPrefix}/users/:id/unlock 解除登录失败锁定
+func UserUnlockLogin(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	unlocked, err := service.UserUnlockLogin(id)
+	if err != nil {
+		code := response.CodeServerError
+		if err.Error() == "用户不存在" {
+			code = response.CodeNotFound
+		}
+		response.Fail(c, code, err.Error())
+		return
+	}
+	if unlocked {
+		response.OKMsg(c, "已解除登录锁定")
+		return
+	}
+	// 幂等：锁定可能已到期自动解除
+	response.OKMsg(c, "该账号当前未被锁定")
+}

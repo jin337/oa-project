@@ -113,13 +113,14 @@ function normalizeUserPayload(values) {
 }
 
 export default function UserManage() {
-  const { hasPerm } = usePermission()
+  const { hasPerm, hasAnyPerm } = usePermission()
   const canAdd = hasPerm('system:user:add')
   const canEdit = hasPerm('system:user:edit')
   const canDelete = hasPerm('system:user:delete')
   const canSearch = hasPerm('system:user:search')
   const canReset = hasPerm('system:user:reset')
   const canProfile = hasPerm('system:user:profile')
+  const canUnlock = hasAnyPerm('system:user:unlock')
   const [list, setList] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -295,6 +296,21 @@ export default function UserManage() {
     }
   }
 
+  // 解除登录锁定：管理员清除此账号的登录失败锁定，成功后刷新列表（login_locked 由后端派生）
+  const [unlockingId, setUnlockingId] = useState(null)
+  const handleUnlock = async (record) => {
+    setUnlockingId(record.id)
+    try {
+      const res = await userApi.unlockUser(record.id)
+      Message.success(res?.msg || '已解除登录锁定')
+      fetchList()
+    } catch (e) {
+      // 错误已在请求层提示
+    } finally {
+      setUnlockingId(null)
+    }
+  }
+
   // 打开用户档案抽屉：列表接口已 Preload Profile/Roles/Dept，直接用行数据，无需再请求 GET /users/:id
   const openDetail = (record) => {
     setDetailVisible(true)
@@ -415,28 +431,32 @@ export default function UserManage() {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
-      width: 80,
+      width: 130,
       align: 'center',
-      render: (status, record) =>
-        canEdit && canDelete && record.id !== 1 ? (
-          <Switch
-            size="small"
-            checked={status === 1}
-            loading={togglingId === record.id}
-            onChange={(checked) => handleToggleStatus(record, checked)}
-          />
-        ) : status === 1 ? (
-          <Tag color="green">启用</Tag>
-        ) : (
-          <Tag color="red">停用</Tag>
-        ),
+      render: (status, record) => (
+        <div className="flex items-center justify-center gap-1">
+          {record.login_locked ? (
+            <Tag color="orangered">已锁定</Tag>
+          ) : canEdit && canDelete && record.id !== 1 ? (
+            <Switch
+              size="small"
+              checked={status === 1}
+              loading={togglingId === record.id}
+              onChange={(checked) => handleToggleStatus(record, checked)}
+            />
+          ) : status === 1 ? (
+            <Tag color="green">启用</Tag>
+          ) : (
+            <Tag color="red">停用</Tag>
+          )}
+        </div>
+      ),
     },
-    (canEdit || canReset || canProfile || canDelete) && {
+    (canEdit || canReset || canProfile || canDelete || canUnlock) && {
       key: 'action',
       title: '操作',
-      width: 120,
       render: (_, record) => (
-        <Space>
+        <Space wrap>
           {canReset && (
             <Button size="mini" onClick={() => openResetPassword(record)}>
               重置密码
@@ -446,6 +466,19 @@ export default function UserManage() {
             <Button size="mini" onClick={() => openDetail(record)}>
               用户档案
             </Button>
+          )}
+          {canUnlock && record.login_locked && (
+            <Popconfirm
+              position="lb"
+              focusLock
+              title="确认解除该账号的登录锁定？"
+              content="解除后该账号可立即重新登录"
+              onOk={() => handleUnlock(record)}
+            >
+              <Button size="mini" status="warning" loading={unlockingId === record.id}>
+                解除锁定
+              </Button>
+            </Popconfirm>
           )}
           {record.status !== 1 && record.id !== 1 && canEdit && canDelete && (
             <Popconfirm

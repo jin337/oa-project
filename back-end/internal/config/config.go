@@ -22,14 +22,39 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port           int         `yaml:"port"`
-	Mode           string      `yaml:"mode"`
-	APIPrefix      string      `yaml:"api_prefix"` // API 统一前缀（版本号变更只改此处，需同步前端 .env 与 Nginx）
-	RequestTimeout int         `yaml:"request_timeout"` // 秒
-	JWT            JWTConfig   `yaml:"jwt"`
-	Log            LogConfig   `yaml:"log"`
-	Cors           CorsConfig  `yaml:"cors"`
+	Port           int                `yaml:"port"`
+	Mode           string             `yaml:"mode"`
+	APIPrefix      string             `yaml:"api_prefix"`      // API 统一前缀（版本号变更只改此处，需同步前端 .env 与 Nginx）
+	RequestTimeout int                `yaml:"request_timeout"` // 秒
+	JWT            JWTConfig          `yaml:"jwt"`
+	Log            LogConfig          `yaml:"log"`
+	Cors           CorsConfig         `yaml:"cors"`
 	OperationLog   OperationLogConfig `yaml:"operation_log"` // 操作审计日志留存策略
+	Security       SecurityConfig     `yaml:"security"`      // 安全防护：限流 + 登录失败锁定
+}
+
+// SecurityConfig 安全防护策略（进程内实现，单实例部署口径；多实例扩容需换 Redis 令牌桶）
+type SecurityConfig struct {
+	RateLimitEnable bool `yaml:"rate_limit_enable"` // 全局接口限流开关（登录/重置密码等凭据接口叠加更严阈值）
+
+	// 全局桶：按客户端 IP 计，令牌=请求数，每秒回填 cost_per_sec 个、突发封顶 burst
+	RateLimitCostPerSec int `yaml:"rate_limit_cost_per_sec"` // 每秒每 IP 持续允许请求数，<=0 用默认桶（50）
+	RateLimitBurst      int `yaml:"rate_limit_burst"`        // 突发预算（≈可容忍短时并发请求数），默认桶 100
+
+	// 敏感接口（登录 / 管理员重置密码）：同样机制但预算更紧，撞库会被迅速限流
+	SensitiveCostPerSec int `yaml:"sensitive_cost_per_sec"` // <=0 用默认桶（5）
+	SensitiveBurst      int `yaml:"sensitive_burst"`        // <=0 用默认桶（10）
+
+	// 可信代理网段（CIDR），如 ["127.0.0.1/32","10.0.0.12/32"]。
+	// 限流与登录锁定按客户端 IP 计数：Gin 默认信任所有代理，客户端可自行伪造
+	// X-Forwarded-For 绕过 IP 限流。反代部署必须在此填 Nginx 所在网段，
+	// 只有来自可信代理的 XFF 才会被采信。留空则沿用 Gin 默认（信任所有代理）。
+	TrustedProxies []string `yaml:"trusted_proxies"`
+
+	// 登录失败锁定（按用户名维度，防对单账号撞库）
+	LoginMaxFails int `yaml:"login_max_fails"` // 窗口内最大失败次数，<=0 回退 5
+	LoginFailTTL  int `yaml:"login_fail_ttl"`  // 失败计数窗口（分钟），<=0 回退 15
+	LoginLockTTL  int `yaml:"login_lock_ttl"`  // 锁定时长（分钟），<=0 回退 15
 }
 
 // OperationLogConfig 操作审计日志留存：超过保留天数的记录由后台定时任务删除
@@ -104,6 +129,16 @@ func defaultConfig() *Config {
 				AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
 			},
 			OperationLog: OperationLogConfig{RetainDays: 180, CleanupIntervalHours: 24},
+			Security: SecurityConfig{
+				RateLimitEnable:     true,
+				RateLimitCostPerSec: 50,
+				RateLimitBurst:      100,
+				SensitiveCostPerSec: 5,
+				SensitiveBurst:      10,
+				LoginMaxFails:       5,
+				LoginFailTTL:        15,
+				LoginLockTTL:        15,
+			},
 		},
 		MySQL: MySQLConfig{
 			Host: "127.0.0.1", Port: 3306,
@@ -123,6 +158,7 @@ func defaultConfig() *Config {
 // APP_ENV=prod      -> configs/config-prod.yaml
 // 配置文件读取/解析失败时不退出，打印告警并使用默认安全配置。
 var DefaultEnv = "dev"
+
 func Load() *Config {
 	Env = os.Getenv("APP_ENV")
 	if Env == "" {

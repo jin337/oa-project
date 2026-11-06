@@ -49,3 +49,8 @@ export function updateUserProfile(id, data) {
 export function resetUserPassword(id, data) {
   return request.put(`/users/${id}/reset-password`, data)
 }
+// PUT /users/:id/unlock 解除登录失败锁定（管理员操作）。
+// 仅列表接口返回 login_locked=true 的账号需要调用；成功后刷新列表使操作项消失
+export function unlockUser(id) {
+  return request.put(`/users/${id}/unlock`)
+}

@@ -157,6 +157,29 @@ APP_ENV=prod ./bin/server
 
 生产部署要点：修改 JWT secret、关闭自动迁移（`mysql.migrate.enable: false`）、确保 `uploads/` 可写、建议 systemd 守护。详见 [`back-end/README.md`](back-end/README.md)。
 
+### 安全防护（登录限流 / 失败锁定 / 安全头）
+
+后端 `config-*.yaml` 的 `server.security` 段控制，三段能力（实现见 `internal/middleware/security.go`）：
+
+- **令牌桶限流**：全局按客户端 IP 计（默认 50/s、突发 100，拦脚本与死循环）；`login`、`reset-password` 等凭据接口走更严的敏感桶（默认 5/s、突发 10），超限返回 HTTP 429。SSE 长连接豁免。
+- **登录失败锁定**：按用户名，窗口内累计 N 次失败即临时锁定（默认 15 分钟锁 15 分钟），登录成功立即清零；账号不存在与密码错误同等计数，不暴露账号是否存在。锁定期返回 HTTP 423 与剩余分钟数。
+- **安全响应头**：`X-Frame-Options: SAMEORIGIN`、`X-Content-Type-Options: nosniff`、`Referrer-Policy`、`Permissions-Policy`，以及 `Content-Security-Policy: frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'`。刻意**不下发 `script-src`**——低代码引擎的 js_event / 表达式钩子依赖 `new Function`，收紧脚本源会砍掉产品能力。
+
+⚠️ 两个必须知晓的边界：
+
+1. **限流与锁定都是单实例进程内计数**。多实例横向扩容时每实例独立计数（等效 N 倍额度、锁定也可被分散绕过），届时需改 Redis 共享令牌桶/计数。
+2. **后端响应头覆盖不到 SPA 的 `index.html`**——它由前端静态服务器下发，点击劫持防护必须在该层同步配置，否则页面仍可被外站 iframe 嵌套：
+
+```nginx
+server {
+  # 前端静态站点（dist/）：安全头与后端 API 保持同口径
+  add_header X-Frame-Options SAMEORIGIN always;
+  add_header X-Content-Type-Options nosniff always;
+  add_header Referrer-Policy strict-origin-when-cross-origin always;
+  add_header Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" always;
+}
+```
+
 ### 前端
 
 ```bash

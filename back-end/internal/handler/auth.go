@@ -1,6 +1,10 @@
 package handler
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
+
 	"back-end/internal/middleware"
 	"back-end/internal/model"
 	"back-end/internal/pkg/response"
@@ -17,12 +21,29 @@ func Login(c *gin.Context) {
 		response.Fail(c, response.CodeParamError, msg)
 		return
 	}
-	res, err := service.Login(&req)
-	if err != nil {
+	// 登录失败锁定（按用户名）：锁定期内不校验密码，直接返回剩余时间（HTTP 423）
+	if err := middleware.CheckLoginLock(req.Username); err != nil {
+		var locked *middleware.LoginLockedErr
+		if errors.As(err, &locked) {
+			response.FailWithHTTP(c, http.StatusLocked, response.CodeForbidden,
+				fmt.Sprintf("登录失败次数过多，账号已临时锁定，请 %.0f 分钟后再试", locked.Remaining.Minutes()))
+			return
+		}
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
-	middleware.InvalidatePermCache() // 登录时全量失效：多实例 TTL 未同步场景下，保证本次会话鉴权用最新权限
+	res, err := service.Login(&req)
+	if err != nil {
+		// 仅凭据/账号类失败计数（停用等已表明账号状态，不叠加锁定语义）
+		if err.Error() == "用户名或密码错误" && middleware.RecordLoginFail(req.Username) {
+			response.FailWithHTTP(c, http.StatusLocked, response.CodeForbidden, "登录失败次数过多，账号已临时锁定，请稍后再试")
+			return
+		}
+		response.Fail(c, response.CodeServerError, err.Error())
+		return
+	}
+	middleware.ClearLoginFail(req.Username) // 成功即清零并立即解锁
+	middleware.InvalidatePermCache()        // 登录时全量失效：多实例 TTL 未同步场景下，保证本次会话鉴权用最新权限
 	response.OK(c, res)
 }
 

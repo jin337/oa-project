@@ -11,6 +11,7 @@ import (
 
 	"back-end/internal/config"
 	"back-end/internal/database"
+	"back-end/internal/middleware"
 	"back-end/internal/pkg/logger"
 	"back-end/internal/router"
 	"back-end/internal/service"
@@ -25,6 +26,9 @@ func main() {
 	// 2. 初始化日志：级别与路径均可配置
 	logger.Setup(cfg.Server.Log.Level, cfg.Server.Log.Path)
 	logger.Infof("环境=%s 配置加载完成", config.Env)
+
+	// 2.1 安全策略初始化：按 config.security 应用限流参数并启动过期 key 清理
+	middleware.InitSecurity()
 
 	// 3. 连接数据库（自动建库 + 连接池 + 健康检测）
 	db, err := database.Setup(cfg.MySQL)

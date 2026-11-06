@@ -99,7 +99,11 @@ func TestAutoApprovedComment(t *testing.T) {
 		{name: "前置卡位", mode: "pre", suffix: "自动通过", want: "已前置审批，自动通过"},
 		{name: "后置退回", mode: "post", suffix: "退回后不重复审批", want: "已后置审批，退回后不重复审批"},
 		{name: "前置退回", mode: "pre", suffix: "退回后不重复审批", want: "已前置审批，退回后不重复审批"},
-		{name: "顺序兜底文案", mode: "sequential", suffix: "自动通过", want: "已前置审批，自动通过"},
+		// 顺序模式（parseApprovalMode 默认返回 sequential）：无前置/后置语义，只输出纯动作文案
+		{name: "顺序模式纯文案", mode: "sequential", suffix: "自动通过", want: "自动通过"},
+		{name: "顺序模式退回文案", mode: "sequential", suffix: "退回后不重复审批", want: "退回后不重复审批"},
+		// 未知/空 mode 同样落入兜底分支（防御性契约）
+		{name: "空 mode 兜底", mode: "", suffix: "自动通过", want: "自动通过"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

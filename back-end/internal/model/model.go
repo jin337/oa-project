@@ -23,6 +23,10 @@ type User struct {
 	Roles   []*Role      `gorm:"many2many:sys_user_role;" json:"roles,omitempty"`
 	Dept    *Dept        `gorm:"foreignKey:DeptID" json:"dept,omitempty"`
 	Profile *UserProfile `gorm:"foreignKey:UserID" json:"profile,omitempty"`
+
+	// LoginLocked 登录失败锁定中（进程内计数派生，不落库：gorm:"-"）。
+	// 仅用户列表接口填充，供管理端判断是否显示「解除锁定」；其他接口恒为 false。
+	LoginLocked bool `gorm:"-" json:"login_locked"`
 }
 
 // UserProfile 员工档案：与用户一对一（1:1）关联，存储更丰富的个人信息

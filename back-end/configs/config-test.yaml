@@ -36,6 +36,16 @@ server:
     retain_days: 90           # 测试环境流水量大且留存价值低，保留 90 天；0=永久保留
     cleanup_interval_hours: 24 # 清理任务执行间隔（小时）
 
+  security:                   # 安全防护（限流为单实例进程内口径；多实例部署需换 Redis 共享计数）
+    rate_limit_enable: true   # 全局接口限流开关
+    rate_limit_cost_per_sec: 50 # 每 IP 每秒全局预算（正常人机操作远达不到，拦脚本/死循环）
+    rate_limit_burst: 100     # 全局突发预算（约可容忍短时并发请求数）
+    sensitive_cost_per_sec: 5 # 凭据接口（登录/重置密码）每秒预算
+    sensitive_burst: 10       # 凭据接口突发预算
+    login_max_fails: 5        # 窗口内失败次数达到即锁定账号
+    login_fail_ttl: 15        # 失败计数窗口（分钟）
+    login_lock_ttl: 15        # 锁定时长（分钟）
+    trusted_proxies: []       # 反代部署必填 Nginx 所在网段（CIDR），如 [127.0.0.1/32]；留空=信任所有代理，客户端可伪造 XFF 绕过 IP 限流
 mysql:
   host: 127.0.0.1
   port: 3306
