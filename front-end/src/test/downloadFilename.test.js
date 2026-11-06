@@ -33,9 +33,16 @@ describe('parseDownloadFilename（下载文件名解析）', () => {
     expect(parseDownloadFilename('attachment', 'fallback.xlsx')).toBe('fallback.xlsx')
   })
 
-  it('识别导出超限范围标记（前端据此提示分批导出）', () => {
-    const name = parseDownloadFilename(`filename*=UTF-8''${encodeURIComponent('报销_前10000条_共20000条.xlsx')}`, 'x.xlsx')
-    expect(/_前\d+条_共\d+条/.test(name)).toBe(true)
-    expect(/_前\d+条_共\d+条/.test('报销_20261106.xlsx')).toBe(false)
+  it('识别导出截断标记（前端据此提示分批导出）', () => {
+    const name = parseDownloadFilename(
+      `filename*=UTF-8''${encodeURIComponent('报销_20261106180907_主表截断前10000条共20000条_子表截断.xlsx')}`,
+      'x.xlsx',
+    )
+    expect(name.includes('截断')).toBe(true)
+    const normal = parseDownloadFilename(
+      `filename*=UTF-8''${encodeURIComponent('报销_20261106.xlsx')}`,
+      'x.xlsx',
+    )
+    expect(normal.includes('截断')).toBe(false)
   })
 })

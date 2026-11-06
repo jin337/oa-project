@@ -107,6 +107,53 @@ func TestExportCellTextOptionMapping(t *testing.T) {
 	}
 }
 
+// TestSanitizeSheetName 工作表名清洗：去非法字符、限长 31 字符（Excel 硬限制）
+func TestSanitizeSheetName(t *testing.T) {
+	if got := service.SanitizeSheetName("a/b\\c:d*e?f[g]h"); got != "abcdefgh" {
+		t.Errorf("非法字符应全部剔除，实际: %q", got)
+	}
+	long := strings.Repeat("列", 40)
+	if got := service.SanitizeSheetName(long); len([]rune(got)) != 31 {
+		t.Errorf("超 31 字符应截断为 31，实际长度: %d", len([]rune(got)))
+	}
+	if got := service.SanitizeSheetName("'费用明细 '"); got != "费用明细" {
+		t.Errorf("应一次性剔除首尾空格与单引号，实际: %q", got)
+	}
+}
+
+// TestUniqueSheetName 重名工作表追加序号且不越界，集合内不产生重复
+func TestUniqueSheetName(t *testing.T) {
+	used := map[string]bool{}
+	first := service.UniqueSheetName(used, "差旅费报销子表")
+	second := service.UniqueSheetName(used, "差旅费报销子表")
+	if first != "差旅费报销子表" {
+		t.Errorf("首个名称应原样使用，实际: %q", first)
+	}
+	if second != "差旅费报销子表_2" {
+		t.Errorf("重名应追加 _2，实际: %q", second)
+	}
+	third := service.UniqueSheetName(used, "差旅费报销子表")
+	if third == first || third == second {
+		t.Errorf("第三个名称必须与前两个不同，实际: %q", third)
+	}
+	// 超长基础名重名时，追加后缀后仍需满足 31 字符限制
+	used2 := map[string]bool{}
+	base := strings.Repeat("表", 31)
+	service.UniqueSheetName(used2, base)
+	dup := service.UniqueSheetName(used2, base)
+	if len([]rune(dup)) > 31 {
+		t.Errorf("去重后的工作表名不得超过 31 字符，实际长度: %d", len([]rune(dup)))
+	}
+	if dup == base {
+		t.Error("重名未产生差异化名称")
+	}
+	// 空名回退默认，不应返回空字符串（空名会触发 excelize 报错）
+	used3 := map[string]bool{}
+	if got := service.UniqueSheetName(used3, ""); got == "" {
+		t.Error("空基础名应回退默认名称")
+	}
+}
+
 // TestExportCellTextTimeAndPlain 时间型格式化、普通文本原样输出
 func TestExportCellTextTimeAndPlain(t *testing.T) {
 	dt := model.ApplicationElement{ElementType: "datetime", FieldKey: "apply_time"}

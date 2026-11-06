@@ -326,8 +326,8 @@ export default function DynamicList({ app, code, editable = false }) {
         `${app?.name || '数据'}.xlsx`,
       )
       saveBlob(blob, filename)
-      // 超出单次上限时后端把范围写进文件名（如 …_前10000条_共20000条.xlsx），据此提示
-      if (/_前\d+条_共\d+条/.test(filename)) {
+      // 后端在数据量超限时把范围写进文件名（如 …_主表截断前10000条共20000条.xlsx），据此提示
+      if (filename.includes('截断')) {
         Message.warning('数据量超出单次导出上限，已按文件名所示范围导出，可缩小筛选范围分批导出')
       } else {
         Message.success('导出成功')
