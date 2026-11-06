@@ -1,4 +1,4 @@
-import { Button, Result, Space, Typography } from '@arco-design/web-react'
+import { Button, Result, Space } from '@arco-design/web-react'
 import { Component } from 'react'
 
 /**
@@ -50,9 +50,9 @@ export default class ErrorBoundary extends Component {
             </Space>
           }
         >
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <div className="text-center text-gray-400 text-xs">
             提示：若该页面由页签缓存产生，关闭当前页签重新打开也可恢复
-          </Typography.Text>
+          </div>
         </Result>
       )
     }

@@ -11,7 +11,6 @@ import {
   Space,
   Table,
   Tag,
-  Tooltip,
   Typography,
 } from '@arco-design/web-react'
 import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
@@ -24,7 +23,16 @@ const RangePicker = DatePicker.RangePicker
 const MenuItem = Menu.Item
 
 // 可配置列 key（操作内容列固定展示，不参与列设置）
-const ALL_COL_KEYS = ['created_at', 'username', 'method', 'path', 'status', 'ip', 'elapsed_ms', 'detail']
+const ALL_COL_KEYS = [
+  'created_at',
+  'username',
+  'method',
+  'path',
+  'status',
+  'ip',
+  'elapsed_ms',
+  'detail',
+]
 
 // 请求方法 -> Tag 颜色（视觉区分写操作类型）
 const METHOD_COLOR = { POST: 'arcoblue', PUT: 'orange', DELETE: 'red', PATCH: 'purple' }
@@ -118,14 +126,14 @@ export default function OperationLogManage() {
       key: 'created_at',
       title: '操作时间',
       dataIndex: 'created_at',
-      width: 190,
+      width: 140,
       render: (v) => formatTime(v),
     },
     {
       key: 'username',
       title: '操作人',
       dataIndex: 'username',
-      width: 120,
+      width: 100,
       render: (v, r) => v || (r.user_id ? `#${r.user_id}` : '-'),
     },
     {
@@ -142,44 +150,49 @@ export default function OperationLogManage() {
       dataIndex: 'path',
       width: 260,
       render: (v) => (
-        <Tooltip content={v}>
-          <Typography.Ellipsis>{v}</Typography.Ellipsis>
-        </Tooltip>
+        <Typography.Ellipsis showTooltip style={{ maxWidth: 260 }}>
+          {v || '-'}
+        </Typography.Ellipsis>
       ),
     },
     {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
-      width: 80,
+      width: 70,
       align: 'center',
       render: (v) => (
-        <Tag color={v >= 200 && v < 400 ? 'green' : v === 403 ? 'orange' : v >= 400 ? 'red' : 'gray'}>
+        <Tag
+          color={v >= 200 && v < 400 ? 'green' : v === 403 ? 'orange' : v >= 400 ? 'red' : 'gray'}
+        >
           {v}
         </Tag>
       ),
     },
-    { key: 'ip', title: 'IP', dataIndex: 'ip', width: 130 },
+    { key: 'ip', title: 'IP', dataIndex: 'ip', width: 100 },
     {
       key: 'elapsed_ms',
       title: '耗时',
       dataIndex: 'elapsed_ms',
       width: 90,
-      align: 'right',
       render: (v) => `${v} ms`,
     },
     {
       key: 'detail',
       title: '请求参数',
       dataIndex: 'query',
+      width: 320,
       render: (_, r) => {
         // 登录/密码等凭据类接口请求体已脱敏，仅展示 URL 查询参数
-        const text = [r.query && `?${r.query}`, r.body && `body: ${r.body}`].filter(Boolean).join(' ')
-        if (!text) return '-'
+        const text = [r.query && `?${r.query}`, r.body && `body: ${r.body}`]
+          .filter(Boolean)
+          .join(' ')
+        // 表格 auto 布局下最后一列会被拉伸，列 width 不生效；
+        // 必须用 style.maxWidth 给 Ellipsis 一个受限宽度，才会出现省略号并启用内置 tooltip
         return (
-          <Tooltip content={<pre className="max-h-60 overflow-auto whitespace-pre-wrap m-0">{text}</pre>}>
-            <Typography.Ellipsis>{text}</Typography.Ellipsis>
-          </Tooltip>
+          <Typography.Ellipsis showTooltip style={{ maxWidth: 320 }}>
+            {text || '-'}
+          </Typography.Ellipsis>
         )
       },
     },
@@ -235,7 +248,11 @@ export default function OperationLogManage() {
             onChange={setPath}
             onPressEnter={handleSearch}
           />
-          <RangePicker value={range} onChange={(dateString) => setRange(dateString || [])} style={{ width: 260 }} />
+          <RangePicker
+            value={range}
+            onChange={(dateString) => setRange(dateString || [])}
+            style={{ width: 260 }}
+          />
           <Button type="primary" onClick={handleSearch}>
             搜索
           </Button>

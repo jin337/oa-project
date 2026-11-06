@@ -543,9 +543,9 @@ export default function InterfaceManage() {
       dataIndex: 'remark',
       width: 220,
       render: (v) => (
-        <div style={{ maxWidth: 220, overflow: 'hidden' }}>
-          <Typography.Ellipsis showTooltip>{v || '-'}</Typography.Ellipsis>
-        </div>
+        <Typography.Ellipsis showTooltip style={{ maxWidth: 220 }}>
+          {v || '-'}
+        </Typography.Ellipsis>
       ),
     },
     { key: 'sort', title: '排序', dataIndex: 'sort', width: 70, align: 'center' },

@@ -1,4 +1,4 @@
-import { Button, Tooltip, Typography } from '@arco-design/web-react'
+import { Button, Typography } from '@arco-design/web-react'
 import { ApprovalStatusTag } from 'src/pages/approval/components/approvalStatus.jsx'
 import { formatTime } from 'src/utils/format'
 
@@ -55,10 +55,11 @@ export const colSummarys = {
   title: '摘要',
   key: 'summarys',
   dataIndex: 'summarys',
+  width: 200,
   render: (v) => (
-    <Tooltip content={v || '-'}>
-      <Typography.Ellipsis>{v || '-'}</Typography.Ellipsis>
-    </Tooltip>
+    <Typography.Ellipsis showTooltip style={{ maxWidth: 200 }}>
+      {v || '-'}
+    </Typography.Ellipsis>
   ),
 }
 // 总金额列
