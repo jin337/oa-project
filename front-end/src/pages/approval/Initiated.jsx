@@ -609,6 +609,7 @@ export default function Initiated() {
         record={detailRecord}
         visible={Boolean(detailRecord)}
         onCancel={closeDetail}
+        printable
       />
 
       {/* 编辑/副本 Drawer（共用一套表单）：副本底部为「保存草稿」+「提交审核」，关掉即不提交；

@@ -11,9 +11,9 @@ import {
   Space,
   Spin,
 } from '@arco-design/web-react'
-import { IconDoubleLeft, IconDoubleRight } from '@arco-design/web-react/icon'
+import { IconDoubleLeft, IconDoubleRight, IconDownload, IconPrinter } from '@arco-design/web-react/icon'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as approvalApi from 'src/api/approval'
 import * as deptApi from 'src/api/dept'
 import { fetchAll } from 'src/api/fetchAll'
@@ -35,6 +35,7 @@ import {
 } from 'src/pages/application/examine/flowModel'
 import { SelectorDataContext } from 'src/pages/application/examine/selector-context'
 import ApprovalTimeline from 'src/pages/approval/components/ApprovalTimeline.jsx'
+import { exportElementPdf, printElement } from 'src/utils/printExport'
 import { formatTime } from 'src/utils/format'
 
 /**
@@ -49,13 +50,34 @@ import { formatTime } from 'src/utils/format'
  * @param {function} props.onCancel    关闭回调
  * @param {object} props.currentTask   当前用户的待办任务（含 id / instance_id），传入时显示同意/不同意按钮
  * @param {function} props.onAction    操作成功后的回调（通知父组件刷新列表）
+ * @param {boolean} props.printable    是否在标题后显示「打印 / 导出PDF」按钮（我的发起/经我处理/抄送我的页面开启）
  */
-export default function DetailDrawer({ record, visible, onCancel, currentTask, onAction }) {
+export default function DetailDrawer({ record, visible, onCancel, currentTask, onAction, printable = false }) {
   const [loading, setLoading] = useState(false)
   const [instance, setInstance] = useState(null)
   const [loadError, setLoadError] = useState(false)
   const [comment, setComment] = useState('')
   const [operating, setOperating] = useState(false)
+  // 打印/导出PDF：内容容器 ref（表单+时间轴两列的共同父级）；exporting 防重复触发
+  const contentRef = useRef(null)
+  const [exporting, setExporting] = useState(false)
+
+  const handlePrint = () => {
+    if (contentRef.current) printElement(contentRef.current, title || '审批详情')
+  }
+  const handleExportPdf = async () => {
+    if (!contentRef.current || exporting) return
+    setExporting(true)
+    try {
+      await exportElementPdf(contentRef.current, `${title || '审批详情'}.pdf`)
+      Message.success('PDF 已导出')
+    } catch (e) {
+      console.error('[export pdf]', e)
+      Message.error('导出 PDF 失败')
+    } finally {
+      setExporting(false)
+    }
+  }
   // 审批详情动态表单实例（字段权限 perm=2 可编辑字段修改后，提交时读取最新值）
   const [detailForm] = Form.useForm()
 
@@ -473,7 +495,27 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
       <Drawer
         className="[&_.arco-drawer-content]:p-0!"
         width="80%"
-        title={`详情 - ${title}`}
+        title={
+          <Space size={12}>
+            <span>{`详情 - ${title}`}</span>
+            {printable && (
+              <Space size={8}>
+                <Button size="mini" type="outline" icon={<IconPrinter />} onClick={handlePrint}>
+                  打印
+                </Button>
+                <Button
+                  size="mini"
+                  type="outline"
+                  icon={<IconDownload />}
+                  loading={exporting}
+                  onClick={handleExportPdf}
+                >
+                  导出PDF
+                </Button>
+              </Space>
+            )}
+          </Space>
+        }
         visible={visible}
         onCancel={onCancel}
         footer={null}
@@ -485,8 +527,8 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
             <Spin />
           </div>
         ) : instance ? (
-          <div className="relative flex h-full flex-nowrap items-start">
-            <div className={`absolute top-3 right-0 z-10`}>
+          <div ref={contentRef} className="relative flex h-full flex-nowrap items-start">
+            <div className={`absolute top-3 right-0 z-10`} data-print-hide>
               <Button
                 size="mini"
                 type="primary"
@@ -514,7 +556,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
             <div
               className={`h-full shrink-0 overflow-y-auto border-l border-(--color-neutral-3) px-4 py-3 transition-all ${flowCollapsed ? 'm-0! w-0 border-l-0 p-0!' : 'w-110'}`}
             >
-              {renderActions()}
+              <div data-print-hide>{renderActions()}</div>
               {/* 审批状态印章：显示在标题栏右上角 */}
               <div className="relative">
                 {instance && (

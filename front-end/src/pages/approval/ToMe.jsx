@@ -150,6 +150,7 @@ export default function ToMe() {
         record={detailRecord}
         visible={Boolean(detailRecord)}
         onCancel={closeDetail}
+        printable
       />
 
       <CCModal record={ccRecord} onClose={() => setCCRecord(null)} onSuccess={fetchList} />

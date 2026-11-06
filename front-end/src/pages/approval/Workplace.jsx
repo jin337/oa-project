@@ -184,6 +184,7 @@ export default function Workplace() {
         record={detailRecord}
         visible={Boolean(detailRecord)}
         onCancel={closeDetail}
+        printable
       />
 
       <CCModal record={ccRecord} onClose={() => setCCRecord(null)} onSuccess={fetchList} />
