@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getApprovalDashboardFlows, getApprovalDashboardSummary } from 'src/api/approval'
 import { ApprovalStatusTag } from 'src/pages/approval/components/approvalStatus'
+import ApprovalDetailDrawer from 'src/pages/approval/components/DetailDrawer'
 import { formatTime } from 'src/utils/format'
 
 const { Row, Col } = Grid
@@ -53,13 +54,9 @@ const SCOPES = [
   },
 ]
 
-// 流程监控记录归属 scope -> 列表页路径（点击跳转对应页面打开详情抽屉）
-const SCOPE_PATH = {
-  todo: '/approval/todo',
-  initiated: '/approval/initiated',
-  approved: '/approval/workplace',
-  cc: '/approval/tome',
-}
+// 流程监控点击行为：不再跳转列表页，直接在工作台打开详情抽屉。
+// 归属为「待办」时，记录 id 即当前用户的待办任务 ID（与 /approval/todo 列表同源），
+// 需一并传入 currentTask，抽屉内才会出现同意/不同意/转交/加签等操作按钮。
 
 /**
  * 工作台：左侧「全部事项」四宫格计数 + 右侧「流程监控」与我相关的所有申请（全状态）。
@@ -101,7 +98,8 @@ export default function Dashboard() {
     }
   }, [timeRange])
 
-  // 流程监控：随 flowTimeRange 变化重新拉取
+  // 流程监控：随 flowTimeRange 变化重新拉取（loadFlows 亦供抽屉内审批操作后刷新）
+  const [flowsReload, setFlowsReload] = useState(0)
   useEffect(() => {
     let alive = true
     setLoading(true)
@@ -117,7 +115,21 @@ export default function Dashboard() {
     return () => {
       alive = false
     }
-  }, [flowTimeRange])
+  }, [flowTimeRange, flowsReload])
+
+  // 详情抽屉（本页打开，不再跳转列表页）：
+  // task 为待办归属时的当前用户待办任务（决定抽屉内是否出现审批/转交/加签按钮），
+  // printable 与原目标页保持一致——待办页不打印，我的发起/经我处理/抄送我的可打印
+  const [detail, setDetail] = useState(null)
+  const openFlowDetail = (r) => {
+    const isTodo = r.scopes?.[0] === 'todo'
+    setDetail({
+      record: r,
+      currentTask: isTodo ? { id: r.id, instance_id: r.instance_id } : null,
+      printable: !isTodo,
+    })
+  }
+  const closeFlowDetail = () => setDetail(null)
 
   return (
     <div className="w-full overflow-x-hidden">
@@ -203,16 +215,9 @@ export default function Dashboard() {
                         role="button"
                         tabIndex={0}
                         className={`cursor-pointer px-4 py-3 transition-colors hover:bg-[rgb(var(--arcoblue-1))] ${i > 0 ? 'border-t border-solid border-[rgb(var(--gray-2))]' : ''}`}
-                        onClick={() => {
-                          // 按记录归属跳转对应页面打开详情抽屉（待办需携带任务参数，后端 scopes[0] 为最高优先级归属）
-                          const target = SCOPE_PATH[r.scopes?.[0]] || SCOPE_PATH.initiated
-                          navigate(target, { state: { openDetail: r } })
-                        }}
+                        onClick={() => openFlowDetail(r)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const target = SCOPE_PATH[r.scopes?.[0]] || SCOPE_PATH.initiated
-                            navigate(target, { state: { openDetail: r } })
-                          }
+                          if (e.key === 'Enter') openFlowDetail(r)
                         }}
                       >
                         {/* 上半部分：模块名（单号） | 申请时间 */}
@@ -249,6 +254,16 @@ export default function Dashboard() {
           </Card>
         </Col>
       </Row>
+
+      {/* 流程监控详情抽屉：在本页打开（记录即 flows 行数据，与列表页同源） */}
+      <ApprovalDetailDrawer
+        record={detail?.record}
+        visible={Boolean(detail)}
+        onCancel={closeFlowDetail}
+        currentTask={detail?.currentTask ?? null}
+        printable={Boolean(detail?.printable)}
+        onAction={() => setFlowsReload((v) => v + 1)}
+      />
     </div>
   )
 }
