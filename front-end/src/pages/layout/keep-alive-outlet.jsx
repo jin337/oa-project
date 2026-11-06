@@ -8,6 +8,41 @@ import {
 import { useTabs } from 'src/store/tab-context'
 
 /**
+ * 同时缓存的页面实例上限（含当前激活页）。
+ * 每个缓存实例是一棵完整页面组件树（表格数据、表单、子表行），约数 MB 量级；
+ * 不设上限时「页签开多少常驻多少」，重度使用会让隐藏页面持续吃内存。
+ * 超限后最久未激活的页面被卸载（页签仍保留，点回去时重新加载，只是不再保留状态）。
+ */
+const MAX_KEEP_ALIVE = 10
+
+/**
+ * 更新快照表（纯函数，Map 迭代顺序即「激活先后」，队首=最久未激活）：
+ * 1) 激活项移到队尾（delete + set 保证顺序；重复调用幂等）；
+ * 2) 删除已不存活的页签（关闭页签 / 被 tab-context 清理的无效页签）；
+ * 3) 超出 max 时从队首逐个淘汰，直到满足上限——刚移到队尾的激活项必然保留。
+ *
+ * @param {Map}   prev     上一次渲染的快照表
+ * @param {string} active  本次激活路径
+ * @param {object} entry   激活页快照 { element, ctx }
+ * @param {Set}   alive    存活路径集合（含 active）
+ * @param {number} max     缓存上限
+ * @returns {Map} 新快照表（不修改 prev）
+ */
+export function updateSnapshots(prev, active, entry, alive, max) {
+  const next = new Map(prev)
+  next.delete(active)
+  next.set(active, entry)
+  for (const path of [...next.keys()]) {
+    if (!alive.has(path)) next.delete(path)
+  }
+  while (next.size > max) {
+    const oldest = next.keys().next().value
+    next.delete(oldest)
+  }
+  return next
+}
+
+/**
  * 页签 keep-alive 出口：为每个存活页签挂载独立容器（div，key=path，绝对定位叠放），
  * 激活页签可见，其余 visibility:hidden——组件实例不卸载，切换页签保留页面状态
  * （表格数据、表单填写、筛选/分页、滚动位置），切回时不重复请求接口。
@@ -30,6 +65,8 @@ import { useTabs } from 'src/store/tab-context'
  * 让页面 useLocation() 得到 undefined 而崩溃白屏。
  *
  * 缓存生命周期与页签一致：关闭页签 → 容器移出列表 → 卸载释放内存；
+ * 另受 MAX_KEEP_ALIVE 上限约束（LRU 淘汰最久未激活页，见 updateSnapshots）——
+ * 被淘汰页的容器因取不到快照而不渲染，等价于卸载，页签本身不受影响。
  * visibility:hidden + absolute 叠放（不用 display:none），避免隐藏时滚动位置被重置。
  * 无页签路径（/403、被清理的无效页签）不缓存：仅渲染当前容器，切走即卸载（保持原行为）。
  * 从未激活过的历史页签（刷新恢复）无快照 → 暂不挂载，切过去时自动补快照再缓存。
@@ -39,21 +76,23 @@ export default function KeepAliveOutlet() {
   const navigationType = useNavigationType()
   const outlet = useOutlet()
   const { tabs } = useTabs()
-  // path → { element, ctx }：元素引用与 context 值引用稳定，是"隐藏即冻结"的关键
+  // path → { element, ctx }：元素引用与 context 值引用稳定，是"隐藏即冻结"的关键；
+  // Map 插入顺序同时承载 LRU 激活先后
   const snapshots = useRef(new Map())
 
-  // 记录当前激活页快照（渲染期幂等写入；location 在同一次导航内引用稳定）
-  snapshots.current.set(location.pathname, {
-    element: outlet,
-    ctx: { location, navigationType },
-  })
-
-  // 渲染范围 = 存活页签 ∪ 当前路径；清理范围外快照（页签关闭 / 无效页签被 tab-context 移除）
+  // 渲染范围 = 存活页签 ∪ 当前路径；alive 同时用于快照清理（页签关闭/无效页签）
   const alive = new Set(tabs.map((t) => t.path))
   alive.add(location.pathname)
-  snapshots.current.forEach((_, path) => {
-    if (!alive.has(path)) snapshots.current.delete(path)
-  })
+
+  // 更新快照表：激活项移到队尾 + 清理失效页签 + LRU 淘汰超上限的最久未激活项
+  snapshots.current = updateSnapshots(
+    snapshots.current,
+    location.pathname,
+    { element: outlet, ctx: { location, navigationType } },
+    alive,
+    MAX_KEEP_ALIVE,
+  )
+
   const renderPaths = tabs.map((t) => t.path)
   if (!renderPaths.includes(location.pathname)) renderPaths.push(location.pathname)
 
@@ -62,7 +101,7 @@ export default function KeepAliveOutlet() {
       {renderPaths.map((path) => {
         const active = path === location.pathname
         const snap = snapshots.current.get(path)
-        // 本会话从未激活过的历史页签：先不挂载，激活时补快照再缓存
+        // 未激活过的历史页签、以及被 LRU 淘汰的页签：无快照 → 不挂载（后者即释放内存）
         if (!active && !snap) return null
         const node = active ? outlet : snap.element
         const ctx = active ? { location, navigationType } : snap.ctx
