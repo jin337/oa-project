@@ -110,6 +110,19 @@ export function deleteApplicationData(appId, dataId) {
   return request.delete(`/application/${appId}/data/${dataId}`)
 }
 
+// GET /application/export?code=xxx&<搜索字段> 数据列表（state=list）全量导出 xlsx。
+// 后端按 code + 筛选自行取数（同 /by-code?state=list 口径，已按数据权限过滤）、
+// 拼主表全字段列并渲染，前端只需触发下载；响应头 Content-Disposition 携带真实文件名。
+// __fullResponse：需要读取响应头；responseType=blob：失败时后端回 JSON 业务错误，调用方按 blob.type 区分。
+export function exportApplicationData(code, filters) {
+  return request.get('/application/export', {
+    params: { code, ...(filters || {}) },
+    responseType: 'blob',
+    timeout: 60000,
+    __fullResponse: true,
+  })
+}
+
 // ========== 流程版本管理 ==========
 
 // GET /application/:id/versions 版本列表

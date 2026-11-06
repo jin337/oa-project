@@ -28,6 +28,10 @@ function handleUnauthorized() {
 
 request.interceptors.response.use(
   (response) => {
+    // 调用方标记 __fullResponse（文件下载需读取 Content-Disposition 等响应头）时，返回完整 axios 响应
+    if (response.config && response.config.__fullResponse) {
+      return response
+    }
     const res = response.data
     if (res && typeof res === 'object' && 'code' in res) {
       if (res.code === 0) {

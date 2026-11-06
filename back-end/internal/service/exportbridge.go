@@ -45,3 +45,11 @@ var (
 	StripAuditFields              = stripAuditFields
 	SystemCols                    = systemCols
 )
+
+// 函数别名（动态数据导出渲染的纯逻辑：列名进制、标量字符串化、单元格值还原）
+var (
+	ExcelColName          = excelColName
+	NormalizeExportScalar = normalizeExportScalar
+	ExportCellText        = exportCellText
+	BuildOptionLabelMap   = buildOptionLabelMap
+)

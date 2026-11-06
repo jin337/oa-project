@@ -30,9 +30,11 @@ import {
   safeSetFieldsValue,
   useApplicationDetailData,
 } from 'src/pages/application/dynamic/useApplicationDetailData'
+import { parseDownloadFilename, saveBlob } from 'src/utils/download'
 
 const FormItem = Form.Item
 const MenuItem = Menu.Item
+
 /**
  * 根据元素类型获取单元格的展示文本：
  * 时间/日期类型（date/datetime/time 等）经 formatTimeValue 格式化为标准可读格式；
@@ -296,6 +298,47 @@ export default function DynamicList({ app, code, editable = false }) {
     fetchList(1, pageSize, {})
   }
 
+  // 导出 xlsx（仅只读列表页 state=list）：一次请求交给后端全量导出。
+  // 后端按 code + 当前搜索条件自行取数（与列表同一口径，已按角色数据权限过滤），
+  // 列为主表全部业务字段（不受列表可见性限制），单元格值由后端按元素类型还原
+  // （时间格式化、静态选项 value→label），文件名与超限范围提示也由后端写入响应头。
+  const [exporting, setExporting] = useState(false)
+  const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const resp = await applicationApi.exportApplicationData(code, searchValues)
+      const blob = resp.data
+      // blob 类型为 JSON 说明后端返回业务错误（无数据/渲染失败），解析后提示
+      if (blob && blob.type && blob.type.includes('application/json')) {
+        const text = await blob.text()
+        let msg = '导出失败'
+        try {
+          msg = JSON.parse(text).msg || msg
+        } catch {
+          /* 非法 JSON 用默认提示 */
+        }
+        Message.error(msg)
+        return
+      }
+      const filename = parseDownloadFilename(
+        resp.headers?.['content-disposition'],
+        `${app?.name || '数据'}.xlsx`,
+      )
+      saveBlob(blob, filename)
+      // 超出单次上限时后端把范围写进文件名（如 …_前10000条_共20000条.xlsx），据此提示
+      if (/_前\d+条_共\d+条/.test(filename)) {
+        Message.warning('数据量超出单次导出上限，已按文件名所示范围导出，可缩小筛选范围分批导出')
+      } else {
+        Message.success('导出成功')
+      }
+    } catch {
+      // 网络层错误已在请求拦截器提示
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // 表格密度下拉（选中项高亮，与系统管理页面一致）
   const sizeMenu = (
     <Menu onClickMenuItem={(key) => setTableSize(key)}>
@@ -356,7 +399,7 @@ export default function DynamicList({ app, code, editable = false }) {
         </div>
       )}
 
-      {/* 表格工具栏：新增（仅可编辑页）/ 刷新 / 密度 / 列设置 */}
+      {/* 表格工具栏：新增（仅可编辑页）/ 导出（仅只读列表页）/ 刷新 / 密度 / 列设置 */}
       <div className="mb-3 flex items-center justify-between">
         <div>
           {editable && (
@@ -366,6 +409,12 @@ export default function DynamicList({ app, code, editable = false }) {
           )}
         </div>
         <Space>
+          {/* 导出仅出现在只读列表页（state=list）；list-edit 可编辑页不展示 */}
+          {!editable && (
+            <Button size="small" loading={exporting} onClick={handleExport}>
+              导出
+            </Button>
+          )}
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
           </Button>

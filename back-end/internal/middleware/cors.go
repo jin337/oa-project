@@ -37,6 +37,8 @@ func Cors() gin.HandlerFunc {
 		c.Header("Access-Control-Allow-Origin", allow)
 		c.Header("Access-Control-Allow-Methods", strings.Join(cfg.AllowMethods, ", "))
 		c.Header("Access-Control-Allow-Headers", strings.Join(cfg.AllowHeaders, ", "))
+		// 文件下载类接口（数据导出等）需要前端读取文件名，必须显式暴露该响应头
+		c.Header("Access-Control-Expose-Headers", "Content-Disposition")
 		c.Header("Access-Control-Max-Age", "86400")
 
 		if c.Request.Method == http.MethodOptions {

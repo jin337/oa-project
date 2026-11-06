@@ -12,9 +12,11 @@ func registerApplicationRoutes(api *gin.RouterGroup) {
 	applications := api.Group("/application")
 	applications.Use(middleware.JWTAuth())
 	{
-		applications.GET("", handler.ApplicationList)                                                                               // 流程列表
-		applications.POST("", middleware.RequirePermission("application:add"), handler.ApplicationCreate)                           // 新建流程
-		applications.GET("/by-code/:code", handler.ApplicationByCode)                                                               // 按编码查询流程（申请/审批人读取）
+		applications.GET("", handler.ApplicationList)                                                     // 流程列表
+		applications.POST("", middleware.RequirePermission("application:add"), handler.ApplicationCreate) // 新建流程
+		applications.GET("/by-code/:code", handler.ApplicationByCode)                                     // 按编码查询流程（申请/审批人读取）
+		// 数据列表导出：后端按 code+筛选自行取数渲染（访问口径与 by-code 一致，仅登录态，不额外挂权限）
+		applications.GET("/export", handler.ApplicationDataExport)                                                                  // 数据列表全量导出 xlsx
 		applications.GET("/:id", handler.ApplicationDetail)                                                                         // 流程详情
 		applications.PUT("/:id", middleware.RequirePermission("application:edit", "application:design"), handler.ApplicationUpdate) // 修改流程
 		applications.DELETE("/:id", middleware.RequirePermission("application:delete"), handler.ApplicationDelete)                  // 删除流程
