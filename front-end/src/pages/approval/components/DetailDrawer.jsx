@@ -562,6 +562,7 @@ export default function DetailDrawer({ record, visible, onCancel, currentTask, o
                 {instance && (
                   <div className={`absolute -top-3 right-6 z-10`}>
                     <span
+                      data-print-keep
                       className="flex h-20 w-20 -rotate-45 items-center justify-center rounded-full bg-white text-base font-bold"
                       style={{
                         border: `2px solid ${statusConfig.color}`,

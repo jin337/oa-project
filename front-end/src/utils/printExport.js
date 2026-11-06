@@ -109,7 +109,13 @@ export function printElement(el, docTitle = '打印') {
   override.textContent = `
     @page { margin: 10mm; }
     html, body { background: #fff; margin: 0; }
-    [data-print-root], [data-print-root] * { max-height: none !important; height: auto !important; overflow: visible !important; }
+    /* 豁免类：显式标记 [data-print-keep] 的节点 */
+    [data-print-root],
+    [data-print-root] *:not([data-print-keep]):not([class*="rounded-full"]) {
+      max-height: none !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
     [data-print-root] { display: block !important; width: auto !important; }
     [data-print-root] > * { width: auto !important; max-width: none !important; border-left: none !important; }
     [data-print-hide] { display: none !important; }
