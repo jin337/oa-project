@@ -229,17 +229,17 @@ func ApiDefinitionCreate(curUserID uint, req *model.ApiDefinitionCreateReq) (*mo
 		params = map[string]interface{}{}
 	}
 	def := model.ApiDefinition{
-		Name:         req.Name,
-		Method:       method,
-		Path:         req.Path,
-		Type:         defType,
-		SQLTemplate:  req.SQLTemplate,
-		TargetPath:   req.TargetPath,
-		Params:       params,
-		Status:       status,
-		Sort:         req.Sort,
-		Remark:       req.Remark,
-		Category:     strings.TrimSpace(req.Category),
+		Name:        req.Name,
+		Method:      method,
+		Path:        req.Path,
+		Type:        defType,
+		SQLTemplate: req.SQLTemplate,
+		TargetPath:  req.TargetPath,
+		Params:      params,
+		Status:      status,
+		Sort:        req.Sort,
+		Remark:      req.Remark,
+		Category:    strings.TrimSpace(req.Category),
 	}
 	def.CreatedBy, def.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&def).Error; err != nil {
@@ -390,7 +390,7 @@ func validateSQLTemplate(tpl string) error {
 	// 占位符语法强约束：仅允许 ${form.xxx}
 	anyPhRe := regexp.MustCompile(`\$\{[^}]+\}`)
 	for _, ph := range anyPhRe.FindAllString(tpl, -1) {
-		if !placeholderExprRe.MatchString(ph[2:len(ph)-1]) {
+		if !placeholderExprRe.MatchString(ph[2 : len(ph)-1]) {
 			return errors.New("占位符仅支持 ${form.xxx} 形式：" + ph)
 		}
 	}
@@ -824,15 +824,15 @@ func ImportBackendRoutes(curUserID uint, routes []RouteDef) (int, error) {
 			}
 			seenNames[displayName] = true
 			def := model.ApiDefinition{
-				Name:         displayName,
-				Method:       method,
-				Path:         path,
-				Type:         "http",
-				TargetPath:   path,
-				Status:       1,
-				Sort:         1,
-				Remark:       "后端路由自动导入",
-				Category:     routeCats[method+" "+path],
+				Name:       displayName,
+				Method:     method,
+				Path:       path,
+				Type:       "http",
+				TargetPath: path,
+				Status:     1,
+				Sort:       1,
+				Remark:     "后端路由自动导入",
+				Category:   routeCats[method+" "+path],
 			}
 			def.CreatedBy = curUserID
 			if err := tx.Create(&def).Error; err != nil {

@@ -130,7 +130,7 @@ func parseMemberID(key string) uint {
 // getUserIDsByRole 查询角色下所有用户 ID（join 表名带配置前缀，与 role.go 查询方式一致）
 func getUserIDsByRole(roleID uint) ([]uint, error) {
 	var userIDs []uint
-	err := database.DB.Table(bizTablePrefix() + "sys_user_role").
+	err := database.DB.Table(bizTablePrefix()+"sys_user_role").
 		Where("role_id = ?", roleID).
 		Pluck("user_id", &userIDs).Error
 	return userIDs, err
@@ -139,7 +139,7 @@ func getUserIDsByRole(roleID uint) ([]uint, error) {
 // getUserIDsByDept 查询部门下所有用户 ID（多部门归属 sys_user_dept 关系表，与 user.go 一致）
 func getUserIDsByDept(deptID uint) ([]uint, error) {
 	var userIDs []uint
-	err := database.DB.Table(bizTablePrefix() + "sys_user_dept").
+	err := database.DB.Table(bizTablePrefix()+"sys_user_dept").
 		Where("dept_id = ?", deptID).
 		Pluck("user_id", &userIDs).Error
 	return userIDs, err

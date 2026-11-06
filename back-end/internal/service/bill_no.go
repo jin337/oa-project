@@ -29,7 +29,7 @@ import (
 const billNoColumn = "bill_no"
 
 // summarysColumn / totalMoneyColumn 业务主表自动承载「摘要/总金额」的列名
-//（新流程建表自动创建，见 application.go createBizTable 主表分支）
+// （新流程建表自动创建，见 application.go createBizTable 主表分支）
 const summarysColumn = "summarys"
 const totalMoneyColumn = "totalmoney"
 
@@ -97,7 +97,8 @@ func ensureBillNo(appID uint, tableName string, dataID, curUserID uint) error {
 }
 
 // nextBillSeq 事务内取下一个流水号：先确保序列行存在（唯一键 app_id + period），再行锁读取并自增
-func nextBillSeq(tx *gorm.DB, appID uint, period string) (int64, error) {	table := billSequenceTable()
+func nextBillSeq(tx *gorm.DB, appID uint, period string) (int64, error) {
+	table := billSequenceTable()
 	if err := tx.Exec(
 		"INSERT IGNORE INTO `"+table+"` (`app_id`, `period`, `seq`, `created_at`, `updated_at`) VALUES (?, ?, 0, NOW(3), NOW(3))",
 		appID, period,

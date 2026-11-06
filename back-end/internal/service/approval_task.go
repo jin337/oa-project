@@ -366,7 +366,7 @@ func isOrdinaryApprovedTask(t *model.ApprovalInstanceTask) bool {
 }
 
 // returnCandidateAllowedTask 判断任务是否可作为退回候选：已完成审批动作
-//（已通过 / 已转交）。与 isOrdinaryApprovedTask 不同，此处包含加签与转交衍生任务——
+// （已通过 / 已转交）。与 isOrdinaryApprovedTask 不同，此处包含加签与转交衍生任务——
 // 加签人、转交人等所有实际完成审批的历史审批人都是合法的退回位置。
 func returnCandidateAllowedTask(t *model.ApprovalInstanceTask) bool {
 	if t == nil {

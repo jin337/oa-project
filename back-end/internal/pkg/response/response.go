@@ -9,13 +9,13 @@ import (
 
 // 业务错误码
 const (
-	CodeOK            = 0 // 成功
-	CodeBusinessError = 1 // 业务结果型错误（如接口试调失败）：前端拦截器静默放行，由调用方展示
-	CodeParamError  = 400  // 参数校验失败
-	CodeUnauthorized = 401 // 未登录或 token 失效
-	CodeForbidden   = 403  // 无权限
-	CodeNotFound    = 404  // 资源不存在
-	CodeServerError = 500  // 服务器内部错误
+	CodeOK            = 0   // 成功
+	CodeBusinessError = 1   // 业务结果型错误（如接口试调失败）：前端拦截器静默放行，由调用方展示
+	CodeParamError    = 400 // 参数校验失败
+	CodeUnauthorized  = 401 // 未登录或 token 失效
+	CodeForbidden     = 403 // 无权限
+	CodeNotFound      = 404 // 资源不存在
+	CodeServerError   = 500 // 服务器内部错误
 )
 
 // Response 统一返回格式：状态码、提示语、数据、时间戳

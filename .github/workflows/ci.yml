@@ -1,0 +1,87 @@
+name: CI
+
+# 触发：main 分支推送 + 所有 PR（含面向 main 的 PR）
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支/PR 的新提交自动取消旧运行，避免排队浪费
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: 后端 Go（格式 / vet / 构建 / 测试）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: back-end
+    steps:
+      - uses: actions/checkout@v4
+
+      # Go 版本取自 go.mod 的 go 指令，升级语言版本无需改 workflow
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: back-end/go.mod
+          cache: true
+          cache-dependency-path: back-end/go.sum
+
+      - name: 依赖下载校验
+        run: go mod download && go mod verify
+
+      # 单元测试为纯内存逻辑（不连数据库），故无需 MySQL service。
+      # 门禁只拦未格式化代码，不自动改写文件，避免把格式化改动混进业务提交
+      - name: gofmt 格式检查
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "以下文件未通过 gofmt，请在本地执行 gofmt -w ./... 后重新提交："
+            echo "$unformatted"
+            gofmt -d . | head -60
+            exit 1
+          fi
+
+      - name: go vet 静态检查
+        run: go vet ./...
+
+      - name: 编译
+        run: go build ./...
+
+      - name: 单元测试
+        run: go test ./... -count=1
+
+  frontend:
+    name: 前端 React（lint / 测试 / 构建）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front-end
+    steps:
+      - uses: actions/checkout@v4
+
+      # 与本地开发环境主版本保持一致（本地 v24）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: front-end/package-lock.json
+
+      # 按 lockfile 精确安装，保证 CI 与本地依赖树一致
+      - name: 安装依赖
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: 单元测试
+        run: npm test
+
+      # 构建同时验证 .env 前缀等配置可用（环境变量文件已入库）
+      - name: 生产构建
+        run: npm run build
+
+      # 产物目录为 vite.config.js 中 outDir: 'web'（非默认 dist）
+      - name: 构建产物存在性检查
+        run: test -f web/index.html

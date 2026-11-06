@@ -35,7 +35,8 @@ func deptLeaderString(leader *uint) string {
 }
 
 // fillDeptLeaderNames 批量填充部门树各节点的负责人昵称（leader_name），避免前端依赖额外用户接口
-func fillDeptLeaderNames(depts []*model.Dept) {	var all []*model.Dept
+func fillDeptLeaderNames(depts []*model.Dept) {
+	var all []*model.Dept
 	var walk func(list []*model.Dept)
 	walk = func(list []*model.Dept) {
 		for _, d := range list {
@@ -86,6 +87,7 @@ func fillDeptLeaderNames(depts []*model.Dept) {	var all []*model.Dept
 //   - 节点以 Type 区分：dept 部门 / user 用户
 //   - 子部门在前、用户在后；部门按 sort ASC, id ASC，用户按 id ASC
 //   - 仅挂载归属部门树内用户的用户（dept_id 无效/无部门的用户不返回）
+//
 // DeptUsers 部门树 + 部门下用户。onlyEnabled=true 时仅返回启用的部门与用户（状态=1），用于选人弹窗等数据源
 func DeptUsers(onlyEnabled bool) ([]*model.OrgNode, error) {
 	var list []*model.Dept
@@ -111,7 +113,10 @@ func DeptUsers(onlyEnabled bool) ([]*model.OrgNode, error) {
 		userMap[u.ID] = u
 	}
 	// 按多部门归属(system_user_dept)挂载：一个用户可出现在多个部门节点下
-	var rels []struct{ UserID uint; DeptID uint }
+	var rels []struct {
+		UserID uint
+		DeptID uint
+	}
 	if err := database.DB.Table("oa_sys_user_dept").Scan(&rels).Error; err != nil {
 		return nil, err
 	}
