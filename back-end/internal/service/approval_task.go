@@ -29,6 +29,7 @@ import (
 	"back-end/internal/model"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // createPendingTask 构造并创建一条待处理审批任务（依次/会签/或签共用）
@@ -975,25 +976,50 @@ func loadOwnedPendingTask(tx *gorm.DB, instanceID, taskID, curUserID uint) (*mod
 	return &task, nil
 }
 
+// lockApprovalInstance 以 FOR UPDATE 读取并锁定实例行，作为实例级串行化闸门。
+// 同意/转交/加签/撤回/作废/重提等一切改变流程状态的操作，都在事务开头先锁同一行，
+// 保证同一实例的并发写串行执行。锁顺序恒为「实例先行」，避免与任务行交叉加锁导致死锁。
+func lockApprovalInstance(tx *gorm.DB, instanceID uint) (*model.ApprovalInstance, error) {
+	var instance model.ApprovalInstance
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&instance, instanceID).Error; err != nil {
+		return nil, errors.New("流程实例不存在")
+	}
+	return &instance, nil
+}
+
+// claimPendingTask 以「当前仍为待处理」为前置条件原子变更任务状态（并发防护核心）。
+// WHERE 带 status=待处理：并发提交同一任务时仅一条 UPDATE 命中（RowsAffected=1），
+// 其余读到 0 行 → 返回 false，调用方据此判定「该任务已处理」，杜绝重复推进/重复流转。
+func claimPendingTask(tx *gorm.DB, taskID uint, fields map[string]interface{}) (bool, error) {
+	res := tx.Model(&model.ApprovalInstanceTask{}).
+		Where("id = ? AND status = ?", taskID, model.TaskStatusPending).
+		Updates(fields)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected == 1, nil
+}
+
 // ApprovalTaskApprove 执行审批操作（通过/拒绝/驳回）：
 //  1. 校验任务存在、状态=待处理、assignee_id=当前用户
 //  2. 校验实例存在、状态=进行中
 //  3. 事务内更新任务状态并按操作类型流转
 func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.ApprovalInstanceTaskApproveReq) error {
 	return withNotify(func(tx *gorm.DB) error {
-		// 1. 校验任务（存在/归属/待处理/当前用户持有）
-		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
+		// 1. 实例串行化闸门：先锁实例行（与撤回/作废/重提同一把锁、同一顺序），
+		//    同一实例的并发审批在此排队，后续任务读取与流转不会交错
+		instance, err := lockApprovalInstance(tx, instanceID)
 		if err != nil {
 			return err
 		}
-
-		// 2. 校验实例
-		var instance model.ApprovalInstance
-		if err := tx.First(&instance, instanceID).Error; err != nil {
-			return errors.New("流程实例不存在")
-		}
 		if instance.Status != model.InstanceStatusRunning {
 			return errors.New("该流程已结束")
+		}
+
+		// 2. 校验任务（存在/归属/待处理/当前用户持有）
+		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
+		if err != nil {
+			return err
 		}
 
 		now := time.Now()
@@ -1005,21 +1031,32 @@ func ApprovalTaskApprove(curUserID uint, instanceID, taskID uint, req *model.App
 			}
 		}
 
-		// 3. 更新任务状态
+		// 3. 条件占用任务：仅当仍为待处理才写入本次操作结果（与实例锁构成双重防护，
+		//    即便未来某入口漏锁实例，任务级条件更新仍能保证一次任务只被推进一次）
+		claimed, err := claimPendingTask(tx, taskID, map[string]interface{}{
+			"status":      req.Action,
+			"comment":     req.Comment,
+			"operated_at": now,
+			"updated_by":  curUserID,
+		})
+		if err != nil {
+			return err
+		}
+		if !claimed {
+			return errors.New("该任务已处理")
+		}
+		// 同步内存对象，供流转逻辑按新状态判断
 		task.Status = req.Action
 		task.Comment = req.Comment
 		task.OperatedAt = &now
 		task.UpdatedBy = curUserID
-		if err := tx.Save(task).Error; err != nil {
-			return err
-		}
 
 		// 4. 按操作类型处理流转
 		switch req.Action {
 		case model.TaskStatusApproved: // 通过
-			return handleNodeApproval(tx, &instance, task, curUserID)
+			return handleNodeApproval(tx, instance, task, curUserID)
 		case model.TaskStatusReturned: // 不同意入口：退回上一步 / 指定前置审批人；无前置审批人时退回发起人
-			return returnFromDisapproval(tx, &instance, task, req, curUserID)
+			return returnFromDisapproval(tx, instance, task, req, curUserID)
 		default:
 			return errors.New("非法的操作类型")
 		}
@@ -1287,6 +1324,12 @@ func handleSequentialNext(tx *gorm.DB, instance *model.ApprovalInstance, node *f
 //  3. 事务内原任务标记为已转交，并新建转交任务
 func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.ApprovalInstanceTaskDelegateReq) error {
 	return withNotify(func(tx *gorm.DB) error {
+		// 0. 实例串行化闸门（与审批/撤回同一把锁、锁序恒为实例先行）
+		instance, err := lockApprovalInstance(tx, instanceID)
+		if err != nil {
+			return err
+		}
+
 		// 校验任务（存在/归属/待处理/当前用户持有）
 		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
 		if err != nil {
@@ -1301,12 +1344,17 @@ func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.Ap
 
 		now := time.Now()
 
-		// 原任务标记为已转交
-		task.Status = model.TaskStatusDelegated
-		task.OperatedAt = &now
-		task.UpdatedBy = curUserID
-		if err := tx.Save(task).Error; err != nil {
+		// 原任务条件占用为已转交（并发重复转交仅一次生效，避免派生两张待办）
+		claimed, err := claimPendingTask(tx, taskID, map[string]interface{}{
+			"status":      model.TaskStatusDelegated,
+			"operated_at": now,
+			"updated_by":  curUserID,
+		})
+		if err != nil {
 			return err
+		}
+		if !claimed {
+			return errors.New("该任务已处理")
 		}
 
 		// 新建转交任务
@@ -1324,17 +1372,14 @@ func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.Ap
 			return err
 		}
 
-		// 待办通知（类型1）：转交后新任务进入目标用户待办
-		var instance model.ApprovalInstance
-		if err := tx.First(&instance, instanceID).Error; err == nil {
-			notifyCreate(tx, model.Notification{
-				UserID:     req.ToUserID,
-				Type:       1,
-				Title:      getInstanceAppName(&instance),
-				Msg:        "您有新的审批待办",
-				InstanceID: instance.ID,
-			})
-		}
+		// 待办通知（类型1）：转交后新任务进入目标用户待办（复用入口已锁定的实例）
+		notifyCreate(tx, model.Notification{
+			UserID:     req.ToUserID,
+			Type:       1,
+			Title:      getInstanceAppName(instance),
+			Msg:        "您有新的审批待办",
+			InstanceID: instance.ID,
+		})
 		return nil
 	})
 }
@@ -1346,22 +1391,22 @@ func ApprovalTaskDelegate(curUserID uint, instanceID, taskID uint, req *model.Ap
 //  4. 后加签（type=2）：加签人任务置为待处理，原审批人通过后由加签人继续审批
 func ApprovalTaskAddSign(curUserID uint, instanceID, taskID uint, req *model.ApprovalInstanceTaskAddSignReq) error {
 	return withNotify(func(tx *gorm.DB) error {
+		// 0. 实例串行化闸门（锁序恒为实例先行，与审批/转交/撤回一致）
+		instance, err := lockApprovalInstance(tx, instanceID)
+		if err != nil {
+			return err
+		}
+		if instance.Status != model.InstanceStatusRunning {
+			return errors.New("该流程已结束")
+		}
+
 		// 1. 校验任务（存在/归属/待处理/当前用户持有）
 		task, err := loadOwnedPendingTask(tx, instanceID, taskID, curUserID)
 		if err != nil {
 			return err
 		}
 
-		// 2. 校验实例
-		var instance model.ApprovalInstance
-		if err := tx.First(&instance, instanceID).Error; err != nil {
-			return errors.New("流程实例不存在")
-		}
-		if instance.Status != model.InstanceStatusRunning {
-			return errors.New("该流程已结束")
-		}
-
-		// 3. 校验目标用户
+		// 2. 校验目标用户
 		var user model.User
 		if err := tx.First(&user, req.UserID).Error; err != nil {
 			return errors.New("加签用户不存在")
@@ -1390,12 +1435,16 @@ func ApprovalTaskAddSign(curUserID uint, instanceID, taskID uint, req *model.App
 			return errors.New("该节点未开放加签权限")
 		}
 
-		// 5. 前加签：原任务挂起为加签等待
+		// 5. 前加签：原任务条件挂起为加签等待（仅当仍为待处理，与实例锁构成双重防护）
 		if req.Type == 1 {
-			if err := tx.Model(&model.ApprovalInstanceTask{}).
-				Where("id = ?", task.ID).
-				Update("status", model.TaskStatusWaiting).Error; err != nil {
+			claimed, err := claimPendingTask(tx, task.ID, map[string]interface{}{
+				"status": model.TaskStatusWaiting,
+			})
+			if err != nil {
 				return err
+			}
+			if !claimed {
+				return errors.New("该任务已处理")
 			}
 		}
 
@@ -1427,7 +1476,7 @@ func ApprovalTaskAddSign(curUserID uint, instanceID, taskID uint, req *model.App
 			notifyCreate(tx, model.Notification{
 				UserID:     req.UserID,
 				Type:       1,
-				Title:      getInstanceAppName(&instance),
+				Title:      getInstanceAppName(instance),
 				Msg:        "您有新的审批待办",
 				InstanceID: instance.ID,
 			})

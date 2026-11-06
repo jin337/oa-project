@@ -5,6 +5,7 @@ import (
 	"back-end/internal/model"
 	"back-end/internal/pkg/response"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -31,17 +32,23 @@ type permCacheEntry struct {
 var (
 	permCacheMu    sync.RWMutex
 	permCacheStore = map[uint]*permCacheEntry{}
+	// permCacheGeneration 缓存失效代号：任何吊销/全量失效都递增。
+	// loadPermEntry 查库期间若发生过失效（代号变化），说明这次读到的可能是旧凭证版本，
+	// 结果只用于当次返回、不写回缓存——否则旧版本号会驻留到 TTL 到期，使吊销延迟生效。
+	permCacheGeneration atomic.Uint64
 )
 
-// RevokeUserTokens 吊销该用户全部已签发 token：库内版本号 +1 并清除其缓存条目，
+// RevokeUserTokens 吊销该用户全部已签发 token：库内版本号 +1 并使其缓存失效，
 // 携带旧版本的 token 下一次请求即 401。登出、修改密码、管理员重置密码时调用。
 // UpdateColumn 不经钩子、不触碰 updated_at（凭证失效非业务修改，不应污染更新时间线）。
 func RevokeUserTokens(userID uint) error {
 	if err := database.DB.Model(&model.User{}).
-		UpdateColumn("token_version", gorm.Expr("token_version + 1")).
-		Where("id = ?", userID).Error; err != nil {
+		Where("id = ?", userID).
+		UpdateColumn("token_version", gorm.Expr("token_version + 1")).Error; err != nil {
 		return err
 	}
+	// 先递增代号：让并发的缓存重建作废；再删除本用户条目：使下一次鉴权立即重查库
+	permCacheGeneration.Add(1)
 	permCacheMu.Lock()
 	delete(permCacheStore, userID)
 	permCacheMu.Unlock()
@@ -58,12 +65,14 @@ func TokenVersionOf(userID uint) (version uint, userExists bool) {
 // InvalidatePermCache 清空全部用户权限缓存（角色/菜单/用户角色关系任何变更后调用）。
 // 全清而非逐用户失效：角色变更影响面难以精确枚举（多对多），全清代价仅一次缓存重建，简单可靠。
 func InvalidatePermCache() {
+	permCacheGeneration.Add(1)
 	permCacheMu.Lock()
 	permCacheStore = map[uint]*permCacheEntry{}
 	permCacheMu.Unlock()
 }
 
-// loadPermEntry 读取（或重建）用户权限缓存条目：超管短路 + 权限码集合 + 凭证版本
+// loadPermEntry 读取（或重建）用户权限缓存条目：超管短路 + 权限码集合 + 凭证版本。
+// 查库期间若发生过吊销/失效（generation 变化），重建结果只返回不缓存，防止旧版本号驻留。
 func loadPermEntry(userID uint) *permCacheEntry {
 	permCacheMu.RLock()
 	entry := permCacheStore[userID]
@@ -71,6 +80,7 @@ func loadPermEntry(userID uint) *permCacheEntry {
 	if entry != nil && entry.expiresAt.After(time.Now()) {
 		return entry
 	}
+	genBefore := permCacheGeneration.Load()
 	var user model.User
 	if err := database.DB.Preload("Roles", "status = ?", 1).
 		Preload("Roles.Menus", "status = 1").
@@ -95,7 +105,11 @@ func loadPermEntry(userID uint) *permCacheEntry {
 		}
 	}
 	permCacheMu.Lock()
-	permCacheStore[userID] = entry
+	// 查库期间发生过吊销/失效：本次读到的可能是旧版本号，不入缓存（当次返回仍可用，
+	// 下一次请求重新查库即可拿到新版本）
+	if permCacheGeneration.Load() == genBefore {
+		permCacheStore[userID] = entry
+	}
 	permCacheMu.Unlock()
 	return entry
 }

@@ -27,13 +27,21 @@ import (
 	"back-end/internal/model"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ApprovalTaskRecall 审批人撤回自己已操作的任务（审核撤回）。
 // 前置校验统一在事务内完成，恢复动作按任务状态分发。
 func ApprovalTaskRecall(curUserID, instanceID, taskID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. 任务存在且归属当前实例
+		// 1. 实例串行化闸门：先锁实例行，锁序恒为「实例 → 任务」，
+		//    与审批/转交/加签/撤回/作废等入口一致，避免并发写交叉死锁
+		var instance model.ApprovalInstance
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&instance, instanceID).Error; err != nil {
+			return errors.New("流程实例不存在")
+		}
+
+		// 2. 任务存在且归属当前实例
 		var task model.ApprovalInstanceTask
 		if err := tx.First(&task, taskID).Error; err != nil {
 			return errors.New("审批任务不存在")
@@ -43,12 +51,6 @@ func ApprovalTaskRecall(curUserID, instanceID, taskID uint) error {
 		}
 		if task.AssigneeID != curUserID {
 			return errors.New("您不是该任务的审批人，无法撤回该操作")
-		}
-
-		// 2. 实例存在
-		var instance model.ApprovalInstance
-		if err := tx.First(&instance, instanceID).Error; err != nil {
-			return errors.New("流程实例不存在")
 		}
 
 		// 3. 计算操作时间并按任务状态判定可撤回的操作类型

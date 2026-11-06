@@ -30,6 +30,7 @@ import (
 	"back-end/internal/model"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // approvalContext 实例创建/保存/提交共用的流程上下文
@@ -249,9 +250,14 @@ func instanceStatusToBizStatus(instanceStatus int) int {
 //   - 当前状态不在允许集合 → 仅「{允许状态}」状态的实例可{action}，当前为「{当前状态}」
 //
 // db 可为 database.DB 或事务句柄 tx（调用方所在事务内加载时传 tx，保证一致性读）。
+//
+// 行锁说明：以 FOR UPDATE 锁定实例行，作为「实例级串行化闸门」。所有会改变流程状态的操作
+// （编辑草稿/提交/重新提交/作废/撤回/删除/审批/转交/加签/审核撤回）都先锁这一行再动任务表，
+// 全局锁序恒为「实例 → 任务」；若顺序不一致，并发撤回与并发同意会交叉等待形成死锁。
+// 事务外调用时该锁随语句自动释放，不影响行为。
 func loadOwnedInstance(db *gorm.DB, curUserID, instanceID uint, action string, allowedStatuses ...int) (*model.ApprovalInstance, error) {
 	var instance model.ApprovalInstance
-	if err := db.First(&instance, instanceID).Error; err != nil {
+	if err := db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&instance, instanceID).Error; err != nil {
 		return nil, errors.New("流程实例不存在")
 	}
 	if instance.CreatedBy != curUserID {
