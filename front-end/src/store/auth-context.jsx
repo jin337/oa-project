@@ -52,7 +52,14 @@ export function AuthProvider({ children }) {
     )
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // 先请求后端吊销凭证（版本号 +1，使该 token 立即失效）；
+    // fire-and-forget：吊销失败（网络异常等）也不阻塞本地登出，避免用户被困在登录态
+    try {
+      if (getToken()) await authApi.logout()
+    } catch {
+      // 忽略：本地清理照常执行
+    }
     // 清理页签持久化缓存，避免下一位用户看到上一用户的页签
     sessionStorage.removeItem('oa-tabs')
     clearToken()

@@ -172,12 +172,21 @@ func UserUpdate(curUserID, id uint, req *model.UserUpdateReq) (*model.User, erro
 		user.Password = string(hash)
 	}
 	user.UpdatedBy = curUserID
-	if err := database.DB.Save(&user).Error; err != nil {
+	// Omit token_version：函数开头 First 读到的版本号可能已过期（期间发生过登出/改密），
+	// Save 若把旧值写回会令已吊销的 token 复活；凭证版本只能由 RevokeUserTokens 单向递增
+	if err := database.DB.Omit("token_version").Save(&user).Error; err != nil {
 		return nil, err
 	}
 	// 角色关联：传了 role_ids 就覆盖式更新（nil 表示不修改）
 	if req.RoleIDs != nil {
 		if err := bindRoles(id, req.RoleIDs); err != nil {
+			return nil, err
+		}
+	}
+	// 管理员改了该用户密码 → 吊销其全部旧凭证（泄露旧密码的会话即刻失效）；
+	// 必须晚于 Save：Save 会写回整个 user 对象，先吊销再 Save 会把版本号覆盖回去
+	if req.Password != "" {
+		if err := middleware.RevokeUserTokens(id); err != nil {
 			return nil, err
 		}
 	}
@@ -213,10 +222,15 @@ func UserUpdatePassword(curUserID, id uint, req *model.UpdatePasswordReq) error 
 	if err != nil {
 		return errors.New("密码加密失败")
 	}
-	return database.DB.Model(&user).Updates(map[string]interface{}{
+	if err := database.DB.Model(&user).Updates(map[string]interface{}{
 		"password":   string(hash),
 		"updated_by": curUserID,
-	}).Error
+	}).Error; err != nil {
+		return err
+	}
+	// 改密即吊销全部旧凭证（含本人其他设备会话）；本次请求的 token 同时作废，
+	// 前端下一次调用会 401 回登录页——修改密码后重新登录是安全惯例
+	return middleware.RevokeUserTokens(id)
 }
 
 // UserResetPassword 重置密码：无需校验旧密码，直接加密新密码入库
@@ -229,10 +243,14 @@ func UserResetPassword(curUserID, id uint, req *model.ResetPasswordReq) error {
 	if err != nil {
 		return errors.New("密码加密失败")
 	}
-	return database.DB.Model(&user).Updates(map[string]interface{}{
+	if err := database.DB.Model(&user).Updates(map[string]interface{}{
 		"password":   string(hash),
 		"updated_by": curUserID,
-	}).Error
+	}).Error; err != nil {
+		return err
+	}
+	// 管理员重置目标用户密码后，吊销该用户全部旧凭证（泄露旧密码的会话即刻失效）
+	return middleware.RevokeUserTokens(id)
 }
 
 // UserUnlockLogin 管理员解除登录锁定：清除该账号的进程内失败计数与锁定期。

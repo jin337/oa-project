@@ -47,6 +47,16 @@ func Login(c *gin.Context) {
 	response.OK(c, res)
 }
 
+// Logout POST /{APIPrefix}/auth/logout 登出：吊销当前用户全部已签发 token
+// 需在 JWTAuth 保护下调用（凭当前身份定位用户）；调用后旧 token 立即 401。
+func Logout(c *gin.Context) {
+	if err := service.Logout(middleware.CurrentUserID(c)); err != nil {
+		response.Fail(c, response.CodeServerError, "登出失败")
+		return
+	}
+	response.OKMsg(c, "已登出")
+}
+
 // Profile GET /{APIPrefix}/auth/profile 当前用户资料+菜单树+权限标识
 func Profile(c *gin.Context) {
 	res, err := service.Profile(middleware.CurrentUserID(c))

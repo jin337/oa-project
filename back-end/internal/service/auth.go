@@ -12,7 +12,7 @@ import (
 
 // LoginResult 登录返回
 type LoginResult struct {
-	Token string `json:"token"`
+	Token string      `json:"token"`
 	User  *model.User `json:"user"`
 }
 
@@ -28,11 +28,17 @@ func Login(req *model.LoginReq) (*LoginResult, error) {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		return nil, errors.New("用户名或密码错误")
 	}
-	token, err := middleware.GenerateToken(user.ID, user.Username)
+	token, err := middleware.GenerateToken(user.ID, user.Username, user.TokenVersion)
 	if err != nil {
 		return nil, errors.New("生成登录凭证失败")
 	}
 	return &LoginResult{Token: token, User: &user}, nil
+}
+
+// Logout 登出：自增该用户凭证版本，使其此前签发的全部 token 立即失效
+// （含其他设备/浏览器上的同一账号会话；重新登录会拿到新版本凭证，不受影响）
+func Logout(userID uint) error {
+	return middleware.RevokeUserTokens(userID)
 }
 
 // Profile 当前登录用户资料：用户 + 角色 + 部门 + 菜单树 + 权限标识

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // ==================== 权限集合进程内缓存 ====================
@@ -20,15 +21,39 @@ import (
 const permCacheTTL = 5 * time.Minute
 
 type permCacheEntry struct {
-	isSuper   bool
-	perms     map[string]bool
-	expiresAt time.Time
+	isSuper      bool
+	perms        map[string]bool
+	tokenVersion uint // 库内当前凭证版本（随条目缓存，鉴权比对免额外查库）
+	userExists   bool // 查询是否命中用户（不存在/查询失败：false，供 JWT 拒绝）
+	expiresAt    time.Time
 }
 
 var (
 	permCacheMu    sync.RWMutex
 	permCacheStore = map[uint]*permCacheEntry{}
 )
+
+// RevokeUserTokens 吊销该用户全部已签发 token：库内版本号 +1 并清除其缓存条目，
+// 携带旧版本的 token 下一次请求即 401。登出、修改密码、管理员重置密码时调用。
+// UpdateColumn 不经钩子、不触碰 updated_at（凭证失效非业务修改，不应污染更新时间线）。
+func RevokeUserTokens(userID uint) error {
+	if err := database.DB.Model(&model.User{}).
+		UpdateColumn("token_version", gorm.Expr("token_version + 1")).
+		Where("id = ?", userID).Error; err != nil {
+		return err
+	}
+	permCacheMu.Lock()
+	delete(permCacheStore, userID)
+	permCacheMu.Unlock()
+	return nil
+}
+
+// TokenVersionOf 读取用户当前凭证版本（复用权限缓存，命中时零查库）。
+// userExists=false 表示用户不存在或查询失败，调用方应视为凭证无效。
+func TokenVersionOf(userID uint) (version uint, userExists bool) {
+	e := loadPermEntry(userID)
+	return e.tokenVersion, e.userExists
+}
 
 // InvalidatePermCache 清空全部用户权限缓存（角色/菜单/用户角色关系任何变更后调用）。
 // 全清而非逐用户失效：角色变更影响面难以精确枚举（多对多），全清代价仅一次缓存重建，简单可靠。
@@ -38,7 +63,7 @@ func InvalidatePermCache() {
 	permCacheMu.Unlock()
 }
 
-// loadPermEntry 读取（或重建）用户权限缓存条目：超管短路 + 权限码集合
+// loadPermEntry 读取（或重建）用户权限缓存条目：超管短路 + 权限码集合 + 凭证版本
 func loadPermEntry(userID uint) *permCacheEntry {
 	permCacheMu.RLock()
 	entry := permCacheStore[userID]
@@ -53,7 +78,12 @@ func loadPermEntry(userID uint) *permCacheEntry {
 		// 查询失败（含用户不存在）：返回空权限且不缓存，下次请求重新查
 		return &permCacheEntry{perms: map[string]bool{}, expiresAt: time.Now().Add(time.Minute)}
 	}
-	entry = &permCacheEntry{perms: map[string]bool{}, expiresAt: time.Now().Add(permCacheTTL)}
+	entry = &permCacheEntry{
+		perms:        map[string]bool{},
+		tokenVersion: user.TokenVersion,
+		userExists:   true,
+		expiresAt:    time.Now().Add(permCacheTTL),
+	}
 	for _, role := range user.Roles {
 		if role.IsSuper {
 			entry.isSuper = true

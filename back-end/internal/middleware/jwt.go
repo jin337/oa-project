@@ -17,17 +17,20 @@ const (
 
 // Claims JWT 载荷
 type Claims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
+	UserID       uint   `json:"user_id"`
+	Username     string `json:"username"`
+	TokenVersion uint   `json:"tv"` // 签发时的凭证版本；登出/改密后库内版本 +1，旧 token 比对不等即失效
 	jwt.RegisteredClaims
 }
 
-// GenerateToken 生成登录 token，密钥与有效期取自配置
-func GenerateToken(userID uint, username string) (string, error) {
+// GenerateToken 生成登录 token，密钥与有效期取自配置。
+// tokenVersion 来自用户表当前凭证版本：登录签发时携带，使该 token 在用户登出或改密后被吊销。
+func GenerateToken(userID uint, username string, tokenVersion uint) (string, error) {
 	cfg := config.Cfg.Server.JWT
 	claims := Claims{
-		UserID:   userID,
-		Username: username,
+		UserID:       userID,
+		Username:     username,
+		TokenVersion: tokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(cfg.Expire) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -38,7 +41,8 @@ func GenerateToken(userID uint, username string) (string, error) {
 	return token.SignedString([]byte(cfg.Secret))
 }
 
-// JWTAuth 登录鉴权中间件：解析 Bearer token，非法直接拦截
+// JWTAuth 登录鉴权中间件：解析 Bearer token，非法直接拦截；
+// 校验签名后再比对凭证版本（登出/改密后旧 token 立即失效，返回 401）。
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := c.GetHeader("Authorization")
@@ -57,6 +61,13 @@ func JWTAuth() gin.HandlerFunc {
 		claims, err := ParseToken(tokenStr)
 		if err != nil {
 			response.FailWithHTTP(c, 401, response.CodeUnauthorized, "登录凭证无效")
+			c.Abort()
+			return
+		}
+		// 凭证版本比对：库内版本随权限缓存读取（命中零查库）；
+		// 用户不存在（已删除）或版本不一致（已登出/改密吊销）均视为凭证失效
+		if cur, exists := TokenVersionOf(claims.UserID); !exists || cur != claims.TokenVersion {
+			response.FailWithHTTP(c, 401, response.CodeUnauthorized, "登录状态已失效，请重新登录")
 			c.Abort()
 			return
 		}

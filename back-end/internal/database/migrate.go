@@ -85,6 +85,15 @@ var migrations = []migration{
 		},
 		Seed: seedAuditLogMenu,
 	},
+	{
+		Version: 4,
+		Name:    "add_user_token_version",
+		// 为存量环境补建 users.token_version 列（token 吊销用）。
+		// v1 的 AutoMigrate 在新环境已含此列（model.User 已声明），此处幂等，重复无副作用。
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.User{})
+		},
+	},
 }
 
 // seedAuditLogMenu 操作审计菜单：系统管理目录下「操作审计」页面（perm=system:audit）

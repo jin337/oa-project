@@ -19,6 +19,11 @@ type User struct {
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	DeptID   uint   `gorm:"index;comment:当前所属部门ID" json:"dept_id"`
 
+	// TokenVersion 登录凭证版本号：JWT 签发时写入载荷，登出/修改密码/重置密码时 +1。
+	// 鉴权时比对「token 内版本 == 库内当前版本」，不等即视为已吊销——
+	// 无状态 JWT 因此获得主动失效能力（旧 token 立即 401），且无需黑名单存储与清理。
+	TokenVersion uint `gorm:"default:0;comment:登录凭证版本号(登出/改密自增，作废旧token)" json:"-"`
+
 	DeptIDs []*Dept      `gorm:"many2many:sys_user_dept;" json:"dept_ids,omitempty"` // 多部门归属(多对多，借鉴 Roles)，当前部门取 DeptID
 	Roles   []*Role      `gorm:"many2many:sys_user_role;" json:"roles,omitempty"`
 	Dept    *Dept        `gorm:"foreignKey:DeptID" json:"dept,omitempty"`
