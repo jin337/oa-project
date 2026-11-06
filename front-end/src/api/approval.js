@@ -63,6 +63,12 @@ export function getApprovalDashboardFlows(params) {
   return request.get('/approval/dashboard/flows', { params })
 }
 
+// GET /approval/locate/:instanceId 判定实例与当前用户的实时归属（todo/initiated/approved/cc/none）
+// 通知点击跳转前调用：待办任务已被处理等情况时定位到真实可见的页面，避免跳到空列表
+export function locateApprovalInstance(instanceId) {
+  return request.get(`/approval/locate/${instanceId}`)
+}
+
 // ========== 流程实例（/approval/instance） ==========
 
 // POST /approval/instance 发起审批

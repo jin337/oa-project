@@ -195,3 +195,19 @@ func ApprovalDashboardFlows(c *gin.Context) {
 	}
 	response.OK(c, map[string]interface{}{"list": list})
 }
+
+// ApprovalLocate GET /{APIPrefix}/approval/locate/:id 判定实例与当前用户的关系归属（参数值为实例 ID）
+// 通知点击时调用：按实时状态决定跳转目标列表页（待办任务已处理时自动落到正确页面），
+// 并携带打开详情抽屉所需参数。实例不存在/已删除返回业务错误，前端回退按通知类型跳转。
+func ApprovalLocate(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	res, err := service.ApprovalLocate(middleware.CurrentUserID(c), id)
+	if err != nil {
+		response.Fail(c, response.CodeNotFound, err.Error())
+		return
+	}
+	response.OK(c, res)
+}

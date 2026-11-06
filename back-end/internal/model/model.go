@@ -900,6 +900,20 @@ type ApprovalDashboardSummary struct {
 	CC        int64 `json:"cc"`        // 抄送我的
 }
 
+// ApprovalLocateResult 审批实例与当前用户的归属定位结果（通知点击跳转目标页判定用）。
+// Scope 与工作台 flows / dashboardScopePriority 同一套标识：
+// todo 待办 / initiated 我发起 / approved 经我处理 / cc 抄送我的 / none 均不可见。
+type ApprovalLocateResult struct {
+	InstanceID uint   `json:"instance_id"`
+	Scope      string `json:"scope"`
+	TaskID     uint   `json:"task_id"`   // scope=todo：本人待处理任务 ID（抽屉审批操作需要）
+	AppID      uint   `json:"app_id"`    // 页面配置 ID
+	DataID     uint   `json:"data_id"`   // 业务数据行 ID
+	BillNo     string `json:"bill_no"`   // 业务单号
+	AppName    string `json:"app_name"`  // 流程名称
+	ItemName   string `json:"item_name"` // 申请项名称
+}
+
 // ApprovalFlowRecord 工作台「流程监控」记录：审批列表记录 + 与我相关的归属作用域。
 // Scopes 按「待办 > 我发起 > 经我处理 > 抄送我」优先级去重排列，前端取第一个跳转对应页面打开详情抽屉。
 type ApprovalFlowRecord struct {

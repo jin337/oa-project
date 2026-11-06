@@ -1,7 +1,8 @@
-import { Badge, Button, Dropdown, Empty, List, Spin, Typography } from '@arco-design/web-react'
+import { Badge, Button, Dropdown, Empty, List, Message, Spin, Typography } from '@arco-design/web-react'
 import { IconNotification } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { locateApprovalInstance } from 'src/api/approval'
 import * as notificationApi from 'src/api/notification'
 import { getToken } from 'src/utils/auth'
 import { API_PREFIX } from 'src/utils/constants'
@@ -9,6 +10,22 @@ import { formatTime } from 'src/utils/format'
 
 // 通知类型文案
 const TYPE_TEXT = { 1: '待办', 2: '退回', 3: '抄送', 4: '结果' }
+
+// 归属 scope -> 目标列表页（与工作台流程监控口径一致）
+const SCOPE_PATH = {
+  todo: '/approval/todo',
+  initiated: '/approval/initiated',
+  approved: '/approval/workplace',
+  cc: '/approval/tome',
+}
+// 通知类型 -> 兜底页面：定位接口异常或该实例与当前用户已无可见归属时使用（等价改造前的静态跳转）
+const TYPE_FALLBACK_PATH = {
+  1: SCOPE_PATH.todo,
+  2: SCOPE_PATH.initiated,
+  3: SCOPE_PATH.cc,
+  4: SCOPE_PATH.initiated,
+}
+
 // 多标签页同步通道
 const bc = new BroadcastChannel('notification-sync')
 
@@ -116,17 +133,43 @@ export default function NotificationBell() {
     loadList()
   }
 
+  // 点击通知：标记已读 → 实时定位实例与当前用户的关系归属 → 跳转目标列表页并直接打开详情抽屉。
+  // 归属必须实时判定：通知是历史事件快照，典型边界——「待办通知的任务已被本人审批」时，
+  // 待办列表按 status=待处理 过滤必然查不到该记录，跳待办页只会看到空列表；
+  // 后端 locate 按 todo>initiated>approved>cc 优先级返回真实可见页面（与工作台 flows 同源口径）。
+  // 定位失败 / scope=none / 通知未挂实例：回退按通知类型静态跳转（改造前行为，不自动开抽屉）。
   const handleClickItem = async (n) => {
     if (!n.read_at) {
       await notificationApi.notificationRead(n.id)
       setCount((c) => Math.max(0, c - 1))
       bc.postMessage({ action: 'read-one' })
     }
-    // 跳转到对应页面
-    if (n.type === 1) navigate('/approval/todo')
-    else if (n.type === 2) navigate('/approval/initiated')
-    else if (n.type === 3) navigate('/approval/tome')
-    else if (n.type === 4) navigate('/approval/initiated')
+    let target = TYPE_FALLBACK_PATH[n.type] || SCOPE_PATH.initiated
+    let openDetailRec = null
+    if (n.instance_id) {
+      try {
+        const res = await locateApprovalInstance(n.instance_id)
+        const loc = res?.data
+        if (loc?.scope && SCOPE_PATH[loc.scope]) {
+          target = SCOPE_PATH[loc.scope]
+          // 待办页把 record.id 当作任务 ID 传 currentTask（抽屉内才能出现审批操作）；
+          // 其余列表页仅用 instance_id 拉详情，item_name/bill_no 用于标题回显
+          openDetailRec = {
+            id: loc.scope === 'todo' && loc.task_id ? loc.task_id : loc.instance_id,
+            instance_id: loc.instance_id,
+            item_name: loc.item_name,
+            app_name: loc.app_name,
+            bill_no: loc.bill_no,
+          }
+        } else if (loc?.scope === 'none') {
+          Message.info('该申请已不在你的列表可见范围')
+        }
+      } catch {
+        // 定位失败（实例已删除等）：回退按类型跳转；接口错误已由请求拦截器提示
+      }
+    }
+    if (openDetailRec) navigate(target, { state: { openDetail: openDetailRec } })
+    else navigate(target)
     setVisible(false)
   }
 

@@ -16,6 +16,8 @@ func registerApprovalRoutes(api *gin.RouterGroup) {
 		// 工作台独立接口
 		approval.GET("/dashboard/summary", handler.ApprovalDashboardSummary) // 全部事项计数
 		approval.GET("/dashboard/flows", handler.ApprovalDashboardFlows)     // 流程监控（与我相关的所有申请）
+		// 实例归属定位（通知点击跳转判定）：参数名按项目惯例 :id（parseID 统一读取），值为实例 ID
+		approval.GET("/locate/:id", handler.ApprovalLocate)
 		// 审批分类 & 申请项（管理操作按 approval:add / approval:edit / approval:delete 细分）
 		category := approval.Group("/category")
 		{

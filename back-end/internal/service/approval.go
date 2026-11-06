@@ -904,6 +904,80 @@ func ApprovalDashboardFlows(curUserID uint, timeRange string) ([]model.ApprovalF
 	return out, nil
 }
 
+// ApprovalLocate 实时判定某审批实例与当前用户的关系归属（通知点击跳转目标页判定用）。
+//
+// 为什么不能按通知 type 直接猜页面：通知是历史事件快照，实例状态在其后随时变化——
+// 最典型即「待办通知的任务已被本人审批」：待办列表按「本人 + status=待处理」过滤，
+// 该记录必然不在待办；但本人存在已操作任务，按工作台 flows 同优先级（todo>initiated>approved>cc），
+// 它会正确落到「经我处理」而非空列表。
+//
+// 判定与 dashboardScopePriority / 各列表 scope 逐条同源（同状态集合、同 operated_at IS NOT NULL
+// 排除自动通过、同草稿排除、同抄送双路径），仅按实例 ID 精确过滤，成本恒定。
+// 归属为 todo 时返回待处理任务 ID（详情抽屉审批操作需要）；均不可见时 Scope="none"
+// （实例已删除则报错，前端回退按 type 跳转）。
+func ApprovalLocate(curUserID, instanceID uint) (*model.ApprovalLocateResult, error) {
+	var inst model.ApprovalInstance
+	if err := database.DB.First(&inst, instanceID).Error; err != nil {
+		return nil, errors.New("审批实例不存在或已删除")
+	}
+	res := &model.ApprovalLocateResult{InstanceID: inst.ID, Scope: "none"}
+
+	// 展示信息（与列表记录同源字段：应用名/申请项名/单号）
+	var app model.Application
+	if err := database.DB.First(&app, inst.AppID).Error; err == nil {
+		res.AppID = app.ID
+		res.AppName = app.Name
+		var item model.ApprovalCategoryItem
+		database.DB.Where("code = ?", app.Code).First(&item)
+		res.ItemName = item.Name
+		if inst.BusinessDataID > 0 {
+			res.DataID = inst.BusinessDataID
+			res.BillNo = readBillNo(app.TableName, inst.BusinessDataID)
+		}
+	}
+
+	// 1. todo：本人待处理任务（同 approvalListTodo 判定域；实例已加载，孤儿任务天然排除）
+	var pending model.ApprovalInstanceTask
+	if err := database.DB.
+		Where("instance_id = ? AND assignee_id = ? AND status = ?", inst.ID, curUserID, model.TaskStatusPending).
+		Order("id DESC").First(&pending).Error; err == nil {
+		res.Scope = "todo"
+		res.TaskID = pending.ID
+		return res, nil
+	}
+
+	// 2. initiated：本人发起且非草稿（同 approvalListInitiated 判定域）
+	if inst.CreatedBy == curUserID && inst.Status != model.InstanceStatusDraft {
+		res.Scope = "initiated"
+		return res, nil
+	}
+
+	// 3. approved：本人已真实操作（同 approvalListApproved：状态集合 + operated_at 非空排除自动通过）
+	var handledCount int64
+	database.DB.Model(&model.ApprovalInstanceTask{}).
+		Where("instance_id = ? AND assignee_id = ? AND status IN ? AND operated_at IS NOT NULL",
+			inst.ID, curUserID, []int{model.TaskStatusApproved, model.TaskStatusRejected, model.TaskStatusReturned}).
+		Count(&handledCount)
+	if handledCount > 0 {
+		res.Scope = "approved"
+		return res, nil
+	}
+
+	// 4. cc：抄送记录表命中 ∪ 执行路径解析命中（同 approvalListCC 双路径；解析路径排除草稿）
+	var ccCount int64
+	database.DB.Model(&model.ApprovalCCRecord{}).
+		Where("instance_id = ? AND user_id = ?", inst.ID, curUserID).
+		Count(&ccCount)
+	if ccCount > 0 {
+		res.Scope = "cc"
+		return res, nil
+	}
+	if inst.Status != model.InstanceStatusDraft && instanceCCContainsUser(inst, curUserID) {
+		res.Scope = "cc"
+	}
+	return res, nil
+}
+
 // approvalListTodo 待办列表：从 approval_task 表查询当前用户的待处理任务
 func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.ApprovalRecord, int64, error) {
 	// JOIN 实例表过滤已删除实例的孤儿任务，保证 total 与列表一致
