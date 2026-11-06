@@ -1,18 +1,20 @@
-package service
+package test
 
 import (
 	"testing"
 
 	"back-end/internal/model"
+	"back-end/internal/service"
 )
 
-// postTestNode 构造一个指定成员（人员 user_x）的审批节点，不依赖数据库
-func postTestNode(id string, strategy int, memberKeys ...string) flowNode {
-	ms := make([]flowMember, 0, len(memberKeys))
+// postTestNode 构造一个指定成员（人员 user_x）的审批节点，不依赖数据库。
+// 跨包访问：flowNode/flowMember 经 service 导出别名构造。
+func postTestNode(id string, strategy int, memberKeys ...string) service.FlowNode {
+	ms := make([]service.FlowMember, 0, len(memberKeys))
 	for _, k := range memberKeys {
-		ms = append(ms, flowMember{Type: 1, Key: k})
+		ms = append(ms, service.FlowMember{Type: 1, Key: k})
 	}
-	return flowNode{ID: id, Type: 2, Label: id, ApproverType: 1, Members: ms, Strategy: strategy}
+	return service.FlowNode{ID: id, Type: 2, Label: id, ApproverType: 1, Members: ms, Strategy: strategy}
 }
 
 func TestParseApprovalModePost(t *testing.T) {
@@ -31,8 +33,8 @@ func TestParseApprovalModePost(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := parseApprovalMode(tc.raw); got != tc.want {
-				t.Fatalf("parseApprovalMode() = %q, want %q", got, tc.want)
+			if got := service.ParseApprovalMode(tc.raw); got != tc.want {
+				t.Fatalf("ParseApprovalMode() = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -42,35 +44,35 @@ func TestPostLastNodeIdx(t *testing.T) {
 	cases := []struct {
 		name     string
 		path     []string
-		nodes    []flowNode
+		nodes    []service.FlowNode
 		userIDs  []uint
 		wantLast map[uint]int
 	}{
 		{
 			name:     "双节点同人：最后出现为第二个节点",
 			path:     []string{"n1", "n2"},
-			nodes:    []flowNode{postTestNode("n1", 1, "user_1"), postTestNode("n2", 1, "user_1")},
+			nodes:    []service.FlowNode{postTestNode("n1", 1, "user_1"), postTestNode("n2", 1, "user_1")},
 			userIDs:  []uint{1},
 			wantLast: map[uint]int{1: 1},
 		},
 		{
 			name:     "三人混合：各取最后出现索引",
 			path:     []string{"n1", "n2", "n3"},
-			nodes:    []flowNode{postTestNode("n1", 1, "user_1"), postTestNode("n2", 1, "user_1", "user_4"), postTestNode("n3", 1, "user_1")},
+			nodes:    []service.FlowNode{postTestNode("n1", 1, "user_1"), postTestNode("n2", 1, "user_1", "user_4"), postTestNode("n3", 1, "user_1")},
 			userIDs:  []uint{1, 4},
 			wantLast: map[uint]int{1: 2, 4: 1},
 		},
 		{
 			name:     "抄送节点不参与判定",
 			path:     []string{"n1", "cc", "n2"},
-			nodes:    []flowNode{postTestNode("n1", 1, "user_1"), {ID: "cc", Type: 3, Label: "cc"}, postTestNode("n2", 1, "user_1")},
+			nodes:    []service.FlowNode{postTestNode("n1", 1, "user_1"), {ID: "cc", Type: 3, Label: "cc"}, postTestNode("n2", 1, "user_1")},
 			userIDs:  []uint{1},
 			wantLast: map[uint]int{1: 2},
 		},
 		{
 			name:     "各只出现一次：索引即自身",
 			path:     []string{"n1", "n2"},
-			nodes:    []flowNode{postTestNode("n1", 1, "user_1"), postTestNode("n2", 1, "user_4")},
+			nodes:    []service.FlowNode{postTestNode("n1", 1, "user_1"), postTestNode("n2", 1, "user_4")},
 			userIDs:  []uint{1, 4},
 			wantLast: map[uint]int{1: 0, 4: 1},
 		},
@@ -78,10 +80,10 @@ func TestPostLastNodeIdx(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			inst := &model.ApprovalInstance{ExecutionPath: tc.path}
-			got := postLastNodeIdx(inst, tc.nodes, tc.userIDs)
+			got := service.PostLastNodeIdx(inst, tc.nodes, tc.userIDs)
 			for uid, want := range tc.wantLast {
 				if got[uid] != want {
-					t.Fatalf("postLastNodeIdx()[%d] = %d, want %d", uid, got[uid], want)
+					t.Fatalf("PostLastNodeIdx()[%d] = %d, want %d", uid, got[uid], want)
 				}
 			}
 		})
@@ -99,7 +101,7 @@ func TestAutoApprovedComment(t *testing.T) {
 		{name: "前置卡位", mode: "pre", suffix: "自动通过", want: "已前置审批，自动通过"},
 		{name: "后置退回", mode: "post", suffix: "退回后不重复审批", want: "已后置审批，退回后不重复审批"},
 		{name: "前置退回", mode: "pre", suffix: "退回后不重复审批", want: "已前置审批，退回后不重复审批"},
-		// 顺序模式（parseApprovalMode 默认返回 sequential）：无前置/后置语义，只输出纯动作文案
+		// 顺序模式（ParseApprovalMode 默认返回 sequential）：无前置/后置语义，只输出纯动作文案
 		{name: "顺序模式纯文案", mode: "sequential", suffix: "自动通过", want: "自动通过"},
 		{name: "顺序模式退回文案", mode: "sequential", suffix: "退回后不重复审批", want: "退回后不重复审批"},
 		// 未知/空 mode 同样落入兜底分支（防御性契约）
@@ -107,8 +109,8 @@ func TestAutoApprovedComment(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := autoApprovedComment(tc.mode, tc.suffix); got != tc.want {
-				t.Fatalf("autoApprovedComment() = %q, want %q", got, tc.want)
+			if got := service.AutoApprovedComment(tc.mode, tc.suffix); got != tc.want {
+				t.Fatalf("AutoApprovedComment() = %q, want %q", got, tc.want)
 			}
 		})
 	}

@@ -1,10 +1,11 @@
-package service
+package test
 
 import (
 	"testing"
 	"time"
 
 	"back-end/internal/model"
+	"back-end/internal/service"
 )
 
 // dept 构造：ID 来自内嵌的 BaseModel（Go 不允许在复合字面量里直接写提升字段）
@@ -23,7 +24,7 @@ func TestBuildDeptTreeFilteredList(t *testing.T) {
 		dept(2, 1, "研发部"),
 		dept(3, 1, "市场部"),
 	}
-	tree := buildDeptTree(list, 0)
+	tree := service.BuildDeptTree(list, 0)
 	if len(tree) != 2 {
 		t.Fatalf("根节点数 = %d, 期望 2（研发部与市场部）", len(tree))
 	}
@@ -47,7 +48,7 @@ func TestBuildDeptTreeNormal(t *testing.T) {
 		dept(3, 1, "市场部"),
 		dept(4, 2, "后端组"),
 	}
-	tree := buildDeptTree(list, 0)
+	tree := service.BuildDeptTree(list, 0)
 	if len(tree) != 1 || tree[0].ID != 1 {
 		t.Fatalf("根节点应为总公司，实际 %+v", tree)
 	}
@@ -67,7 +68,7 @@ func TestBuildDeptTreeNormal(t *testing.T) {
 
 // TestBuildDeptTreeEmpty 空列表返回空切片而非 nil。
 func TestBuildDeptTreeEmpty(t *testing.T) {
-	tree := buildDeptTree(nil, 0)
+	tree := service.BuildDeptTree(nil, 0)
 	if tree == nil {
 		t.Fatal("空列表应返回空切片而不是 nil")
 	}
@@ -84,7 +85,7 @@ func TestBuildDeptTreeCycle(t *testing.T) {
 		dept(2, 1, "B"),
 	}
 	done := make(chan []*model.Dept, 1)
-	go func() { done <- buildDeptTree(list, 0) }()
+	go func() { done <- service.BuildDeptTree(list, 0) }()
 	select {
 	case tree := <-done:
 		if len(tree) != 0 {

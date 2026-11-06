@@ -1,8 +1,10 @@
-package service
+package test
 
 import (
 	"testing"
 	"time"
+
+	"back-end/internal/service"
 )
 
 func TestParseWithdrawWindowDuration(t *testing.T) {
@@ -39,9 +41,9 @@ func TestParseWithdrawWindowDuration(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := parseWithdrawWindowDuration(tc.config)
+			got, ok := service.ParseWithdrawWindowDuration(tc.config)
 			if ok != tc.ok || (tc.ok && got != tc.want) {
-				t.Fatalf("parseWithdrawWindowDuration() = %v, %v; want %v, %v", got, ok, tc.want, tc.ok)
+				t.Fatalf("ParseWithdrawWindowDuration() = %v, %v; want %v, %v", got, ok, tc.want, tc.ok)
 			}
 		})
 	}

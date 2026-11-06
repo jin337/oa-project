@@ -1,4 +1,4 @@
-package middleware
+package test
 
 import (
 	"net/http"
@@ -8,53 +8,54 @@ import (
 	"time"
 
 	"back-end/internal/config"
+	"back-end/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
-// 本文件测试限流与登录锁定的纯内存逻辑（不依赖数据库/配置）。
+// 限流与登录锁定的纯内存逻辑测试（不依赖数据库/配置）。
 // loginPolicy 在 config.Cfg == nil 时回退默认 5 次 / 15 分钟窗口 / 15 分钟锁定，
-// 测试直接使用默认策略。
+// 测试直接使用默认策略。私有符号经 middleware 桥接层（exportbridge.go）跨包访问。
 
 func TestTokenBucketBurstThenBlock(t *testing.T) {
-	rl := newRateLimiter(1, 3) // 每秒 1 个令牌，桶容量 3
+	rl := middleware.NewRateLimiter(1, 3) // 每秒 1 个令牌，桶容量 3
 	now := time.Now()
 	for i := 0; i < 3; i++ {
-		if !rl.allow("ip1", now) {
+		if !middleware.RateLimiterAllow(rl, "ip1", now) {
 			t.Fatalf("第 %d 次请求应放行（桶初始满 3）", i+1)
 		}
 	}
-	if rl.allow("ip1", now) {
+	if middleware.RateLimiterAllow(rl, "ip1", now) {
 		t.Fatal("耗尽 burst 后应立即限流")
 	}
 }
 
 func TestTokenBucketRefill(t *testing.T) {
-	rl := newRateLimiter(2, 2) // 每秒回填 2 个
+	rl := middleware.NewRateLimiter(2, 2) // 每秒回填 2 个
 	now := time.Now()
-	if !rl.allow("ip", now) || !rl.allow("ip", now) {
+	if !middleware.RateLimiterAllow(rl, "ip", now) || !middleware.RateLimiterAllow(rl, "ip", now) {
 		t.Fatal("burst 内应放行")
 	}
-	if rl.allow("ip", now) {
+	if middleware.RateLimiterAllow(rl, "ip", now) {
 		t.Fatal("耗尽后同一时刻应拒绝")
 	}
 	// 半秒后回填 1 个令牌
-	if !rl.allow("ip", now.Add(500*time.Millisecond)) {
+	if !middleware.RateLimiterAllow(rl, "ip", now.Add(500*time.Millisecond)) {
 		t.Fatal("回填后应恢复放行")
 	}
 }
 
 func TestTokenBucketCappedAtBurst(t *testing.T) {
-	rl := newRateLimiter(10, 3)
+	rl := middleware.NewRateLimiter(10, 3)
 	now := time.Now()
-	if !rl.allow("ip", now) {
+	if !middleware.RateLimiterAllow(rl, "ip", now) {
 		t.Fatal("首次应放行")
 	}
 	// 长时间空闲：回填应封顶 burst=3，而非累积成 1 小时 * 10/秒
 	later := now.Add(time.Hour)
 	ok := 0
 	for i := 0; i < 10; i++ {
-		if rl.allow("ip", later) {
+		if middleware.RateLimiterAllow(rl, "ip", later) {
 			ok++
 		}
 	}
@@ -64,12 +65,12 @@ func TestTokenBucketCappedAtBurst(t *testing.T) {
 }
 
 func TestTokenBucketPerKeyIsolated(t *testing.T) {
-	rl := newRateLimiter(1, 1)
+	rl := middleware.NewRateLimiter(1, 1)
 	now := time.Now()
-	if !rl.allow("a", now) || rl.allow("a", now) {
+	if !middleware.RateLimiterAllow(rl, "a", now) || middleware.RateLimiterAllow(rl, "a", now) {
 		t.Fatal("a 应只能过一次")
 	}
-	if !rl.allow("b", now) {
+	if !middleware.RateLimiterAllow(rl, "b", now) {
 		t.Fatal("不同 key 应独立计数")
 	}
 }
@@ -82,7 +83,7 @@ func TestRateLimitSensitiveKeywords(t *testing.T) {
 		"/v1/api/approval/instance":      false,
 	}
 	for path, want := range cases {
-		if got := matchKeyword(path, rateLimitSensitiveKeywords); got != want {
+		if got := middleware.MatchKeyword(path, middleware.RateLimitSensitiveKeywords); got != want {
 			t.Errorf("path %s: got %v want %v", path, got, want)
 		}
 	}
@@ -90,25 +91,25 @@ func TestRateLimitSensitiveKeywords(t *testing.T) {
 
 func TestLoginLockAfterMaxFails(t *testing.T) {
 	user := "lock-test-user"
-	defer ClearLoginFail(user)
+	defer middleware.ClearLoginFail(user)
 
 	// 前 4 次失败不锁定
 	for i := 0; i < 4; i++ {
-		if RecordLoginFail(user) {
+		if middleware.RecordLoginFail(user) {
 			t.Fatalf("第 %d 次失败不应触发锁定（默认阈值 5）", i+1)
 		}
 	}
-	if err := CheckLoginLock(user); err != nil {
+	if err := middleware.CheckLoginLock(user); err != nil {
 		t.Fatalf("未达阈值不应锁定: %v", err)
 	}
 	// 第 5 次触发锁定
-	if !RecordLoginFail(user) {
+	if !middleware.RecordLoginFail(user) {
 		t.Fatal("达到阈值应返回锁定")
 	}
-	err := CheckLoginLock(user)
-	locked, ok := err.(*LoginLockedErr)
+	err := middleware.CheckLoginLock(user)
+	locked, ok := err.(*middleware.LoginLockedErr)
 	if !ok {
-		t.Fatalf("锁定后 CheckLoginLock 应返回 *LoginLockedErr，实际 %v", err)
+		t.Fatalf("CheckLoginLock 应返回 *middleware.LoginLockedErr，实际 %v", err)
 	}
 	if locked.Remaining <= 0 {
 		t.Fatalf("剩余时间应为正，实际 %v", locked.Remaining)
@@ -117,41 +118,36 @@ func TestLoginLockAfterMaxFails(t *testing.T) {
 
 func TestLoginSuccessClearsLock(t *testing.T) {
 	user := "unlock-test-user"
-	defer ClearLoginFail(user)
+	defer middleware.ClearLoginFail(user)
 
 	for i := 0; i < 5; i++ {
-		RecordLoginFail(user)
+		middleware.RecordLoginFail(user)
 	}
-	if CheckLoginLock(user) == nil {
+	if middleware.CheckLoginLock(user) == nil {
 		t.Fatal("5 次失败后应处于锁定")
 	}
-	ClearLoginFail(user)
-	if err := CheckLoginLock(user); err != nil {
+	middleware.ClearLoginFail(user)
+	if err := middleware.CheckLoginLock(user); err != nil {
 		t.Fatalf("登录成功后应立即可重试: %v", err)
 	}
 }
 
 func TestLoginFailWindowResets(t *testing.T) {
 	user := "window-test-user"
-	defer ClearLoginFail(user)
+	defer middleware.ClearLoginFail(user)
 
 	// 4 次失败后，把 firstFail 推到窗口（默认 15 分钟）之外，再失败 1 次不应锁定
 	for i := 0; i < 4; i++ {
-		RecordLoginFail(user)
+		middleware.RecordLoginFail(user)
 	}
-	loginAttemptsMu.Lock()
-	a := loginAttempts[user]
-	if a == nil {
-		loginAttemptsMu.Unlock()
+	if !middleware.BackdateLoginFirstFail(user, time.Now().Add(-20*time.Minute)) {
 		t.Fatal("计数记录应存在")
 	}
-	a.firstFail = time.Now().Add(-20 * time.Minute)
-	loginAttemptsMu.Unlock()
 
-	if RecordLoginFail(user) {
+	if middleware.RecordLoginFail(user) {
 		t.Fatal("超出失败窗口后应重新计数，第 1 次不触发锁定")
 	}
-	if CheckLoginLock(user) != nil {
+	if middleware.CheckLoginLock(user) != nil {
 		t.Fatal("窗口重置后不应处于锁定")
 	}
 }
@@ -169,7 +165,7 @@ func setRateCfg(enable bool, cost, burst int) func() {
 		RateLimitCostPerSec: cost,
 		RateLimitBurst:      burst,
 	}
-	globalLimiter = newRateLimiter(cost, burst)
+	middleware.SetGlobalRateLimiter(cost, burst)
 	return func() { config.Cfg = old }
 }
 
@@ -178,7 +174,7 @@ func TestRateLimitMiddlewareBlocksOverBurst(t *testing.T) {
 	defer setRateCfg(true, 1, 2)()
 
 	r := gin.New()
-	r.GET("/x", RateLimit(), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	r.GET("/x", middleware.RateLimit(), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
 	code := func() int {
 		w := httptest.NewRecorder()
@@ -199,7 +195,7 @@ func TestRateLimitMiddlewareDisabled(t *testing.T) {
 	defer setRateCfg(false, 1, 1)()
 
 	r := gin.New()
-	r.GET("/x", RateLimit(), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	r.GET("/x", middleware.RateLimit(), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 	for i := 0; i < 5; i++ {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest("GET", "/x", nil))
@@ -212,19 +208,19 @@ func TestRateLimitMiddlewareDisabled(t *testing.T) {
 func TestAdminUnlockAndBatchQuery(t *testing.T) {
 	u1 := "unlock-api-test-1"
 	u2 := "unlock-api-test-2"
-	defer ClearLoginFail(u1)
-	defer ClearLoginFail(u2)
+	defer middleware.ClearLoginFail(u1)
+	defer middleware.ClearLoginFail(u2)
 
 	// u1 锁定；u2 只累计 3 次失败（未达 5 次阈值，不锁定）
 	for i := 0; i < 5; i++ {
-		RecordLoginFail(u1)
+		middleware.RecordLoginFail(u1)
 	}
 	for i := 0; i < 3; i++ {
-		RecordLoginFail(u2)
+		middleware.RecordLoginFail(u2)
 	}
 
 	// 批量查询只应返回锁定中的账号
-	got := LoginLockedRemaining([]string{u1, u2, "not-exist-user"})
+	got := middleware.LoginLockedRemaining([]string{u1, u2, "not-exist-user"})
 	if _, ok := got[u1]; !ok {
 		t.Fatal("u1 锁定中，应出现在批量查询结果")
 	}
@@ -236,30 +232,30 @@ func TestAdminUnlockAndBatchQuery(t *testing.T) {
 	}
 
 	// 管理员解锁：返回 true 且状态彻底清除
-	if !AdminUnlockLogin(u1) {
+	if !middleware.AdminUnlockLogin(u1) {
 		t.Fatal("解锁锁定中的账号应返回 true")
 	}
-	if err := CheckLoginLock(u1); err != nil {
+	if err := middleware.CheckLoginLock(u1); err != nil {
 		t.Fatalf("解锁后应可立即登录: %v", err)
 	}
-	if len(LoginLockedRemaining([]string{u1})) != 0 {
+	if len(middleware.LoginLockedRemaining([]string{u1})) != 0 {
 		t.Fatal("解锁后批量查询不应再包含该账号")
 	}
 	// 重复解锁：已无记录，返回 false（供 handler 区分"本就未锁定"）
-	if AdminUnlockLogin(u1) {
+	if middleware.AdminUnlockLogin(u1) {
 		t.Fatal("重复解锁应返回 false")
 	}
 	// 未锁定账号解锁返回 false；完全未知用户名同样 false
-	if AdminUnlockLogin(u2) {
+	if middleware.AdminUnlockLogin(u2) {
 		t.Fatal("未达阈值的账号解锁应返回 false")
 	}
-	if AdminUnlockLogin("totally-unknown-user") {
+	if middleware.AdminUnlockLogin("totally-unknown-user") {
 		t.Fatal("未知账号解锁应返回 false")
 	}
 }
 
 func TestLoginLockedErrText(t *testing.T) {
-	err := &LoginLockedErr{Remaining: 5 * time.Minute}
+	err := &middleware.LoginLockedErr{Remaining: 5 * time.Minute}
 	if err.Error() == "" {
 		t.Fatal("锁定错误需提供文案")
 	}
@@ -268,7 +264,7 @@ func TestLoginLockedErrText(t *testing.T) {
 func TestSecurityHeadersApplied(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/x", SecurityHeaders(), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	r.GET("/x", middleware.SecurityHeaders(), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/x", nil))

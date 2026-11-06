@@ -1,10 +1,11 @@
-package service
+package test
 
 import (
 	"testing"
 	"time"
 
 	"back-end/internal/model"
+	"back-end/internal/service"
 )
 
 func TestIsOrdinaryApprovedTask(t *testing.T) {
@@ -38,8 +39,8 @@ func TestIsOrdinaryApprovedTask(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := isOrdinaryApprovedTask(tc.task); got != tc.want {
-				t.Fatalf("isOrdinaryApprovedTask() = %v, want %v", got, tc.want)
+			if got := service.IsOrdinaryApprovedTask(tc.task); got != tc.want {
+				t.Fatalf("IsOrdinaryApprovedTask() = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -59,8 +60,8 @@ func TestIsDerivedTask(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := isDerivedTask(tc.task); got != tc.want {
-				t.Fatalf("isDerivedTask() = %v, want %v", got, tc.want)
+			if got := service.IsDerivedTask(tc.task); got != tc.want {
+				t.Fatalf("IsDerivedTask() = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -84,8 +85,8 @@ func TestReturnCandidateNodeAllowed(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := returnCandidateNodeAllowed(tc.candidateIdx, tc.currentIdx, tc.strategy); got != tc.want {
-				t.Fatalf("returnCandidateNodeAllowed() = %v, want %v", got, tc.want)
+			if got := service.ReturnCandidateNodeAllowed(tc.candidateIdx, tc.currentIdx, tc.strategy); got != tc.want {
+				t.Fatalf("ReturnCandidateNodeAllowed() = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -131,15 +132,15 @@ func TestTaskApprovedAfterReturnTarget(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := taskApprovedAfterReturnTarget(tc.task, tc.target, pathIndex); got != tc.want {
-				t.Fatalf("taskApprovedAfterReturnTarget() = %v, want %v", got, tc.want)
+			if got := service.TaskApprovedAfterReturnTarget(tc.task, tc.target, pathIndex); got != tc.want {
+				t.Fatalf("TaskApprovedAfterReturnTarget() = %v, want %v", got, tc.want)
 			}
 		})
 	}
 }
 
 func TestDelegatedChainStatus(t *testing.T) {
-	root := func(status int) *model.ApprovalInstanceTask {
+	mkRoot := func(status int) *model.ApprovalInstanceTask {
 		return &model.ApprovalInstanceTask{
 			BaseModel: model.BaseModel{ID: 40},
 			Status:    status,
@@ -154,54 +155,54 @@ func TestDelegatedChainStatus(t *testing.T) {
 	}{
 		{
 			name: "转交人已通过时原审批人视为完成",
-			root: root(model.TaskStatusDelegated),
+			root: mkRoot(model.TaskStatusDelegated),
 			children: map[uint]*model.ApprovalInstanceTask{
 				40: {BaseModel: model.BaseModel{ID: 51}, Status: model.TaskStatusApproved, DelegatedFrom: 40},
 			},
-			want: delegatedChainApproved,
+			want: service.DelegatedChainApproved,
 		},
 		{
 			name: "转交链仍待处理时原审批人未完成",
-			root: root(model.TaskStatusDelegated),
+			root: mkRoot(model.TaskStatusDelegated),
 			children: map[uint]*model.ApprovalInstanceTask{
 				40: {BaseModel: model.BaseModel{ID: 51}, Status: model.TaskStatusPending, DelegatedFrom: 40},
 			},
-			want: delegatedChainPending,
+			want: service.DelegatedChainPending,
 		},
 		{
 			name: "多级转交最终待处理时仍未完成",
-			root: root(model.TaskStatusDelegated),
+			root: mkRoot(model.TaskStatusDelegated),
 			children: map[uint]*model.ApprovalInstanceTask{
 				40: {BaseModel: model.BaseModel{ID: 51}, Status: model.TaskStatusDelegated, DelegatedFrom: 40},
 				51: {BaseModel: model.BaseModel{ID: 52}, Status: model.TaskStatusPending, DelegatedFrom: 51},
 			},
-			want: delegatedChainPending,
+			want: service.DelegatedChainPending,
 		},
 		{
 			name: "转交链被取消时视为无效",
-			root: root(model.TaskStatusDelegated),
+			root: mkRoot(model.TaskStatusDelegated),
 			children: map[uint]*model.ApprovalInstanceTask{
 				40: {BaseModel: model.BaseModel{ID: 51}, Status: model.TaskStatusCancelled, DelegatedFrom: 40},
 			},
-			want: delegatedChainInvalid,
+			want: service.DelegatedChainInvalid,
 		},
 		{
 			name: "普通已通过根任务不进入转交链判断",
-			root: root(model.TaskStatusApproved),
-			want: delegatedChainInvalid,
+			root: mkRoot(model.TaskStatusApproved),
+			want: service.DelegatedChainInvalid,
 		},
 		{
 			name: "缺少转交子任务时视为无效",
-			root: root(model.TaskStatusDelegated),
-			want: delegatedChainInvalid,
+			root: mkRoot(model.TaskStatusDelegated),
+			want: service.DelegatedChainInvalid,
 		},
-		{name: "nil 根任务安全返回无效", root: nil, want: delegatedChainInvalid},
+		{name: "nil 根任务安全返回无效", root: nil, want: service.DelegatedChainInvalid},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := delegatedChainStatus(tc.root, tc.children); got != tc.want {
-				t.Fatalf("delegatedChainStatus() = %d, want %d", got, tc.want)
+			if got := service.DelegatedChainStatus(tc.root, tc.children); got != tc.want {
+				t.Fatalf("DelegatedChainStatus() = %d, want %d", got, tc.want)
 			}
 		})
 	}

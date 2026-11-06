@@ -1,6 +1,10 @@
-package service
+package test
 
-import "testing"
+import (
+	"testing"
+
+	"back-end/internal/service"
+)
 
 // TestMergeForwardParams 验证「转发参数模板只作默认值」的合并规则：
 // 模板铺底、调用方同名键覆盖，模板中调用方未提供的键保留。
@@ -50,9 +54,9 @@ func TestMergeForwardParams(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := mergeForwardParams(c.tpl, c.form)
+			got := service.MergeForwardParams(c.tpl, c.form)
 			if len(got) != len(c.want) {
-				t.Fatalf("mergeForwardParams(%v, %v) = %v, 期望 %v", c.tpl, c.form, got, c.want)
+				t.Fatalf("MergeForwardParams(%v, %v) = %v, 期望 %v", c.tpl, c.form, got, c.want)
 			}
 			for k, want := range c.want {
 				if gv, ok := got[k]; !ok || gv != want {
@@ -67,7 +71,7 @@ func TestMergeForwardParams(t *testing.T) {
 func TestMergeForwardParamsDoesNotMutateInputs(t *testing.T) {
 	tpl := map[string]interface{}{"type": "calc", "value": 1}
 	form := map[string]interface{}{"value": 2}
-	out := mergeForwardParams(tpl, form)
+	out := service.MergeForwardParams(tpl, form)
 	out["type"] = "changed"
 	out["extra"] = 1
 	if tpl["type"] != "calc" || len(tpl) != 2 {
