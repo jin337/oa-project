@@ -202,7 +202,7 @@ export default function OperationLogManage() {
   const visibleColumns = columns.filter((c) => visibleCols.includes(c.key))
 
   return (
-    <Card title="操作审计">
+    <Card title="操作日志">
       {/* 搜索区域 */}
       <div className="mb-3">
         <Space wrap>
