@@ -82,8 +82,13 @@ func OperationLog() gin.HandlerFunc {
 
 		start := time.Now()
 		var raw []byte
-		if c.Request.Body != nil {
-			raw, _ = io.ReadAll(io.LimitReader(c.Request.Body, opLogBodyLimit+1024))
+		// multipart（文件上传）不读取请求体：大文件整体缓冲会翻倍内存占用，
+		// 且上传审计价值低（路径+操作人+状态已可追溯），请求体记录留空
+		isMultipart := strings.Contains(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data")
+		if c.Request.Body != nil && !isMultipart {
+			// 完整读取后原样回填：只读前 N 字节就回填会把大请求体（如带附件列表的表单 JSON）
+			// 截断后交给下游 handler，造成绑定失败/数据损坏。截断仅发生在"记录"阶段（见下方）
+			raw, _ = io.ReadAll(c.Request.Body)
 			c.Request.Body = io.NopCloser(bytes.NewReader(raw))
 		}
 
