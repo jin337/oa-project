@@ -1,4 +1,4 @@
-import { Button, Card, Table } from '@arco-design/web-react'
+import { Button, Card, Table, Tag } from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -32,6 +32,7 @@ const ALL_COL_KEYS = [
   'totalmoney',
   'node_name',
   'approval_status',
+  'deadline',
 ]
 
 /** 我的待办：展示当前用户待处理的审批任务，支持审批/转交/加签/查看详情 */
@@ -88,6 +89,18 @@ export default function Todo() {
     colTotalmoney,
     colNodeName,
     colStatus,
+    {
+      // 待办超时：后端按实例提交时冻结的 taskTimeout 快照计算，前端只做展示
+      title: '时限',
+      key: 'deadline',
+      width: 120,
+      render: (_, r) => {
+        if (!r.deadline) return '-'
+        if (r.overdue) return <Tag color="red">已超时</Tag>
+        const hours = Math.ceil((r.remaining_seconds || 0) / 3600)
+        return <span>{hours > 0 ? `${hours} 小时后到期` : '即将到期'}</span>
+      },
+    },
     {
       title: '操作',
       key: 'action',

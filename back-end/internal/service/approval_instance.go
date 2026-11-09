@@ -713,10 +713,14 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 		if err != nil {
 			return err
 		}
-		// 无审核记录才可撤回：任一任务已脱离待处理即拒绝（比时间窗更前置的硬性条件）
+		// 无审核记录才可撤回：任一任务已脱离待处理即拒绝（比时间窗更前置的硬性条件）。
+		// 例外：「自动通过」记录（status=已通过且 operated_at 为空）是前置/后置审批跨节点卡位
+		// 或空审批人节点的系统行为，不是审批人的真实操作，不计入——否则启用前置审批的申请
+		// 提交后立刻被判为「已有审核记录」，发起人永远无法撤回。
 		var operatedCount int64
 		if err := tx.Model(&model.ApprovalInstanceTask{}).
-			Where("instance_id = ? AND status <> ?", instance.ID, model.TaskStatusPending).
+			Where("instance_id = ? AND status <> ? AND NOT (status = ? AND operated_at IS NULL)",
+				instance.ID, model.TaskStatusPending, model.TaskStatusApproved).
 			Count(&operatedCount).Error; err != nil {
 			return err
 		}

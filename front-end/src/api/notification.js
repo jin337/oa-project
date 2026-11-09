@@ -19,3 +19,13 @@ export function notificationReadAll() {
 export function notificationRead(id) {
   return request.put(`/notifications/${id}/read`)
 }
+
+// PUT /notifications/read 批量已读（body: { ids }）
+export function notificationReadBatch(ids) {
+  return request.put('/notifications/read', { ids })
+}
+
+// DELETE /notifications 批量删除（body: { ids }）
+export function notificationDelete(ids) {
+  return request.delete('/notifications', { data: { ids } })
+}

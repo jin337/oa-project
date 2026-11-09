@@ -1,43 +1,22 @@
-import { Badge, Button, Dropdown, Empty, List, Message, Spin, Typography } from '@arco-design/web-react'
+import { Badge, Button } from '@arco-design/web-react'
 import { IconNotification } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { locateApprovalInstance } from 'src/api/approval'
 import * as notificationApi from 'src/api/notification'
 import { getToken } from 'src/utils/auth'
 import { API_PREFIX } from 'src/utils/constants'
-import { formatTime } from 'src/utils/format'
 
-// 通知类型文案
-const TYPE_TEXT = { 1: '待办', 2: '退回', 3: '抄送', 4: '结果' }
-
-// 归属 scope -> 目标列表页（与工作台流程监控口径一致）
-const SCOPE_PATH = {
-  todo: '/approval/todo',
-  initiated: '/approval/initiated',
-  approved: '/approval/workplace',
-  cc: '/approval/tome',
-}
-// 通知类型 -> 兜底页面：定位接口异常或该实例与当前用户已无可见归属时使用（等价改造前的静态跳转）
-const TYPE_FALLBACK_PATH = {
-  1: SCOPE_PATH.todo,
-  2: SCOPE_PATH.initiated,
-  3: SCOPE_PATH.cc,
-  4: SCOPE_PATH.initiated,
-}
-
-// 多标签页同步通道
+// 多标签页同步通道（与通知中心页面共用同一频道）
 const bc = new BroadcastChannel('notification-sync')
 
+/**
+ * 顶部消息入口：只负责未读数展示与跳转，通知列表/搜索/分页在独立的通知中心页面。
+ * 保留 SSE 实时连接与多标签页同步：新通知到达时刷新徽标，并广播给已打开的通知中心页面。
+ */
 export default function NotificationBell() {
   const navigate = useNavigate()
   const [count, setCount] = useState(0)
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [visible, setVisible] = useState(false)
-  const dropdownOpenRef = useRef(false)
 
-  // 加载未读数
   const loadCount = useCallback(async () => {
     try {
       const res = await notificationApi.notificationUnreadCount()
@@ -47,18 +26,9 @@ export default function NotificationBell() {
     }
   }, [])
 
-  // 加载通知列表
-  const loadList = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await notificationApi.notificationList({ page: 1, size: 20 })
-      setList(res?.data?.list || [])
-    } catch {
-      // 静默
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  useEffect(() => {
+    loadCount()
+  }, [loadCount])
 
   // SSE 实时连接（替代轮询）
   useEffect(() => {
@@ -77,17 +47,13 @@ export default function NotificationBell() {
       }
     })
 
-    // 收到新通知（实时推送）
+    // 收到新通知（实时推送）：更新徽标并广播，通知中心页面据此刷新列表
     es.addEventListener('notification', () => {
       setCount((c) => {
         const newCount = c + 1
         bc.postMessage({ type: 'increment', count: newCount })
         return newCount
       })
-      // 如果下拉打开，刷新列表
-      if (dropdownOpenRef.current) {
-        loadList()
-      }
     })
 
     // 错误时自动重连（EventSource 原生支持）
@@ -98,19 +64,16 @@ export default function NotificationBell() {
     return () => {
       es.close()
     }
-  }, [loadCount, loadList])
+  }, [])
 
-  // 多标签页同步：接收其他标签页的通知状态
+  // 多标签页同步：其他标签页标记已读后，本标签页徽标同步
   useEffect(() => {
     bc.onmessage = (e) => {
-      const { type, count, action } = e.data
-      if (type === 'sync-count') {
-        setCount(count)
-      } else if (type === 'increment') {
-        setCount(count)
+      const { type, count: next, action } = e.data || {}
+      if (type === 'sync-count' || type === 'increment') {
+        setCount(next || 0)
       } else if (action === 'read-all') {
         setCount(0)
-        if (dropdownOpenRef.current) loadList()
       } else if (action === 'read-one') {
         setCount((c) => Math.max(0, c - 1))
       }
@@ -118,144 +81,18 @@ export default function NotificationBell() {
     return () => {
       bc.onmessage = null
     }
-  }, [loadList])
-
-  const handleVisibleChange = (v) => {
-    setVisible(v)
-    dropdownOpenRef.current = v
-    if (v) loadList()
-  }
-
-  const handleReadAll = async () => {
-    await notificationApi.notificationReadAll()
-    setCount(0)
-    bc.postMessage({ action: 'read-all' })
-    loadList()
-  }
-
-  // 点击通知：标记已读 → 实时定位实例与当前用户的关系归属 → 跳转目标列表页并直接打开详情抽屉。
-  // 归属必须实时判定：通知是历史事件快照，典型边界——「待办通知的任务已被本人审批」时，
-  // 待办列表按 status=待处理 过滤必然查不到该记录，跳待办页只会看到空列表；
-  // 后端 locate 按 todo>initiated>approved>cc 优先级返回真实可见页面（与工作台 flows 同源口径）。
-  // 定位失败 / scope=none / 通知未挂实例：回退按通知类型静态跳转（改造前行为，不自动开抽屉）。
-  const handleClickItem = async (n) => {
-    if (!n.read_at) {
-      await notificationApi.notificationRead(n.id)
-      setCount((c) => Math.max(0, c - 1))
-      bc.postMessage({ action: 'read-one' })
-    }
-    let target = TYPE_FALLBACK_PATH[n.type] || SCOPE_PATH.initiated
-    let openDetailRec = null
-    if (n.instance_id) {
-      try {
-        const res = await locateApprovalInstance(n.instance_id)
-        const loc = res?.data
-        if (loc?.scope && SCOPE_PATH[loc.scope]) {
-          target = SCOPE_PATH[loc.scope]
-          // 待办页把 record.id 当作任务 ID 传 currentTask（抽屉内才能出现审批操作）；
-          // 其余列表页仅用 instance_id 拉详情，item_name/bill_no 用于标题回显
-          openDetailRec = {
-            id: loc.scope === 'todo' && loc.task_id ? loc.task_id : loc.instance_id,
-            instance_id: loc.instance_id,
-            item_name: loc.item_name,
-            app_name: loc.app_name,
-            bill_no: loc.bill_no,
-          }
-        } else if (loc?.scope === 'none') {
-          Message.info('该申请已不在你的列表可见范围')
-        }
-      } catch {
-        // 定位失败（实例已删除等）：回退按类型跳转；接口错误已由请求拦截器提示
-      }
-    }
-    if (openDetailRec) navigate(target, { state: { openDetail: openDetailRec } })
-    else navigate(target)
-    setVisible(false)
-  }
-
-  // 按时间分组：今天 / 昨天 / 更早
-  const groupList = (() => {
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    const yesterday = today - 86400000
-
-    const groups = { 今天: [], 昨天: [], 更早: [] }
-    list.forEach((n) => {
-      const t = new Date(n.created_at).getTime()
-      if (t >= today) groups['今天'].push(n)
-      else if (t >= yesterday) groups['昨天'].push(n)
-      else groups['更早'].push(n)
-    })
-    return Object.entries(groups).filter(([, items]) => items.length > 0)
-  })()
-
-  const dropdown = (
-    <div className="max-h-96 w-80 overflow-auto rounded-lg border border-gray-100 bg-white shadow-lg">
-      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-        <Typography.Text className="font-medium">通知</Typography.Text>
-        {count > 0 && (
-          <Button type="text" size="mini" onClick={handleReadAll}>
-            全部已读
-          </Button>
-        )}
-      </div>
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <Spin />
-        </div>
-      ) : list.length === 0 ? (
-        <Empty className="py-8" description="暂无通知" />
-      ) : (
-        groupList.map(([groupName, items]) => (
-          <div key={groupName}>
-            <div className="bg-gray-50 px-3 py-1 text-xs text-gray-500 border-b border-(--color-neutral-3)">{groupName}</div>
-            <List
-              bordered={false}
-              dataSource={items}
-              render={(n) => (
-                <List.Item
-                  key={n.id}
-                  className="cursor-pointer px-3! py-2!"
-                  onClick={() => handleClickItem(n)}
-                >
-                  <div className="w-full">
-                    <div className="flex items-center justify-between">
-                      <Typography.Text className={n.read_at ? '' : 'font-medium'}>
-                        [{TYPE_TEXT[n.type] || ''}]{n.title}
-                      </Typography.Text>
-                      <Typography.Text className="text-xs text-gray-400">
-                        {formatTime(n.created_at)}
-                      </Typography.Text>
-                    </div>
-                    <Typography.Text className="block text-xs text-gray-500">
-                      {n.msg}
-                    </Typography.Text>
-                  </div>
-                </List.Item>
-              )}
-            />
-          </div>
-        ))
-      )}
-    </div>
-  )
+  }, [])
 
   return (
-    <Dropdown
-      droplist={dropdown}
-      trigger="click"
-      popupVisible={visible}
-      onVisibleChange={handleVisibleChange}
-      position="br"
-    >
-      <Button
-        type="text"
-        icon={
-          <Badge count={count} dot={count > 0}>
-            <IconNotification />
-          </Badge>
-        }
-      />
-    </Dropdown>
+    <Button
+      type="text"
+      title="通知中心"
+      onClick={() => navigate('/notification')}
+      icon={
+        <Badge count={count} dot={count > 0}>
+          <IconNotification />
+        </Badge>
+      }
+    />
   )
 }

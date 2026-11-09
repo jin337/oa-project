@@ -758,6 +758,15 @@ type ApprovalInstanceTask struct {
 	AddSignFrom   uint       `gorm:"default:0;comment:加签来源任务ID(0=普通任务)" json:"add_sign_from"`
 	AddSignType   int        `gorm:"default:0;comment:加签类型 1-前加签 2-后加签" json:"add_sign_type"`
 
+	// 超时提醒（应用「其他设置-待办超时提醒」配置，按实例提交时快照的 taskTimeout / taskAdvance 判定）：
+	// AdvanceRemindedAt 为「距截止不足 taskAdvance」时发出的到期预警时间，同一任务只发一次；
+	// RemindedAt 为最后一次系统超时提醒时间，RemindCount 为已发送次数（上限 3 次、间隔 24 小时）；
+	// UrgedAt 为最后一次被发起人手动催办的时间（限频用）。
+	AdvanceRemindedAt *time.Time `gorm:"comment:最后一次到期预警时间(空=未预警)" json:"advance_reminded_at,omitempty"`
+	RemindedAt        *time.Time `gorm:"comment:最后一次超时提醒时间(空=未提醒)" json:"reminded_at,omitempty"`
+	RemindCount       int        `gorm:"default:0;comment:超时提醒已发送次数" json:"remind_count"`
+	UrgedAt           *time.Time `gorm:"comment:最后一次发起人催办时间" json:"urged_at,omitempty"`
+
 	Instance *ApprovalInstance `gorm:"foreignKey:InstanceID" json:"instance,omitempty"`
 }
 
@@ -895,6 +904,14 @@ type ApprovalRecord struct {
 	// 与详情页任务级 can_recall 同口径：窗口内、本人操作是实例内最后一次操作、或签通过除外。
 	CanRecall    bool `json:"can_recall"`
 	RecallTaskID uint `json:"recall_task_id,omitempty"`
+
+	// 待办超时（按实例提交时的 taskTimeout 快照计算；仅「我的待办」填充）
+	Deadline         *time.Time `json:"deadline,omitempty"`          // 超时截止时间；未配置超时提醒时为 nil
+	Overdue          bool       `json:"overdue"`                     // 是否已超时
+	RemainingSeconds int64      `json:"remaining_seconds,omitempty"` // 剩余秒数（负数表示已超时多少秒）
+
+	// 可催办：仅「我的发起」使用；进行中且存在待处理任务时为 true
+	CanUrge bool `json:"can_urge"`
 }
 
 // ApprovalDashboardSummary 工作台「全部事项」四类计数（与列表 scope 同一口径）
@@ -935,6 +952,16 @@ type ApprovalListReq struct {
 	// 时间范围：today 当天 / week 本周 / month 本月 / year 本年 / all 所有（空等价 all）；按实例发起时间筛选
 	TimeRange string `json:"time_range" form:"time_range" validate:"omitempty,oneof=today week month year all" label:"时间范围"`
 }
+
+// 站内通知类型
+const (
+	NotificationTypeTodo    = 1 // 待办
+	NotificationTypeReturn  = 2 // 退回
+	NotificationTypeCC      = 3 // 抄送
+	NotificationTypeResult  = 4 // 结果
+	NotificationTypeOverdue = 5 // 待办超时提醒 / 发起人催办
+	NotificationTypeAdvance = 6 // 待办到期预警（超时前的一次性提前提醒）
+)
 
 // Notification 站内通知
 type Notification struct {

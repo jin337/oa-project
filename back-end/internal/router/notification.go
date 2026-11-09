@@ -16,6 +16,8 @@ func registerNotificationRoutes(api *gin.RouterGroup) {
 		notifications.GET("/stream", handler.NotificationStream)            // 通知实时推送(SSE)
 		notifications.GET("/unread-count", handler.NotificationUnreadCount) // 未读通知数
 		notifications.PUT("/read-all", handler.NotificationReadAll)         // 全部标记已读
+		notifications.PUT("/read", handler.NotificationReadBatch)           // 批量标记已读
 		notifications.PUT("/:id/read", handler.NotificationRead)            // 单条标记已读
+		notifications.DELETE("", handler.NotificationDelete)                // 批量删除通知
 	}
 }

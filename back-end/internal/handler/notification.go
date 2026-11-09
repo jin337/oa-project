@@ -13,10 +13,23 @@ import (
 )
 
 // NotificationList GET /{APIPrefix}/notifications
+// 查询参数：page、size、keyword（标题/内容模糊）、type（1待办 2退回 3抄送 4结果）、
+// status（unread/read，缺省返回全部）
 func NotificationList(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
-	list, total, err := service.NotificationList(middleware.CurrentUserID(c), page, size)
+	ntype, _ := strconv.Atoi(c.DefaultQuery("type", "0"))
+	status := c.Query("status")
+	if status != "unread" && status != "read" {
+		status = "" // 非法值按"全部"处理，避免前端传参异常时返回空列表
+	}
+	list, total, err := service.NotificationList(middleware.CurrentUserID(c), service.NotificationQuery{
+		Page:    page,
+		Size:    size,
+		Keyword: c.Query("keyword"),
+		Type:    ntype,
+		Status:  status,
+	})
 	if err != nil {
 		respondServiceError(c, err)
 		return
@@ -57,6 +70,51 @@ func NotificationRead(c *gin.Context) {
 		return
 	}
 	response.OK(c, nil)
+}
+
+// notificationIDsRequest 批量操作请求体：通知 ID 列表
+type notificationIDsRequest struct {
+	IDs []uint `json:"ids"`
+}
+
+// NotificationReadBatch PUT /{APIPrefix}/notifications/read 批量标记已读
+func NotificationReadBatch(c *gin.Context) {
+	var req notificationIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeParamError, "参数错误")
+		return
+	}
+	ids := service.NormalizeNotificationIDs(req.IDs)
+	if len(ids) == 0 {
+		response.Fail(c, response.CodeParamError, "请选择要标记的通知")
+		return
+	}
+	updated, err := service.NotificationReadBatch(middleware.CurrentUserID(c), ids)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	response.OK(c, gin.H{"updated": updated})
+}
+
+// NotificationDelete DELETE /{APIPrefix}/notifications 批量删除通知
+func NotificationDelete(c *gin.Context) {
+	var req notificationIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeParamError, "参数错误")
+		return
+	}
+	ids := service.NormalizeNotificationIDs(req.IDs)
+	if len(ids) == 0 {
+		response.Fail(c, response.CodeParamError, "请选择要删除的通知")
+		return
+	}
+	deleted, err := service.NotificationDelete(middleware.CurrentUserID(c), ids)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	response.OK(c, gin.H{"deleted": deleted})
 }
 
 // NotificationStream GET /{APIPrefix}/notifications/stream SSE 实时推送

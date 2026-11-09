@@ -377,6 +377,17 @@ export default function Initiated() {
     }
   }
 
+  // 催办：给当前待处理审批人发送站内催办提醒；同一实例 30 分钟内限一次（后端校验）
+  const handleUrge = async (record) => {
+    try {
+      await approvalApi.urgeApprovalInstance(record.instance_id || record.id)
+      Message.success('已发送催办提醒')
+      fetchList()
+    } catch (e) {
+      // 错误已在请求层提示
+    }
+  }
+
   // 抄送：弹出人员选择器（多选），选中后调用接口抄送给指定用户
   const [ccRecord, setCCRecord] = useState(null)
   const openCC = (record) => setCCRecord(record)
@@ -513,6 +524,12 @@ export default function Initiated() {
             visible: r.can_withdraw,
             confirmText: '撤回后该申请将标记为已撤回，可继续编辑或重新提交，确定撤回？',
             onClick: () => handleWithdraw(r),
+          },
+          {
+            key: 'urge',
+            label: '催办',
+            visible: r.can_urge,
+            onClick: () => handleUrge(r),
           },
           {
             key: 'void',

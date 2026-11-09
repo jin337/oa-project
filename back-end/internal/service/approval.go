@@ -547,7 +547,10 @@ func fillApprovalCapabilities(records []model.ApprovalRecord) {
 	if len(records) == 0 {
 		return
 	}
-	// 已操作任务计数（严格口径：status 脱离待处理即视为审核记录），按实例分组一次查出
+	// 已操作任务计数（严格口径：status 脱离待处理即视为审核记录），按实例分组一次查出。
+	// 例外：「自动通过」记录（status=已通过且 operated_at 为空，由前置/后置审批跨节点卡位
+	// 或空审批人节点生成）不是审批人的真实操作，不计入审核记录——否则启用前置审批的申请
+	// 一提交就会命中该计数，导致 can_withdraw 永远为 false、发起人无法撤回。
 	operatedCounts := map[uint]int64{}
 	instanceIDs := make([]uint, 0, len(records))
 	for _, r := range records {
@@ -559,10 +562,23 @@ func fillApprovalCapabilities(records []model.ApprovalRecord) {
 	}
 	if err := database.DB.Model(&model.ApprovalInstanceTask{}).
 		Select("instance_id, COUNT(*) AS cnt").
-		Where("instance_id IN ? AND status <> ?", instanceIDs, model.TaskStatusPending).
+		Where("instance_id IN ? AND status <> ? AND NOT (status = ? AND operated_at IS NULL)",
+			instanceIDs, model.TaskStatusPending, model.TaskStatusApproved).
 		Group("instance_id").Scan(&operatedRows).Error; err == nil {
 		for _, row := range operatedRows {
 			operatedCounts[row.InstanceID] = row.Cnt
+		}
+	}
+	// 当前仍有待处理任务的实例：用于「我的发起」的催办按钮显隐（进行中才可催办）
+	pendingInstances := map[uint]bool{}
+	var pendingRows []struct{ InstanceID uint }
+	if err := database.DB.Model(&model.ApprovalInstanceTask{}).
+		Select("instance_id").
+		Where("instance_id IN ? AND status = ?", instanceIDs, model.TaskStatusPending).
+		Group("instance_id").
+		Scan(&pendingRows).Error; err == nil {
+		for _, row := range pendingRows {
+			pendingInstances[row.InstanceID] = true
 		}
 	}
 	// 回填能力标记；进行中实例的撤回窗口按实例快照优先，旧快照缺失时回退当前生效版本配置
@@ -588,6 +604,8 @@ func fillApprovalCapabilities(records []model.ApprovalRecord) {
 		}
 		r.CanVoid = isWithdrawn
 		r.CanEdit = r.InstanceStatus == model.InstanceStatusReturned || isWithdrawn
+		// 催办：仅进行中且仍存在待处理任务的实例可催办
+		r.CanUrge = isRunning && pendingInstances[r.InstanceID]
 		// 删除仅对草稿开放，而草稿不出现在「我的发起」；已撤回需先编辑转为草稿再删除
 		r.CanDelete = false
 	}
@@ -1004,6 +1022,9 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 	}
 
 	records := make([]model.ApprovalRecord, 0, len(tasks))
+	// 超时时长按实例快照缓存：同一实例的多条待办共享一次解析
+	timeoutCache := make(map[uint]time.Duration)
+	now := time.Now()
 	for _, t := range tasks {
 		var inst model.ApprovalInstance
 		if err := database.DB.First(&inst, t.InstanceID).Error; err != nil {
@@ -1032,6 +1053,21 @@ func approvalListTodo(curUserID uint, req *model.ApprovalListReq) ([]model.Appro
 			StatusName:     approvalStatusName(model.ApprovalStatusReviewing),
 			CreatedBy:      inst.CreatedBy,
 			CreatedAt:      &inst.CreatedAt,
+		}
+		// 待办超时：起算点为任务创建时间，时长取实例提交时冻结的 taskTimeout 快照。
+		// 未配置（0）时不下发 deadline/overdue，前端显示为「-」。
+		timeout, cached := timeoutCache[inst.ID]
+		if !cached {
+			if d, ok := parseTaskTimeout(inst.ApprovalOtherJSON); ok {
+				timeout = d
+			}
+			timeoutCache[inst.ID] = timeout
+		}
+		if timeout > 0 {
+			deadline := t.CreatedAt.Add(timeout)
+			rec.Deadline = &deadline
+			rec.Overdue = now.After(deadline)
+			rec.RemainingSeconds = int64(deadline.Sub(now).Seconds())
 		}
 		records = append(records, rec)
 	}

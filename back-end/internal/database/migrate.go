@@ -94,6 +94,24 @@ var migrations = []migration{
 			return db.AutoMigrate(&model.User{})
 		},
 	},
+	{
+		Version: 6,
+		Name:    "add_task_overdue_fields",
+		// 待办超时提醒：给审批任务补建 reminded_at / remind_count / urged_at 三列。
+		// AutoMigrate 只增不删，存量待办数据保持原样（未提醒、计数为 0，不触发历史补发）。
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.ApprovalInstanceTask{})
+		},
+	},
+	{
+		Version: 7,
+		Name:    "add_task_advance_field",
+		// 待办到期预警：补建 advance_reminded_at 列，记录「距截止不足 taskAdvance」时发出的
+		// 一次性提前提醒。存量任务为空，不会被补发预警。
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.ApprovalInstanceTask{})
+		},
+	},
 }
 
 // seedAuditLogMenu 操作审计菜单：系统管理目录下「操作审计」页面（perm=system:audit）

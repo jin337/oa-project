@@ -48,6 +48,9 @@ const ApprovalWorkplace = lazy(() => import('src/pages/approval/Workplace.jsx'))
 const ApprovalToMe = lazy(() => import('src/pages/approval/ToMe.jsx'))
 const ApprovalDrafts = lazy(() => import('src/pages/approval/Drafts.jsx'))
 
+// 通知中心：固定路由，所有已登录用户可访问（通知数据按当前用户隔离），不依赖菜单权限
+const NotificationCenter = lazy(() => import('src/pages/notification/NotificationCenter.jsx'))
+
 function PageLoading() {
   return (
     <div className="flex min-h-50 items-center justify-center">
@@ -214,6 +217,15 @@ function AppRouter() {
         children: [
           { index: true, element: <Page><Dashboard /></Page> },
           ...buildMenuRoutes(menus),
+          // 通知中心：固定路由（顶部消息按钮跳转），不受菜单授权限制，必须排在兜底 403 之前
+          {
+            path: 'notification',
+            element: (
+              <Page>
+                <NotificationCenter />
+              </Page>
+            ),
+          },
           { path: '403', element: <Page><Forbidden /></Page> },
           // 未注册路径统一重定向 403（菜单外的路径不可访问）
           { path: '*', element: <Navigate to="/403" replace /> },

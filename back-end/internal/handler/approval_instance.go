@@ -106,6 +106,19 @@ func ApprovalInstanceWithdraw(c *gin.Context) {
 	response.OKMsg(c, "撤回成功")
 }
 
+// ApprovalInstanceUrge POST /{APIPrefix}/approval/instance/:id/urge 发起人催办（只发站内通知）
+func ApprovalInstanceUrge(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if _, err := service.UrgeApprovalInstance(middleware.CurrentUserID(c), id); err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	response.OKMsg(c, "已发送催办提醒")
+}
+
 // ApprovalInstanceResubmit PUT /{APIPrefix}/approval/instance/:id/resubmit 已驳回实例重新提交
 func ApprovalInstanceResubmit(c *gin.Context) {
 	id, ok := parseID(c)

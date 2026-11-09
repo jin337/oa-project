@@ -101,6 +101,11 @@ export function voidApprovalInstance(id) {
   return request.put(`/approval/instance/${id}/void`)
 }
 
+// POST /approval/instance/:id/urge 发起人催办（只发站内通知，同一实例 30 分钟内限一次）
+export function urgeApprovalInstance(id) {
+  return request.post(`/approval/instance/${id}/urge`)
+}
+
 // PUT /approval/instance/:id/resubmit 已驳回实例重新提交（发起人修改表单后继续审批）
 export function resubmitApprovalInstance(id, businessData) {
   return request.put(`/approval/instance/${id}/resubmit`, { business_data: businessData })

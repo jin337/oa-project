@@ -63,18 +63,7 @@ func main() {
 		}
 	}()
 
-	// 6. 定时清理已读超过30天的通知
-	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			if err := service.NotificationCleanup(); err != nil {
-				logger.Errorf("通知清理失败: %v", err)
-			}
-		}
-	}()
-
-	// 6.2 定时清理超过保留天数的操作审计日志（server.operation_log.retain_days，0=永久保留则不注册）
+	// 6. 定时清理超过保留天数的操作审计日志（server.operation_log.retain_days，0=永久保留则不注册）
 	if cfg.Server.OperationLog.RetainDays > 0 {
 		go func() {
 			interval := time.Duration(cfg.Server.OperationLog.CleanupIntervalHours) * time.Hour
@@ -105,6 +94,25 @@ func main() {
 			} else if n > 0 {
 				logger.Infof("版本定时激活 %d 个", n)
 			}
+		}
+	}()
+
+	// 6.2 每 10 分钟扫描一次待办超时：按实例提交时冻结的 taskTimeout / taskAdvance 快照判定，
+	// 超时给当前待办人发站内提醒（每任务最多 3 次、间隔 24 小时），到期前发一次预警；均不改变审批流转
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		scan := func() {
+			reminded, advanced, err := service.OverdueNotificationScan()
+			if err != nil {
+				logger.Errorf("待办超时提醒扫描失败: %v", err)
+			} else if reminded > 0 || advanced > 0 {
+				logger.Infof("待办到期预警 %d 条、超时提醒 %d 条", advanced, reminded)
+			}
+		}
+		scan()
+		for range ticker.C {
+			scan()
 		}
 	}()
 

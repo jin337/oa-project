@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 
 	"back-end/internal/database"
@@ -11,18 +12,58 @@ import (
 	"gorm.io/gorm"
 )
 
-// NotificationList 我的通知列表
-func NotificationList(userID uint, page, size int) ([]model.Notification, int64, error) {
+// NotificationQuery 通知列表查询条件（通知中心页面）
+// Status 为空表示全部；unread/read 分别只看未读/已读。Type 为 0 表示全部类型。
+type NotificationQuery struct {
+	Page    int
+	Size    int
+	Keyword string
+	Type    int
+	Status  string
+}
+
+// 分页上限，避免单页请求过大；超限按上限截断
+const notificationMaxPageSize = 100
+
+// escapeLike 转义 LIKE 通配符，保证关键字按字面匹配（% 与 _ 不作为通配）
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
+// NotificationList 我的通知列表：支持关键字（标题/内容）、类型、已读状态筛选与分页。
+// 通知中心页面默认展示全部历史（已读 + 未读），未读数统计仍由 NotificationUnreadCount 提供。
+func NotificationList(userID uint, q NotificationQuery) ([]model.Notification, int64, error) {
+	page, size := q.Page, q.Size
 	if page <= 0 {
 		page = 1
 	}
 	if size <= 0 {
 		size = 10
 	}
-	var list []model.Notification
+	if size > notificationMaxPageSize {
+		size = notificationMaxPageSize
+	}
+
+	db := database.DB.Model(&model.Notification{}).Where("user_id = ?", userID)
+	switch q.Status {
+	case "unread":
+		db = db.Where("read_at IS NULL")
+	case "read":
+		db = db.Where("read_at IS NOT NULL")
+	}
+	if q.Type > 0 {
+		db = db.Where("type = ?", q.Type)
+	}
+	if kw := strings.TrimSpace(q.Keyword); kw != "" {
+		like := "%" + escapeLike(kw) + "%"
+		db = db.Where("(title LIKE ? OR msg LIKE ?)", like, like)
+	}
+
 	var total int64
-	db := database.DB.Model(&model.Notification{}).Where("user_id = ? AND read_at IS NULL", userID)
-	db.Count(&total)
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var list []model.Notification
 	err := db.Order("created_at DESC").Offset((page - 1) * size).Limit(size).Find(&list).Error
 	return list, total, err
 }
@@ -57,11 +98,47 @@ func NotificationRead(userID, id uint) error {
 	return nil
 }
 
-// NotificationCleanup 清理已读超过30天的通知
-func NotificationCleanup() error {
-	return database.DB.Unscoped().
-		Where("read_at IS NOT NULL AND read_at < DATE_SUB(NOW(), INTERVAL 30 DAY)").
-		Delete(&model.Notification{}).Error
+// NotificationMaxBatch 批量操作单次上限，避免一次提交过大
+const NotificationMaxBatch = 200
+
+// NormalizeNotificationIDs 清洗批量操作的 ID：丢弃 0 值、去重，并按上限截断
+func NormalizeNotificationIDs(ids []uint) []uint {
+	seen := make(map[uint]struct{}, len(ids))
+	out := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+		if len(out) >= NotificationMaxBatch {
+			break
+		}
+	}
+	return out
+}
+
+// NotificationReadBatch 批量标记已读：仅限当前用户的通知、仅未读行；返回实际更新条数
+func NotificationReadBatch(userID uint, ids []uint) (int64, error) {
+	if len(ids) == 0 {
+		return 0, errors.New("请选择要标记的通知")
+	}
+	res := database.DB.Model(&model.Notification{}).
+		Where("user_id = ? AND read_at IS NULL AND id IN ?", userID, ids).
+		Update("read_at", gorm.Expr("NOW()"))
+	return res.RowsAffected, res.Error
+}
+
+// NotificationDelete 批量删除通知：仅限当前用户的通知（物理删除，不可恢复）；返回实际删除条数
+func NotificationDelete(userID uint, ids []uint) (int64, error) {
+	if len(ids) == 0 {
+		return 0, errors.New("请选择要删除的通知")
+	}
+	res := database.DB.Where("user_id = ? AND id IN ?", userID, ids).Delete(&model.Notification{})
+	return res.RowsAffected, res.Error
 }
 
 // ============================================================
