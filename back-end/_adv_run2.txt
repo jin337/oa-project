@@ -1,5 +1,0 @@
-
-2026/11/09 16:27:26 [31;1mD:/Desktop/GitHub/full-stack-project/back-end/_tmp_adv/main.go:49 [35;1msql: Scan error on column index 0, name "advance_reminded_at": unsupported Scan, storing driver.Value type <nil> into type *time.Time
-[0m[33m[0.718ms] [34;1m[rows:1][0m SELECT advance_reminded_at FROM oa_approval_instance_tasks WHERE id = 43
-BACKUP 2026-11-09 16:19:56.714|0001-01-01 00:00:00|61
-SET 2026-11-09 16:23:28.666
