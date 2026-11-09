@@ -696,7 +696,9 @@ export default function ApplicationManage() {
                     onChange={(val) => setEditingRemark(val)}
                   />
                 ) : (
-                  v || '-'
+                  <Typography.Ellipsis showTooltip style={{ maxWidth: 260 }}>
+                    {v || '-'}
+                  </Typography.Ellipsis>
                 ),
             },
             {

@@ -1,0 +1,28 @@
+NOW=2026-11-09 16:25:37
+
+-- pending tasks --
+task=43 inst=14 assignee=1 created=2026-11-09 16:19:56 remind_count=0 reminded_at=- advance_at=-
+task=41 inst=13 assignee=1 created=2026-11-09 16:13:19 remind_count=1 reminded_at=2026-11-09 16:21:27 advance_at=-
+task=39 inst=12 assignee=1 created=2026-11-09 16:12:03 remind_count=1 reminded_at=2026-11-09 16:21:27 advance_at=-
+task=37 inst=11 assignee=1 created=2026-11-09 16:10:47 remind_count=1 reminded_at=2026-11-09 16:21:27 advance_at=-
+task=35 inst=8 assignee=4 created=2026-11-09 16:09:52 remind_count=0 reminded_at=- advance_at=-
+task=34 inst=10 assignee=4 created=2026-11-09 16:09:50 remind_count=1 reminded_at=2026-11-09 16:21:27 advance_at=-
+task=30 inst=9 assignee=2 created=2026-11-09 15:57:10 remind_count=0 reminded_at=- advance_at=-
+task=24 inst=3 assignee=4 created=2026-11-09 15:54:45 remind_count=1 reminded_at=2026-11-09 16:11:27 advance_at=2026-11-09 16:01:27
+task=23 inst=4 assignee=4 created=2026-11-09 15:54:43 remind_count=1 reminded_at=2026-11-09 16:11:27 advance_at=2026-11-09 16:01:27
+task=22 inst=5 assignee=4 created=2026-11-09 15:54:40 remind_count=0 reminded_at=- advance_at=-
+task=21 inst=7 assignee=4 created=2026-11-09 15:54:38 remind_count=0 reminded_at=- advance_at=-
+
+-- instances --
+
+-- notifications (inst>=11) --
+noti=60 user=1 type=5 inst=13 at=2026-11-09 16:21:27 msg=待办已超时 3 分钟未处理，请尽快处理
+noti=59 user=1 type=5 inst=12 at=2026-11-09 16:21:27 msg=待办已超时 4 分钟未处理，请尽快处理
+noti=58 user=1 type=5 inst=11 at=2026-11-09 16:21:27 msg=待办已超时 5 分钟未处理，请尽快处理
+noti=56 user=1 type=5 inst=14 at=2026-11-09 16:20:59 msg=发起人催办：您有审批待办待处理，请尽快处理
+noti=55 user=1 type=1 inst=14 at=2026-11-09 16:19:56 msg=您有新的审批待办
+noti=54 user=1 type=1 inst=13 at=2026-11-09 16:13:19 msg=您有新的审批待办
+noti=53 user=1 type=1 inst=12 at=2026-11-09 16:12:03 msg=您有新的审批待办
+noti=50 user=1 type=1 inst=11 at=2026-11-09 16:10:47 msg=您有新的审批待办
+
+max_noti=60

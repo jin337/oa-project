@@ -90,15 +90,26 @@ export default function Todo() {
     colNodeName,
     colStatus,
     {
-      // 待办超时：后端按实例提交时冻结的 taskTimeout 快照计算，前端只做展示
+      // 待办超时：后端按实例提交时冻结的 taskTimeout 快照计算，前端只做展示。
+      // 展示单位按剩余时长的量级选择：分钟级配置（如 5 分钟）不能被向上取整成「1 小时」。
       title: '时限',
       key: 'deadline',
       width: 120,
       render: (_, r) => {
         if (!r.deadline) return '-'
         if (r.overdue) return <Tag color="red">已超时</Tag>
-        const hours = Math.ceil((r.remaining_seconds || 0) / 3600)
-        return <span>{hours > 0 ? `${hours} 小时后到期` : '即将到期'}</span>
+        const secs = Math.max(0, r.remaining_seconds || 0)
+        let text
+        if (secs < 60) {
+          text = '不到 1 分钟后到期'
+        } else if (secs < 3600) {
+          text = `${Math.floor(secs / 60)} 分钟后到期`
+        } else if (secs < 86400) {
+          text = `${Math.floor(secs / 3600)} 小时后到期`
+        } else {
+          text = `${Math.floor(secs / 86400)} 天后到期`
+        }
+        return <span>{text}</span>
       },
     },
     {

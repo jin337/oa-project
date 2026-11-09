@@ -12,6 +12,7 @@ import {
     Table,
     Tabs,
     Tag,
+    Typography,
 } from '@arco-design/web-react'
 import { IconSwap } from '@arco-design/web-react/icon'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -518,7 +519,9 @@ export default function DesignManage() {
                     onChange={(val) => setEditingRemark(val)}
                   />
                 ) : (
-                  v || '-'
+                  <Typography.Ellipsis showTooltip style={{ maxWidth: 260 }}>
+                    {v || '-'}
+                  </Typography.Ellipsis>
                 ),
             },
             {

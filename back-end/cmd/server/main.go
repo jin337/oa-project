@@ -97,10 +97,11 @@ func main() {
 		}
 	}()
 
-	// 6.2 每 10 分钟扫描一次待办超时：按实例提交时冻结的 taskTimeout / taskAdvance 快照判定，
-	// 超时给当前待办人发站内提醒（每任务最多 3 次、间隔 24 小时），到期前发一次预警；均不改变审批流转
+	// 6.2 每分钟扫描一次待办超时：按实例提交时冻结的 taskTimeout / taskAdvance 快照判定，
+	// 超时给当前待办人发站内提醒（每任务最多 3 次、间隔 24 小时），到期前发一次预警；均不改变审批流转。
+	// 扫描周期必须不大于最小预警提前量（1 分钟），否则短时限任务可能在两次扫描之间直接越过预警窗口。
 	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
+		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		scan := func() {
 			reminded, advanced, err := service.OverdueNotificationScan()
