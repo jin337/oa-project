@@ -965,14 +965,16 @@ const (
 
 // Notification 站内通知
 type Notification struct {
-	ID         uint       `json:"id" gorm:"primaryKey"`
-	UserID     uint       `json:"user_id" gorm:"index;not null;comment:接收人ID"`
-	Type       int        `json:"type" gorm:"not null;comment:通知类型 1待办 2退回 3抄送 4结果"`
-	Title      string     `json:"title" gorm:"size:200;comment:标题（应用名）"`
-	Msg        string     `json:"msg" gorm:"size:200;comment:消息描述"`
-	InstanceID uint       `json:"instance_id" gorm:"index;comment:关联审批实例ID"`
-	ReadAt     *time.Time `json:"read_at" gorm:"comment:阅读时间"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID         uint   `json:"id" gorm:"primaryKey"`
+	UserID     uint   `json:"user_id" gorm:"index;not null;comment:接收人ID"`
+	Type       int    `json:"type" gorm:"not null;comment:通知类型 1待办 2退回 3抄送 4结果"`
+	Title      string `json:"title" gorm:"size:200;comment:标题（应用名）"`
+	Msg        string `json:"msg" gorm:"size:200;comment:消息描述"`
+	InstanceID uint   `json:"instance_id" gorm:"index;comment:关联审批实例ID"`
+	// Summarys 业务摘要（非持久字段）：列表查询时按 instance_id 回填业务主表 summarys 列，与审批列表「摘要」同口径
+	Summarys  string     `json:"summarys" gorm:"-"`
+	ReadAt    *time.Time `json:"read_at" gorm:"comment:阅读时间"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 func (Notification) TableName() string { return "oa_notifications" }

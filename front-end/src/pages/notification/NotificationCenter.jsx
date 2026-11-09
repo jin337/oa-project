@@ -258,15 +258,26 @@ export default function NotificationCenter() {
     },
     {
       key: 'title',
-      title: '标题',
+      title: '模块',
       dataIndex: 'title',
-      width: 240,
+      width: 200,
       render: (v, r) => (
         <Typography.Ellipsis
           showTooltip
-          style={{ maxWidth: 240 }}
+          style={{ maxWidth: 200 }}
           className={r.read_at ? '' : 'font-medium'}
         >
+          {v || '-'}
+        </Typography.Ellipsis>
+      ),
+    },
+    {
+      key: 'summarys',
+      title: '摘要',
+      dataIndex: 'summarys',
+      width: 200,
+      render: (v) => (
+        <Typography.Ellipsis showTooltip style={{ maxWidth: 200 }}>
           {v || '-'}
         </Typography.Ellipsis>
       ),
@@ -291,33 +302,19 @@ export default function NotificationCenter() {
     {
       key: 'action',
       title: '操作',
-      width: 140,
+      width: 80,
       align: 'center',
       render: (_, r) => (
-        <Space size="mini">
-          {!r.read_at && (
-            <Button
-              type="text"
-              size="mini"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleReadOne(r)
-              }}
-            >
-              标记已读
-            </Button>
-          )}
-          <Button
-            type="text"
-            size="mini"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleClickItem(r)
-            }}
-          >
-            查看
-          </Button>
-        </Space>
+        <Button
+          type="text"
+          size="mini"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleClickItem(r)
+          }}
+        >
+          查看
+        </Button>
       ),
     },
   ]
@@ -342,7 +339,7 @@ export default function NotificationCenter() {
           <Space wrap>
             <Input
               className="w-64!"
-              placeholder="按标题或内容搜索"
+              placeholder="按模块或内容搜索"
               allowClear
               value={keyword}
               onChange={setKeyword}

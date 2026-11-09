@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -65,7 +66,75 @@ func NotificationList(userID uint, q NotificationQuery) ([]model.Notification, i
 	}
 	var list []model.Notification
 	err := db.Order("created_at DESC").Offset((page - 1) * size).Limit(size).Find(&list).Error
+	if err == nil {
+		fillNotificationSummary(list)
+	}
 	return list, total, err
+}
+
+// fillNotificationSummary 回填通知列表的「摘要」：按 instance_id 批量取实例的业务表与业务主键，
+// 再按业务表分组查询 summarys 列（与审批列表「摘要」同口径，避免逐条回表造成 N+1）。
+// 未关联实例、业务表缺 summarys 列或业务数据已删除时，该条摘要留空，不阻断列表返回。
+func fillNotificationSummary(list []model.Notification) {
+	if len(list) == 0 {
+		return
+	}
+	ids := make([]uint, 0, len(list))
+	for _, n := range list {
+		if n.InstanceID > 0 {
+			ids = append(ids, n.InstanceID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	var insts []model.ApprovalInstance
+	if err := database.DB.Select("id", "business_table", "business_data_id").
+		Where("id IN ?", ids).Find(&insts).Error; err != nil {
+		return
+	}
+	instOf := make(map[uint]model.ApprovalInstance, len(insts))
+	grouped := make(map[string][]uint)
+	for _, in := range insts {
+		instOf[in.ID] = in
+		if in.BusinessTable == "" || in.BusinessDataID == 0 {
+			continue
+		}
+		grouped[in.BusinessTable] = append(grouped[in.BusinessTable], in.BusinessDataID)
+	}
+
+	summaryOf := make(map[string]string)
+	for table, bizIDs := range grouped {
+		if !isValidTableName(table) {
+			continue
+		}
+		real := bizTableName(table)
+		cols, err := queryColumnSet(real)
+		if err != nil || !cols[summarysColumn] {
+			continue
+		}
+		var rows []struct {
+			ID       uint
+			Summarys string
+		}
+		if err := database.DB.Raw("SELECT `id`, IFNULL(`"+summarysColumn+"`, '') AS summarys FROM `"+real+"` WHERE `id` IN ?", bizIDs).
+			Scan(&rows).Error; err != nil {
+			continue
+		}
+		for _, row := range rows {
+			if row.Summarys != "" {
+				summaryOf[fmt.Sprintf("%s:%d", table, row.ID)] = row.Summarys
+			}
+		}
+	}
+
+	for i := range list {
+		in, ok := instOf[list[i].InstanceID]
+		if !ok {
+			continue
+		}
+		list[i].Summarys = summaryOf[fmt.Sprintf("%s:%d", in.BusinessTable, in.BusinessDataID)]
+	}
 }
 
 // NotificationUnreadCount 未读数

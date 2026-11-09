@@ -147,10 +147,8 @@ func OverdueNotificationScan() (int, int, error) {
 			if deadline.Sub(now) > conf.advance {
 				continue
 			}
-			msg := fmt.Sprintf("待办将在 %s 后到期，请尽快处理", humanDuration(deadline.Sub(now)))
-			if len([]rune(msg)) > 200 {
-				msg = "待办即将到期，请尽快处理"
-			}
+			// 预警文案固定，不随扫描时点的剩余时长变化，同一类提醒措辞一致
+			msg := "待办即将超时，请尽快处理"
 			err := withNotify(func(tx *gorm.DB) error {
 				// 条件更新：只有任务仍处于待处理且从未预警过才写入，
 				// 并发扫描或用户刚处理完时不会重复发送。
