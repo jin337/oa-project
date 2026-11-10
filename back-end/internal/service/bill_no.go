@@ -80,31 +80,56 @@ func ensureBillNo(appID uint, tableName string, dataID, curUserID uint) error {
 
 	// 4. 事务内取号并写入业务行（WHERE 再判一次空值，并发下不覆盖已有单号）
 	period := time.Now().Format("20060102")
-	return database.DB.Transaction(func(tx *gorm.DB) error {
-		seq, err := nextBillSeq(tx, appID, period)
-		if err != nil {
-			return err
-		}
-		billNo := fmt.Sprintf("%s-%s-%03d", prefix, period, seq)
-		if err := tx.Exec(
-			"UPDATE `"+real+"` SET `"+billNoColumn+"` = ?, `updated_by` = ? WHERE `id` = ? AND (`"+billNoColumn+"` IS NULL OR `"+billNoColumn+"` = '')",
-			billNo, curUserID, dataID,
-		).Error; err != nil {
-			return fmt.Errorf("写入单号失败: %w", err)
-		}
-		return nil
-	})
-}
-
-// nextBillSeq 事务内取下一个流水号：先确保序列行存在（唯一键 app_id + period），再行锁读取并自增
-func nextBillSeq(tx *gorm.DB, appID uint, period string) (int64, error) {
 	table := billSequenceTable()
-	if err := tx.Exec(
+	// 序列行初始化放在事务外：事务内再 INSERT IGNORE 会同时申请唯一索引锁与行锁，
+	// 与业务表 UPDATE 交叉时在并发发起场景形成环路，实测 20 并发约半数报 1213 死锁。
+	if err := database.DB.Exec(
 		"INSERT IGNORE INTO `"+table+"` (`app_id`, `period`, `seq`, `created_at`, `updated_at`) VALUES (?, ?, 0, NOW(3), NOW(3))",
 		appID, period,
 	).Error; err != nil {
-		return 0, fmt.Errorf("初始化单据序列失败: %w", err)
+		return fmt.Errorf("初始化单据序列失败: %w", err)
 	}
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		lastErr = database.DB.Transaction(func(tx *gorm.DB) error {
+			seq, err := nextBillSeq(tx, appID, period)
+			if err != nil {
+				return err
+			}
+			billNo := fmt.Sprintf("%s-%s-%03d", prefix, period, seq)
+			if err := tx.Exec(
+				"UPDATE `"+real+"` SET `"+billNoColumn+"` = ?, `updated_by` = ? WHERE `id` = ? AND (`"+billNoColumn+"` IS NULL OR `"+billNoColumn+"` = '')",
+				billNo, curUserID, dataID,
+			).Error; err != nil {
+				return fmt.Errorf("写入单号失败: %w", err)
+			}
+			return nil
+		})
+		if lastErr == nil {
+			return nil
+		}
+		// 死锁属瞬时冲突，退避后重试；其他错误直接上抛
+		if !isDeadlockError(lastErr) {
+			return lastErr
+		}
+		time.Sleep(time.Duration(20*(attempt+1)) * time.Millisecond)
+	}
+	return lastErr
+}
+
+// isDeadlockError 判断是否为 MySQL 死锁（1213）或锁等待超时（1205）。
+func isDeadlockError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "1213") || strings.Contains(msg, "Deadlock") ||
+		strings.Contains(msg, "1205") || strings.Contains(msg, "lock wait timeout")
+}
+
+// nextBillSeq 事务内取下一个流水号：行锁读取并自增（序列行由 ensureBillNo 在事务外初始化）
+func nextBillSeq(tx *gorm.DB, appID uint, period string) (int64, error) {
+	table := billSequenceTable()
 	var seq int64
 	if err := tx.Raw(
 		"SELECT `seq` FROM `"+table+"` WHERE `app_id` = ? AND `period` = ? FOR UPDATE",

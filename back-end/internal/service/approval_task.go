@@ -195,6 +195,7 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 
 	// 审批人为空：按 emptyHandler 配置分支处理
 	//   1-自动通过（默认） / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员未解析到人视为配置缺陷拒绝放行
+	emptyAdminFallback := false
 	if len(userIDs) == 0 {
 		switch node.EmptyHandler {
 		case 2: // 自动拒绝
@@ -208,6 +209,7 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 				return finishInstance(tx, instance, model.InstanceStatusRejected, "未配置流程管理员，自动拒绝", curUserID)
 			}
 			userIDs = adminIDs
+			emptyAdminFallback = true
 		case 4: // 指定人员但未解析到任何人：视为配置缺陷，拒绝放行
 			return finishInstance(tx, instance, model.InstanceStatusRejected, "指定审批人未配置，自动拒绝", curUserID)
 		default: // 1-自动通过（默认）
@@ -229,7 +231,10 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 	// 自动通过记录无 operated_at：不可撤回、不进经我处理、不推送通知；时间线保留标记。
 	mode := parseApprovalMode(instance.ApprovalOtherJSON)
 	autoIDs, remainIDs := []uint{}, userIDs
-	if mode == "pre" {
+	if emptyAdminFallback {
+		// 兜底管理员来自空审批人策略，不是节点静态成员：若交给跨节点重复成员合并逻辑，
+		// postLastNodeIdx 查不到其成员关系，会把整个节点判成"已在其他节点审批"并自动通过
+	} else if mode == "pre" {
 		operated, err := preApprovedAssigneeIDs(tx, instance.ID)
 		if err != nil {
 			return fmt.Errorf("查询已审批人失败: %w", err)

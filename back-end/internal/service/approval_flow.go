@@ -174,6 +174,26 @@ func injectSelfSelectIntoNodes(nodes []flowNode, selfSelectMembers map[string][]
 // 条件评估引擎（与前端 DynamicFlowView.jsx 的 evaluateBranch 逻辑一致）
 // ============================================================
 
+// iterRows 兼容子表行的两种内存形态：快照直读的 []map[string]interface{} 与
+// JSON 反序列化后的 []interface{}（后者元素为 map[string]interface{}）。
+// 兼容前，resolveFieldValue 只识别 []interface{}，导致业务数据详情（[]map）条件下的
+// 子表规则（row/sum/avg）恒不命中，条件分支永远落默认分支。
+func iterRows(v interface{}) []map[string]interface{} {
+	switch rows := v.(type) {
+	case []map[string]interface{}:
+		return rows
+	case []interface{}:
+		out := make([]map[string]interface{}, 0, len(rows))
+		for _, item := range rows {
+			if m, ok := item.(map[string]interface{}); ok {
+				out = append(out, m)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
 // resolveFieldValue 获取规则字段在表单数据中的实际值（与前端 resolveFieldValue 一致）
 // 子表字段按 rule.Agg 聚合：
 //   - row（默认）：返回该字段全部非空行值组成的切片，由 evaluateRule 按"任一行命中"判定
@@ -186,16 +206,14 @@ func resolveFieldValue(rule flowRule, formData map[string]interface{}) interface
 	tk := rule.TableKey
 	if tk != "" {
 		if tableData, ok := formData[tk]; ok {
-			if rows, ok := tableData.([]interface{}); ok && len(rows) > 0 {
+			if rows := iterRows(tableData); len(rows) > 0 {
 				var nums []float64
 				var raw []interface{}
-				for _, row := range rows {
-					if rowMap, ok := row.(map[string]interface{}); ok {
-						if v, exists := rowMap[rule.Field]; exists && v != nil && v != "" {
-							raw = append(raw, v)
-							if n, ok := toFloat64(v); ok {
-								nums = append(nums, n)
-							}
+				for _, rowMap := range rows {
+					if v, exists := rowMap[rule.Field]; exists && v != nil && v != "" {
+						raw = append(raw, v)
+						if n, ok := toFloat64(v); ok {
+							nums = append(nums, n)
 						}
 					}
 				}

@@ -770,7 +770,33 @@ func ApprovalInstanceWithdraw(curUserID, instanceID uint) error {
 	})
 }
 
+// instanceParticipant 判断用户是否为实例参与人：发起人 / 任一任务的审批人 / 抄送对象。
+// 详情与手动抄送都依赖它做可见性控制：原实现不做任何校验，任意登录用户拿到实例 ID
+// 即可读取他人单据的全量业务字段，并把自己抄送进去。
+func instanceParticipant(curUserID uint, instance *model.ApprovalInstance) bool {
+	if instance == nil || curUserID == 0 {
+		return false
+	}
+	if instance.CreatedBy == curUserID {
+		return true
+	}
+	var count int64
+	if err := database.DB.Model(&model.ApprovalInstanceTask{}).
+		Where("instance_id = ? AND assignee_id = ?", instance.ID, curUserID).
+		Count(&count).Error; err == nil && count > 0 {
+		return true
+	}
+	if err := database.DB.Model(&model.ApprovalCCRecord{}).
+		Where("instance_id = ? AND user_id = ?", instance.ID, curUserID).
+		Count(&count).Error; err == nil && count > 0 {
+		return true
+	}
+	// 流程配置管理员/系统管理员可查看与运维全量实例
+	return isFlowAdmin(curUserID)
+}
+
 // ApprovalInstanceManualCC 手动抄送：把当前实例抄送给指定用户列表（可多选）。
+//   - 仅发起人 / 审批人 / 抄送人可操作，且不允许抄送给自己
 //   - 幂等：同一 instance + user 已存在（manual-cc）则跳过该用户
 //   - 写入 oa_approval_cc_records，并给每个被抄送人发一条站内通知（事务提交后通过 SSE 推送）
 func ApprovalInstanceManualCC(curUserID, instanceID uint, userIDs []uint) error {
@@ -783,6 +809,20 @@ func ApprovalInstanceManualCC(curUserID, instanceID uint, userIDs []uint) error 
 	}
 	if inst.DeletedAt.Valid {
 		return errors.New("审批实例不存在")
+	}
+	if !instanceParticipant(curUserID, &inst) {
+		return errors.New("无权操作该审批单")
+	}
+	// 过滤掉自己：抄送自己既无业务意义，也会重复产生通知
+	onlySelf := true
+	for _, uid := range userIDs {
+		if uid != 0 && uid != curUserID {
+			onlySelf = false
+			break
+		}
+	}
+	if onlySelf {
+		return errors.New("不能抄送给自己")
 	}
 	appName := getInstanceAppName(&inst)
 	now := time.Now()
@@ -797,7 +837,7 @@ func ApprovalInstanceManualCC(curUserID, instanceID uint, userIDs []uint) error 
 			existingSet[id] = struct{}{}
 		}
 		for _, uid := range userIDs {
-			if uid == 0 {
+			if uid == 0 || uid == curUserID {
 				continue
 			}
 			if _, ok := existingSet[uid]; ok {
@@ -870,6 +910,10 @@ func ApprovalInstanceDetail(curUserID, instanceID uint) (*model.ApprovalInstance
 	var instance model.ApprovalInstance
 	if err := database.DB.First(&instance, instanceID).Error; err != nil {
 		return nil, errors.New("流程实例不存在")
+	}
+	// 详情含全量业务字段与审批轨迹，只允许参与人读取
+	if !instanceParticipant(curUserID, &instance) {
+		return nil, errors.New("无权查看该审批单")
 	}
 
 	// 查询应用配置（名称 + 详情页布局快照）

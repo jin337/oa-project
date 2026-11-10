@@ -158,17 +158,35 @@ func getUserIDsByExamineGroup(groupID uint) ([]uint, error) {
 	return eg.ApproverIDs, nil
 }
 
-// resolveFlowAdminUserIDs 流程管理员：拥有「审批配置管理」权限（application:examine-btn）的用户
+// flowAdminPerms 流程管理员判定用的权限码：只认「流程配置编辑/设计/新增」这类
+// 管理动作权限。不能包含父级 application——它只是菜单可见性，普通员工角色也持有，
+// 否则全公司都会被当成流程管理员。
+var flowAdminPerms = []string{"application:edit", "application:design", "application:add"}
+
+// isFlowAdmin 判断用户是否具备流程配置管理权限。
+// 用于详情/抄送的管理员豁免：系统管理员与流程配置负责人需要查看、运维全量实例，
+// 普通员工（只持有父级 application 菜单权限）不在其列。
+func isFlowAdmin(userID uint) bool {
+	var count int64
+	err := database.DB.Table(bizTablePrefix()+"sys_user_role").
+		Joins("JOIN "+bizTablePrefix()+"sys_role_menu rm ON rm.role_id = "+bizTablePrefix()+"sys_user_role.role_id").
+		Joins("JOIN "+bizTablePrefix()+"menus m ON m.id = rm.menu_id").
+		Where(bizTablePrefix()+"sys_user_role.user_id = ? AND m.perm IN ? AND m.status = 1", userID, flowAdminPerms).
+		Count(&count).Error
+	return err == nil && count > 0
+}
+
+// resolveFlowAdminUserIDs 流程管理员：拥有流程配置编辑权的用户
 // （emptyHandler=3 转交流程管理员时使用；无配置管理员时返回空列表）
 func resolveFlowAdminUserIDs() ([]uint, error) {
 	var userIDs []uint
 	err := database.DB.Table(bizTablePrefix()+"sys_user_role").
 		Joins("JOIN "+bizTablePrefix()+"sys_role_menu rm ON rm.role_id = "+bizTablePrefix()+"sys_user_role.role_id").
 		Joins("JOIN "+bizTablePrefix()+"menus m ON m.id = rm.menu_id").
-		Where("m.perm = ? AND m.status = 1", "application:examine-btn").
+		Where("m.perm IN ? AND m.status = 1", flowAdminPerms).
 		Distinct().
 		Pluck(bizTablePrefix()+"sys_user_role.user_id", &userIDs).Error
-	return userIDs, err
+	return uniqueUintSlice(userIDs), err
 }
 
 // uniqueUintSlice 去重
