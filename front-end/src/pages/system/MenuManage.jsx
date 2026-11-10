@@ -153,8 +153,7 @@ export default function MenuManage() {
       sort: record.sort,
       status: record.status,
       hidden: record.hidden,
-      // 后端 1/0 转成开关布尔值：只有显式 0 才是不缓存，历史缺字段按缓存
-      cache: Number(record.cache) === 0 ? false : true
+      cache: record.cache,
     })
     setFormType(record.type)
     setModalVisible(true)
@@ -166,8 +165,6 @@ export default function MenuManage() {
     const { link_state: linkState, ...rest } = values
     const payload = {
       ...rest,
-      // 开关布尔值转成后端约定的 1/0（1 缓存，0 不缓存）
-      cache: values.cache ? 1 : 0,
       link_app: values.link_app ? `${values.link_app}:${linkState || DEFAULT_LINK_STATE}` : '',
     }
     setSaving(true)
@@ -288,10 +285,10 @@ export default function MenuManage() {
       render: (cache, record) =>
         record.type !== 2 ? (
           '-'
-        ) : Number(cache) === 0 ? (
-          <Tag color="orange">不缓存</Tag>
+        ) : cache === 1 ? (
+          <Tag color="green">是</Tag>
         ) : (
-          <Tag color="green">缓存</Tag>
+          <Tag color="red">否</Tag>
         ),
     },
     {
@@ -506,10 +503,13 @@ export default function MenuManage() {
                   <FormItem
                     label="是否缓存"
                     field="cache"
-                    triggerPropName="checked"
+                    triggerPropName="value"
                     extra="关闭后切走即卸载该页面，切回重新加载数据"
                   >
-                    <Switch checkedText="缓存" uncheckedText="不缓存" />
+                    <Select>
+                      <Select.Option value={1}>是</Select.Option>
+                      <Select.Option value={0}>否</Select.Option>
+                    </Select>
                   </FormItem>
                 </Col>
               </>
