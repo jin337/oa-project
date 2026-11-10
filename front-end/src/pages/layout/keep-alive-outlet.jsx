@@ -6,6 +6,7 @@ import {
   useOutlet,
 } from 'react-router-dom'
 import { useTabs } from 'src/store/tab-context'
+import { useAuth } from 'src/store/auth-context'
 import { isTabCacheExcluded } from 'src/config/tab-cache'
 
 /**
@@ -71,8 +72,9 @@ export function updateSnapshots(prev, active, entry, alive, max, isExcluded = ()
  * 缓存生命周期与页签一致：关闭页签 → 容器移出列表 → 卸载释放内存；
  * 另受 MAX_KEEP_ALIVE 上限约束（LRU 淘汰最久未激活页，见 updateSnapshots）——
  * 被淘汰页的容器因取不到快照而不渲染，等价于卸载，页签本身不受影响。
- * 不缓存白名单（src/config/tab-cache.js）：命中路径当次激活不写快照，
+ * 不缓存开关（菜单管理「是否缓存」，判定见 src/config/tab-cache.js）：命中路径当次激活不写快照，
  * 切走时无快照可渲染 → 容器卸载，切回重新挂载并重新请求数据；页签本身照常保留。
+ * 菜单未收录的路径（工作台首页、通知中心等固定路由）默认不缓存。
  * visibility:hidden + absolute 叠放（不用 display:none），避免隐藏时滚动位置被重置。
  * 无页签路径（/403、被清理的无效页签）不缓存：仅渲染当前容器，切走即卸载（保持原行为）。
  * 从未激活过的历史页签（刷新恢复）无快照 → 暂不挂载，切过去时自动补快照再缓存。
@@ -82,6 +84,8 @@ export default function KeepAliveOutlet() {
   const navigationType = useNavigationType()
   const outlet = useOutlet()
   const { tabs } = useTabs()
+  // 菜单树用于判定「是否缓存」：菜单里显式关掉缓存、或路径不在菜单中 → 不缓存
+  const { menus } = useAuth()
   // path → { element, ctx }：元素引用与 context 值引用稳定，是"隐藏即冻结"的关键；
   // Map 插入顺序同时承载 LRU 激活先后
   const snapshots = useRef(new Map())
@@ -90,6 +94,8 @@ export default function KeepAliveOutlet() {
   const alive = new Set(tabs.map((t) => t.path))
   alive.add(location.pathname)
 
+  const isExcluded = (path) => isTabCacheExcluded(menus, path)
+
   // 更新快照表：激活项移到队尾 + 清理失效页签 + LRU 淘汰超上限的最久未激活项
   snapshots.current = updateSnapshots(
     snapshots.current,
@@ -97,7 +103,7 @@ export default function KeepAliveOutlet() {
     { element: outlet, ctx: { location, navigationType } },
     alive,
     MAX_KEEP_ALIVE,
-    isTabCacheExcluded,
+    isExcluded,
   )
 
   const renderPaths = tabs.map((t) => t.path)
@@ -107,10 +113,10 @@ export default function KeepAliveOutlet() {
     <div className="relative h-full w-full">
       {renderPaths.map((path) => {
         const active = path === location.pathname
-        // 白名单路径不查快照：非激活时取不到快照 → 容器不挂载，等价于卸载；
+        // 不缓存的路径不查快照：非激活时取不到快照 → 容器不挂载，等价于卸载；
         // 激活时照常渲染最新 outlet，只是切走时不留快照
-        const snap = isTabCacheExcluded(path) ? null : snapshots.current.get(path)
-        // 未激活过的历史页签、被 LRU 淘汰的页签、不缓存白名单页签：不挂载
+        const snap = isExcluded(path) ? null : snapshots.current.get(path)
+        // 未激活过的历史页签、被 LRU 淘汰的页签、不缓存的页签：不挂载
         if (!active && !snap) return null
         const node = active ? outlet : snap.element
         const ctx = active ? { location, navigationType } : snap.ctx

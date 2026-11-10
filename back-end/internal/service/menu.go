@@ -47,9 +47,15 @@ func MenuCreate(curUserID uint, req *model.MenuCreateReq) (*model.Menu, error) {
 	if status == 0 {
 		status = 1
 	}
+	// 未显式传 cache 时默认缓存；传 0 才是「不缓存」
+	cache := 1
+	if req.Cache != nil {
+		cache = *req.Cache
+	}
 	menu := model.Menu{
 		ParentID: req.ParentID, Name: req.Name, Type: req.Type,
 		Path: req.Path, Perm: req.Perm, LinkApp: req.LinkApp, Icon: req.Icon, Sort: req.Sort, Status: status, Hidden: req.Hidden,
+		Cache: cache,
 	}
 	menu.CreatedBy, menu.UpdatedBy = curUserID, curUserID
 	if err := database.DB.Create(&menu).Error; err != nil {
@@ -96,6 +102,10 @@ func MenuUpdate(curUserID, id uint, req *model.MenuUpdateReq) (*model.Menu, erro
 	}
 	if req.Hidden == 0 || req.Hidden == 1 {
 		menu.Hidden = req.Hidden
+	}
+	// 仅显式传 cache 时更新，避免只改状态/名称等部分更新把缓存开关冲成 0
+	if req.Cache != nil {
+		menu.Cache = *req.Cache
 	}
 	menu.UpdatedBy = curUserID
 	if err := database.DB.Save(&menu).Error; err != nil {

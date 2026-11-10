@@ -112,6 +112,16 @@ var migrations = []migration{
 			return db.AutoMigrate(&model.ApprovalInstanceTask{})
 		},
 	},
+	{
+		Version: 8,
+		Name:    "add_menu_cache_field",
+		// 页签缓存开关：给菜单补建 cache 列（1 缓存 / 0 不缓存）。
+		// 存量菜单由列默认值 1 补齐，保持「默认缓存」的既有行为；
+		// 工作台等不在菜单中的固定路由由前端按「未收录即不缓存」处理。
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&model.Menu{})
+		},
+	},
 }
 
 // seedAuditLogMenu 操作审计菜单：系统管理目录下「操作审计」页面（perm=system:audit）

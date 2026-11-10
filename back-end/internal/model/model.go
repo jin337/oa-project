@@ -173,6 +173,9 @@ type Menu struct {
 	Sort     int    `gorm:"default:1;comment:排序" json:"sort"`
 	Status   int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
 	Hidden   int    `gorm:"default:0;comment:是否隐藏 1是 0否" json:"hidden"`
+	// 是否缓存页签：1 缓存（切走保留页面状态）；0 不缓存（切走即卸载，切回重新挂载并重新请求）。
+	// 未在菜单中配置的路径（如工作台首页、通知中心等固定路由）默认不缓存，见前端 config/tab-cache.js。
+	Cache int `gorm:"default:1;comment:是否缓存页签 1缓存 0不缓存" json:"cache"`
 
 	Children []*Menu `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
@@ -355,6 +358,8 @@ type MenuCreateReq struct {
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   int    `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	Hidden   int    `json:"hidden" validate:"omitempty,oneof=0 1" label:"是否隐藏"`
+	// 指针区分「未传」与「显式不缓存」：未传按默认缓存（1）处理
+	Cache *int `json:"cache" validate:"omitempty,oneof=0 1" label:"是否缓存"`
 }
 
 type MenuUpdateReq struct {
@@ -368,6 +373,8 @@ type MenuUpdateReq struct {
 	Sort     int    `json:"sort" validate:"omitempty" label:"排序"`
 	Status   *int   `json:"status" validate:"omitempty,oneof=0 1" label:"状态"`
 	Hidden   int    `json:"hidden" validate:"omitempty,oneof=0 1" label:"是否隐藏"`
+	// 指针区分「未传」与「显式不缓存」：部分更新（如仅切换状态）不会把缓存开关冲成 0
+	Cache *int `json:"cache" validate:"omitempty,oneof=0 1" label:"是否缓存"`
 }
 
 type DeptCreateReq struct {

@@ -27,6 +27,7 @@ import * as menuApi from 'src/api/menu'
 import IconSelect, { MenuIcon } from 'src/components/icon-select'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
+import { useAuth } from 'src/store/auth-context'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -44,6 +45,7 @@ const ALL_COL_KEYS = [
   'sort',
   'status',
   'hidden',
+  'cache',
 ]
 const TYPE_MAP = { 1: '目录', 2: '菜单', 3: '按钮' }
 
@@ -77,10 +79,13 @@ const EMPTY_FORM = {
   sort: 1,
   status: 1,
   hidden: 0,
+  cache: 1,
 }
 
 export default function MenuManage() {
   const { hasPerm } = usePermission()
+  // 菜单改动后同步全局菜单树（页签缓存判定读的就是这份数据，改完立即生效）
+  const { refreshProfile } = useAuth()
   const canAdd = hasPerm('system:menu:add')
   const canEdit = hasPerm('system:menu:edit')
   const canDelete = hasPerm('system:menu:delete')
@@ -148,6 +153,8 @@ export default function MenuManage() {
       sort: record.sort,
       status: record.status,
       hidden: record.hidden,
+      // 后端 1/0 转成开关布尔值：只有显式 0 才是不缓存，历史缺字段按缓存
+      cache: Number(record.cache) === 0 ? false : true
     })
     setFormType(record.type)
     setModalVisible(true)
@@ -159,6 +166,8 @@ export default function MenuManage() {
     const { link_state: linkState, ...rest } = values
     const payload = {
       ...rest,
+      // 开关布尔值转成后端约定的 1/0（1 缓存，0 不缓存）
+      cache: values.cache ? 1 : 0,
       link_app: values.link_app ? `${values.link_app}:${linkState || DEFAULT_LINK_STATE}` : '',
     }
     setSaving(true)
@@ -172,6 +181,8 @@ export default function MenuManage() {
       }
       setModalVisible(false)
       fetchTree()
+      // 同步全局菜单树，让「是否缓存」等改动的页签行为立即生效
+      refreshProfile().catch(() => {})
     } catch (e) {
       // 错误已在请求层提示
     } finally {
@@ -266,6 +277,22 @@ export default function MenuManage() {
       align: 'center',
       width: 90,
       render: (hidden) => (hidden === 1 ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag>),
+    },
+    {
+      key: 'cache',
+      title: '是否缓存',
+      dataIndex: 'cache',
+      align: 'center',
+      width: 90,
+      // 缓存开关只对页面菜单（type=2）有意义，目录/按钮不展示
+      render: (cache, record) =>
+        record.type !== 2 ? (
+          '-'
+        ) : Number(cache) === 0 ? (
+          <Tag color="orange">不缓存</Tag>
+        ) : (
+          <Tag color="green">缓存</Tag>
+        ),
     },
     {
       key: 'status',
@@ -475,6 +502,16 @@ export default function MenuManage() {
                     />
                   </FormItem>
                 </Col>
+                <Col span={12}>
+                  <FormItem
+                    label="是否缓存"
+                    field="cache"
+                    triggerPropName="checked"
+                    extra="关闭后切走即卸载该页面，切回重新加载数据"
+                  >
+                    <Switch checkedText="缓存" uncheckedText="不缓存" />
+                  </FormItem>
+                </Col>
               </>
             )}
             {formType !== 3 && (
@@ -492,7 +529,7 @@ export default function MenuManage() {
                 <InputNumber min={1} placeholder="数字越小越靠前" />
               </FormItem>
             </Col>
-            <Col span={formType !== 2 ? 12 : 24}>
+            <Col span={12}>
               <FormItem label="状态" field="status" triggerPropName="value">
                 <Select>
                   <Select.Option value={1}>启用</Select.Option>
