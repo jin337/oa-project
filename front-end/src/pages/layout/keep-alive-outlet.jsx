@@ -6,6 +6,7 @@ import {
   useOutlet,
 } from 'react-router-dom'
 import { useTabs } from 'src/store/tab-context'
+import { isTabCacheExcluded } from 'src/config/tab-cache'
 
 /**
  * 同时缓存的页面实例上限（含当前激活页）。
@@ -18,22 +19,25 @@ const MAX_KEEP_ALIVE = 10
 /**
  * 更新快照表（纯函数，Map 迭代顺序即「激活先后」，队首=最久未激活）：
  * 1) 激活项移到队尾（delete + set 保证顺序；重复调用幂等）；
- * 2) 删除已不存活的页签（关闭页签 / 被 tab-context 清理的无效页签）；
- * 3) 超出 max 时从队首逐个淘汰，直到满足上限——刚移到队尾的激活项必然保留。
+ * 2) 白名单路径（isExcluded 为真）不保留快照，且已有的旧快照一并清除；
+ * 3) 删除已不存活的页签（关闭页签 / 被 tab-context 清理的无效页签）；
+ * 4) 超出 max 时从队首逐个淘汰，直到满足上限——刚移到队尾的激活项必然保留。
  *
- * @param {Map}   prev     上一次渲染的快照表
- * @param {string} active  本次激活路径
- * @param {object} entry   激活页快照 { element, ctx }
- * @param {Set}   alive    存活路径集合（含 active）
- * @param {number} max     缓存上限
+ * @param {Map}   prev       上一次渲染的快照表
+ * @param {string} active    本次激活路径
+ * @param {object} entry     激活页快照 { element, ctx }
+ * @param {Set}   alive      存活路径集合（含 active）
+ * @param {number} max       缓存上限
+ * @param {(path:string)=>boolean} isExcluded 是否命中「不缓存」白名单
  * @returns {Map} 新快照表（不修改 prev）
  */
-export function updateSnapshots(prev, active, entry, alive, max) {
+export function updateSnapshots(prev, active, entry, alive, max, isExcluded = () => false) {
   const next = new Map(prev)
   next.delete(active)
-  next.set(active, entry)
+  // 白名单页面不留快照：切走时无可渲染快照 → 容器卸载，切回重新挂载
+  if (!isExcluded(active)) next.set(active, entry)
   for (const path of [...next.keys()]) {
-    if (!alive.has(path)) next.delete(path)
+    if (!alive.has(path) || isExcluded(path)) next.delete(path)
   }
   while (next.size > max) {
     const oldest = next.keys().next().value
@@ -67,6 +71,8 @@ export function updateSnapshots(prev, active, entry, alive, max) {
  * 缓存生命周期与页签一致：关闭页签 → 容器移出列表 → 卸载释放内存；
  * 另受 MAX_KEEP_ALIVE 上限约束（LRU 淘汰最久未激活页，见 updateSnapshots）——
  * 被淘汰页的容器因取不到快照而不渲染，等价于卸载，页签本身不受影响。
+ * 不缓存白名单（src/config/tab-cache.js）：命中路径当次激活不写快照，
+ * 切走时无快照可渲染 → 容器卸载，切回重新挂载并重新请求数据；页签本身照常保留。
  * visibility:hidden + absolute 叠放（不用 display:none），避免隐藏时滚动位置被重置。
  * 无页签路径（/403、被清理的无效页签）不缓存：仅渲染当前容器，切走即卸载（保持原行为）。
  * 从未激活过的历史页签（刷新恢复）无快照 → 暂不挂载，切过去时自动补快照再缓存。
@@ -91,6 +97,7 @@ export default function KeepAliveOutlet() {
     { element: outlet, ctx: { location, navigationType } },
     alive,
     MAX_KEEP_ALIVE,
+    isTabCacheExcluded,
   )
 
   const renderPaths = tabs.map((t) => t.path)
@@ -100,8 +107,10 @@ export default function KeepAliveOutlet() {
     <div className="relative h-full w-full">
       {renderPaths.map((path) => {
         const active = path === location.pathname
-        const snap = snapshots.current.get(path)
-        // 未激活过的历史页签、以及被 LRU 淘汰的页签：无快照 → 不挂载（后者即释放内存）
+        // 白名单路径不查快照：非激活时取不到快照 → 容器不挂载，等价于卸载；
+        // 激活时照常渲染最新 outlet，只是切走时不留快照
+        const snap = isTabCacheExcluded(path) ? null : snapshots.current.get(path)
+        // 未激活过的历史页签、被 LRU 淘汰的页签、不缓存白名单页签：不挂载
         if (!active && !snap) return null
         const node = active ? outlet : snap.element
         const ctx = active ? { location, navigationType } : snap.ctx
