@@ -275,7 +275,6 @@ export default function NotificationCenter() {
       key: 'summarys',
       title: '摘要',
       dataIndex: 'summarys',
-      width: 200,
       render: (v) => (
         <Typography.Ellipsis showTooltip style={{ maxWidth: 200 }}>
           {v || '-'}
@@ -286,6 +285,7 @@ export default function NotificationCenter() {
       key: 'msg',
       title: '内容',
       dataIndex: 'msg',
+      width: 300,
       render: (v) => (
         <Typography.Ellipsis showTooltip style={{ maxWidth: 360 }}>
           {v || '-'}
