@@ -550,6 +550,9 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 	if err := ensureBillNo(instance.AppID, ctx.app.TableName, instance.BusinessDataID, curUserID); err != nil {
 		return nil, err
 	}
+	// 单号写在业务主表，草稿提交路径不经过实例创建，必须在这里回填到实例行，
+	// 否则实例详情/列表的 bill_no 一直为空（BUG-APR-001）
+	billNo := readBillNo(ctx.app.TableName, instance.BusinessDataID)
 
 	// 6. 序列化快照（Updates map 不走 serializer，需手动序列化）
 	injectedFlowBytes, _ := json.Marshal(buildSnapshotFlow(ctx.injectedNodes, ctx.endNode))
@@ -569,6 +572,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 			"execution_path":         string(execPathBytes),
 			"current_node_idx":       0,
 			"status":                 model.InstanceStatusRunning,
+			"bill_no":                billNo,
 			"approval_draft_members": nil, // 草稿暂存提交后清空（成员已注入快照；撤回时由 Withdraw 写回）
 			"updated_by":             curUserID,
 		}

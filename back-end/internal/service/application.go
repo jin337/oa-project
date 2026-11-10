@@ -1156,6 +1156,8 @@ func approvalStatusName(status int) string {
 		return "已作废"
 	case model.ApprovalStatusDeleted:
 		return "已删除"
+	case model.ApprovalStatusWithdrawn:
+		return "已撤回"
 	default:
 		return fmt.Sprintf("未知(%d)", status)
 	}
@@ -1245,10 +1247,15 @@ func createBizTables(tableName, subTableName, pageName string) error {
 }
 
 // ApplicationCreate 新增页面配置：
-//  1. 根据 TableName/SubTableName（逗号分隔）动态创建业务数据表
-//  2. 自动生成 code（app_<40bit 时间戳>_<40bit 随机>，见 internal/pkg/idgen），忽略前端传入值
-//  3. 持久化配置（含布局 JSON）
+//  1. 校验主表/子表名未被任何页面配置或既有物理表占用（防止多配置共表、删一方即毁另一方）
+//  2. 根据 TableName/SubTableName（逗号分隔）动态创建业务数据表
+//  3. 自动生成 code（app_<40bit 时间戳>_<40bit 随机>，见 internal/pkg/idgen），忽略前端传入值
+//  4. 落库应用配置，并把创建时提交的布局/审批流写入首版「设计中」版本快照
 func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.Application, error) {
+	// 1. 表名占用校验：同名主表/子表已被其他配置登记或物理表已存在时拒绝创建（BUG-FLOW-002）
+	if err := checkApplicationTableAvailable(req.TableName, req.SubTableName); err != nil {
+		return nil, err
+	}
 	if err := createBizTables(req.TableName, req.SubTableName, req.Name); err != nil {
 		return nil, err
 	}
@@ -1270,7 +1277,77 @@ func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.
 	if err := database.DB.Create(&app).Error; err != nil {
 		return nil, err
 	}
+
+	// 2. 首版快照：Application 上的布局/审批流是 gorm:"-" 内存字段，不入库；
+	// 必须写入「设计中」版本，设计页与首次发布才能读到创建时提交的内容（BUG-FLOW-001）
+	ver := model.ApplicationVersion{
+		ApplicationID:    app.ID,
+		VersionNo:        "v1",
+		Status:           model.AppVersionStatusDraft,
+		EffectiveAt:      time.Now(),
+		FormLayoutJSON:   req.FormLayoutJSON,
+		DetailLayoutJSON: req.DetailLayoutJSON,
+		ApprovalFlowJSON: req.ApprovalFlowJSON,
+		CreatedBy:        curUserID,
+	}
+	if err := database.DB.Create(&ver).Error; err != nil {
+		// 版本落库失败：回滚本次新建的应用行与物理表，避免留下无快照的半成品配置
+		database.DB.Unscoped().Delete(&model.Application{}, app.ID)
+		for _, n := range append([]string{req.TableName}, splitTableNames(req.SubTableName)...) {
+			if isValidTableName(n) {
+				database.DB.Exec("DROP TABLE IF EXISTS `" + bizTableName(n) + "`")
+			}
+		}
+		return nil, fmt.Errorf("初始化版本失败: %w", err)
+	}
 	return &app, nil
+}
+
+// checkApplicationTableAvailable 校验新建配置的主表/子表名是否可用：
+//   - 配置层面：存续中的页面配置已登记同名表 → 拒绝，否则两份配置指向同一张物理表
+//   - 物理层面：带前缀的同名业务表已存在 → 拒绝，否则 CREATE TABLE IF NOT EXISTS 会静默复用既有数据
+//
+// 已软删除的配置不再占用表名（删除时物理表已清理，允许重新建同名流程）。
+func checkApplicationTableAvailable(tableName, subTableName string) error {
+	var apps []model.Application
+	if err := database.DB.Select("id", "table_name", "sub_table_name").Find(&apps).Error; err != nil {
+		return err
+	}
+	usedTable := map[string]bool{}
+	usedSub := map[string]bool{}
+	for _, a := range apps {
+		usedTable[a.TableName] = true
+		for _, s := range splitTableNames(a.SubTableName) {
+			usedSub[s] = true
+		}
+	}
+	if usedTable[tableName] {
+		return fmt.Errorf("主表名 %q 已被其他页面配置占用，请更换", tableName)
+	}
+	if bizTableExists(tableName) {
+		return fmt.Errorf("主表 %q 已存在，请更换表名", tableName)
+	}
+	for _, sub := range splitTableNames(subTableName) {
+		if !isValidTableName(sub) {
+			return fmt.Errorf("非法的子表名: %q", sub)
+		}
+		if usedSub[sub] || usedTable[sub] {
+			return fmt.Errorf("子表名 %q 已被其他页面配置占用，请更换", sub)
+		}
+		if bizTableExists(sub) {
+			return fmt.Errorf("子表 %q 已存在，请更换表名", sub)
+		}
+	}
+	return nil
+}
+
+// bizTableExists 判断带配置前缀的业务表是否已在库中存在
+func bizTableExists(raw string) bool {
+	if !isValidTableName(raw) {
+		return false
+	}
+	cols, err := queryColumns(bizTableName(raw))
+	return err == nil && len(cols) > 0
 }
 
 // ApplicationUpdate 修改页面配置，并同步变更到底层物理业务表（DDL 失败即中断，保证配置与物理表一致）：
@@ -1573,6 +1650,12 @@ func ApplicationDelete(id uint) error {
 		return errors.New("页面配置不存在")
 	}
 
+	// 删除前确认主表/子表没有被其他页面配置共用：历史脏配置可能已共表，
+	// 此时删一方会把另一方仍在使用的物理表 DROP 掉（BUG-FLOW-002 的破坏路径）
+	if err := checkTableNotSharedByOthers(&app, id); err != nil {
+		return err
+	}
+
 	// 收集主表 + 子表（逗号分隔，去空白、跳过空项）待删除的表名
 	names := []string{app.TableName}
 	for _, sub := range strings.Split(app.SubTableName, ",") {
@@ -1602,7 +1685,43 @@ func ApplicationDelete(id uint) error {
 	}
 
 	// 物理表全部删除成功后，再软删除配置记录
-	return database.DB.Delete(&model.Application{}, id).Error
+	if err := database.DB.Delete(&model.Application{}, id).Error; err != nil {
+		return err
+	}
+
+	// 同步清理该配置的版本快照与字段元素，避免删除应用后留下孤儿版本/元素行（BUG-CAND-001）
+	if err := database.DB.Unscoped().Where("application_id = ?", id).
+		Delete(&model.ApplicationVersion{}).Error; err != nil {
+		return fmt.Errorf("清理版本快照失败: %w", err)
+	}
+	if err := database.DB.Unscoped().Where("app_id = ?", id).
+		Delete(&model.ApplicationElement{}).Error; err != nil {
+		return fmt.Errorf("清理页面元素失败: %w", err)
+	}
+	return nil
+}
+
+// checkTableNotSharedByOthers 检查当前配置的主表/子表是否仍被其他页面配置引用
+func checkTableNotSharedByOthers(app *model.Application, excludeID uint) error {
+	names := map[string]bool{app.TableName: true}
+	for _, s := range splitTableNames(app.SubTableName) {
+		names[s] = true
+	}
+	var others []model.Application
+	if err := database.DB.Where("id <> ?", excludeID).Find(&others).Error; err != nil {
+		return err
+	}
+	for i := range others {
+		if names[others[i].TableName] {
+			return fmt.Errorf("主表 %q 仍被页面配置「%s」使用，请先处理该配置再删除", app.TableName, others[i].Name)
+		}
+		for _, s := range splitTableNames(others[i].SubTableName) {
+			if names[s] {
+				return fmt.Errorf("表 %q 仍被页面配置「%s」使用，请先处理该配置再删除", s, others[i].Name)
+			}
+		}
+	}
+	return nil
 }
 
 // ==================== 流程版本管理 ====================
