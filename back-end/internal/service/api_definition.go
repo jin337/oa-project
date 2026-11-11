@@ -358,6 +358,9 @@ var sqlFirstWordRe = regexp.MustCompile(`(?i)^\s*(SELECT|INSERT|UPDATE|DELETE)\b
 // sqlWhereRe 写操作必须带 WHERE
 var sqlWhereRe = regexp.MustCompile(`(?i)\bWHERE\b`)
 
+// setVarRe 仅匹配 SET 变量赋值（SET @x / SET @@global.x），用于区分标准 UPDATE ... SET
+var setVarRe = regexp.MustCompile(`(?i)\bset\s+@@?`)
+
 // validateSQLTemplate SQL 模板强约束：
 // 1. 必须以 SELECT/INSERT/UPDATE/DELETE 开头（不做只读限制，但写操作必须带 WHERE）
 // 2. 禁止分号（不支持多条语句）、注释符（防注释绕过参数化）

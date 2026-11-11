@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"regexp"
 	"sort"
@@ -311,6 +312,10 @@ func mergeLayoutColumns(cols []interface{}, byKey map[string]*model.ApplicationE
 			base = byKey[tk+"\x00"+fk]
 		}
 		if base == nil {
+			// 字段元素已不存在（被删除）：读取时跳过、保存时丢弃，避免悬空引用继续渲染或写回
+			if isFieldLayoutItem(c) {
+				continue
+			}
 			out = append(out, c)
 			continue
 		}
@@ -342,6 +347,10 @@ func mergeLayoutJSON(layout map[string]interface{}, appID uint) map[string]inter
 		}
 		base := matchApplicationElement(m, byID, byKey)
 		if base == nil {
+			// 无匹配：字段元素视为已删除，直接跳过；基础/表格组件保留
+			if isFieldLayoutItem(m) {
+				continue
+			}
 			// 无匹配（基础/表格组件）：表格元素含 columns 时仍做列级合并
 			if cols, ok := m["columns"].([]interface{}); ok && len(cols) > 0 {
 				next := make(map[string]interface{}, len(m)+1)
@@ -369,7 +378,101 @@ func mergeLayoutJSON(layout map[string]interface{}, appID uint) map[string]inter
 	return next
 }
 
-// compactLayoutColumns 保存裁剪：列仅保留布局自身字段 + 与底不同的覆盖项，title 空时兜底为底 label
+// isFieldLayoutItem 判断布局项是否为字段元素（绑定物理字段）：只有字段元素才允许因元素被删除而剔除，
+// 分割线/表格等基础组件没有 field_key+table_key，必须保留。
+func isFieldLayoutItem(m map[string]interface{}) bool {
+	fk, _ := m["field_key"].(string)
+	tk, _ := m["table_key"].(string)
+	return fk != "" && tk != ""
+}
+
+// layoutItemMatchesElement 判断布局项是否指向指定元素：优先 element_id，其次 (table_key, field_key)
+func layoutItemMatchesElement(m map[string]interface{}, elementID uint, tableKey, fieldKey string) bool {
+	if id, ok := numericVal(m["element_id"]); ok && elementID > 0 && uint(id) == elementID {
+		return true
+	}
+	fk, _ := m["field_key"].(string)
+	tk, _ := m["table_key"].(string)
+	return fk != "" && tk != "" && fk == fieldKey && tk == tableKey
+}
+
+// removeElementFromLayouts 从应用的草稿/待生效/生效版本布局中移除指定元素引用（含表格列），
+// 返回被清理的引用数量。历史失效版本（status=2）保留原样，供历史追溯。
+func removeElementFromLayouts(appID, elementID uint, tableKey, fieldKey string) (int, error) {
+	var versions []model.ApplicationVersion
+	if err := database.DB.Where("application_id = ? AND status IN ?", appID,
+		[]int{model.AppVersionStatusScheduled, model.AppVersionStatusActive, model.AppVersionStatusDraft}).
+		Find(&versions).Error; err != nil {
+		return 0, err
+	}
+	removed := 0
+	for i := range versions {
+		layouts := []*map[string]interface{}{&versions[i].FormLayoutJSON, &versions[i].DetailLayoutJSON}
+		changed := false
+		for _, lp := range layouts {
+			if *lp == nil {
+				continue
+			}
+			els, ok := (*lp)["elements"].([]interface{})
+			if !ok {
+				continue
+			}
+			keep := make([]interface{}, 0, len(els))
+			for _, item := range els {
+				m, ok := item.(map[string]interface{})
+				if !ok {
+					keep = append(keep, item)
+					continue
+				}
+				if layoutItemMatchesElement(m, elementID, tableKey, fieldKey) {
+					removed++
+					changed = true
+					continue
+				}
+				// 表格组件的列引用同样需要清理
+				if cols, ok := m["columns"].([]interface{}); ok && len(cols) > 0 {
+					nextCols := make([]interface{}, 0, len(cols))
+					colChanged := false
+					for _, c := range cols {
+						cm, ok := c.(map[string]interface{})
+						if ok && layoutItemMatchesElement(cm, elementID, tableKey, fieldKey) {
+							colChanged = true
+							removed++
+							continue
+						}
+						nextCols = append(nextCols, c)
+					}
+					if colChanged {
+						nm := make(map[string]interface{}, len(m))
+						for k, v := range m {
+							nm[k] = v
+						}
+						nm["columns"] = nextCols
+						keep = append(keep, nm)
+						changed = true
+						continue
+					}
+				}
+				keep = append(keep, m)
+			}
+			if changed {
+				(*lp)["elements"] = keep
+			}
+		}
+		if changed {
+			if err := database.DB.Model(&versions[i]).
+				Select("form_layout_json", "detail_layout_json").Updates(&versions[i]).Error; err != nil {
+				return removed, err
+			}
+		}
+	}
+	if removed > 0 {
+		log.Printf("[layout] 已从应用 %d 的版本布局清理元素引用 %d 处 (element=%d, %s.%s)",
+			appID, removed, elementID, tableKey, fieldKey)
+	}
+	return removed, nil
+}
+
 func compactLayoutColumns(cols []interface{}, byKey map[string]*model.ApplicationElement) []interface{} {
 	out := make([]interface{}, 0, len(cols))
 	for _, item := range cols {
@@ -385,6 +488,10 @@ func compactLayoutColumns(cols []interface{}, byKey map[string]*model.Applicatio
 			base = byKey[tk+"\x00"+fk]
 		}
 		if base == nil {
+			// 字段元素已不存在（被删除）：读取时跳过、保存时丢弃，避免悬空引用继续渲染或写回
+			if isFieldLayoutItem(c) {
+				continue
+			}
 			out = append(out, c)
 			continue
 		}
@@ -434,6 +541,10 @@ func compactLayoutJSON(layout map[string]interface{}, appID uint) map[string]int
 		}
 		base := matchApplicationElement(m, byID, byKey)
 		if base == nil {
+			// 无匹配：字段元素视为已删除，直接丢弃（防止悬空引用写回草稿）；基础/表格组件保留
+			if isFieldLayoutItem(m) {
+				continue
+			}
 			// 无匹配（基础/表格组件）：表格元素含 columns 时仍做列级裁剪
 			if cols, ok := m["columns"].([]interface{}); ok && len(cols) > 0 {
 				next := make(map[string]interface{}, len(m)+1)
@@ -746,6 +857,27 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 // 字段集合由 systemCols 派生（审计字段 + 主键），定义见 helper.go
 var appSystemCols = systemCols("id")
 
+// isBlankSubRow 判断子表行是否为「全空行」：除 parent_id 与审计字段外，
+// 所有业务字段均为空（nil 或空白字符串）。0/false 视为已填写、予以保留。
+// 后端兜底过滤 [{}]，避免接口直调（前端已在 Apply 提交前过滤）时落库无意义空行。
+func isBlankSubRow(row map[string]interface{}) bool {
+	for k, v := range row {
+		if appSystemCols[k] || k == "parent_id" {
+			continue
+		}
+		switch val := v.(type) {
+		case nil:
+		case string:
+			if strings.TrimSpace(val) != "" {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // ApplicationDataCreate 动态业务数据新增（支持主表 + 子表）：
 //  1. 根据应用配置获取主表名，拼接前缀得到真实物理表
 //  2. 区分主表字段与子表数据：key 匹配子表名时视为子表行数据（[]interface{}），不作为主表字段校验
@@ -753,6 +885,30 @@ var appSystemCols = systemCols("id")
 //  4. 主表 INSERT 成功后获取自增主键 ID
 //  5. 遍历子表数据，为每行填充 parent_id（= 主表 ID）及审计字段，校验列合法性后逐行 INSERT
 func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface{}) (uint, error) {
+	var id uint
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		var e error
+		id, e = applicationDataCreateWithDB(tx, appID, curUserID, data)
+		return e
+	})
+	if err != nil {
+		return 0, err
+	}
+	// 主表 + 子表已原子提交，再取单号：取号走独立连接/事务，不能嵌套在业务事务内
+	app, _, err := ApplicationDetail(appID)
+	if err != nil {
+		return id, nil // 配置读取失败不否定已落库的业务数据
+	}
+	if err := ensureBillNo(appID, app.TableName, id, curUserID); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+// applicationDataCreateWithDB 在指定 DB/事务句柄中创建业务数据（主表 + 子表原子写入），
+// 由 ApplicationDataCreate 包事务调用；子表任一行写入失败时主表 INSERT 一并回滚，
+// 避免出现「主表已落库、子表为空」的孤儿行。
+func applicationDataCreateWithDB(db *gorm.DB, appID uint, curUserID uint, data map[string]interface{}) (uint, error) {
 	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return 0, err
@@ -829,21 +985,20 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 		strings.Join(mainPlaceholders, ","),
 	)
 
-	if err := database.DB.Exec(mainSQL, mainArgs...).Error; err != nil {
+	if err := db.Exec(mainSQL, mainArgs...).Error; err != nil {
 		return 0, fmt.Errorf("插入数据失败: %w", err)
 	}
 
 	// 获取主表自增主键
 	var id uint
-	if err := database.DB.Raw("SELECT LAST_INSERT_ID()").Scan(&id).Error; err != nil {
+	if err := db.Raw("SELECT LAST_INSERT_ID()").Scan(&id).Error; err != nil {
 		return 0, err
 	}
 
 	// 生成单号：应用配置了单号前缀时，新建即取号（幂等；未配置前缀或表缺 bill_no 列时自动跳过）
-	// 与「提交审核」共用 ensureBillNo，保证同一应用的单号格式与每日流水连续
-	if err := ensureBillNo(appID, app.TableName, id, curUserID); err != nil {
-		return 0, err
-	}
+	// 与「提交审核」共用 ensureBillNo，保证同一应用的单号格式与每日流水连续。
+	// 注意：取号使用独立连接/事务（见 bill_no.go 的并发注释），不能在本事务内执行，
+	// 因此这里只记录表名，待主表 + 子表事务提交后再由调用方取号。
 
 	// 子表数据插入：主表 INSERT 成功后，逐子表、逐行写入
 	for subName, rows := range subData {
@@ -863,6 +1018,10 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 			rowMap, ok := row.(map[string]interface{})
 			if !ok {
 				return 0, fmt.Errorf("子表 %s 第 %d 行数据格式错误，期望对象", subName, i+1)
+			}
+			// 全空行兜底：前端提交前已过滤，接口直调仍可能传入 [{}]，跳过以免落库空行
+			if isBlankSubRow(rowMap) {
+				continue
 			}
 
 			subColumns := []string{"`parent_id`"}
@@ -893,7 +1052,7 @@ func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface
 				strings.Join(subPlaceholders, ","),
 			)
 
-			if err := database.DB.Exec(subSQL, subArgs...).Error; err != nil {
+			if err := db.Exec(subSQL, subArgs...).Error; err != nil {
 				return 0, fmt.Errorf("插入子表 %s 数据失败: %w", subName, err)
 			}
 		}
@@ -983,7 +1142,11 @@ func deleteBusinessData(db *gorm.DB, appID, dataID uint) ([]string, error) {
 //  4. 子表数据：先清理旧数据（parent_id = dataId，有 deleted_at 软删、否则物理删），
 //     再遍历新数据逐行校验列合法性后重新 INSERT（自动填充 parent_id 及审计字段）
 func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]interface{}) error {
-	return ApplicationDataUpdateWithDB(database.DB, appID, dataID, curUserID, data)
+	// 主表 UPDATE 与子表「清旧 + 插新」必须原子完成：任一子表行失败时回滚，
+	// 否则会留下「主表已改、子表被清空/半写」的不一致状态。
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		return ApplicationDataUpdateWithDB(tx, appID, dataID, curUserID, data)
+	})
 }
 
 // ApplicationDataUpdateWithDB 与 ApplicationDataUpdate 逻辑一致，但允许传入指定 DB 句柄
@@ -1100,6 +1263,10 @@ func ApplicationDataUpdateWithDB(db *gorm.DB, appID, dataID uint, curUserID uint
 			rowMap, ok := row.(map[string]interface{})
 			if !ok {
 				return fmt.Errorf("子表 %s 第 %d 行数据格式错误，期望对象", subName, i+1)
+			}
+			// 全空行兜底：与创建一致，跳过前端/接口传入的全空行
+			if isBlankSubRow(rowMap) {
+				continue
 			}
 			subColumns := []string{"`parent_id`"}
 			subPlaceholders := []string{"?"}

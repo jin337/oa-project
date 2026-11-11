@@ -102,7 +102,7 @@ const useDeptOptions = (el, rt, pageType) => {
 
 /**
  * Input.Search 形式：输入框只读（展示已选部门名，不可手动输入），点「选择」按钮唤起弹窗，
- * 弹窗内部门树勾选单选（父子独立勾选，仅取最后勾选项；取消全部勾选后确定即清空）。
+ * 弹窗内部门树勾选单选（父子独立勾选，取本次点击的节点；取消勾选后确定即清空）。
  * value：部门 id（单选标量）；onChange：选中部门 id（未选传 ''）。
  */
 function DeptPicker({ value, onChange, options, placeholder, label, disabled }) {
@@ -174,10 +174,16 @@ function DeptPicker({ value, onChange, options, placeholder, label, disabled }) 
                 checkable
                 checkStrictly
                 checkedKeys={checkedKeys}
-                onCheck={(keys) => {
+                onCheck={(keys, info) => {
                   // checkStrictly 下父子独立勾选：keys 为 { checked, halfChecked } 或数组
                   const arr = Array.isArray(keys) ? keys : keys?.checked || []
-                  // 单选：仅保留最后勾选的节点
+                  // 单选：以本次点击的节点为准。不能取数组末项——勾选父级时若发生级联勾选，
+                  // 排在其后的子级会被误取（实测点「市场部」落成「C组」）。
+                  const triggerKey = info?.node?.key
+                  if (triggerKey !== undefined && triggerKey !== null) {
+                    setCheckedKeys(info?.checked === false ? [] : [triggerKey])
+                    return
+                  }
                   setCheckedKeys(arr.slice(-1))
                 }}
                 treeData={treeData}

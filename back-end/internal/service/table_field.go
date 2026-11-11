@@ -302,20 +302,54 @@ func TableFieldUpdate(appID uint, tableName, oldName string, req *model.TableFie
 	return getTableColumn(real, col.Name)
 }
 
-// TableFieldDelete 删除指定物理业务表（主表或子表）列（ALTER TABLE ... DROP COLUMN，不可逆）
-func TableFieldDelete(appID uint, tableName, fieldName string) error {
+// FieldReference 字段被表单元素引用的记录（用于删除拦截提示与级联结果）
+type FieldReference struct {
+	ElementID uint   `json:"element_id"`
+	Label     string `json:"label"`
+}
+
+// TableFieldDelete 删除指定物理业务表（主表或子表）列（ALTER TABLE ... DROP COLUMN，不可逆）。
+// 删除前检查表单元素引用：默认阻止并要求先处理引用；cascade=true 时先软删引用元素并清理布局，再删列。
+func TableFieldDelete(appID uint, tableName, fieldName string, cascade bool) ([]FieldReference, error) {
 	real, err := getApplicationBizTableBy(appID, tableName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !columnExists(real, fieldName) {
-		return errors.New("字段不存在")
+		return nil, errors.New("字段不存在")
 	}
 	if appFieldSystemCols[fieldName] {
-		return errors.New("系统字段不允许删除: " + fieldName)
+		return nil, errors.New("系统字段不允许删除: " + fieldName)
 	}
+
+	var refs []model.ApplicationElement
+	if err := database.DB.Where("app_id = ? AND table_key = ? AND field_key = ?", appID, tableName, fieldName).
+		Find(&refs).Error; err != nil {
+		return nil, fmt.Errorf("检查字段引用失败: %w", err)
+	}
+	if len(refs) > 0 && !cascade {
+		labels := make([]string, 0, len(refs))
+		for i := range refs {
+			labels = append(labels, fmt.Sprintf("%s(id=%d)", refs[i].Label, refs[i].ID))
+		}
+		return nil, fmt.Errorf("字段 %s 仍被 %d 个表单元素引用（%s），请先删除这些元素，或传 cascade=true 级联清理",
+			fieldName, len(refs), strings.Join(labels, "、"))
+	}
+
+	cleaned := make([]FieldReference, 0, len(refs))
+	for i := range refs {
+		el := &refs[i]
+		if err := database.DB.Delete(el).Error; err != nil {
+			return nil, fmt.Errorf("级联删除表单元素失败: %w", err)
+		}
+		if _, err := removeElementFromLayouts(appID, el.ID, el.TableKey, el.FieldKey); err != nil {
+			return nil, fmt.Errorf("级联清理布局失败: %w", err)
+		}
+		cleaned = append(cleaned, FieldReference{ElementID: el.ID, Label: el.Label})
+	}
+
 	if err := database.DB.Exec("ALTER TABLE `" + real + "` DROP COLUMN `" + fieldName + "`").Error; err != nil {
-		return fmt.Errorf("删除数据库字段失败: %w", err)
+		return nil, fmt.Errorf("删除数据库字段失败: %w", err)
 	}
-	return nil
+	return cleaned, nil
 }

@@ -25,8 +25,9 @@ import (
 //   - api 数据源型（userselect 等，value→label 需回查）→ 输出存储原值（多为 id）；
 //   - 其它 → 直接输出（nil/空 → 空串）。
 //
-// 每个子表 Sheet 首列为「所属主表单号」（主表存在 bill_no 时）或「所属主表ID」，
-// 因为多张单据的子表行汇总在同一 Sheet 内，缺少归属列将无法对应回主表记录。
+// 列标题统一为「字段名称（字段键）」，例如「金额（amount）」，主表与子表同一口径；
+// 元素未配置名称时退化为字段键本身。子表 Sheet 首列固定为 parent_id（标题即 parent_id），
+// 不再附加「所属主表」+单号列：parent_id 已能唯一回溯主表记录，单号只是主表的业务字段。
 
 const (
 	// applicationExportMaxRows 主表单次导出行数上限（对齐 ApplicationDataList 的 size 归一上限）
@@ -72,9 +73,12 @@ func ApplicationDataExport(code string, filters map[string]string, curUserID uin
 			}
 			labelMap := buildOptionLabelMap(el.DataSource)
 			field := el.FieldKey
-			title := el.Label
+			// 列标题=名称（字段键）：同时给出业务名称与对应字段，便于核对配置与二次取数
+			title := strings.TrimSpace(el.Label)
 			if title == "" {
 				title = field
+			} else {
+				title = title + "（" + field + "）"
 			}
 			cols = append(cols, exportColumn{
 				Title:  title,
@@ -103,27 +107,14 @@ func ApplicationDataExport(code string, filters map[string]string, curUserID uin
 	}
 	mainTruncated := total > int64(len(mainRows))
 
-	// 主表 id → 展示标识（单号优先），供子表 Sheet 归属列回填
-	ownerKeyByID := make(map[string]string, len(mainRows))
+	// 主表 id 集合：子表按 parent_id IN (...) 分批关联；parent_id 自身即子表 Sheet 的首列
 	mainIDs := make([]string, 0, len(mainRows))
-	billNoRows := 0
 	for _, row := range mainRows {
 		id := normalizeExportScalar(row["id"])
 		if id == "" {
 			continue
 		}
 		mainIDs = append(mainIDs, id)
-		if billNo := normalizeExportScalar(row["bill_no"]); billNo != "" {
-			ownerKeyByID[id] = billNo
-			billNoRows++
-		} else {
-			ownerKeyByID[id] = id
-		}
-	}
-	// 全部主表行都有单号时，归属列展示单号（可读）；否则退回主表 id，避免部分行只能看到 id 却标为「单号」
-	ownerTitle := "所属主表ID"
-	if len(mainIDs) > 0 && billNoRows == len(mainIDs) {
-		ownerTitle = "所属主表单号"
 	}
 
 	// 渲染多 Sheet：工作表名一律用物理表名（与数据库表一一对应，主表/子表口径统一）
@@ -148,22 +139,24 @@ func ApplicationDataExport(code string, filters map[string]string, curUserID uin
 		if len(subCols) == 0 {
 			continue // 子表未配置任何字段，跳过空 Sheet
 		}
-		rows, truncated, err := fetchSubTableRows(bizTableName(sub), mainIDs, ownerKeyByID)
+		rows, truncated, err := fetchSubTableRows(bizTableName(sub), mainIDs)
 		if err != nil {
 			return nil, "", err
 		}
 		if truncated {
 			subTruncated = true
 		}
-		ownerCol := exportColumn{
-			Title:  ownerTitle,
-			Render: func(row map[string]interface{}) string { return normalizeExportScalar(row["__owner"]) },
-		}
+		// 子表只额外输出 parent_id 关键列并置于首列；不再附加「所属主表」+单号列，
+		// 避免同一条关联信息以两种标题重复出现
+		ownerCols := []exportColumn{{
+			Title:  "parent_id",
+			Render: func(row map[string]interface{}) string { return normalizeExportScalar(row["parent_id"]) },
+		}}
 		sheetName := uniqueSheetName(used, bizTableName(sub))
 		if _, err := f.NewSheet(sheetName); err != nil {
 			return nil, "", fmt.Errorf("创建工作表 %s: %w", sheetName, err)
 		}
-		if err := writeExportSheet(f, sheetName, append([]exportColumn{ownerCol}, subCols...), rows); err != nil {
+		if err := writeExportSheet(f, sheetName, append(ownerCols, subCols...), rows); err != nil {
 			return nil, "", err
 		}
 	}
@@ -184,7 +177,7 @@ func ApplicationDataExport(code string, filters map[string]string, curUserID uin
 }
 
 // writeExportSheet 写入一个工作表：表头 + 数据行 + 列宽 + 冻结首行。
-// rows 中的键为目标表物理列名；归属主表列（parent_id 对应单号）在取数阶段已回填为 __owner 键。
+// rows 中的键为目标表物理列名，列 Render 按列自身取值，不再依赖额外的归属回填字段。
 func writeExportSheet(f *excelize.File, sheet string, cols []exportColumn, rows []map[string]interface{}) error {
 	headers := make([]string, len(cols))
 	for i, c := range cols {
@@ -225,8 +218,7 @@ func writeExportSheet(f *excelize.File, sheet string, cols []exportColumn, rows 
 }
 
 // fetchSubTableRows 按 parent_id 关联取子表行（分批查询，行数超上限则截断）。
-// 每行回填 __owner（归属主表单号/ID）供首列渲染。
-func fetchSubTableRows(subReal string, mainIDs []string, ownerKeyByID map[string]string) ([]map[string]interface{}, bool, error) {
+func fetchSubTableRows(subReal string, mainIDs []string) ([]map[string]interface{}, bool, error) {
 	colSet, err := queryColumnSet(subReal)
 	if err != nil {
 		return nil, false, err
@@ -265,12 +257,6 @@ func fetchSubTableRows(subReal string, mainIDs []string, ownerKeyByID map[string
 				break
 			}
 			stripAuditFields(row)
-			pid := normalizeExportScalar(row["parent_id"])
-			if owner, ok := ownerKeyByID[pid]; ok {
-				row["__owner"] = owner
-			} else {
-				row["__owner"] = pid
-			}
 			rows = append(rows, row)
 		}
 		if truncated {

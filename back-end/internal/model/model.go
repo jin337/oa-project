@@ -578,7 +578,7 @@ type ApplicationElement struct {
 	ValidationRule    string                 `gorm:"size:255;comment:校验规则" json:"validation_rule"`
 	ValidationMessage string                 `gorm:"size:255;comment:错误提示" json:"validation_message"`
 	Visibility        map[string]interface{} `gorm:"serializer:json;type:json;comment:列表与搜索行为" json:"visibility"`
-	DynamicStates     map[string]interface{} `gorm:"serializer:json;type:json;comment:动态状态控制" json:"dynamic_states"`
+	DynamicStates     JSONMap                `gorm:"type:json;comment:动态状态控制" json:"dynamic_states"`
 	DataSource        map[string]interface{} `gorm:"serializer:json;type:json;comment:数据源配置" json:"data_source"`
 	Actions           map[string]interface{} `gorm:"serializer:json;type:json;comment:事件驱动配置" json:"actions"`
 }

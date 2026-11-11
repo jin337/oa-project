@@ -27,6 +27,7 @@ import (
 
 	"back-end/internal/database"
 	"back-end/internal/model"
+	"back-end/internal/pkg/logger"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -771,6 +772,7 @@ func runEndEventSQL(tx *gorm.DB, instance *model.ApprovalInstance, appName strin
 		return
 	}
 	if err := validateEndEventSQL(tpl); err != nil {
+		logger.Errorf("[end-event] 实例 %d 事件 SQL 校验失败: %v | sql=%s", instance.ID, err, tpl)
 		notifyCreate(tx, model.Notification{
 			UserID:     instance.CreatedBy,
 			Type:       4,
@@ -783,6 +785,7 @@ func runEndEventSQL(tx *gorm.DB, instance *model.ApprovalInstance, appName strin
 	// 加载业务数据作为 form 上下文
 	formData, err := ApplicationDataDetail(instance.AppID, instance.BusinessDataID, &model.ApplicationDataDetailReq{})
 	if err != nil || formData == nil {
+		logger.Errorf("[end-event] 实例 %d 读取业务数据失败: %v", instance.ID, err)
 		notifyCreate(tx, model.Notification{
 			UserID:     instance.CreatedBy,
 			Type:       4,
@@ -795,6 +798,7 @@ func runEndEventSQL(tx *gorm.DB, instance *model.ApprovalInstance, appName strin
 	vars := map[string]interface{}{"form": formData}
 	finalSQL, args, err := resolveSQLPlaceholders(tpl, vars)
 	if err != nil {
+		logger.Errorf("[end-event] 实例 %d 占位符解析失败: %v", instance.ID, err)
 		notifyCreate(tx, model.Notification{
 			UserID:     instance.CreatedBy,
 			Type:       4,
@@ -808,6 +812,7 @@ func runEndEventSQL(tx *gorm.DB, instance *model.ApprovalInstance, appName strin
 	defer cancel()
 	res := tx.WithContext(ctx).Exec(finalSQL, args...)
 	if res.Error != nil {
+		logger.Errorf("[end-event] 实例 %d 执行失败: %v | sql=%s", instance.ID, res.Error, finalSQL)
 		notifyCreate(tx, model.Notification{
 			UserID:     instance.CreatedBy,
 			Type:       4,
@@ -848,12 +853,16 @@ func validateEndEventSQL(tpl string) error {
 	lower := strings.ToLower(tpl)
 	for _, kw := range []string{
 		"drop", "truncate", "rename", "grant", "revoke", "exec ", "execute ", "call ",
-		"begin", "commit", "rollback", "set ",
+		"begin", "commit", "rollback",
 		"into outfile", "into dumpfile", "load_file", "sleep(", "benchmark(",
 	} {
 		if strings.Contains(lower, kw) {
 			return errors.New("包含禁用关键字：" + strings.TrimSpace(kw))
 		}
+	}
+	// 仅禁止 SET 变量赋值（SET @x / SET @@global.x），不误伤标准 UPDATE ... SET
+	if setVarRe.MatchString(lower) {
+		return errors.New("禁止 SET 变量赋值")
 	}
 	// 占位符仅 ${form.xxx}
 	anyPhRe := regexp.MustCompile(`\$\{[^}]+\}`)
@@ -863,7 +872,9 @@ func validateEndEventSQL(tpl string) error {
 		}
 	}
 	first := strings.ToUpper(m[1])
-	if first == "INSERT" || first == "UPDATE" || first == "DELETE" {
+	// 仅 UPDATE / DELETE 强制 WHERE：INSERT ... VALUES 语法上不存在 WHERE，
+	// 对其强制 WHERE 会把合法的插入写回全部判为「全表操作」。
+	if first == "UPDATE" || first == "DELETE" {
 		if !sqlWhereRe.MatchString(tpl) {
 			return errors.New(first + " 语句必须包含 WHERE 条件，禁止全表操作")
 		}

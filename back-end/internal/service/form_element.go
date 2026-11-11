@@ -84,7 +84,7 @@ func ApplicationElementList(appID uint, req *model.ApplicationElementListReq) ([
 			DefaultValue:   el.DefaultValue,
 			ValidationRule: el.ValidationRule,
 			Visibility:     el.Visibility,
-			DynamicStates:  el.DynamicStates,
+			DynamicStates:  map[string]interface{}(el.DynamicStates),
 			DataSource:     el.DataSource,
 			Actions:        el.Actions,
 		})
@@ -137,7 +137,7 @@ func ApplicationElementCreate(curUserID, appID uint, req *model.ApplicationEleme
 		DefaultValue:   req.DefaultValue,
 		ValidationRule: req.ValidationRule,
 		Visibility:     req.Visibility,
-		DynamicStates:  req.DynamicStates,
+		DynamicStates:  model.JSONMap(req.DynamicStates),
 		DataSource:     req.DataSource,
 		Actions:        req.Actions,
 	}
@@ -180,7 +180,7 @@ func ApplicationElementUpdate(curUserID, appID, id uint, req *model.ApplicationE
 		el.Visibility = req.Visibility
 	}
 	if req.DynamicStates != nil {
-		el.DynamicStates = req.DynamicStates
+		el.DynamicStates = model.JSONMap(req.DynamicStates)
 	}
 	if req.DataSource != nil {
 		el.DataSource = req.DataSource
@@ -206,11 +206,18 @@ func ApplicationElementUpdate(curUserID, appID, id uint, req *model.ApplicationE
 	return &el, nil
 }
 
-// ApplicationElementDelete 删除表单元素（软删除）
+// ApplicationElementDelete 删除表单元素（软删除），并清理各版本布局中的引用与子表列，
+// 避免删除后布局仍保留悬空元素、再保存时把脏数据写回草稿。
 func ApplicationElementDelete(appID, id uint) error {
 	var el model.ApplicationElement
 	if err := database.DB.Where("id = ? AND app_id = ?", id, appID).First(&el).Error; err != nil {
 		return errors.New("表单元素不存在")
 	}
-	return database.DB.Delete(&el).Error
+	if err := database.DB.Delete(&el).Error; err != nil {
+		return err
+	}
+	if _, err := removeElementFromLayouts(appID, el.ID, el.TableKey, el.FieldKey); err != nil {
+		return err
+	}
+	return nil
 }
