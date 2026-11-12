@@ -1,4 +1,4 @@
-import { Button, Checkbox, Drawer, Radio, Select } from '@arco-design/web-react'
+import { Button, Checkbox, Drawer, Message, Radio, Select } from '@arco-design/web-react'
 import { IconClose, IconPlus } from '@arco-design/web-react/icon'
 import { useMemo, useState } from 'react'
 import { PersonPicker } from 'src/components/PersonSelectorModal'
@@ -47,8 +47,10 @@ export function ApproverEditDrawer({
   const [selfSelect, setSelfSelect] = useState(node.selfSelect || 1)
   // 审批方式：1-依次审批 / 2-会签 / 3-或签
   const [strategy, setStrategy] = useState(node.strategy || 1)
-  // 审批人为空处理：1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员
-  const [emptyHandler, setEmptyHandler] = useState(node.emptyHandler || 1)
+  // 审批人为空处理：2-自动拒绝 / 3-转交流程管理员 / 4-指定人员（1-自动通过已废止）
+  const [emptyHandler, setEmptyHandler] = useState(
+    [2, 3, 4].includes(node.emptyHandler) ? node.emptyHandler : 2,
+  )
   const [emptyMembers, setEmptyMembers] = useState(normalizeMembers(node.emptyMembers))
   // 审批人操作权限数组元素：1-不同意/退回 / 2-转交 / 3-加签
   const [permissions, setPermissions] = useState(node.permissions || [1])
@@ -117,7 +119,16 @@ export function ApproverEditDrawer({
           <Button onClick={onCancel}>取消</Button>
           <Button
             type="primary"
-            onClick={() =>
+            onClick={() => {
+              // 空审批人不允许保存：发起人自选在提交时选人，其余类型必须在配置时选足
+              if (approverType !== 3 && members.length === 0) {
+                Message.error('审批对象不能为空，请选择审批人')
+                return
+              }
+              if (emptyHandler === 4 && emptyMembers.length === 0) {
+                Message.error('审批人为空时需指定兜底人员')
+                return
+              }
               onSave({
                 ...node,
                 approverType,
@@ -129,7 +140,7 @@ export function ApproverEditDrawer({
                 permissions,
                 fieldPerms,
               })
-            }
+            }}
           >
             保存
           </Button>

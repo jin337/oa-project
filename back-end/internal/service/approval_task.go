@@ -3,14 +3,14 @@ package service
 // ============================================================
 // 审批任务流转引擎
 // ============================================================
-// 覆盖：首个节点任务生成（generateTasksForCurrentNode）、空审批人自动通过
-// （handleAutoPassNode）、节点间推进（advanceToNextNode）、流程终结
+// 覆盖：首个节点任务生成（generateTasksForCurrentNode）、空审批人拒绝
+// （handleAutoPassNode 已废止）、节点间推进（advanceToNextNode）、流程终结
 // （finishInstance）、审批操作（ApprovalTaskApprove / ApprovalTaskDelegate）。
 //
 // 节点语义：
 //   - type=2（审批人）：生成审批待办任务，审批方式由 strategy 决定
 //   - type=3（抄送人）：不生成待办任务，直接推进到下一节点
-//   - 审批人为空且 emptyHandler=1：按配置自动通过当前节点（递归推进）
+//   - 审批人为空：不再自动通过；运行时按自动拒绝处理（提交前已做完整性校验）
 //
 // 所有操作必须在调用方提供的事务内执行，保证实例状态与任务数据一致。
 // ============================================================
@@ -213,8 +213,8 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 			emptyAdminFallback = true
 		case 4: // 指定人员但未解析到任何人：视为配置缺陷，拒绝放行
 			return finishInstance(tx, instance, model.InstanceStatusRejected, "指定审批人未配置，自动拒绝", curUserID)
-		default: // 1-自动通过（默认）
-			return advanceToNextNodeWith(tx, instance, allNodes, curUserID, "自动通过")
+		default: // 1-自动通过（历史配置）已废止：空审批人不允许静默推进
+			return finishInstance(tx, instance, model.InstanceStatusRejected, "审批人为空，自动拒绝", curUserID)
 		}
 	}
 

@@ -1936,6 +1936,10 @@ func PublishApplicationVersion(appID uint, curUserID uint, req *ApplicationVersi
 	if err != nil {
 		return nil, err
 	}
+	// 发布前校验审批流完整性：审批节点必须有审批人，空审批人不允许进入生效版本。
+	if err := validateApprovalFlowApprovers(draft.ApprovalFlowJSON); err != nil {
+		return nil, err
+	}
 	effectiveAt := time.Now()
 	if req.EffectiveAt != nil && req.EffectiveAt.After(effectiveAt) {
 		effectiveAt = *req.EffectiveAt
@@ -2134,6 +2138,10 @@ func RepublishApplicationVersion(appID, versionID uint, remark string, effective
 	var ver model.ApplicationVersion
 	if err := database.DB.Where("id = ? AND application_id = ?", versionID, appID).First(&ver).Error; err != nil {
 		return nil, errors.New("版本不存在")
+	}
+	// 再次发布已有版本同样要拦截空审批人配置
+	if err := validateApprovalFlowApprovers(ver.ApprovalFlowJSON); err != nil {
+		return nil, err
 	}
 	now := time.Now()
 	eff := now

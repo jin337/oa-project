@@ -302,6 +302,11 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		return nil, err
 	}
 
+	// 0.5 写库前先校验候选表单数据：直接调接口提交时，不完整数据不应先落业务表再失败。
+	if err := validateSubmitPayloadBeforeWrite(req); err != nil {
+		return nil, err
+	}
+
 	// 1. 解析业务数据 ID（支持自动创建）
 	if _, err := resolveBusinessDataID(curUserID, req); err != nil {
 		return nil, err
@@ -313,8 +318,18 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		return nil, err
 	}
 
+	// 2.5 后端提交前校验：按当前生效表单配置校验必填/正则/子表必填列，
+	// 防止绕过前端提交前事件后直接调接口提交不完整数据。
+	if err := validateSubmitFormData(&ctx.app, ctx.formData); err != nil {
+		return nil, err
+	}
+
 	// 3. 发起人自选节点必须已选择审批人
 	if err := validateSelfSelectApprovers(ctx); err != nil {
+		return nil, err
+	}
+	// 3.5 当前执行路径上的审批节点必须有实际审批人；空审批人不再自动通过
+	if err := validateExecutionPathApprovers(ctx.injectedNodes, ctx.execPath); err != nil {
 		return nil, err
 	}
 
@@ -529,6 +544,10 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 	}
 
 	// 2.5 同步编辑抽屉中修改的表单数据（一步提交，不再先调 /draft 落库）
+	// 写库前先校验候选值，避免不完整数据先更新业务表再失败。
+	if err := validateSubmitCandidate(instance.AppID, instance.BusinessDataID, req.BusinessData); err != nil {
+		return nil, err
+	}
 	if len(req.BusinessData) > 0 {
 		if err := ApplicationDataUpdateWithDB(database.DB, instance.AppID, instance.BusinessDataID, curUserID, req.BusinessData); err != nil {
 			return nil, fmt.Errorf("更新业务数据失败: %w", err)
@@ -541,8 +560,17 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		return nil, err
 	}
 
+	// 3.5 后端提交前校验：草稿保存阶段允许不完整，正式提交时必须满足表单约束。
+	if err := validateSubmitFormData(&ctx.app, ctx.formData); err != nil {
+		return nil, err
+	}
+
 	// 4. 发起人自选节点必须已选择审批人
 	if err := validateSelfSelectApprovers(ctx); err != nil {
+		return nil, err
+	}
+	// 4.5 当前执行路径上的审批节点必须有实际审批人；空审批人不再自动通过
+	if err := validateExecutionPathApprovers(ctx.injectedNodes, ctx.execPath); err != nil {
 		return nil, err
 	}
 
@@ -624,6 +652,39 @@ func ApprovalInstanceResubmit(curUserID uint, instanceID uint, req *model.Approv
 		return nil, err
 	}
 	instance = *owned
+
+	// 1.5 后端提交前校验：重新提交同样可能被直接调接口绕过前端事件，
+	// 用实例冻结的表单快照校验「库内现值 + 本次修改值」。
+	var app model.Application
+	if err := database.DB.First(&app, instance.AppID).Error; err != nil {
+		return nil, errors.New("页面配置不存在")
+	}
+	if layout, ok := instance.FormLayoutJSON.(map[string]interface{}); ok {
+		app.FormLayoutJSON = layout
+	}
+	candidate, err := ApplicationDataDetail(instance.AppID, instance.BusinessDataID, &model.ApplicationDataDetailReq{})
+	if err != nil {
+		return nil, fmt.Errorf("读取业务数据快照失败: %w", err)
+	}
+	if req != nil {
+		for k, v := range req.BusinessData {
+			candidate[k] = v
+		}
+	}
+	if err := validateSubmitFormData(&app, candidate); err != nil {
+		return nil, err
+	}
+
+	// 1.6 重新评估执行路径，并校验路径上的审批节点都有实际审批人。
+	// 退回后可能修改了表单触发另一条分支，不能沿用旧路径的判断。
+	nodes, err := parseFlowNodes(instance.ApprovalFlowJSON)
+	if err != nil {
+		return nil, err
+	}
+	execPath := flattenExecutionPath(nodes, candidate)
+	if err := validateExecutionPathApprovers(nodes, execPath); err != nil {
+		return nil, err
+	}
 
 	err = withNotify(func(tx *gorm.DB) error {
 		// 1. 更新业务表单数据（发起人修改，可选）
