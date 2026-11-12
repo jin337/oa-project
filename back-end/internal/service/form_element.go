@@ -20,6 +20,18 @@ func checkApplicationElementTableKey(appID uint, tableKey string) error {
 	return nil
 }
 
+// checkApplicationElementFieldExists 校验 field_key 必须是分类表上的真实列，
+// 防止元素引用不存在的字段。
+func checkApplicationElementFieldExists(tableKey, fieldKey string) error {
+	if tableKey == "" || fieldKey == "" {
+		return nil
+	}
+	if !columnExists(bizTableName(tableKey), fieldKey) {
+		return errors.New("对应字段不存在：" + fieldKey)
+	}
+	return nil
+}
+
 // checkApplicationElementUniqueField 同一页面配置下，同一字段分类(table_key)内字段标识(field_key)唯一
 func checkApplicationElementUniqueField(appID uint, tableKey, fieldKey string, excludeID uint) error {
 	if tableKey == "" || fieldKey == "" {
@@ -123,6 +135,9 @@ func ApplicationElementCreate(curUserID, appID uint, req *model.ApplicationEleme
 	if err := checkApplicationElementTableKey(appID, req.TableKey); err != nil {
 		return nil, err
 	}
+	if err := checkApplicationElementFieldExists(req.TableKey, req.FieldKey); err != nil {
+		return nil, err
+	}
 	if err := checkApplicationElementUniqueField(appID, req.TableKey, req.FieldKey, 0); err != nil {
 		return nil, err
 	}
@@ -195,6 +210,9 @@ func ApplicationElementUpdate(curUserID, appID, id uint, req *model.ApplicationE
 	}
 	if req.TableKey != "" {
 		finalTableKey = req.TableKey
+	}
+	if err := checkApplicationElementFieldExists(finalTableKey, finalFieldKey); err != nil {
+		return nil, err
 	}
 	if err := checkApplicationElementUniqueField(appID, finalTableKey, finalFieldKey, el.ID); err != nil {
 		return nil, err
