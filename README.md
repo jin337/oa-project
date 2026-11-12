@@ -1,106 +1,133 @@
-# OA 低代码审批系统（full-stack-project）
+# OA 低代码审批系统
 
-> 前后端一体化的低代码审批平台：动态表单 + 流程编排 + 审批工作台 + 接口管理
+> 配置驱动的 OA 平台：动态表单 + 流程编排 + 审批工作台 + 接口管理，前后端一体化实现。
+
+---
 
 ## 目录
 
 - [项目简介](#项目简介)
+- [核心技术栈](#核心技术栈)
 - [仓库结构](#仓库结构)
-- [技术栈总览](#技术栈总览)
-- [功能模块](#功能模块)
-- [快速开始](#快速开始)
-- [配置说明](#配置说明)
+- [环境依赖](#环境依赖)
+- [本地开发与运行](#本地开发与运行)
+- [配置文件说明](#配置文件说明)
 - [构建与部署](#构建与部署)
+- [功能模块](#功能模块)
 - [核心机制](#核心机制)
-- [关键设计决策](#关键设计决策)
+- [常见问题](#常见问题)
 - [文档导航](#文档导航)
+
+---
 
 ## 项目简介
 
-本仓库为 OA 管理系统的完整前后端实现，采用「配置驱动」的低代码思路：在不改代码的前提下，通过**流程配置**模块完成「建应用 → 配字段 → 配表单 → 配布局 → 配审批流 → 发起审批」的全链路闭环。
+本仓库是一个完整可运行的 OA 审批系统，核心思路是**配置驱动**：不改代码，通过「流程配置」模块完成 **建应用 → 配业务表 → 配表单元素 → 拖拽布局 → 配审批流 → 发起审批** 的全链路闭环。
 
-仓库由两个子项目组成：
+| 能力 | 说明 |
+| --- | --- |
+| 动态表单 | 表单与详情页由后端布局 JSON 驱动渲染，支持数据源、联动赋值、显隐/禁用表达式、校验规则、主子表 |
+| 流程编排 | 可视化流程画布，审批人支持指定人员 / 角色 / 发起人自选 / 审核人员组，节点支持依次、会签、或签 |
+| 审批工作台 | 发起、待办、我的发起、经我处理、抄送我的、草稿箱，支持同意 / 退回 / 拒绝 / 加签 / 转交 / 撤回 / 催办 |
+| 接口管理 | SQL 直查与 HTTP 转发双模式，统一分发端点对外暴露，表单元素可直接引用 |
+| 系统管理 | 用户、角色、菜单、部门、审核人员组、操作审计，菜单与按钮级权限 + 五档数据权限 |
+| 实时通知 | 待办 / 退回 / 抄送 / 结果事件经 SSE 推送，多标签页同步未读数 |
 
-| 子项目 | 说明 | 端口 |
+仓库由两个独立子项目组成，各自有完整文档：
+
+| 子项目 | 角色 | 默认端口 |
 | --- | --- | --- |
-| `back-end` | Go + Gin + GORM 后端服务，提供 RESTful API、动态业务数据读写、审批状态机、SSE 实时通知 | 8180 |
-| `front-end` | React 19 + Vite + Arco Design 前端 SPA，承接全部业务界面与动态表单运行时 | 8181 |
+| [`back-end`](back-end/README.md) | Go + Gin + GORM 服务端：REST API、动态数据读写、审批状态机、SSE、后台任务 | `8180` |
+| [`front-end`](front-end/README.md) | React 19 + Vite + Arco Design 单页应用：全部业务界面与表单运行时 | `8181` |
+
+---
+
+## 核心技术栈
+
+| 层 | 技术 | 版本 | 用途 |
+| --- | --- | --- | --- |
+| 后端语言 | Go | 1.26.2 | 服务端，handler / service / model 分层 |
+| Web 框架 | Gin | v1.12.0 | 路由分组、中间件链 |
+| ORM | GORM | v1.31.2 | MySQL 访问、版本化自动迁移 |
+| 鉴权 | golang-jwt/jwt | v5.3.1 | HS256 Bearer Token |
+| 参数校验 | go-playground/validator | v10.30.3 | 请求体校验与中文错误翻译 |
+| 数据导入导出 | excelize | v2.11.1 | Excel 导入导出 |
+| 数据库 | MySQL | 5.7+ | utf8mb4，表统一 `oa_` 前缀 |
+| 前端框架 | React | 19.2 | 函数组件 + Hooks |
+| 构建工具 | Vite | 8.2 | 开发服务器、分包、gzip/brotli 预压缩 |
+| 路由 | react-router-dom | 7.18 | 菜单树驱动动态路由、页面懒加载 |
+| 组件库 | Arco Design | 2.66 | 表格、表单、抽屉、时间线、流程画布 |
+| 样式 | Tailwind CSS | 4.1 | 原子化样式 |
+| HTTP | axios | 1.7 | 统一实例、拦截器、Token 注入 |
+| 测试 | Vitest / go test | 5.0 / 标准库 | 前后端单测与 CI 门禁 |
+| CI | GitHub Actions | - | 格式、静态检查、测试、构建 |
+
+---
 
 ## 仓库结构
 
-```
+```text
 full-stack-project/
-├── back-end/                 # 后端服务（Go/Gin/GORM/MySQL）
-│   ├── cmd/server/           #   入口：配置 → 日志 → 数据库 → 迁移 → 路由 → 优雅停机
-│   ├── configs/              #   环境配置（config-{dev,test,prod}.yaml，APP_ENV 切换）
-│   ├── internal/             #   config / database / middleware / model / router / handler / service / pkg
-│   ├── uploads/              #   上传文件存储根目录（按 app_code 分目录）
-│   ├── Taskfile.yml          #   任务封装（run-dev / build / test / package 等）
-│   └── README.md             #   后端完整文档（接口清单 / 核心机制 / 部署）
-├── front-end/                # 前端 SPA（React/Vite/Arco/Tailwind）
+├── back-end/                     # 后端服务（Go / Gin / GORM / MySQL）
+│   ├── cmd/server/               #   入口：配置 → 日志 → 数据库 → 迁移 → 路由 → 后台任务 → 优雅停机
+│   ├── configs/                  #   config-dev.yaml / config-test.yaml / config-prod.yaml
+│   ├── internal/
+│   │   ├── config/               #     配置加载与默认值
+│   │   ├── database/             #     连接、建库、版本化迁移与初始化数据
+│   │   ├── middleware/           #     JWT、CORS、超时、限流、安全头、数据权限、操作审计
+│   │   ├── model/                #     GORM 模型
+│   │   ├── handler/              #     HTTP 控制器
+│   │   ├── service/              #     业务逻辑（审批、通知、导出等）
+│   │   ├── router/               #     路由装配与各模块注册
+│   │   ├── pkg/                  #     idgen / logger / response / vtrans
+│   │   └── test/                 #     Go 单元与集成测试
+│   ├── logs/                     #   运行日志（app-{env}.log / gin.log / migrate-{env}.log）
+│   ├── uploads/                  #   上传文件（按 app_code 分目录）
+│   ├── bin/                      #   发布构建产物
+│   ├── Taskfile.yml              #   task run / build / package / test / vet / clean
+│   └── README.md                 #   后端完整文档
+├── front-end/                    # 前端 SPA（React / Vite / Arco / Tailwind）
 │   ├── src/
-│   │   ├── pages/            #   页面：system / application（流程配置）/ approval / interface 等
-│   │   ├── api/              #   接口封装（统一 axios 实例）
-│   │   ├── components/       #   布局、权限按钮、通知铃铛等
-│   │   ├── store/            #   AuthContext / TabContext
-│   │   ├── utils/ hooks/ test/
-│   │   └── router.jsx        #   菜单树驱动的动态路由
-│   ├── vite.config.js        #   8181 端口 + /v1/api 代理 + 构建分包/预压缩
-│   └── README.md             #   前端完整文档（核心机制 / 配置 / 部署）
-└── README.md                 # 本文件（仓库总览）
+│   │   ├── api/                  #     axios 实例与按模块封装的接口
+│   │   ├── components/           #     通用组件
+│   │   ├── config/               #     应用名、页签缓存策略
+│   │   ├── pages/                #     application / approval / interface / layout / notification / profile / system
+│   │   ├── store/                #     auth-context / tab-context
+│   │   ├── utils/ hooks/ test/   #     工具、Hooks、单测
+│   │   ├── views/                #     Login 与 MainLayout
+│   │   └── router.jsx            #     菜单树驱动的路由与 PAGE_MAP
+│   ├── web/                      #   生产构建产物
+│   ├── .env.development          #   开发环境变量
+│   ├── .env.production           #   生产环境变量
+│   ├── vite.config.js            #   端口、代理、分包、压缩、标题注入
+│   └── README.md                 #   前端完整文档
+├── .github/workflows/ci.yml      # CI：后端 gofmt/vet/build/test，前端 lint/test/build
+└── README.md                     # 本文件（项目总览）
 ```
 
-## 技术栈总览
+---
 
-| 层 | 技术 | 版本要点 | 说明 |
-| --- | --- | --- | --- |
-| 后端语言 | Go | 1.26.2 | `go.mod` 声明，工程化分层（handler / service / model） |
-| Web 框架 | Gin | v1.12.0 | 路由分组 + 中间件链（JWT / CORS / 超时 / 数据权限 / recovery） |
-| ORM | GORM | v1.31.2 | MySQL 驱动，版本化自动迁移（`migrate_versions`） |
-| 鉴权 | golang-jwt/jwt | v5.3.1 | HS256，`Authorization: Bearer <token>` |
-| 前端框架 | React | ^19.2.8 | 函数组件 + Hooks，react-19-adapter 适配 Arco |
-| 构建 | Vite | ^8.2.2 | 8181 端口，分包 + gzip/brotli 预压缩 |
-| 组件库 | Arco Design | ^2.66.16 | 表格 / 表单 / 抽屉 / 时间线 / 流程画布 |
-| 样式 | Tailwind CSS | ^4.1.4 | 原子化 CSS + Prettier 类名排序 |
-| 数据库 | MySQL | ≥ 5.7 | 库 `oa_test`，表统一 `oa_` 前缀，utf8mb4 |
+## 环境依赖
 
-## 功能模块
-
-```
-系统管理（system）
-├── 用户管理 / 角色管理 / 菜单管理 / 部门管理
-└── 审核人员组（/system/examine）——可复用的审核人集合，审批人 / 抄送对象均可引用
-
-流程配置（application，/application*）
-├── 流程配置页（应用 CRUD，编码 app_<毫秒base32>_<随机base32>）
-├── 表管理（业务表结构：字段 / 类型 / 长度）
-├── 表单元素管理（元素库 + 数据源 / 事件联动 / 校验，可引用接口管理）
-├── 布局管理（表单页 / 详情页双模式可视化拖拽）
-└── 审批管理（发起人范围 + 流程画布：指定人员/角色/发起人自选/审核人员组，依次/会签/或签）
-
-审批工作台（approval，/approval*）
-├── 发起申请 / 我的待办 / 我的发起 / 经我处理 / 抄送我的 / 草稿箱
-└── 审批详情（业务表单 + 流程时间线 + 状态印章）
-
-接口管理（/interface）
-├── SQL 直查 / HTTP 转发双模式定义，统一分发端点 /v1/api/interfaces/*path 对外暴露
-├── 试调、一键导入后端路由（注释即名称）、被引用统计防误删
-```
-
-## 快速开始
-
-### 环境依赖
-
-| 依赖 | 版本要求 | 说明 |
+| 依赖 | 版本要求 | 用途 |
 | --- | --- | --- |
-| Go | ≥ 1.26 | 后端编译运行 |
-| MySQL | ≥ 5.7 | 库不存在时后端自动创建 |
-| Node.js | `^20.19.0 \|\| >=22.12.0` | 前端 Vite 8 要求，推荐 22 LTS |
-| task / air（可选） | 最新 | 后端任务封装与热重载 |
+| Go | 1.26.2（与 `go.mod` 一致） | 后端编译运行 |
+| MySQL | 5.7+（推荐 8.0） | 业务库，库不存在时后端自动创建 |
+| Node.js | ≥ 20.19，推荐 22 LTS（CI 使用 24） | 前端 Vite 8 要求 |
+| npm | ≥ 10 | 前端依赖与构建 |
+| Task | 最新（可选） | 后端任务封装，`winget install go-task.go-task` |
+| air | 最新（可选） | 后端热重载，`task run-dev` 依赖 |
+| UPX | 最新（可选） | `task package` 压缩可执行文件 |
+
+数据库需支持 `utf8mb4`；后端启动时自动 `CREATE DATABASE IF NOT EXISTS`，只需保证账号有建库、建表权限。
+
+---
+
+## 本地开发与运行
 
 ### 1. 准备数据库
 
-编辑 `back-end/configs/config-dev.yaml` 的 `mysql` 段（默认连接本机 3306，库自动创建）：
+编辑 `back-end/configs/config-dev.yaml` 的 `mysql` 段（默认 `127.0.0.1:3306`，库 `oa_test` 自动创建）：
 
 ```yaml
 mysql:
@@ -116,11 +143,12 @@ mysql:
 
 ```bash
 cd back-end
-task run-dev        # 推荐：air 热重载开发
+task run          # 默认 APP_ENV=dev
 # 或 go run ./cmd/server
+# 或 task run-dev（需已安装 air，保存即重启）
 ```
 
-首次启动自动完成建库、迁移与初始化数据（默认管理员 **admin / admin123**）。
+首次以 `migrate.mode: full` 启动会建表并写入初始化数据（超级管理员 **admin / admin123**、基础菜单与部门）；之后启动按 `migrate_versions` 记录跳过已应用的迁移，不会重复写入。
 
 ### 3. 启动前端（8181）
 
@@ -130,146 +158,228 @@ npm install
 npm run dev
 ```
 
-浏览器访问 `http://localhost:8181/` 登录即可联调；开发环境 `/v1/api`、`/uploads` 由 Vite 代理到后端 8180。
+Vite 固定 `8181` 端口（`strictPort`），自动打开浏览器，并把 `/v1/api`、`/uploads`、`/health` 代理到 `8180`。
 
-> **API 前缀（版本号）**：唯一真值 = 后端 `back-end/configs/config-*.yaml` 的 `server.api_prefix` + 前端 `front-end/.env.*` 的 `VITE_API_PREFIX`（均默认 `/v1/api`）。版本号变更（如 v1 → v2）只改这两处配置 + Nginx 反代路径，代码零改动。
+### 4. 验证服务
 
-## 配置说明
+```bash
+# 后端健康检查：HTTP 200 + code=0 表示进程在线，db_status=ok 表示数据库可用
+curl http://127.0.0.1:8180/
 
-| 项目 | 配置文件 | 说明 |
-| --- | --- | --- |
-| 后端 | `back-end/configs/config-{dev,test,prod}.yaml` | 环境变量 `APP_ENV` 切换（默认 dev）；服务端口、JWT 密钥/有效期、日志、CORS、连接池、迁移开关均在此配置 |
-| 前端 | `front-end/vite.config.js` | 8181 端口、`/api` 代理目标、构建分包与预压缩 |
-| 前端 | `front-end/src/config/app.js` | 系统名称、登录页文案、表单元素类型选项、字段宽度选项 |
-| 仓库 | `.gitignore` | 忽略 `node_modules`、`dist`、`bin/`、`logs/`、`uploads/` 等 |
+# 前端
+# 浏览器打开 http://localhost:8181/，使用 admin / admin123 登录
+```
 
-> 两个子项目均不使用 `.env` 文件；后端地址差异通过前端 `vite.config.js` 代理与后端 `APP_ENV` 分别管理。
+### 5. 启动顺序与停止
 
-## 构建与部署
+推荐顺序：**MySQL → 后端 → 前端**。停止时先停前端，再向后端发送 `Ctrl+C`（等价 `SIGINT`/`SIGTERM`），后端会在 5 秒内完成优雅停机。
+
+> 生产环境务必修改默认管理员密码与 `server.jwt.secret`。
+
+---
+
+## 配置文件说明
 
 ### 后端
 
-```bash
-cd back-end
-task package        # 发布版打包（-s -w + UPX 压缩，产物输出 bin/）
-APP_ENV=prod ./bin/server
-```
+配置文件位于 `back-end/configs/`，由环境变量 `APP_ENV` 选择：`dev`（默认）/ `test` / `prod`。详细字段见 [`back-end/README.md`](back-end/README.md#配置文件说明)。
 
-生产部署要点：修改 JWT secret、关闭自动迁移（`mysql.migrate.enable: false`）、确保 `uploads/` 可写、建议 systemd 守护。详见 [`back-end/README.md`](back-end/README.md)。
-
-### 安全防护（登录限流 / 失败锁定 / 安全头）
-
-后端 `config-*.yaml` 的 `server.security` 段控制，三段能力（实现见 `internal/middleware/security.go`）：
-
-- **令牌桶限流**：全局按客户端 IP 计（默认 50/s、突发 100，拦脚本与死循环）；`login`、`reset-password` 等凭据接口走更严的敏感桶（默认 5/s、突发 10），超限返回 HTTP 429。SSE 长连接豁免。
-- **登录失败锁定**：按用户名，窗口内累计 N 次失败即临时锁定（默认 15 分钟锁 15 分钟），登录成功立即清零；账号不存在与密码错误同等计数，不暴露账号是否存在。锁定期返回 HTTP 423 与剩余分钟数。
-- **安全响应头**：`X-Frame-Options: SAMEORIGIN`、`X-Content-Type-Options: nosniff`、`Referrer-Policy`、`Permissions-Policy`，以及 `Content-Security-Policy: frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'`。刻意**不下发 `script-src`**——低代码引擎的 js_event / 表达式钩子依赖 `new Function`，收紧脚本源会砍掉产品能力。
-
-⚠️ 两个必须知晓的边界：
-
-1. **限流与锁定都是单实例进程内计数**。多实例横向扩容时每实例独立计数（等效 N 倍额度、锁定也可被分散绕过），届时需改 Redis 共享令牌桶/计数。
-2. **后端响应头覆盖不到 SPA 的 `index.html`**——它由前端静态服务器下发，点击劫持防护必须在该层同步配置，否则页面仍可被外站 iframe 嵌套：
-
-```nginx
-server {
-  # 前端静态站点（dist/）：安全头与后端 API 保持同口径
-  add_header X-Frame-Options SAMEORIGIN always;
-  add_header X-Content-Type-Options nosniff always;
-  add_header Referrer-Policy strict-origin-when-cross-origin always;
-  add_header Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" always;
-}
-```
+| 配置块 | 关键字段 | 说明 |
+| --- | --- | --- |
+| `server` | `port` / `mode` / `api_prefix` / `request_timeout` | 监听端口 `8180`、Gin 模式、API 前缀 `/v1/api`、请求超时 10s |
+| `server.jwt` | `secret` / `expire` / `issuer` | 签名密钥（生产必须更换）、有效期 24h、签发者 |
+| `server.log` | `level` / `path` | 日志级别与文件路径（`logs/app-{env}.log`） |
+| `server.cors` | `enable` / `allow_origins` | 同域反代可关闭；分离部署需写具体域名 |
+| `server.security` | 限流、登录锁定、`trusted_proxies`、安全头 | 单实例进程内计数，多实例需换 Redis |
+| `server.operation_log` | `retain_days` / `cleanup_interval_hours` | 操作审计留存与清理周期 |
+| `mysql` | `host` / `port` / `dbname` / `table_prefix` / `parse_time` / `loc` / 连接池 | 库名、表前缀、时区、连接池与超时 |
+| `mysql.migrate` | `enable` / `mode` / `log_*` | 自动迁移开关；`full` 全量建表 + 初始化数据，`incremental` 仅增量 |
 
 ### 前端
 
-```bash
-cd front-end
-npm run build       # 产物输出 dist/（含 .gz / .br 预压缩）
+| 位置 | 变量 | 当前值 | 说明 |
+| --- | --- | --- | --- |
+| `front-end/.env.development` | `VITE_API_PREFIX` | `/v1/api` | 开发环境 API 前缀 |
+| `front-end/.env.development` | `VITE_BASE_PATH` | 空 | 开发环境部署于根路径 |
+| `front-end/.env.production` | `VITE_API_PREFIX` | `/v1/api` | 生产环境 API 前缀 |
+| `front-end/.env.production` | `VITE_BASE_PATH` | `/oa` | 生产默认子路径，改根路径需置空后重新构建 |
+| `front-end/vite.config.js` | - | - | 端口 `8181`、代理目标 `8180`、产物 `web/`、分包与预压缩 |
+| `front-end/src/config/app.js` | `APP_NAME` | - | 构建时注入页面标题 |
+
+### 端口与路径约定
+
+| 项 | 值 | 位置 |
+| --- | --- | --- |
+| 后端服务 | `8180` | `server.port` |
+| API 前缀 | `/v1/api` | `server.api_prefix` + `VITE_API_PREFIX` |
+| 健康检查 | `GET /` | 后端根路径 |
+| 附件访问 | `/uploads/*` | 后端静态目录 |
+| 前端开发端口 | `8181` | `vite.config.js` |
+| 前端生产 base | `/oa` | `VITE_BASE_PATH` |
+| 前端构建产物 | `front-end/web/` | `vite.config.js` 的 `outDir` |
+
+> API 版本号变更（如 `v1` → `v2`）只需同步后端 `api_prefix`、前端 `VITE_API_PREFIX` 与 Nginx 反代路径，业务代码无需改动。
+
+---
+
+## 构建与部署
+
+### 构建
+
+| 目标 | 命令 | 产物 |
+| --- | --- | --- |
+| 后端本地编译 | `cd back-end && task build` | `back-end/oa_serve_main`（Windows 为 `.exe`） |
+| 后端发布包 | `cd back-end && task package` | `back-end/bin/oa_serve_main`（`-s -w` 裁剪 + UPX 压缩，默认注入 prod 环境） |
+| 前端生产包 | `cd front-end && npm run build` | `front-end/web/`（含 `.gz` / `.br` 预压缩） |
+
+`task package` 通过 `-ldflags "-X 'back-end/internal/config.DefaultEnv=prod'"` 把默认环境设为 `prod`，部署时仍可用 `APP_ENV` 覆盖。
+
+### 部署拓扑
+
+```text
+                 ┌──────────────────────────────┐
+  浏览器 ──────► │ Nginx :80                    │
+                 │  /oa/      → 前端 web/        │
+                 │  /v1/api/  → 后端 :8180       │
+                 │  /uploads/ → 后端 :8180       │
+                 │  SSE 路径  → 关闭代理缓冲      │
+                 └──────────────┬───────────────┘
+                                │
+                        back-end :8180 ──► MySQL
 ```
 
-Nginx 托管 `dist/`：history 模式回退 `try_files ... /index.html`、`/v1/api` 反代后端、SSE 路径关闭 `proxy_buffering`。若需发布到 `/v1` 等子路径：`.env.production` 设 `VITE_BASE_PATH=/v1`（构建资源自动带前缀、路由 `basename` 自动生效），Nginx 用 `location /v1/api/`（先声明）+ `location /v1/`（`try_files ... /v1/index.html`）。详见 [`front-end/README.md`](front-end/README.md)。
+前端 `web/` 放到 `/var/www/oa`，Nginx 示例：
+
+```nginx
+server {
+    listen 80;
+    server_name oa.example.com;
+
+    # 子路径部署：root 指向 web/ 的上级目录
+    location /oa/ {
+        root /var/www;
+        try_files $uri $uri/ /oa/index.html;
+    }
+
+    location /v1/api/ {
+        proxy_pass http://127.0.0.1:8180;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # SSE 必须关闭缓冲，否则断线事件不会下发
+    location = /v1/api/notifications/stream {
+        proxy_pass http://127.0.0.1:8180;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        add_header X-Accel-Buffering no;
+    }
+
+    location /uploads/ {
+        proxy_pass http://127.0.0.1:8180;
+    }
+}
+```
+
+后端建议交由 systemd 守护：
+
+```ini
+[Service]
+Type=simple
+WorkingDirectory=/opt/oa
+Environment=APP_ENV=prod
+ExecStart=/opt/oa/oa_serve_main
+Restart=always
+RestartSec=5
+```
+
+### 部署清单
+
+1. 备份数据库；确认 `server.jwt.secret`、数据库密码已替换为生产值。
+2. 生产建议关闭自动迁移（`mysql.migrate.enable: false`），迁移脚本先在测试库验证。
+3. 确保 `uploads/` 目录存在且进程可写；为 `logs/` 预留磁盘与轮转策略。
+4. 校验 API 前缀、`VITE_BASE_PATH`、Nginx location 三者一致。
+5. SSE 路径关闭代理缓冲与缓存，`proxy_read_timeout` ≥ 1 小时。
+6. 前端 `index.html` 不缓存，`assets/` 下带 hash 的资源长缓存。
+7. 多实例部署时，限流与登录锁定需改为 Redis 共享计数。
+
+### CI
+
+`.github/workflows/ci.yml` 在 `main` 推送与所有 PR 上执行：
+
+- 后端：`go mod verify` → `gofmt` 检查 → `go vet` → `go build` → `go test ./... -count=1`
+- 前端：`npm ci` → `npm run lint` → `npm test` → `npm run build` → 校验 `web/index.html` 存在
+
+---
+
+## 功能模块
+
+```text
+系统管理
+├── 用户 / 角色 / 菜单 / 部门
+└── 审核人员组、操作审计
+
+流程配置（/application*）
+├── 应用管理、业务表字段管理
+├── 表单元素管理（数据源 / 联动 / 校验，可引用接口）
+├── 布局管理（表单页与详情页可视化拖拽）
+└── 审批管理（发起人范围 + 流程画布）
+
+审批工作台（/approval*）
+├── 发起申请、我的待办、我的发起、经我处理、抄送我的、草稿箱
+└── 审批详情（业务表单 + 流程时间线 + 状态印章）
+
+接口管理（/interface）
+└── SQL 直查 / HTTP 转发定义、试调、路由导入、引用统计
+
+通知中心（/notification）
+└── 站内通知、未读计数、SSE 实时更新
+```
+
+---
 
 ## 核心机制
 
-### 权限体系
-
-- **菜单权限**：角色分配菜单 → 用户绑定角色 → 前端按菜单树生成动态路由与按钮级权限（`RequirePermission` / `AuthButton`）
-- **数据权限**：角色配置数据范围，查询自动过滤：
-
-| 数据范围 | 过滤条件 |
-| --- | --- |
-| 1 全部数据 | 不过滤 |
-| 2 自定义部门 | `dept_id IN (指定部门集合)` |
-| 3 仅本部门 | `dept_id IN (本部门)` |
-| 4 本部门及下级 | `dept_id IN (本部门 + 子部门)` |
-| 5 仅本人 | `created_by = 当前用户` |
-
-系统约定部门列统一 `dept_id`、创建人列统一 `created_by`；部门维度与仅本人并存时取并集（OR）。
-
-### 动态表单引擎
-
-依据后端下发的 `form_layout_json` / `detail_layout_json` 动态渲染，四种页面模式：`form`（填报）/ `detail`（只读）/ `move-form` / `move-detail`（设计器）。
-
-- **取值表达式**：
-
-| 前缀 | 含义 | 用途 |
+| 机制 | 要点 | 详细说明 |
 | --- | --- | --- |
-| `form.xxx` | 整个表单当前值 | 数据源参数、联动目标值 |
-| `item.xxx` | 当前选中项 | select/treeSelect 选中项取值 |
-| 无前缀 | 接口响应根节点 | `target_mapping.source` |
-| `${}` | 字符串插值 | url / label 拼接 |
+| 菜单与按钮权限 | 角色分配菜单，前端由后端菜单树生成路由，页面内用 `AuthButton` 做按钮级权限 | [前端文档](front-end/README.md) |
+| 数据权限 | 角色配置 1-5 档范围：全部 / 自定义部门 / 本部门 / 本部门及下级 / 仅本人；部门维度与仅本人并存取并集 | [后端文档](back-end/README.md) |
+| 动态表单 | 布局 JSON 只存元素引用与位置，渲染时合并元素属性；支持 `form.xxx` / `item.xxx` / `${}` 表达式 | [后端文档](back-end/README.md) |
+| 审批状态机 | 草稿(6) → 进行中(0) → 已通过(1) / 已拒绝(2) / 已退回(3)，支持撤回；退回后重新提交走完整流程 | [后端文档](back-end/README.md) |
+| 接口统一分发 | 外部只认 `method + path`，内部 SQL / HTTP 实现可切换；被引用接口禁止删除 | 见下文 |
+| 即时通知 | 审批事件在事务提交后推送，SSE 心跳保活，多标签页广播同步 | [前端文档](front-end/README.md) |
+| 文件上传 | `POST /v1/api/upload?app_code=xxx`，按应用分目录存储，经 `/uploads/*` 访问 | [后端文档](back-end/README.md) |
 
-- **核心配置**：`data_source`（静态 / 接口 / 引用接口管理）、`actions`（on_mount / on_change / on_blur → set_value / fetch_and_fill）、`dynamic_states`（visible_if / disabled_if）、`default_value`、`validation_rule`、`columns`（子表）
+**接口统一分发**：`GET/POST/PUT/DELETE /v1/api/interfaces/*path` 按 `method + path` 匹配已启用定义；`type=sql` 仅允许 SELECT 模板，`type=http` 转发内部相对路径并原样透传结果。表单元素可在数据源与 `fetch_and_fill` 中引用接口，运行时自动走统一分发。
 
-- **赋值对象（主表 / 子表）**：`set_value.value_mapping` 与 `fetch_and_fill.target_mapping` 的每条映射为 `{ source, target, table_name }`。`target` 是字段名，`table_name` 是赋值对象所属业务表（配置界面用 OptGroup 区分主表/子表后写入）：
-  - `table_name` 为主表（或为空，旧数据）→ 写主表字段；
-  - `table_name` 命中子表 → 子表行内触发且同表时写当前行，否则写该子表所有行；
-  - 旧数据（无 `table_name`）保持原语义：子表行内触发写同行、主表触发写主表字段。
+---
 
-### 审批流程
+## 常见问题
 
-实例状态机（`oa_approval_instances.status`，对齐钉钉）：
+| 现象 | 排查方向 |
+| --- | --- |
+| 后端启动报数据库连接失败 | MySQL 是否运行、账号密码与 `config-dev.yaml` 是否一致、账号是否有建库权限 |
+| 端口被占用 | 后端改 `server.port`；前端 `strictPort` 固定 8181，需释放端口或改配置并同步代理 |
+| 登录 401 / 立即跳回登录页 | Token 过期、`jwt.secret` 变更、系统时间偏差 |
+| 前端接口 404 / 502 | 后端是否在 8180、`VITE_API_PREFIX` 与 Nginx 反代是否一致 |
+| 生产构建后白屏 | `VITE_BASE_PATH` 与 Nginx location 不匹配，或缺少 SPA fallback |
+| 通知不实时、断线不恢复 | 代理未对 SSE 关闭缓冲，或缺 `X-Accel-Buffering: no` |
+| 上传失败 / 附件 403 | `uploads/` 目录权限、Nginx `/uploads/` 反代配置 |
+| 迁移失败但服务仍启动 | 迁移失败只记录日志不阻断；查看 `logs/migrate-{env}.log` 后重跑 |
+| 多实例下限流失效 | 限流与锁定为进程内计数，需改 Redis 共享实现 |
 
-```
-草稿(6) ─提交→ 进行中(0) ─通过→ 已通过(1)
-                      ├拒绝→ 已拒绝(2)
-                      └退回→ 已退回(3) ─重新提交→ 进行中(0)
-               撤回→ 草稿(6)
-```
-
-审批人操作：**同意**（推进下一节点）/ **退回**（发起人编辑后重走完整流程）/ **拒绝**（直接终结）。任务状态：`0` 待处理 / `1` 已通过 / `2` 已拒绝 / `3` 已退回 / `4` 已转交 / `5` 已取消。
-
-### 接口管理（oa_api_definitions）
-
-- **双模式**：`type=sql` SQL 模板直查（`${form.xxx}` 占位参数化，仅 SELECT，数据权限按模板内静态写死）；`type=http` 转发到内部相对路径
-- **统一分发**：`GET/POST/PUT/DELETE /v1/api/interfaces/*path` 按 method+path（status=1）匹配执行；HTTP 转发结果原样透传
-- **与表单元素联动**：数据源 / `fetch_and_fill` 可「引用接口」（`api_ref: 1`），运行时自动走统一分发；接口被引用时列表显示「被引用」并禁用删除
-- **导入后端路由**：解析 `internal/router/*.go` 行内注释作为接口名称，一键批量生成转发定义
-- **返回结构**：SQL 直查默认返回行数组；结果单列且列名为 `_data` 且可解析 JSON 时，自动解析为对象/数组
-
-### 站内通知（SSE）
-
-- 审批待办（1）/ 退回（2）/ 抄送（3）/ 结果（4）事件自动生成通知
-- 后端事务提交成功后统一推送（`withNotify`），事务回滚不产生幽灵通知
-- 前端 `EventSource` 实时接收 + 未读计数 + BroadcastChannel 多标签页同步；30 秒心跳保活，SSE 路径豁免请求超时
-
-### 文件上传
-
-- `POST /v1/api/upload?app_code=xxx` 单文件上传，按应用分目录存储
-- 存储路径：`back-end/uploads/{app_code}/{时间戳}_{文件名}`，通过 `/uploads/*` 静态访问
-- 业务字段存储 JSON 数组：`[{ uid, url, name, size }]`
-
-## 关键设计决策
-
-1. **布局只存增量**：布局 JSON 引用式存储（仅 `element_id` 与位置/宽度），其他属性从表单元素管理合并读取，改元素设置无需重拖布局
-2. **数据权限闭环在角色管理**：数据范围（1-5）统一由角色配置，业务查询自动注入，接口管理 SQL 模板内静态写死过滤，避免误导
-3. **退回对齐钉钉**：退回后发起人重新提交走完整流程，新旧任务不叠加
-4. **接口定义统一分发**：外部只认 `method + path`，内部实现（SQL / HTTP 转发）可随时切换，表单元素引用接口不被内部实现耦合
-5. **编码生成（idgen）**：`app_<40bit毫秒base32>_<40bit随机base32>`，字典序即时间序，可直接排序，生成后不可变
+---
 
 ## 文档导航
 
 | 文档 | 内容 |
 | --- | --- |
-| [`back-end/README.md`](back-end/README.md) | 后端完整文档：核心特性、目录结构、接口清单、配置说明、构建部署、核心机制（SSE / 上传 / 动态表单 / 数据权限 / 接口管理 / 审批状态机） |
-| [`front-end/README.md`](front-end/README.md) | 前端完整文档：模块介绍、目录结构、npm scripts、代理说明、构建部署、核心机制（路由权限 / 动态表单引擎 / 接口管理 / 审核人员组 / 站内通知 / 审批工作台 / 流程配置） |
+| [`back-end/README.md`](back-end/README.md) | 后端：技术栈、目录结构、环境依赖、启动与配置全字段、运行时后台任务、构建部署（含 SSE 与 systemd）、API 约定、常见问题 |
+| [`front-end/README.md`](front-end/README.md) | 前端：技术栈、目录结构、环境依赖、启动与环境变量、工程配置、常用命令、构建部署（`/oa` 子路径与 SSE）、开发规范、常见问题 |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI 流水线定义 |
