@@ -62,66 +62,6 @@ var migrations = []migration{
 		},
 		Seed: seedInitData,
 	},
-	{
-		Version: 2,
-		Name:    "add_approval_other_json",
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(
-				&model.ApplicationVersion{},
-				&model.ApprovalInstance{},
-			)
-		},
-	},
-	{
-		Version: 3,
-		Name:    "add_operation_log_menu",
-		// v1 已含 OperationLog 建表（新环境生效）；本版本为「已应用过 v1 的存量环境」补建：
-		// AutoMigrate 幂等，新环境重跑无副作用；同时幂等补种操作审计菜单
-		Up: func(db *gorm.DB) error {
-			if err := db.AutoMigrate(&model.OperationLog{}); err != nil {
-				return err
-			}
-			return seedAuditLogMenu(db)
-		},
-		Seed: seedAuditLogMenu,
-	},
-	{
-		Version: 4,
-		Name:    "add_user_token_version",
-		// 为存量环境补建 users.token_version 列（token 吊销用）。
-		// v1 的 AutoMigrate 在新环境已含此列（model.User 已声明），此处幂等，重复无副作用。
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(&model.User{})
-		},
-	},
-	{
-		Version: 6,
-		Name:    "add_task_overdue_fields",
-		// 待办超时提醒：给审批任务补建 reminded_at / remind_count / urged_at 三列。
-		// AutoMigrate 只增不删，存量待办数据保持原样（未提醒、计数为 0，不触发历史补发）。
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(&model.ApprovalInstanceTask{})
-		},
-	},
-	{
-		Version: 7,
-		Name:    "add_task_advance_field",
-		// 待办到期预警：补建 advance_reminded_at 列，记录「距截止不足 taskAdvance」时发出的
-		// 一次性提前提醒。存量任务为空，不会被补发预警。
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(&model.ApprovalInstanceTask{})
-		},
-	},
-	{
-		Version: 8,
-		Name:    "add_menu_cache_field",
-		// 页签缓存开关：给菜单补建 cache 列（1 缓存 / 0 不缓存）。
-		// 存量菜单由列默认值 1 补齐，保持「默认缓存」的既有行为；
-		// 工作台等不在菜单中的固定路由由前端按「未收录即不缓存」处理。
-		Up: func(db *gorm.DB) error {
-			return db.AutoMigrate(&model.Menu{})
-		},
-	},
 }
 
 // seedAuditLogMenu 操作审计菜单：系统管理目录下「操作审计」页面（perm=system:audit）
