@@ -35,34 +35,81 @@ export default function NotificationBell() {
     const token = getToken()
     if (!token) return
 
-    const es = new EventSource(`${API_PREFIX}/notifications/stream?token=${token}`)
+    let es = null
+    let stopped = false
+    let reconnectTimer = null
+    let lastEventAt = Date.now()
 
-    // 连接成功事件（带初始未读数）
-    es.addEventListener('connected', (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        setCount(data?.count || 0)
-      } catch {
-        // 静默
-      }
-    })
-
-    // 收到新通知（实时推送）：更新徽标并广播，通知中心页面据此刷新列表
-    es.addEventListener('notification', () => {
-      setCount((c) => {
-        const newCount = c + 1
-        bc.postMessage({ type: 'increment', count: newCount })
-        return newCount
-      })
-    })
-
-    // 错误时自动重连（EventSource 原生支持）
-    es.onerror = () => {
-      // 静默，EventSource 会自动重连
+    const markAlive = () => {
+      lastEventAt = Date.now()
     }
 
+    function scheduleReconnect() {
+      if (stopped || reconnectTimer) return
+      if (es) {
+        es.close()
+        es = null
+      }
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null
+        if (!stopped) connect()
+      }, 5000)
+    }
+
+    function connect() {
+      if (stopped) return
+      lastEventAt = Date.now()
+      const source = new EventSource(`${API_PREFIX}/notifications/stream?token=${token}`)
+      es = source
+
+      source.onopen = markAlive
+
+      // 连接成功事件（带初始未读数）
+      source.addEventListener('connected', (e) => {
+        markAlive()
+        try {
+          const data = JSON.parse(e.data)
+          setCount(data?.count || 0)
+        } catch {
+          // 静默
+        }
+      })
+
+      // 收到新通知（实时推送）：更新徽标并广播，通知中心页面据此刷新列表
+      source.addEventListener('notification', () => {
+        markAlive()
+        setCount((c) => {
+          const newCount = c + 1
+          bc.postMessage({ type: 'increment', count: newCount })
+          return newCount
+        })
+      })
+
+      // 后端每 30 秒发送一次心跳，用于判断代理链路是否仍然存活
+      source.addEventListener('ping', markAlive)
+
+      source.onerror = () => {
+        // 浏览器已关闭连接时统一走应用层重连；CONNECTING 状态交给原生重连。
+        if (source.readyState === EventSource.CLOSED) {
+          scheduleReconnect()
+        }
+      }
+    }
+
+    connect()
+
+    // 代理在后端进程退出时可能不传播断开事件，不能只依赖 onerror。
+    const watchdog = setInterval(() => {
+      if (!stopped && Date.now() - lastEventAt > 75000) {
+        scheduleReconnect()
+      }
+    }, 15000)
+
     return () => {
-      es.close()
+      stopped = true
+      clearInterval(watchdog)
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (es) es.close()
     }
   }, [])
 

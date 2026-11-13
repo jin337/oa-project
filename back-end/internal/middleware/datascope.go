@@ -13,7 +13,7 @@ import (
 type DataScopeResult struct {
 	All     bool   // 全部数据
 	DeptIDs []uint // 部门过滤集合（2/3/4 合并，去重）
-	Self    bool   // 仅本人（创建人 = 当前用户）
+	Self    bool   // 仅本人（由调用方提供本人匹配字段：业务表通常 created_by，用户表 id，部门树用 dept_id）
 }
 
 // ResolveDataScope 解析当前用户的数据范围（多角色取并集，任一角色"全部"即放行）：
@@ -59,9 +59,10 @@ func ResolveDataScope(userID uint) *DataScopeResult {
 }
 
 // ApplyDataScope 根据当前登录用户角色的数据范围，对列表查询追加过滤条件：
-// deptColumn 为目标表的部门字段（如 "users.dept_id"），creatorColumn 为目标表的创建人字段（如 "created_by"）。
-// 部门维度（2/3/4）按部门集合过滤，仅本人（5）按创建人过滤；部门与仅本人并存时取并集（OR）。
-func ApplyDataScope(db *gorm.DB, userID uint, deptColumn, creatorColumn string) *gorm.DB {
+// deptColumn 为目标表的部门字段（如 "users.dept_id"），selfColumn 为目标表表达“本人”的字段
+// （业务表通常为 "created_by"；用户表应传 "id"，不能用审计创建人 created_by 代替用户身份）。
+// 部门维度（2/3/4）按部门集合过滤，仅本人（5）按 selfColumn 过滤；部门与仅本人并存时取并集（OR）。
+func ApplyDataScope(db *gorm.DB, userID uint, deptColumn, selfColumn string) *gorm.DB {
 	scope := ResolveDataScope(userID)
 	if scope.All {
 		return db
@@ -73,7 +74,7 @@ func ApplyDataScope(db *gorm.DB, userID uint, deptColumn, creatorColumn string) 
 		args = append(args, scope.DeptIDs)
 	}
 	if scope.Self {
-		conds = append(conds, creatorColumn+" = ?")
+		conds = append(conds, selfColumn+" = ?")
 		args = append(args, userID)
 	}
 	if len(conds) == 0 {

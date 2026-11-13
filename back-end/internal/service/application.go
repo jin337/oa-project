@@ -723,35 +723,14 @@ func ApplicationDataList(appID uint, curUserID uint, req *model.ApplicationDataL
 }
 
 // buildDataPermissionConds 构建数据权限过滤条件（按用户角色数据范围自动过滤）
-// 数据范围：1全部 2自定义部门 3本部门 4本部门及以下
+// 数据范围：1全部 2自定义部门 3本部门 4本部门及以下 5仅本人
 // 过滤字段：默认用 created_by（创建人）
+// 统一复用 middleware.ResolveDataScope，避免与部门树/用户列表的范围解析分叉。
 func buildDataPermissionConds(userID uint, colSet map[string]bool) ([]string, []interface{}) {
-	// 查当前用户的角色
-	var user model.User
-	if err := database.DB.Preload("Roles").First(&user, userID).Error; err != nil {
-		return []string{"1 = 0"}, []interface{}{}
-	}
-
-	// 检查是否有"全部数据"权限
-	showAll := false
-	showDeptAndBelow := false
-	showDept := false
-	for _, role := range user.Roles {
-		if role.Status != 1 {
-			continue
-		}
-		switch role.DataScope {
-		case model.DataScopeAll:
-			showAll = true
-		case model.DataScopeDeptAndBelow:
-			showDeptAndBelow = true
-		case model.DataScopeDept:
-			showDept = true
-		}
-	}
+	scope := middleware.ResolveDataScope(userID)
 
 	// 全部数据，不过滤
-	if showAll {
+	if scope.All {
 		return []string{}, []interface{}{}
 	}
 
@@ -760,26 +739,25 @@ func buildDataPermissionConds(userID uint, colSet map[string]bool) ([]string, []
 		return []string{}, []interface{}{}
 	}
 
-	// 获取用户有权限的用户 ID
+	// 部门范围（自定义/本部门/本部门及以下）按部门集合查询用户 ID；
+	// 仅本人直接使用当前用户 ID；多角色时取并集。
 	var userIDs []uint
-	if showDeptAndBelow {
-		// 本部门及以下
-		deptIDs := middleware.CollectDeptAndBelow(user.DeptID)
-		var users []model.User
-		database.DB.Where("dept_id IN ?", deptIDs).Find(&users)
-		for _, u := range users {
-			userIDs = append(userIDs, u.ID)
+	seen := map[uint]bool{}
+	addUser := func(id uint) {
+		if id > 0 && !seen[id] {
+			seen[id] = true
+			userIDs = append(userIDs, id)
 		}
-	} else if showDept {
-		// 本部门
+	}
+	if len(scope.DeptIDs) > 0 {
 		var users []model.User
-		database.DB.Where("dept_id = ?", user.DeptID).Find(&users)
+		database.DB.Where("dept_id IN ?", scope.DeptIDs).Find(&users)
 		for _, u := range users {
-			userIDs = append(userIDs, u.ID)
+			addUser(u.ID)
 		}
-	} else {
-		// 仅本人
-		userIDs = []uint{userID}
+	}
+	if scope.Self {
+		addUser(userID)
 	}
 
 	if len(userIDs) == 0 {

@@ -168,7 +168,7 @@ func buildSnapshotFlow(injected []flowNode, endNode any) []any {
 
 // validateSelfSelectApprovers 校验执行路径上的发起人自选（approverType=3）节点已选择审批人。
 // 关键修复：发起人自选节点若未选审批人，提交应被拦截并给出明确提示，
-// 而不是走 emptyHandler=1（自动通过）递归跳过所有节点、流程瞬间"已通过"。
+// 而不是走 emptyHandler=1（历史自动通过）递归跳过所有节点、流程瞬间"已通过"。
 func validateSelfSelectApprovers(ctx *approvalContext) error {
 	for _, nodeID := range ctx.execPath {
 		node := findNodeByID(ctx.injectedNodes, nodeID)

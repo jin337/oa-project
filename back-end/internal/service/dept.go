@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"back-end/internal/database"
 	"back-end/internal/middleware"
@@ -15,8 +16,29 @@ func DeptTree(curUserID uint, req *model.DeptListReq) ([]*model.Dept, error) {
 	if req.Name != "" {
 		db = db.Where("name LIKE ?", "%"+req.Name+"%")
 	}
-	// 数据权限过滤：只显示有权限的部门
-	db = middleware.ApplyDataScope(db, curUserID, "id", "created_by")
+	// 数据权限过滤：部门维度按部门集合过滤；仅本人显示本人所在部门。
+	// 部门表的 created_by 是审计创建人，不能用来表达“本人”，否则仅本人范围会返回空树。
+	scope := middleware.ResolveDataScope(curUserID)
+	if !scope.All {
+		conds := make([]string, 0, 2)
+		args := make([]interface{}, 0, 2)
+		if len(scope.DeptIDs) > 0 {
+			conds = append(conds, "id IN ?")
+			args = append(args, scope.DeptIDs)
+		}
+		if scope.Self {
+			var self model.User
+			if err := database.DB.Select("dept_id").First(&self, curUserID).Error; err == nil && self.DeptID > 0 {
+				conds = append(conds, "id = ?")
+				args = append(args, self.DeptID)
+			}
+		}
+		if len(conds) == 0 {
+			db = db.Where("1 = 0")
+		} else {
+			db = db.Where(strings.Join(conds, " OR "), args...)
+		}
+	}
 	var list []*model.Dept
 	if err := db.Order("sort ASC, id ASC").Find(&list).Error; err != nil {
 		return nil, err

@@ -11,10 +11,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// UserList 用户分页列表：按当前操作者的数据范围过滤 dept_id
+// UserList 用户分页列表：按当前操作者的数据范围过滤 dept_id；
+// 仅本人范围必须按用户主键 id 匹配，不能用审计创建人 created_by。
 func UserList(curUserID uint, req *model.UserListReq) ([]model.User, int64, error) {
 	db := database.DB.Model(&model.User{})
-	db = middleware.ApplyDataScope(db, curUserID, "dept_id", "created_by")
+	db = middleware.ApplyDataScope(db, curUserID, "dept_id", "id")
 	if req.Username != "" {
 		db = db.Where("username LIKE ?", "%"+req.Username+"%")
 	}
