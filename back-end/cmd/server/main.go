@@ -44,6 +44,10 @@ func main() {
 		logger.Errorf("自动迁移失败，服务继续启动: %v", err)
 	}
 
+	// 4.1 跨实例权限失效：轮询权限版本，变化时清空本实例缓存并通过 SSE 通知前端刷新。
+	// 单实例部署下变更接口本身会立即清缓存；多实例下由 500ms 轮询收敛。
+	middleware.StartPermissionVersionWatcher(service.BroadcastPermissionChanged)
+
 	// 5. 组装路由并启动服务
 	// GIN 请求日志输出到文件，避免继承终端/管道 stdout 时缓冲写满阻塞全部请求
 	if ginFile, ferr := os.OpenFile("logs/gin.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); ferr == nil {

@@ -152,12 +152,12 @@ func NotificationStream(c *gin.Context) {
 		select {
 		case <-notify:
 			return
-		case n, ok := <-ch:
+		case ev, ok := <-ch:
 			if !ok {
 				return
 			}
-			data, _ := json.Marshal(n)
-			fmt.Fprintf(c.Writer, "event: notification\ndata: %s\n\n", data)
+			data, _ := json.Marshal(ev.Data)
+			fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", ev.Event, data)
 			c.Writer.Flush()
 		case <-ticker.C:
 			fmt.Fprintf(c.Writer, "event: ping\ndata: {}\n\n")

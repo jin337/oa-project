@@ -636,7 +636,7 @@ func fillApprovalCapabilities(records []model.ApprovalRecord) {
 		r.CanEdit = r.InstanceStatus == model.InstanceStatusReturned || isWithdrawn
 		// 催办：仅进行中且仍存在待处理任务的实例可催办
 		r.CanUrge = isRunning && pendingInstances[r.InstanceID]
-		// 删除仅对草稿开放，而草稿不出现在「我的发起」；已撤回需先编辑转为草稿再删除
+		// 删除仅对从未提交过的草稿开放，而草稿不出现在「我的发起」；已撤回/已驳回不提供删除
 		r.CanDelete = false
 	}
 }

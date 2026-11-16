@@ -713,7 +713,7 @@ const (
 	InstanceStatusRejected  = 2 // 已拒绝（终态）
 	InstanceStatusReturned  = 3 // 已驳回（可重新提交）
 	InstanceStatusVoided    = 4 // 已作废（终态）
-	InstanceStatusWithdrawn = 5 // 已撤回（回退为草稿）
+	InstanceStatusWithdrawn = 5 // 已撤回（原单保留，可重新提交或另存为草稿）
 	InstanceStatusDraft     = 6 // 草稿（未正式启动，不生成审批任务）
 )
 
@@ -905,7 +905,7 @@ type ApprovalRecord struct {
 	CanVoid     bool `json:"can_void"`     // 可作废：仅已撤回（审核中一律只能撤回）
 	CanWithdraw bool `json:"can_withdraw"` // 可撤回：进行中
 	CanEdit     bool `json:"can_edit"`     // 可编辑：已驳回 / 已撤回
-	CanDelete   bool `json:"can_delete"`   // 可删除：已撤回（草稿在草稿箱页面处理）
+	CanDelete   bool `json:"can_delete"`   // 可删除：当前仅从未提交过的草稿可删，草稿由草稿箱页面处理
 
 	// 审核撤回（经我处理列表）：当前用户在该实例内是否存在可撤回的任务，以及对应任务 ID。
 	// 与详情页任务级 can_recall 同口径：窗口内、本人操作是实例内最后一次操作、或签通过除外。
@@ -969,6 +969,16 @@ const (
 	NotificationTypeOverdue = 5 // 待办超时提醒 / 发起人催办
 	NotificationTypeAdvance = 6 // 待办到期预警（超时前的一次性提前提醒）
 )
+
+// PermissionVersion 权限版本：角色/菜单/用户角色变更时递增，供多实例轮询失效权限缓存。
+// 单行表（id=1），不保存具体权限内容，只作为跨实例的失效信号。
+type PermissionVersion struct {
+	ID        uint      `gorm:"primarykey" json:"id"`
+	Version   uint64    `gorm:"not null;default:0" json:"version"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (PermissionVersion) TableName() string { return "oa_permission_versions" }
 
 // Notification 站内通知
 type Notification struct {

@@ -80,7 +80,7 @@ func RoleUpdate(c *gin.Context) {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
-	middleware.InvalidatePermCache() // 角色属性（状态等）变化影响鉴权结果
+	middleware.InvalidatePermCacheGlobally() // 角色属性（状态等）变化影响鉴权结果
 	response.OK(c, role)
 }
 
@@ -94,7 +94,7 @@ func RoleDelete(c *gin.Context) {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
-	middleware.InvalidatePermCache() // 角色删除影响持有该角色用户的权限
+	middleware.InvalidatePermCacheGlobally() // 角色删除影响持有该角色用户的权限
 	response.OKMsg(c, "删除成功")
 }
 
@@ -113,7 +113,7 @@ func RoleAssignMenus(c *gin.Context) {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return
 	}
-	middleware.InvalidatePermCache() // 角色权限重分配，所有持有该角色用户缓存失效
+	middleware.InvalidatePermCacheGlobally() // 角色权限重分配，所有持有该角色用户缓存失效
 	response.OKMsg(c, "分配菜单成功")
 }
 

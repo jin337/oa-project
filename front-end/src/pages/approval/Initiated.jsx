@@ -52,8 +52,8 @@ const PAGE_TITLE = '我的发起'
 // 撤回：仅「审核中」的实例可撤回（前端业务状态 2 = 审核中）
 // 作废/撤回/编辑的可用性以后端返回的能力标记为准（can_void / can_withdraw / can_edit），
 // 前端不自行判断状态：审核中只能撤回，作废仅「已撤回」可用
-// 删除不在此页提供：仅草稿可删，草稿归草稿箱管理
-// 已撤回（业务状态 8）：可编辑，保存后转为草稿，或直接重新提交
+// 删除不在此页提供：仅从未提交过的草稿可删，草稿归草稿箱管理
+// 已撤回（业务状态 8）：可编辑；提交审核沿用原单，另存为草稿会复制出一条新草稿、原单保留
 // 副本：任何状态都可复制，复制出的数据就地填进申请抽屉，是否提交由用户决定
 const WITHDRAWN_STATUS = 8
 
@@ -393,8 +393,8 @@ export default function Initiated() {
   const openCC = (record) => setCCRecord(record)
   const closeCC = () => setCCRecord(null)
 
-  // 已撤回编辑：保存修改（后端把实例转为草稿，之后在草稿箱继续完善）
-  const handleSaveWithdrawn = async () => {
+  // 已撤回/已驳回：另存为草稿——新建一条草稿记录，原单保持原状态、审批记录不丢失
+  const handleSaveAsDraft = async () => {
     let values
     try {
       values = await editForm.validate()
@@ -406,18 +406,17 @@ export default function Initiated() {
     try {
       const layout = parseLayoutJson(editApp?.form_layout_json)
       const payload = serializeTimeFields(values, layout?.elements || [])
-      // 抽屉内本次选择/调整的自选审批人、抄送人随保存一起带上，避免与界面展示不一致
+      // 新草稿要重新取号、重新生成行主键，不能沿用原已撤回单的业务行字段
+      const cleanPayload = stripCopyFields(payload)
       const selfSelectUserIDs = buildSelfSelectUserIDs(selfSelectMembers)
       await approvalApi.saveDraftInstance({
-        instance_id: editRecord.instance_id || editRecord.id,
         app_id: editApp.id,
-        business_data_id: editRecord.data_id ?? editRecord.id,
-        business_data: payload,
+        business_data: cleanPayload,
         ...(Object.keys(selfSelectUserIDs).length
           ? { approval_draft_members: selfSelectUserIDs }
           : {}),
       })
-      Message.success('保存成功，已转为草稿')
+      Message.success('已另存为草稿，原单保留在“我的发起”')
       setEditVisible(false)
       fetchList()
     } catch (e) {
@@ -427,7 +426,7 @@ export default function Initiated() {
     }
   }
 
-  // 已撤回编辑：直接提交审核（一步完成，不再先调 /draft 落库）
+  // 已撤回编辑：直接提交审核（沿用原单，保留原单号和审批记录）
   const handleSubmitWithdrawn = async () => {
     if (!selfSelectReady) {
       Message.error('请先为自选的审批人/抄送人节点选择人员后再提交')
@@ -484,8 +483,8 @@ export default function Initiated() {
     }
   }
 
-  // 删除：仅草稿可删，而草稿不出现在本页（草稿箱负责），故本页不提供删除入口。
-  // 已撤回如需删除，先在编辑抽屉「保存草稿」转为草稿，再到草稿箱删除。
+  // 删除：仅从未提交过的草稿可删，而草稿不出现在本页（草稿箱负责），故本页不提供删除入口。
+  // 已撤回/已驳回如需继续修改，使用「另存为草稿」复制新草稿，原单保留。
 
   const columns = [
     colIndex,
@@ -630,7 +629,7 @@ export default function Initiated() {
       />
 
       {/* 编辑/副本 Drawer（共用一套表单）：副本底部为「保存草稿」+「提交审核」，关掉即不提交；
-          已撤回底部为「保存草稿」+「提交审核」；已驳回底部为「重新提交」 */}
+          已撤回/已驳回底部为「另存为草稿」+「提交审核/重新提交」，另存为草稿会新建记录、原单保留 */}
       <Drawer
         className="[&_.arco-drawer-content]:p-0!"
         width="80%"
@@ -655,8 +654,8 @@ export default function Initiated() {
                 <Button type="primary" loading={editSaving} onClick={handleSubmitWithdrawn}>
                   提交审核
                 </Button>
-                <Button loading={editSaving} onClick={handleSaveWithdrawn}>
-                  保存草稿
+                <Button loading={editSaving} onClick={handleSaveAsDraft}>
+                  另存为草稿
                 </Button>
               </>
             ) : (
@@ -664,8 +663,8 @@ export default function Initiated() {
                 <Button type="primary" loading={editSaving} onClick={handleResubmit}>
                   重新提交
                 </Button>
-                <Button loading={editSaving} onClick={handleSaveWithdrawn}>
-                  保存草稿
+                <Button loading={editSaving} onClick={handleSaveAsDraft}>
+                  另存为草稿
                 </Button>
               </>
             )}

@@ -43,7 +43,7 @@ func Login(c *gin.Context) {
 		return
 	}
 	middleware.ClearLoginFail(req.Username) // 成功即清零并立即解锁
-	middleware.InvalidatePermCache()        // 登录时全量失效：多实例 TTL 未同步场景下，保证本次会话鉴权用最新权限
+	middleware.InvalidatePermCache()        // 登录时清空本实例权限缓存，保证本次会话鉴权用最新权限
 	response.OK(c, res)
 }
 

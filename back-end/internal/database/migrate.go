@@ -62,6 +62,23 @@ var migrations = []migration{
 		},
 		Seed: seedInitData,
 	},
+	{
+		Version: 2,
+		Name:    "permission_version",
+		Up: func(db *gorm.DB) error {
+			if err := db.AutoMigrate(&model.PermissionVersion{}); err != nil {
+				return err
+			}
+			var count int64
+			if err := db.Model(&model.PermissionVersion{}).Where("id = ?", 1).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return db.Create(&model.PermissionVersion{ID: 1, Version: 1}).Error
+			}
+			return nil
+		},
+	},
 }
 
 // seedAuditLogMenu 操作审计菜单：系统管理目录下「操作审计」页面（perm=system:audit）

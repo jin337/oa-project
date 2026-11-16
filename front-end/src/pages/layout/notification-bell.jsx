@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import * as notificationApi from 'src/api/notification'
 import { getToken } from 'src/utils/auth'
 import { API_PREFIX } from 'src/utils/constants'
+import { useAuth } from 'src/store/auth-context'
 
 // 多标签页同步通道（与通知中心页面共用同一频道）
 const bc = new BroadcastChannel('notification-sync')
@@ -15,6 +16,7 @@ const bc = new BroadcastChannel('notification-sync')
  */
 export default function NotificationBell() {
   const navigate = useNavigate()
+  const { refreshProfile } = useAuth()
   const [count, setCount] = useState(0)
 
   const loadCount = useCallback(async () => {
@@ -85,6 +87,12 @@ export default function NotificationBell() {
         })
       })
 
+      // 权限变更：后台权限版本已更新，立即重拉 profile，按钮与菜单按最新 perms 渲染
+      source.addEventListener('permission_changed', () => {
+        markAlive()
+        refreshProfile().catch(() => {})
+      })
+
       // 后端每 30 秒发送一次心跳，用于判断代理链路是否仍然存活
       source.addEventListener('ping', markAlive)
 
@@ -111,7 +119,7 @@ export default function NotificationBell() {
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (es) es.close()
     }
-  }, [])
+  }, [refreshProfile])
 
   // 多标签页同步：其他标签页标记已读后，本标签页徽标同步
   useEffect(() => {

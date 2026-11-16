@@ -262,22 +262,28 @@ func (q *notifyQueue) flush() {
 	}
 }
 
-// NotificationHub 管理用户的 SSE 连接，用于实时推送通知
+// SSEEvent 一条 SSE 事件：Event 对应 event: 名称，Data 由 handler 序列化为 data。
+type SSEEvent struct {
+	Event string
+	Data  any
+}
+
+// NotificationHub 管理用户的 SSE 连接，用于实时推送通知与权限变更事件
 type NotificationHub struct {
 	mu      sync.RWMutex
-	clients map[uint]map[chan *model.Notification]struct{}
+	clients map[uint]map[chan SSEEvent]struct{}
 }
 
 var globalHub = &NotificationHub{
-	clients: make(map[uint]map[chan *model.Notification]struct{}),
+	clients: make(map[uint]map[chan SSEEvent]struct{}),
 }
 
-// Register 注册一个用户的 SSE 连接，返回接收通知的 channel
-func (h *NotificationHub) Register(userID uint) chan *model.Notification {
-	ch := make(chan *model.Notification, 16)
+// Register 注册一个用户的 SSE 连接，返回接收事件的 channel
+func (h *NotificationHub) Register(userID uint) chan SSEEvent {
+	ch := make(chan SSEEvent, 16)
 	h.mu.Lock()
 	if h.clients[userID] == nil {
-		h.clients[userID] = make(map[chan *model.Notification]struct{})
+		h.clients[userID] = make(map[chan SSEEvent]struct{})
 	}
 	h.clients[userID][ch] = struct{}{}
 	h.mu.Unlock()
@@ -285,7 +291,7 @@ func (h *NotificationHub) Register(userID uint) chan *model.Notification {
 }
 
 // Unregister 注销一个用户的 SSE 连接
-func (h *NotificationHub) Unregister(userID uint, ch chan *model.Notification) {
+func (h *NotificationHub) Unregister(userID uint, ch chan SSEEvent) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if chans, ok := h.clients[userID]; ok {
@@ -299,14 +305,29 @@ func (h *NotificationHub) Unregister(userID uint, ch chan *model.Notification) {
 	}
 }
 
-// Push 向指定用户的所有在线连接推送通知
-func (h *NotificationHub) Push(userID uint, n *model.Notification) {
+// Push 向指定用户的所有在线连接推送一条事件
+func (h *NotificationHub) Push(userID uint, ev SSEEvent) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	if chans, ok := h.clients[userID]; ok {
 		for ch := range chans {
 			select {
-			case ch <- n:
+			case ch <- ev:
+			default:
+				// channel 满则丢弃，避免阻塞
+			}
+		}
+	}
+}
+
+// Broadcast 向所有在线连接推送一条事件
+func (h *NotificationHub) Broadcast(ev SSEEvent) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, chans := range h.clients {
+		for ch := range chans {
+			select {
+			case ch <- ev:
 			default:
 				// channel 满则丢弃，避免阻塞
 			}
@@ -319,17 +340,21 @@ func PushNotification(userID uint, n *model.Notification) {
 	if userID == 0 || n == nil {
 		return
 	}
-	globalHub.mu.RLock()
-	globalHub.mu.RUnlock()
-	globalHub.Push(userID, n)
+	globalHub.Push(userID, SSEEvent{Event: "notification", Data: n})
+}
+
+// BroadcastPermissionChanged 通知所有在线用户刷新菜单与按钮权限。
+// 权限变更后调用；前端收到后重新拉取 /auth/profile，按钮显示随 perms 即时更新。
+func BroadcastPermissionChanged() {
+	globalHub.Broadcast(SSEEvent{Event: "permission_changed", Data: struct{}{}})
 }
 
 // RegisterNotification 注册 SSE 连接（对外接口）
-func RegisterNotification(userID uint) chan *model.Notification {
+func RegisterNotification(userID uint) chan SSEEvent {
 	return globalHub.Register(userID)
 }
 
 // UnregisterNotification 注销 SSE 连接（对外接口）
-func UnregisterNotification(userID uint, ch chan *model.Notification) {
+func UnregisterNotification(userID uint, ch chan SSEEvent) {
 	globalHub.Unregister(userID, ch)
 }

@@ -157,7 +157,7 @@ func ApprovalInstanceManualCC(c *gin.Context) {
 	response.OKMsg(c, "已发送抄送")
 }
 
-// ApprovalInstanceDelete DELETE /{APIPrefix}/approval/instance/:id 删除已终结实例
+// ApprovalInstanceDelete DELETE /{APIPrefix}/approval/instance/:id 删除从未提交过的草稿实例
 func ApprovalInstanceDelete(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

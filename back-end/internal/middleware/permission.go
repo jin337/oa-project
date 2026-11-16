@@ -3,7 +3,9 @@ package middleware
 import (
 	"back-end/internal/database"
 	"back-end/internal/model"
+	"back-end/internal/pkg/logger"
 	"back-end/internal/pkg/response"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,7 +19,7 @@ import (
 // 背景：hasAnyPermission 每次受保护请求都要 Preload 角色+菜单（2~3 次 join 查询），
 // 权限数据变更频率极低（角色/菜单/用户角色调整）而读取频率为每请求一次，适合缓存。
 // 策略：按用户缓存「超管标记 + 权限码集合」，TTL 兜底过期 + 变更点显式失效。
-// 单实例部署下失效即时生效；多实例横向扩容时依赖 TTL（5 分钟）收敛，如需强一致可升级 Redis pub/sub。
+// 单实例部署下失效即时生效；多实例通过数据库权限版本 + 500ms 轮询收敛，最坏窗口小于 1 秒。
 
 const permCacheTTL = 5 * time.Minute
 
@@ -62,13 +64,107 @@ func TokenVersionOf(userID uint) (version uint, userExists bool) {
 	return e.tokenVersion, e.userExists
 }
 
-// InvalidatePermCache 清空全部用户权限缓存（角色/菜单/用户角色关系任何变更后调用）。
+// InvalidatePermCache 清空本实例全部用户权限缓存（登录等只需本地失效的场景）。
 // 全清而非逐用户失效：角色变更影响面难以精确枚举（多对多），全清代价仅一次缓存重建，简单可靠。
 func InvalidatePermCache() {
 	permCacheGeneration.Add(1)
 	permCacheMu.Lock()
 	permCacheStore = map[uint]*permCacheEntry{}
 	permCacheMu.Unlock()
+}
+
+// ensurePermissionVersionRow 读取权限版本行；首次读取或迁移未种子时幂等创建。
+func ensurePermissionVersionRow() (*model.PermissionVersion, error) {
+	if database.DB == nil {
+		return nil, errors.New("数据库未初始化")
+	}
+	var row model.PermissionVersion
+	err := database.DB.First(&row, 1).Error
+	if err == nil {
+		return &row, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	row = model.PermissionVersion{ID: 1, Version: 1}
+	if err := database.DB.Create(&row).Error; err != nil {
+		// 多实例同时启动可能并发创建，唯一主键冲突后回读一次即可
+		var existing model.PermissionVersion
+		if readErr := database.DB.First(&existing, 1).Error; readErr == nil {
+			return &existing, nil
+		}
+		return nil, err
+	}
+	return &row, nil
+}
+
+// PermissionVersion 读取全局权限版本号；供跨实例轮询判断权限是否已变更。
+func PermissionVersion() (uint64, error) {
+	row, err := ensurePermissionVersionRow()
+	if err != nil {
+		return 0, err
+	}
+	return row.Version, nil
+}
+
+// BumpPermissionVersion 递增全局权限版本号，作为跨实例的失效信号。
+func BumpPermissionVersion() error {
+	if _, err := ensurePermissionVersionRow(); err != nil {
+		return err
+	}
+	return database.DB.Model(&model.PermissionVersion{}).
+		Where("id = ?", 1).
+		Updates(map[string]interface{}{
+			"version":    gorm.Expr("version + 1"),
+			"updated_at": time.Now(),
+		}).Error
+}
+
+// InvalidatePermCacheGlobally 权限变更后调用：先清本实例缓存，
+// 再递增数据库版本，让其他实例在轮询到版本变化时也清缓存。
+func InvalidatePermCacheGlobally() {
+	InvalidatePermCache()
+	if err := BumpPermissionVersion(); err != nil {
+		// 版本递增失败不能影响已经成功的权限变更；本实例仍已即时失效，
+		// 其他实例最迟由 TTL 兜底。
+		logger.Errorf("[权限] 递增全局权限版本失败: %v", err)
+	}
+}
+
+// StartPermissionVersionWatcher 启动跨实例权限版本轮询：
+// 检测到版本变化时清空本实例权限缓存，并回调 onChange（用于 SSE 通知前端刷新）。
+// 500ms 轮询把多实例的失效窗口压到秒级以内；单实例变更仍由 InvalidatePermCacheGlobally 即时生效。
+func StartPermissionVersionWatcher(onChange func()) {
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+
+		var last uint64
+		var loggedErr bool
+		for range ticker.C {
+			version, err := PermissionVersion()
+			if err != nil {
+				if !loggedErr {
+					logger.Errorf("[权限] 轮询全局权限版本失败: %v", err)
+					loggedErr = true
+				}
+				continue
+			}
+			loggedErr = false
+			if last == 0 {
+				last = version
+				continue
+			}
+			if version == last {
+				continue
+			}
+			last = version
+			InvalidatePermCache()
+			if onChange != nil {
+				onChange()
+			}
+		}
+	}()
 }
 
 // loadPermEntry 读取（或重建）用户权限缓存条目：超管短路 + 权限码集合 + 凭证版本。

@@ -12,8 +12,9 @@ package service
 //	草稿(6) --提交--> 进行中(0) --全部节点完成--> 已通过(1)
 //	进行中(0) --审批人不同意并退回前置已通过审批人--> 进行中(0)（目标审批人重新生成待办）
 //	进行中(0) --无前置审批人时退回--> 已退回(3)，发起人修改后重新提交
-//	进行中(0) --发起人撤回--> 草稿(6)（回退草稿，可重新编辑/重新提交）
-//	已拒绝(2)为系统自动拒绝与历史数据枚举；新人工审批入口不再产生终态拒绝；已驳回/已作废/草稿可按规则删除
+//	进行中(0) --发起人撤回--> 已撤回(5)（保留单号与审批记录；可提交审核继续走原单）
+//	已撤回(5) --另存为草稿--> 新建草稿(6)（复制业务数据，原单保留，可单独删除新草稿）
+//	已拒绝(2)为系统自动拒绝与历史数据枚举；新人工审批入口不再产生终态拒绝；仅从未提交过的草稿可按规则删除
 //
 // 所有多表更新（实例状态 + 快照 + 任务）均在同一个数据库事务内执行。
 // ============================================================
@@ -436,16 +437,16 @@ func saveDraftCreate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 }
 
 // saveDraftUpdate 更新已有草稿实例：
-//  1. 校验草稿存在、属于当前用户、状态=草稿
+//  1. 校验草稿存在、属于当前用户、状态=草稿；已提交过的实例（含已撤回）不得回退为草稿
 //  2. 业务数据以草稿实例已关联的行为准（防止前端漏传 business_data_id 时新建业务行）
 //  3. 事务内更新实例（快照/表单/执行路径/自选成员），状态保持草稿，不新增记录
 func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*model.ApprovalInstance, error) {
 	var instance model.ApprovalInstance
 
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. 加载草稿/已撤回实例并校验归属/状态（两者均可编辑；已撤回编辑保存后转为正式草稿）
+		// 1. 加载草稿实例并校验归属/状态；已撤回等已提交实例不能转为草稿
 		owned, err := loadOwnedInstance(tx, curUserID, req.InstanceID, "编辑",
-			model.InstanceStatusDraft, model.InstanceStatusWithdrawn)
+			model.InstanceStatusDraft)
 		if err != nil {
 			return err
 		}
@@ -480,11 +481,10 @@ func saveDraftUpdate(curUserID uint, req *model.ApprovalInstanceCreateReq) (*mod
 			selfSelectJSON = string(b)
 		}
 
-		// 6. 严格更新该草稿/已撤回实例（UPDATE ... WHERE id=? AND status IN (草稿,已撤回)），不新增记录；
-		// 保存后统一落为草稿，进入草稿箱继续完善
+		// 6. 严格更新该草稿实例（UPDATE ... WHERE id=? AND status=草稿），不新增记录；
+		// 状态保持草稿，进入草稿箱继续完善
 		res := tx.Model(&model.ApprovalInstance{}).
-			Where("id = ? AND status IN ?", instance.ID,
-				[]int{model.InstanceStatusDraft, model.InstanceStatusWithdrawn}).
+			Where("id = ? AND status = ?", instance.ID, model.InstanceStatusDraft).
 			Updates(map[string]interface{}{
 				"app_id":                 instance.AppID,
 				"business_table":         ctx.app.TableName,
@@ -928,8 +928,9 @@ func ApprovalInstanceManualCC(curUserID, instanceID uint, userIDs []uint) error 
 }
 
 // ApprovalInstanceDelete 删除流程实例（软删除）
-// 仅允许发起人删除「草稿」实例——从未正式发起、未产生任何审批结果的记录。
-// 已撤回需先编辑保存（转为草稿）后到草稿箱删除；已驳回/已作废/已通过/已拒绝等留有流程痕迹的记录不允许删除。
+// 仅允许发起人删除「从未提交过的草稿」：status=草稿 且实例未生成业务单号。
+// 已提交过的审批（含已撤回、已驳回、已作废、已通过、已拒绝）一律不可删除；
+// 已撤回如需继续修改，请使用「另存为草稿」复制出新草稿，原单保留。
 // 同时级联软删除对应的业务表数据，清理该实例产生的通知，并回收已无人引用的附件文件
 func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 	var orphans []string
@@ -938,6 +939,11 @@ func ApprovalInstanceDelete(curUserID, instanceID uint) error {
 			model.InstanceStatusDraft)
 		if err != nil {
 			return err
+		}
+		// 状态为草稿仍可能是历史数据中的“已撤回→草稿”；实例单号只在正式提交时生成，
+		// 因此以 BillNo 为空作为“从未提交过”的兜底校验，避免删掉已提交审批。
+		if strings.TrimSpace(instance.BillNo) != "" {
+			return errors.New("该记录已提交过审批，不能删除")
 		}
 
 		// 级联软删除业务表数据，同时拿到这批数据引用到的附件地址
