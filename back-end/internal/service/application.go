@@ -727,16 +727,24 @@ func ApplicationDataList(appID uint, curUserID uint, req *model.ApplicationDataL
 // 过滤字段：默认用 created_by（创建人）
 // 统一复用 middleware.ResolveDataScope，避免与部门树/用户列表的范围解析分叉。
 func buildDataPermissionConds(userID uint, colSet map[string]bool) ([]string, []interface{}) {
-	scope := middleware.ResolveDataScope(userID)
+	return buildDataPermissionCondsForScope(middleware.ResolveDataScope(userID), userID, colSet)
+}
 
+// buildDataPermissionCondsForScope 是 buildDataPermissionConds 的纯条件构建部分，
+// 单独拆出便于测试失败关闭分支。scope 为 nil 时按无权限处理。
+func buildDataPermissionCondsForScope(scope *middleware.DataScopeResult, userID uint, colSet map[string]bool) ([]string, []interface{}) {
 	// 全部数据，不过滤
-	if scope.All {
+	if scope != nil && scope.All {
 		return []string{}, []interface{}{}
 	}
+	if scope == nil {
+		return []string{"1 = 0"}, []interface{}{}
+	}
 
-	// 没有 created_by 字段，不过滤
+	// 缺 created_by 时不能跳过过滤：否则“仅本部门/仅本人”会退化成“全部数据”。
+	// 这里失败关闭返回空结果；存量表需补列并回填后再开放第 3/4/5 档数据范围。
 	if !colSet["created_by"] {
-		return []string{}, []interface{}{}
+		return []string{"1 = 0"}, []interface{}{}
 	}
 
 	// 部门范围（自定义/本部门/本部门及以下）按部门集合查询用户 ID；
