@@ -455,6 +455,7 @@ export default function UserManage() {
     (canEdit || canReset || canProfile || canDelete || canUnlock) && {
       key: 'action',
       title: '操作',
+      width: 240,
       render: (_, record) => (
         <Space wrap>
           {canReset && (

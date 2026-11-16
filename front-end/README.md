@@ -67,7 +67,7 @@ front-end/
 │   │   ├── request.js          # axios 实例、Token 注入、统一错误处理
 │   │   ├── auth.js / menu.js / user.js / role.js / dept.js
 │   │   ├── application.js / approval.js / notification.js
-│   │   ├── apiDefinition.js / examine*.js / operationLog.js / fetchAll.js
+│   │   ├── apiDefinition.js / examineGroup.js / operationLog.js / fetchAll.js
 │   ├── components/             # 通用组件（弹窗选择器、编辑器、错误边界等）
 │   ├── config/                 # 全局常量（app.js 应用名、tab-cache.js 页签缓存策略）
 │   ├── error/                  # 错误页（Forbidden 等）
