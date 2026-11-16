@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"back-end/internal/model"
@@ -11,6 +13,7 @@ import (
 	"back-end/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // OperationLogList GET /{APIPrefix}/operation-logs 操作审计日志（分页+筛选）
@@ -26,6 +29,25 @@ func OperationLogList(c *gin.Context) {
 		return
 	}
 	response.OK(c, response.PageResult{List: list, Total: total, Page: req.Page, Size: req.Size})
+}
+
+// OperationLogDetail GET /{APIPrefix}/operation-logs/:id 单条审计日志详情（含完整请求体）
+func OperationLogDetail(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		response.Fail(c, response.CodeParamError, "日志 ID 不合法")
+		return
+	}
+	log, err := service.OperationLogDetail(uint(id))
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		response.Fail(c, response.CodeNotFound, "操作日志不存在")
+		return
+	}
+	if err != nil {
+		response.Fail(c, response.CodeServerError, "查询操作日志失败")
+		return
+	}
+	response.OK(c, log)
 }
 
 // OperationLogExport GET /{APIPrefix}/operation-logs/export 按筛选条件导出审计日志 xlsx。

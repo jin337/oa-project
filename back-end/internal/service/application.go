@@ -1783,16 +1783,80 @@ func syncTableKeyReferences(app *model.Application, oldKey, newKey string) error
 	return nil
 }
 
+// ErrApplicationDeleteNotFound 删除应用时目标配置不存在。
+var ErrApplicationDeleteNotFound = errors.New("页面配置不存在")
+
+// ApplicationDeleteBlockedError 删除应用被业务规则拦截（可读提示直接返回给前端）。
+type ApplicationDeleteBlockedError struct {
+	Msg string
+}
+
+func (e *ApplicationDeleteBlockedError) Error() string {
+	return e.Msg
+}
+
 // ApplicationDelete 删除页面配置（软删除），并级联物理删除关联的业务数据表：
 //  1. 先按 id 查询配置记录，获取主表 TableName 与子表 SubTableName（逗号分隔多个）
-//  2. 提取主表与拆分后的所有子表，经 bizTableName 拼接前缀，并经 isValidTableName 校验合法性（防 SQL 注入）
-//  3. 遍历所有合法表名执行 DROP TABLE IF EXISTS 物理删除
-//  4. 所有关联物理表删除成功后再软删除配置记录
-//  5. 查询不到配置记录或物理删表失败均中断并返回错误
+//  2. 校验应用必须处于停用状态，且没有关联审批实例、关联菜单页面、被其他配置共用的表
+//  3. 提取主表与拆分后的所有子表，经 bizTableName 拼接前缀，并经 isValidTableName 校验合法性（防 SQL 注入）
+//  4. 遍历所有合法表名执行 DROP TABLE IF EXISTS 物理删除
+//  5. 所有关联物理表删除成功后再软删除配置记录
+//  6. 查询不到配置记录、业务校验不通过或物理删表失败均中断并返回错误
 func ApplicationDelete(id uint) error {
 	var app model.Application
 	if err := database.DB.First(&app, id).Error; err != nil {
-		return errors.New("页面配置不存在")
+		return ErrApplicationDeleteNotFound
+	}
+
+	// 强校验：只有停用状态允许删除。前端隐藏按钮只是交互约束，不能作为安全边界。
+	if app.Status != 0 {
+		return &ApplicationDeleteBlockedError{Msg: "应用当前未停用，请先停用该应用后再删除"}
+	}
+
+	// 强校验：存在任何审批实例都拒绝删除。删除会 DROP 业务表并软删应用，
+	// 而审批列表/详情依赖应用配置与业务表；若只允许历史记录存在，删除后历史记录会失去应用名和业务数据。
+	var approvalCount, ongoingCount int64
+	if err := database.DB.Model(&model.ApprovalInstance{}).
+		Where("app_id = ?", id).Count(&approvalCount).Error; err != nil {
+		return fmt.Errorf("检查关联审批实例失败: %w", err)
+	}
+	if err := database.DB.Model(&model.ApprovalInstance{}).
+		Where("app_id = ? AND status = ?", id, 0).Count(&ongoingCount).Error; err != nil {
+		return fmt.Errorf("检查进行中审批实例失败: %w", err)
+	}
+	if approvalCount > 0 {
+		msg := fmt.Sprintf("该应用仍关联 %d 条审批实例", approvalCount)
+		if ongoingCount > 0 {
+			msg += fmt.Sprintf("（其中进行中 %d 条）", ongoingCount)
+		}
+		msg += "，删除会丢失这些审批记录依赖的应用配置和业务数据，请先处理后再删除"
+		return &ApplicationDeleteBlockedError{Msg: msg}
+	}
+
+	// 强校验：菜单通过 link_app = "应用编码:页面状态" 关联应用，删除后会留下死菜单入口。
+	if app.Code != "" {
+		var menuCount, enabledMenuCount int64
+		// link_app 形如 "应用编码:页面状态"。用 LEFT + 字符长度精确比较前缀，
+		// 避免 LIKE 把 code 中的 "_"、"% " 当作通配符而误伤其他应用。
+		linkPrefix := app.Code + ":"
+		linkQuery := "link_app = ? OR LEFT(link_app, CHAR_LENGTH(?)) = ?"
+		linkArgs := []any{app.Code, linkPrefix, linkPrefix}
+		if err := database.DB.Model(&model.Menu{}).
+			Where(linkQuery, linkArgs...).Count(&menuCount).Error; err != nil {
+			return fmt.Errorf("检查关联菜单页面失败: %w", err)
+		}
+		if err := database.DB.Model(&model.Menu{}).
+			Where(linkQuery, linkArgs...).Where("status = ?", 1).Count(&enabledMenuCount).Error; err != nil {
+			return fmt.Errorf("检查启用菜单页面失败: %w", err)
+		}
+		if menuCount > 0 {
+			msg := fmt.Sprintf("该应用仍被 %d 个菜单页面引用", menuCount)
+			if enabledMenuCount > 0 {
+				msg += fmt.Sprintf("（其中启用 %d 个）", enabledMenuCount)
+			}
+			msg += "，请先在菜单管理中解除关联后再删除"
+			return &ApplicationDeleteBlockedError{Msg: msg}
+		}
 	}
 
 	// 删除前确认主表/子表没有被其他页面配置共用：历史脏配置可能已共表，

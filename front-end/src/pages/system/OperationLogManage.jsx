@@ -3,6 +3,7 @@ import {
   Card,
   Checkbox,
   DatePicker,
+  Descriptions,
   Dropdown,
   Input,
   Menu,
@@ -10,12 +11,19 @@ import {
   Popover,
   Select,
   Space,
+  Spin,
   Table,
   Tag,
   Typography,
 } from '@arco-design/web-react'
-import { IconList, IconRefresh, IconSettings } from '@arco-design/web-react/icon'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  IconDown,
+  IconList,
+  IconRefresh,
+  IconRight,
+  IconSettings,
+} from '@arco-design/web-react/icon'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as operationLogApi from 'src/api/operationLog'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { formatTime } from 'src/utils/format'
@@ -23,20 +31,32 @@ import { formatTime } from 'src/utils/format'
 const RangePicker = DatePicker.RangePicker
 const MenuItem = Menu.Item
 
-// 可配置列 key（操作内容列固定展示，不参与列设置）
-const ALL_COL_KEYS = [
-  'created_at',
-  'username',
-  'method',
-  'path',
-  'status',
-  'ip',
-  'elapsed_ms',
-  'detail',
-]
+// 可配置列 key（展开行内容不参与列设置）
+const ALL_COL_KEYS = ['created_at', 'username', 'method', 'path', 'status', 'ip', 'elapsed_ms']
 
 // 请求方法 -> Tag 颜色（视觉区分写操作类型）
 const METHOD_COLOR = { POST: 'arcoblue', PUT: 'orange', DELETE: 'red', PATCH: 'purple' }
+
+const formatBytes = (n) => {
+  if (!n) return '-'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+// 代码块：保留 pre 的换行/滚动能力，复制入口使用 Typography.copyable。
+// Typography 的 code 是行内样式，直接替代 pre 会丢失多行与滚动，不适合长请求体。
+const renderCodeBlock = (text) => {
+  if (!text) return '-'
+  return (
+    <div className="flex">
+      <pre className="m-0 flex-1 rounded bg-(--color-fill-1) px-2.5 py-2 text-xs break-all whitespace-pre-wrap">
+        {text}
+      </pre>
+      <Typography.Text copyable={{ text }} />
+    </div>
+  )
+}
 
 export default function OperationLogManage() {
   const [list, setList] = useState([])
@@ -55,6 +75,13 @@ export default function OperationLogManage() {
   // 表格密度 & 列可见性
   const [tableSize, setTableSize] = useState('default')
   const [visibleCols, setVisibleCols] = useState(ALL_COL_KEYS)
+
+  // 展开行：按需拉取完整请求体，避免列表一次返回所有大字段
+  const [expandedKeys, setExpandedKeys] = useState([])
+  const [detailMap, setDetailMap] = useState({})
+  const [detailLoading, setDetailLoading] = useState({})
+  const detailCacheRef = useRef({})
+  const detailLoadingRef = useRef({})
 
   // 生效筛选条件 → 请求参数（列表与导出共用，保证口径一致）
   const buildFilterParams = useCallback((fromApplied) => {
@@ -83,6 +110,31 @@ export default function OperationLogManage() {
     },
     [page, size, applied, buildFilterParams],
   )
+
+  // 展开行按需加载详情：列表不返回 body，展开时才拉完整记录；同一行只请求一次。
+  const loadDetail = useCallback(async (id) => {
+    if (detailCacheRef.current[id] || detailLoadingRef.current[id]) return
+    detailLoadingRef.current[id] = true
+    setDetailLoading((prev) => ({ ...prev, [id]: true }))
+    try {
+      const res = await operationLogApi.getOperationLog(id)
+      detailCacheRef.current[id] = res.data
+      setDetailMap((prev) => ({ ...prev, [id]: res.data }))
+    } catch {
+      // 错误已在请求层提示；展开行保留列表摘要信息
+    } finally {
+      detailLoadingRef.current[id] = false
+      setDetailLoading((prev) => ({ ...prev, [id]: false }))
+    }
+  }, [])
+
+  const handleExpand = (record, expanded) => {
+    setExpandedKeys((prev) => {
+      if (expanded) return prev.includes(record.id) ? prev : [...prev, record.id]
+      return prev.filter((id) => id !== record.id)
+    })
+    if (expanded) loadDetail(record.id)
+  }
 
   // 导出：按已生效筛选条件下载 xlsx。
   // 响应为 blob：type 为 JSON 时说明后端返回的是业务错误（如权限/参数），解析后提示；
@@ -208,31 +260,6 @@ export default function OperationLogManage() {
       ),
     },
     {
-      key: 'detail',
-      title: '请求参数',
-      dataIndex: 'query',
-      width: 300,
-      render: (_, r) => {
-        // 登录/密码等凭据类接口请求体已脱敏，仅展示 URL 查询参数
-        const text = [r.query && `?${r.query}`, r.body && `body: ${r.body}`]
-          .filter(Boolean)
-          .join(' ')
-        // 表格 auto 布局下最后一列会被拉伸，列 width 不生效；
-        // 必须用 style.maxWidth 给 Ellipsis 一个受限宽度，才会出现省略号并启用内置 tooltip
-        return (
-          <Typography.Ellipsis
-            showTooltip={{
-              content: <div className="max-h-60 overflow-auto px-2 py-3">{text}</div>,
-              className: '[&_.arco-tooltip-content]:p-0!',
-            }}
-            style={{ maxWidth: 300 }}
-          >
-            {text || '-'}
-          </Typography.Ellipsis>
-        )
-      },
-    },
-    {
       key: 'status',
       title: '状态',
       dataIndex: 'status',
@@ -271,6 +298,63 @@ export default function OperationLogManage() {
   )
 
   const visibleColumns = columns.filter((c) => visibleCols.includes(c.key))
+
+  // 展开行：用 Descriptions 承载完整请求上下文；请求体/查询参数用可滚动 pre 展示。
+  const renderExpandedRow = (record) => {
+    if (detailLoading[record.id]) {
+      return (
+        <div className="flex justify-center py-6">
+          <Spin />
+        </div>
+      )
+    }
+    const d = detailMap[record.id] || record
+    return (
+      <Descriptions
+        className="bg-white [&_.arco-descriptions-table]:border-collapse!"
+        column={2}
+        border
+        size={tableSize}
+        data={[
+          { label: '操作时间', value: formatTime(d.created_at) },
+          { label: '操作人', value: d.username || (d.user_id ? `#${d.user_id}` : '-') },
+          {
+            label: '请求方法',
+            value: <Tag color={METHOD_COLOR[d.method] || 'gray'}>{d.method}</Tag>,
+          },
+          {
+            label: '状态',
+            value: (
+              <Tag
+                color={
+                  d.status >= 200 && d.status < 400
+                    ? 'green'
+                    : d.status === 403
+                      ? 'orange'
+                      : d.status >= 400
+                        ? 'red'
+                        : 'gray'
+                }
+              >
+                {d.status}
+              </Tag>
+            ),
+          },
+          { label: 'IP', value: d.ip || '-' },
+          { label: '耗时', value: `${d.elapsed_ms} ms` },
+          { label: '请求体大小', value: formatBytes(d.body_bytes) },
+          { label: 'Content-Type', value: d.content_type || '-' },
+          { label: 'Request ID', value: d.request_id || '-', span: 2 },
+          { label: 'User-Agent', value: d.user_agent || '-', span: 2 },
+          { label: '路径', value: d.path || '-', span: 2 },
+          ...(d.query
+            ? [{ label: '查询参数', value: renderCodeBlock(`?${d.query}`), span: 2 }]
+            : []),
+          { label: '请求体', value: d.body ? renderCodeBlock(d.body) : '-', span: 2 },
+        ]}
+      />
+    )
+  }
 
   return (
     <Card title="操作日志">
@@ -321,10 +405,10 @@ export default function OperationLogManage() {
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          仅记录写操作（新增/修改/删除/登录等）；凭据类接口请求体已脱敏
+          仅记录非 GET 请求；展开行查看完整请求上下文，密码与 token 等凭据值已脱敏
         </Typography.Text>
         <Space>
-          <Button size="small" loading={exporting} onClick={handleExport}>
+          <Button size="small" type="primary" loading={exporting} onClick={handleExport}>
             导出
           </Button>
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
@@ -349,6 +433,23 @@ export default function OperationLogManage() {
         data={list}
         loading={loading}
         size={tableSize}
+        expandedRowRender={renderExpandedRow}
+        expandedRowKeys={expandedKeys}
+        onExpand={handleExpand}
+        expandProps={{
+          expandRowByClick: true,
+          icon: ({ expanded, record }) =>
+            expanded ? (
+              <button>
+                <IconDown />
+              </button>
+            ) : (
+              <button>
+                <IconRight />
+              </button>
+            ),
+          width: 60,
+        }}
         pagination={{
           current: page,
           pageSize: size,

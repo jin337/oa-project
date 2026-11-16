@@ -213,7 +213,7 @@ curl http://127.0.0.1:8180/
 | 后端服务 | `8180` | `server.port` |
 | API 前缀 | `/v1/api` | `server.api_prefix` + `VITE_API_PREFIX` |
 | 健康检查 | `GET /` | 后端根路径 |
-| 附件访问 | `/uploads/*` | 后端静态目录 |
+| 附件访问 | `/uploads/*` | 后端受保护下载路由（需登录） |
 | 前端开发端口 | `8181` | `vite.config.js` |
 | 前端生产 base | `/oa` | `VITE_BASE_PATH` |
 | 前端构建产物 | `front-end/web/` | `vite.config.js` 的 `outDir` |
@@ -283,6 +283,10 @@ server {
 
     location /uploads/ {
         proxy_pass http://127.0.0.1:8180;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
@@ -354,7 +358,7 @@ RestartSec=5
 | 审批状态机 | 草稿(6) → 进行中(0) → 已通过(1) / 已拒绝(2) / 已退回(3)，支持撤回；退回后重新提交走完整流程 | [后端文档](back-end/README.md) |
 | 接口统一分发 | 外部只认 `method + path`，内部 SQL / HTTP 实现可切换；被引用接口禁止删除 | 见下文 |
 | 即时通知 | 审批事件在事务提交后推送，SSE 心跳保活，多标签页广播同步 | [前端文档](front-end/README.md) |
-| 文件上传 | `POST /v1/api/upload?app_code=xxx`，按应用分目录存储，经 `/uploads/*` 访问 | [后端文档](back-end/README.md) |
+| 文件上传 | `POST /v1/api/upload?app_code=xxx`，按应用分目录存储，经受保护 `/uploads/*` 路由访问（需登录） | [后端文档](back-end/README.md) |
 
 **接口统一分发**：`GET/POST/PUT/DELETE /v1/api/interfaces/*path` 按 `method + path` 匹配已启用定义；`type=sql` 仅允许 SELECT 模板，`type=http` 转发内部相对路径并原样透传结果。表单元素可在数据源与 `fetch_and_fill` 中引用接口，运行时自动走统一分发。
 
@@ -370,7 +374,7 @@ RestartSec=5
 | 前端接口 404 / 502 | 后端是否在 8180、`VITE_API_PREFIX` 与 Nginx 反代是否一致 |
 | 生产构建后白屏 | `VITE_BASE_PATH` 与 Nginx location 不匹配，或缺少 SPA fallback |
 | 通知不实时、断线不恢复 | 代理未对 SSE 关闭缓冲，或缺 `X-Accel-Buffering: no` |
-| 上传失败 / 附件 403 | `uploads/` 目录权限、Nginx `/uploads/` 反代配置 |
+| 上传失败 / 附件 401 | `uploads/` 目录权限与磁盘空间、Nginx `/uploads/` 反代及 `X-Forwarded-Proto`、登录 Cookie `oa_file_token` 是否已签发 |
 | 迁移失败但服务仍启动 | 迁移失败只记录日志不阻断；查看 `logs/migrate-{env}.log` 后重跑 |
 | 多实例下限流失效 | 限流与锁定为进程内计数，需改 Redis 共享实现 |
 

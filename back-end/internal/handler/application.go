@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -204,7 +205,15 @@ func ApplicationDelete(c *gin.Context) {
 		return
 	}
 	if err := service.ApplicationDelete(id); err != nil {
-		response.Fail(c, response.CodeServerError, err.Error())
+		var blocked *service.ApplicationDeleteBlockedError
+		switch {
+		case errors.Is(err, service.ErrApplicationDeleteNotFound):
+			response.Fail(c, response.CodeNotFound, err.Error())
+		case errors.As(err, &blocked):
+			response.Fail(c, response.CodeParamError, err.Error())
+		default:
+			response.Fail(c, response.CodeServerError, err.Error())
+		}
 		return
 	}
 	response.OKMsg(c, "删除成功")

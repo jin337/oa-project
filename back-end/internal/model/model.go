@@ -999,17 +999,21 @@ func (Notification) TableName() string { return "oa_notifications" }
 // OperationLog 操作审计日志：记录所有非 GET 写操作（登录/授权/配置变更/删除等）
 // 由 middleware.OperationLog 异步落库；GET 查询不记录，避免噪音与存储膨胀
 type OperationLog struct {
-	ID        uint      `gorm:"primarykey" json:"id"`
-	CreatedAt time.Time `json:"created_at" gorm:"index;comment:操作时间"`
-	UserID    uint      `json:"user_id" gorm:"index;comment:操作人ID(未登录为0)"`
-	Username  string    `json:"username" gorm:"size:64;comment:操作人用户名快照"`
-	Method    string    `json:"method" gorm:"size:10;comment:请求方法"`
-	Path      string    `json:"path" gorm:"size:191;index;comment:请求路径"`
-	Query     string    `json:"query" gorm:"size:512;comment:URL查询参数"`
-	Body      string    `json:"body" gorm:"size:2000;comment:请求体(截断;敏感接口脱敏)"`
-	Status    int       `json:"status" gorm:"comment:HTTP状态码"`
-	IP        string    `json:"ip" gorm:"size:64;comment:客户端IP"`
-	ElapsedMs int64     `json:"elapsed_ms" gorm:"comment:耗时(毫秒)"`
+	ID          uint      `gorm:"primarykey" json:"id"`
+	CreatedAt   time.Time `json:"created_at" gorm:"index;comment:操作时间"`
+	UserID      uint      `json:"user_id" gorm:"index;comment:操作人ID(未登录为0)"`
+	Username    string    `json:"username" gorm:"size:64;comment:操作人用户名快照"`
+	Method      string    `json:"method" gorm:"size:10;comment:请求方法"`
+	Path        string    `json:"path" gorm:"size:191;index;comment:请求路径"`
+	Query       string    `json:"query" gorm:"type:text;comment:URL查询参数(敏感值脱敏)"`
+	Body        string    `json:"body" gorm:"type:longtext;comment:请求体(完整;敏感字段脱敏)"`
+	Status      int       `json:"status" gorm:"comment:HTTP状态码"`
+	IP          string    `json:"ip" gorm:"size:64;comment:客户端IP"`
+	ElapsedMs   int64     `json:"elapsed_ms" gorm:"comment:耗时(毫秒)"`
+	UserAgent   string    `json:"user_agent" gorm:"size:512;comment:User-Agent"`
+	ContentType string    `json:"content_type" gorm:"size:128;comment:Content-Type"`
+	RequestID   string    `json:"request_id" gorm:"size:64;index;comment:请求ID"`
+	BodyBytes   int64     `json:"body_bytes" gorm:"comment:请求体字节数"`
 }
 
 func (OperationLog) TableName() string { return "oa_operation_logs" }

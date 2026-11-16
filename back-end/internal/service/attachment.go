@@ -28,7 +28,7 @@ import (
 //
 // 文件删除无法回滚，因此回收必须在业务事务**提交之后**执行；单个文件出错只记日志，不阻断主流程。
 
-// uploadURLPrefix 上传接口回写业务数据的地址前缀（静态路由 /uploads 与 config.UploadDir 同源）
+// uploadURLPrefix 上传接口回写业务数据的地址前缀（受保护下载路由 /uploads 与 config.UploadDir 同源）
 const uploadURLPrefix = "/uploads/"
 
 // uploadPathPattern 匹配业务数据里出现的本机附件地址，如 /uploads/app_xxx/20261014150620_54700.png

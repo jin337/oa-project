@@ -303,7 +303,7 @@ func RateLimit() gin.HandlerFunc {
 //   - X-Content-Type-Options: nosniff —— 禁 MIME 嗅探；
 //   - Referrer-Policy / Permissions-Policy —— 收敛引用信息泄漏与浏览器能力授权。
 //
-// 注意：本中间件只覆盖后端响应（API 与 /uploads 静态资源）。
+// 注意：本中间件只覆盖后端响应（API 与受保护的 /uploads 文件路由）。
 // SPA 的 index.html 由前端静态服务器（Nginx 等）下发，点击劫持防护需在该层同步配置，
 // 见 README「安全响应头」一节。
 func SecurityHeaders() gin.HandlerFunc {

@@ -1,51 +1,53 @@
-package service
+package test
 
 import (
 	"strings"
 	"testing"
+
+	"back-end/internal/service"
 )
 
 func TestValidateFlowNodesApprovers(t *testing.T) {
 	cases := []struct {
 		name    string
-		nodes   []flowNode
+		nodes   []service.FlowNode
 		wantErr string
 	}{
 		{
 			name: "指定人员审批节点有审批人",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "n1", Type: 2, Label: "部门负责人", ApproverType: 1,
-				Members: []flowMember{{Type: 1, Key: "user_1"}},
+				Members: []service.FlowMember{{Type: 1, Key: "user_1"}},
 			}},
 		},
 		{
 			name: "指定人员审批节点为空",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "n1", Type: 2, Label: "部门负责人", ApproverType: 1,
 			}},
 			wantErr: "未配置审批人",
 		},
 		{
 			name: "审批人 key 非法",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "n1", Type: 2, Label: "部门负责人", ApproverType: 1,
-				Members: []flowMember{{Type: 1, Key: "bad-key"}},
+				Members: []service.FlowMember{{Type: 1, Key: "bad-key"}},
 			}},
 			wantErr: "无效审批人配置",
 		},
 		{
 			name: "发起人自选配置期允许为空",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "n1", Type: 2, Label: "发起人自选", ApproverType: 3,
 			}},
 		},
 		{
 			name: "条件分支内审批节点为空",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "b1", Type: 4, Label: "条件分支",
-				Branches: []flowBranch{{
+				Branches: []service.FlowBranch{{
 					ID: "br1", Label: "金额大于 100",
-					Children: []flowNode{{
+					Children: []service.FlowNode{{
 						ID: "n1", Type: 2, Label: "财务审批", ApproverType: 1,
 					}},
 				}},
@@ -54,7 +56,7 @@ func TestValidateFlowNodesApprovers(t *testing.T) {
 		},
 		{
 			name: "发起人与抄送节点为空不阻断",
-			nodes: []flowNode{
+			nodes: []service.FlowNode{
 				{ID: "start", Type: 1, Label: "发起人", InitiatorType: 3},
 				{ID: "cc1", Type: 3, Label: "抄送人"},
 			},
@@ -62,7 +64,7 @@ func TestValidateFlowNodesApprovers(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateFlowNodesApprovers(tc.nodes)
+			err := service.ValidateFlowNodesApprovers(tc.nodes)
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("expect nil error, got %v", err)
@@ -77,23 +79,23 @@ func TestValidateFlowNodesApprovers(t *testing.T) {
 }
 
 func TestValidateExecutionPathApprovers(t *testing.T) {
-	member := []flowMember{{Type: 1, Key: "user_1"}}
+	member := []service.FlowMember{{Type: 1, Key: "user_1"}}
 	cases := []struct {
 		name     string
-		nodes    []flowNode
+		nodes    []service.FlowNode
 		execPath []string
 		wantErr  string
 	}{
 		{
 			name: "路径上的审批节点有审批人",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "n1", Type: 2, Label: "部门负责人", ApproverType: 1, Members: member,
 			}},
 			execPath: []string{"n1"},
 		},
 		{
 			name: "路径上的审批节点为空",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "n1", Type: 2, Label: "部门负责人", ApproverType: 1,
 			}},
 			execPath: []string{"n1"},
@@ -101,7 +103,7 @@ func TestValidateExecutionPathApprovers(t *testing.T) {
 		},
 		{
 			name: "自选节点未选择审批人",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "n1", Type: 2, Label: "发起人自选", ApproverType: 3,
 			}},
 			execPath: []string{"n1"},
@@ -109,14 +111,14 @@ func TestValidateExecutionPathApprovers(t *testing.T) {
 		},
 		{
 			name: "自选节点已选择审批人",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "n1", Type: 2, Label: "发起人自选", ApproverType: 3, Members: member,
 			}},
 			execPath: []string{"n1"},
 		},
 		{
 			name: "抄送节点为空不影响",
-			nodes: []flowNode{{
+			nodes: []service.FlowNode{{
 				ID: "cc1", Type: 3, Label: "抄送人",
 			}},
 			execPath: []string{"cc1"},
@@ -124,7 +126,7 @@ func TestValidateExecutionPathApprovers(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateExecutionPathApprovers(tc.nodes, tc.execPath)
+			err := service.ValidateExecutionPathApprovers(tc.nodes, tc.execPath)
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("expect nil error, got %v", err)

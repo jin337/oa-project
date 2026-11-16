@@ -31,8 +31,11 @@ func Setup() *gin.Engine {
 	// 根路径健康检查：无需鉴权，用于验证服务与数据库是否正常
 	r.GET("/", handler.Health)
 
-	// 上传文件静态服务：直接映射磁盘 uploads 目录（目录来源与上传、附件回收共用 config.UploadDir）
-	r.Static("/uploads", config.UploadDir)
+	// 上传文件受保护访问：不再把 uploads 目录直接静态映射。
+	// 浏览器 <img>/<a> 无法附带 Authorization，故该组额外接受同源 HttpOnly 附件 Cookie；
+	// 业务 API 仍只认 Bearer，避免 Cookie 鉴权扩大到写接口。
+	uploads := r.Group("/uploads", middleware.JWTAuthWithCookie())
+	uploads.GET("/:appCode/:filename", handler.UploadFile)
 
 	// 业务路由统一注册在配置的前缀下（config.Server.APIPrefix，唯一真值见 config-*.yaml 的 server.api_prefix）
 	api := r.Group(config.Cfg.Server.APIPrefix)

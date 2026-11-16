@@ -1,8 +1,13 @@
 import request from 'src/api/request'
 
-// GET /operation-logs 操作日志分页查询
+// GET /operation-logs 操作日志分页查询（列表不含完整请求体）
 export function listOperationLogs(params) {
   return request.get('/operation-logs', { params })
+}
+
+// GET /operation-logs/detail/:id 单条日志详情（含完整请求体）
+export function getOperationLog(id) {
+  return request.get(`/operation-logs/detail/${id}`)
 }
 
 // GET /operation-logs/export 按筛选条件导出操作日志 xlsx。

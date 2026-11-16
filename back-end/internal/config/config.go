@@ -11,7 +11,7 @@ import (
 )
 
 // UploadDir 上传文件根目录（相对后端运行目录）。
-// 上传写入（handler.Upload）、静态映射（路由 /uploads）与附件回收（service.ReclaimOrphanUploads）
+// 上传写入（handler.Upload）、受保护下载（handler.UploadFile）与附件回收（service.ReclaimOrphanUploads）
 // 共用这一个来源，避免多处各自硬编码后漂移。
 const UploadDir = "uploads"
 

@@ -14,6 +14,12 @@ type RateLimiter = rateLimiter
 var (
 	NewRateLimiter = newRateLimiter
 	MatchKeyword   = matchKeyword
+	// RequestToken 按 Authorization > query token > Cookie 的顺序取凭证；
+	// 测试用于验证普通 API 与附件路由的 Cookie 读取边界。
+	RequestToken = requestToken
+	// 审计请求体/查询串的脱敏函数，测试验证密码、token 不落库。
+	RedactSensitiveBody  = redactSensitiveBody
+	RedactSensitiveQuery = redactSensitiveQuery
 )
 
 // 方法表达式桥接：Go 禁止跨包调用未导出方法，转为包级函数（首参接收者）。

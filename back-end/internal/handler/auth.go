@@ -44,6 +44,7 @@ func Login(c *gin.Context) {
 	}
 	middleware.ClearLoginFail(req.Username) // 成功即清零并立即解锁
 	middleware.InvalidatePermCache()        // 登录时清空本实例权限缓存，保证本次会话鉴权用最新权限
+	middleware.SetAuthCookie(c, res.Token)  // 附件下载 Cookie：浏览器加载图片/点击链接时自动携带
 	response.OK(c, res)
 }
 
@@ -54,6 +55,7 @@ func Logout(c *gin.Context) {
 		response.Fail(c, response.CodeServerError, "登出失败")
 		return
 	}
+	middleware.ClearAuthCookie(c)
 	response.OKMsg(c, "已登出")
 }
 

@@ -13,7 +13,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// OperationLogList 操作审计日志分页查询：按操作人/方法/路径模糊与时间范围过滤
+// OperationLogList 操作审计日志分页查询：按操作人/方法/路径模糊与时间范围过滤。
+// 列表不返回完整请求体（可能很大），展开行通过 OperationLogDetail 按需加载。
 func OperationLogList(req *model.OperationLogListReq) ([]model.OperationLog, int64, error) {
 	db := applyOperationLogFilter(database.DB.Model(&model.OperationLog{}), req)
 	var total int64
@@ -21,8 +22,17 @@ func OperationLogList(req *model.OperationLogListReq) ([]model.OperationLog, int
 		return nil, 0, err
 	}
 	var list []model.OperationLog
-	err := db.Order("id DESC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
+	err := db.Omit("Body", "Query").Order("id DESC").Offset(req.Offset()).Limit(req.Limit()).Find(&list).Error
 	return list, total, err
+}
+
+// OperationLogDetail 按 ID 读取单条审计日志（含完整请求体），供前端展开行加载。
+func OperationLogDetail(id uint) (*model.OperationLog, error) {
+	var log model.OperationLog
+	if err := database.DB.First(&log, id).Error; err != nil {
+		return nil, err
+	}
+	return &log, nil
 }
 
 // applyOperationLogFilter 追加审计日志筛选条件（列表与导出共用，保证两个入口口径一致）

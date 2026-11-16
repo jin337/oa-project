@@ -33,7 +33,7 @@
 | 通知中心 | 站内通知、未读数、已读同步、SSE 实时推送 |
 | 接口管理 | 后台配置 SQL / HTTP 接口，运行时按权限统一分发 |
 | 操作审计 | 非 GET 写操作留痕，按保留天数自动清理 |
-| 文件与导出 | 附件上传与静态访问、列表与单据 Excel 导出 |
+| 文件与导出 | 附件上传与受保护下载、列表与单据 Excel 导出 |
 
 服务启动后会拉起若干常驻协程（版本定时激活、待办超时扫描、审计日志清理），并支持优雅停机。
 
@@ -85,7 +85,7 @@ back-end/
 │   ├── service/                 # 业务逻辑：流程、审批、通知、导出等
 │   └── test/                    # 单元 / 集成测试（*_test.go）
 ├── logs/                        # 运行日志（运行时生成，默认 app-dev.log / gin.log / migrate-dev.log）
-├── uploads/                     # 上传附件目录（通过 /uploads 静态访问）
+├── uploads/                     # 上传附件目录（通过受保护 /uploads 路由访问）
 ├── bin/                         # 发布打包产物
 ├── Taskfile.yml                 # 常用任务封装
 ├── .air.toml                    # air 热重载配置
@@ -372,6 +372,10 @@ server {
     # 附件
     location /uploads/ {
         proxy_pass http://127.0.0.1:8180;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
@@ -459,8 +463,10 @@ sudo systemctl status oa-backend
 | 端点 | 说明 |
 | --- | --- |
 | `GET /` | 健康检查（服务 + 数据库） |
-| `/uploads/*` | 上传附件静态访问 |
+| `/uploads/*` | 上传附件受保护下载（需登录） |
 | `/v1/api/*` | 业务接口，按模块分组 |
+
+> `/uploads/*` 不再直接静态映射磁盘目录：浏览器图片/链接请求通过登录时签发的 HttpOnly Cookie 鉴权，API 客户端仍可用 Bearer Token；普通业务 API 不接受该 Cookie，避免把只读文件鉴权扩散到写接口。
 
 ---
 

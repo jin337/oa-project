@@ -12,7 +12,8 @@ func registerOperationLogRoutes(api *gin.RouterGroup) {
 	logs := api.Group("/operation-logs")
 	logs.Use(middleware.JWTAuth())
 	{
-		logs.GET("", middleware.RequirePermission("system:audit"), handler.OperationLogList)          // 日志列表
-		logs.GET("/export", middleware.RequirePermission("system:audit"), handler.OperationLogExport) // 日志导出 xlsx
+		logs.GET("", middleware.RequirePermission("system:audit"), handler.OperationLogList)              // 日志列表
+		logs.GET("/export", middleware.RequirePermission("system:audit"), handler.OperationLogExport)     // 日志导出 xlsx
+		logs.GET("/detail/:id", middleware.RequirePermission("system:audit"), handler.OperationLogDetail) // 单条详情（完整请求体）
 	}
 }

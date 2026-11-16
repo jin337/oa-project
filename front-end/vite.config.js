@@ -50,7 +50,7 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
         rewrite: () => '/',
       },
-      // 上传文件静态资源代理
+      // 上传文件受保护访问代理（浏览器 Cookie 由 Vite 代理透传）
       '/uploads': {
         target: 'http://localhost:8180',
         changeOrigin: true,

@@ -1,10 +1,29 @@
 package test
 
 import (
+	"os"
 	"testing"
 
 	"back-end/internal/service"
 )
+
+// chdirBackendRoot 将工作目录切到 back-end 根目录，测试结束自动恢复。
+// internal/test 的包目录是 back-end/internal/test，配置和 uploads 都相对于 back-end。
+func chdirBackendRoot(t *testing.T) {
+	t.Helper()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("读取测试工作目录失败: %v", err)
+	}
+	if err := os.Chdir("../.."); err != nil {
+		t.Fatalf("切换后端根目录失败: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWD); err != nil {
+			t.Errorf("恢复测试工作目录失败: %v", err)
+		}
+	})
+}
 
 // TestStripAuditFields 审计字段必须全部剥离，业务字段与主键 / 关联列保留。
 func TestStripAuditFields(t *testing.T) {

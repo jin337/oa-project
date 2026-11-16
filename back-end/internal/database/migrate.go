@@ -79,6 +79,21 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		Version: 3,
+		Name:    "audit_full_payload",
+		Up: func(db *gorm.DB) error {
+			// 审计日志从“截断 2000 字节”升级为完整请求体：body=longtext、query=text；
+			// 同时新增 UA/Content-Type/RequestID/请求体字节数，供展开行追溯。
+			if err := db.AutoMigrate(&model.OperationLog{}); err != nil {
+				return err
+			}
+			if err := db.Migrator().AlterColumn(&model.OperationLog{}, "Query"); err != nil {
+				return err
+			}
+			return db.Migrator().AlterColumn(&model.OperationLog{}, "Body")
+		},
+	},
 }
 
 // seedAuditLogMenu 操作审计菜单：系统管理目录下「操作审计」页面（perm=system:audit）

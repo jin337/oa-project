@@ -16,6 +16,7 @@ package service
 type (
 	FlowNode   = flowNode
 	FlowMember = flowMember
+	FlowBranch = flowBranch
 )
 
 // 常量别名（转交链状态，与 delegatedChainStatus 返回值配套）
@@ -31,19 +32,21 @@ var AuditFields = auditFields
 // 函数别名（var 持有原函数值，调用签名与原函数一致；
 // 参数涉及 FlowNode 等别名类型，外部传入 service.FlowNode 即等价传入 flowNode）
 var (
-	MergeForwardParams            = mergeForwardParams
-	ParseApprovalMode             = parseApprovalMode
-	PostLastNodeIdx               = postLastNodeIdx
-	AutoApprovedComment           = autoApprovedComment
-	IsOrdinaryApprovedTask        = isOrdinaryApprovedTask
-	IsDerivedTask                 = isDerivedTask
-	ReturnCandidateNodeAllowed    = returnCandidateNodeAllowed
-	TaskApprovedAfterReturnTarget = taskApprovedAfterReturnTarget
-	DelegatedChainStatus          = delegatedChainStatus
-	ParseWithdrawWindowDuration   = parseWithdrawWindowDuration
-	BuildDeptTree                 = buildDeptTree
-	StripAuditFields              = stripAuditFields
-	SystemCols                    = systemCols
+	MergeForwardParams             = mergeForwardParams
+	ParseApprovalMode              = parseApprovalMode
+	PostLastNodeIdx                = postLastNodeIdx
+	AutoApprovedComment            = autoApprovedComment
+	IsOrdinaryApprovedTask         = isOrdinaryApprovedTask
+	IsDerivedTask                  = isDerivedTask
+	ReturnCandidateNodeAllowed     = returnCandidateNodeAllowed
+	TaskApprovedAfterReturnTarget  = taskApprovedAfterReturnTarget
+	DelegatedChainStatus           = delegatedChainStatus
+	ParseWithdrawWindowDuration    = parseWithdrawWindowDuration
+	BuildDeptTree                  = buildDeptTree
+	ValidateFlowNodesApprovers     = validateFlowNodesApprovers
+	ValidateExecutionPathApprovers = validateExecutionPathApprovers
+	StripAuditFields               = stripAuditFields
+	SystemCols                     = systemCols
 )
 
 // 函数别名（动态数据导出渲染的纯逻辑：列名进制、标量字符串化、单元格值还原、工作表名处理）
