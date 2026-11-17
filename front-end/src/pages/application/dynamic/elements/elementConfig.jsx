@@ -231,22 +231,38 @@ export const ELEMENT_RENDER_CONFIG = {
   },
   date: {
     renderPreview: (el) => (
-      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} getPopupContainer={(node) => document.body} />
+      <DatePicker
+        style={{ width: '100%' }}
+        placeholder={el.placeholder || undefined}
+        getPopupContainer={(node) => document.body}
+      />
     ),
   },
   datepicker: {
     renderPreview: (el) => (
-      <DatePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} getPopupContainer={(node) => document.body} />
+      <DatePicker
+        style={{ width: '100%' }}
+        placeholder={el.placeholder || undefined}
+        getPopupContainer={(node) => document.body}
+      />
     ),
   },
   time: {
     renderPreview: (el) => (
-      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} getPopupContainer={(node) => document.body} />
+      <TimePicker
+        style={{ width: '100%' }}
+        placeholder={el.placeholder || undefined}
+        getPopupContainer={(node) => document.body}
+      />
     ),
   },
   timepicker: {
     renderPreview: (el) => (
-      <TimePicker style={{ width: '100%' }} placeholder={el.placeholder || undefined} getPopupContainer={(node) => document.body} />
+      <TimePicker
+        style={{ width: '100%' }}
+        placeholder={el.placeholder || undefined}
+        getPopupContainer={(node) => document.body}
+      />
     ),
   },
   switch: {
@@ -270,13 +286,25 @@ export const ELEMENT_RENDER_CONFIG = {
   },
   deptselect: {
     meta: {
-      dataSourceDefaults: { type: 'api', url: '/depts', method: 'GET' },
+      dataSourceDefaults: {
+        type: 'api',
+        url: '/get_depts',
+        method: 'GET',
+        value_field: 'item.name',
+        label: 'item.name',
+      },
     },
     renderPreview: renderDeptPreview,
   },
   userselect: {
     meta: {
-      dataSourceDefaults: { type: 'api', url: '/user-list', method: 'GET' },
+      dataSourceDefaults: {
+        type: 'api',
+        url: '/user-list',
+        method: 'GET',
+        value_field: 'item.nickname',
+        label: 'item.nickname',
+      },
     },
     renderPreview: renderUserPreview,
   },

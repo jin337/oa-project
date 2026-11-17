@@ -399,10 +399,24 @@ func layoutItemMatchesElement(m map[string]interface{}, elementID uint, tableKey
 // removeElementFromLayouts 从应用的草稿/待生效/生效版本布局中移除指定元素引用（含表格列），
 // 返回被清理的引用数量。历史失效版本（status=2）保留原样，供历史追溯。
 func removeElementFromLayouts(appID, elementID uint, tableKey, fieldKey string) (int, error) {
+	return removeLayoutRefs(appID, elementID, tableKey, fieldKey,
+		[]int{model.AppVersionStatusScheduled, model.AppVersionStatusActive, model.AppVersionStatusDraft})
+}
+
+// removeFieldFromLayouts 删除物理字段时清理所有版本布局中的字段引用，包括已失效版本。
+// 字段被 DROP COLUMN 后旧版本中的引用已无意义，保留会形成悬空字段。
+func removeFieldFromLayouts(appID uint, tableKey, fieldKey string) (int, error) {
+	return removeLayoutRefs(appID, 0, tableKey, fieldKey, nil)
+}
+
+// removeLayoutRefs 清理布局引用。statuses 为 nil 表示处理该应用的全部版本。
+func removeLayoutRefs(appID, elementID uint, tableKey, fieldKey string, statuses []int) (int, error) {
 	var versions []model.ApplicationVersion
-	if err := database.DB.Where("application_id = ? AND status IN ?", appID,
-		[]int{model.AppVersionStatusScheduled, model.AppVersionStatusActive, model.AppVersionStatusDraft}).
-		Find(&versions).Error; err != nil {
+	db := database.DB.Where("application_id = ?", appID)
+	if statuses != nil {
+		db = db.Where("status IN ?", statuses)
+	}
+	if err := db.Find(&versions).Error; err != nil {
 		return 0, err
 	}
 	removed := 0
@@ -417,6 +431,7 @@ func removeElementFromLayouts(appID, elementID uint, tableKey, fieldKey string) 
 			if !ok {
 				continue
 			}
+			layoutChanged := false
 			keep := make([]interface{}, 0, len(els))
 			for _, item := range els {
 				m, ok := item.(map[string]interface{})
@@ -426,7 +441,7 @@ func removeElementFromLayouts(appID, elementID uint, tableKey, fieldKey string) 
 				}
 				if layoutItemMatchesElement(m, elementID, tableKey, fieldKey) {
 					removed++
-					changed = true
+					layoutChanged = true
 					continue
 				}
 				// 表格组件的列引用同样需要清理
@@ -449,14 +464,15 @@ func removeElementFromLayouts(appID, elementID uint, tableKey, fieldKey string) 
 						}
 						nm["columns"] = nextCols
 						keep = append(keep, nm)
-						changed = true
+						layoutChanged = true
 						continue
 					}
 				}
 				keep = append(keep, m)
 			}
-			if changed {
+			if layoutChanged {
 				(*lp)["elements"] = keep
+				changed = true
 			}
 		}
 		if changed {

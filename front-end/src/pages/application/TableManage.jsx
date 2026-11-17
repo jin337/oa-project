@@ -209,6 +209,10 @@ export default function TableManage() {
       Message.warning('应用上线中，请先下架后再修改字段')
       return
     }
+    if (record.has_data) {
+      Message.warning('该字段已有数据，不允许修改；请先清空该字段数据')
+      return
+    }
     setEditing(record)
     form.setFieldsValue({
       name: record.name,
@@ -254,6 +258,10 @@ export default function TableManage() {
   const handleDelete = async (record) => {
     if (structureLocked) {
       Message.warning('应用上线中，请先下架后再删除字段')
+      return
+    }
+    if (record.has_data) {
+      Message.warning('该字段已有数据，不允许删除；请先清空该字段数据')
       return
     }
     try {
@@ -331,37 +339,52 @@ export default function TableManage() {
             </Tooltip>
           )
         }
-        return (
-          <Space>
-            {reserved ? (
+        if (reserved) {
+          return (
+            <Space>
               <Tooltip content="系统保留字段，不可编辑">
                 <Button size="mini" disabled>
                   编辑
                 </Button>
               </Tooltip>
-            ) : (
-              <Button size="mini" onClick={() => openEdit(record)}>
-                编辑
-              </Button>
-            )}
-            {reserved ? (
               <Tooltip content="系统保留字段，不可删除">
                 <Button size="mini" status="danger" disabled>
                   删除
                 </Button>
               </Tooltip>
-            ) : (
-              <Popconfirm
-                position="lb"
-                focusLock
-                title="确认删除该字段？"
-                onOk={() => handleDelete(record)}
-              >
-                <Button size="mini" status="danger">
+            </Space>
+          )
+        }
+        if (record.has_data) {
+          return (
+            <Tooltip content="该字段已有数据，不允许修改或删除；请先清空该字段数据">
+              <Space>
+                <Button size="mini" disabled>
+                  编辑
+                </Button>
+                <Button size="mini" status="danger" disabled>
                   删除
                 </Button>
-              </Popconfirm>
-            )}
+              </Space>
+            </Tooltip>
+          )
+        }
+        return (
+          <Space>
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+            <Popconfirm
+              position="lb"
+              focusLock
+              title="确认删除该字段？"
+              content="删除后，字段对应的表单元素、表单页/详情页布局（含移动端布局）以及审批流中的条件与字段权限会一并删除，且不可恢复。"
+              onOk={() => handleDelete(record)}
+            >
+              <Button size="mini" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
           </Space>
         )
       },
@@ -492,11 +515,11 @@ export default function TableManage() {
             <Input placeholder="如：user_name" />
           </FormItem>
           <FormItem
-            label="字段类型"
+            label={editing ? '字段类型（不可修改）' : '字段类型'}
             field="type"
             rules={[{ required: true, message: '请选择字段类型' }]}
           >
-            <Select placeholder="请选择类型" allowClear showSearch>
+            <Select placeholder="请选择类型" allowClear showSearch disabled={!!editing}>
               {FIELD_TYPES.map((t) => (
                 <Select.Option key={t} value={t}>
                   {t}

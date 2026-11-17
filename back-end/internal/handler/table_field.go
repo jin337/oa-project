@@ -100,8 +100,7 @@ func TableFieldDelete(c *gin.Context) {
 		response.Fail(c, response.CodeParamError, "表名不能为空")
 		return
 	}
-	cascade := c.Query("cascade") == "true" || c.Query("cascade") == "1"
-	cleaned, err := service.TableFieldDelete(id, req.TableName, fieldName, cascade)
+	cleaned, err := service.TableFieldDelete(id, req.TableName, fieldName)
 	if err != nil {
 		response.Fail(c, response.CodeServerError, err.Error())
 		return

@@ -539,6 +539,7 @@ type TableColumn struct {
 	NotNull      int    `json:"not_null"`
 	DefaultValue string `json:"default_value"`
 	Comment      string `json:"comment"`
+	HasData      bool   `json:"has_data"` // 该字段列是否已有数据；有数据时禁止改/删该字段
 }
 
 type TableFieldCreateReq struct {
