@@ -1552,6 +1552,7 @@ export default function ElementManage() {
                       size="small"
                       type="outline"
                       className="mt-1"
+                      disabled={drawerReadOnly}
                       onClick={() => setApiPicker({ target: 'ds' })}
                     >
                       {dsApiRef === 1 ? '重新引用' : '引用接口'}
@@ -1585,16 +1586,22 @@ export default function ElementManage() {
                               >
                                 <Input placeholder="提交值，如：1" />
                               </FormItem>
-                              <Button status="danger" onClick={() => remove(index)}>
+                              <Button
+                                status="danger"
+                                disabled={drawerReadOnly}
+                                onClick={() => remove(index)}
+                              >
                                 删除
                               </Button>
                             </div>
                           ))}
                         </div>
                       )}
-                      <Button type="outline" onClick={() => add({ label: '', value: '' })}>
-                        + 添加选项
-                      </Button>
+                      {!drawerReadOnly && (
+                        <Button type="outline" onClick={() => add({ label: '', value: '' })}>
+                          + 添加选项
+                        </Button>
+                      )}
                     </div>
                   )}
                 </Form.List>
@@ -1618,9 +1625,11 @@ export default function ElementManage() {
                           </b>
                           ，接口地址与请求方法由接口管理维护，不可手动修改
                         </span>
-                        <Button size="mini" type="text" onClick={() => handleApiUnref('ds')}>
-                          取消引用
-                        </Button>
+                        {!drawerReadOnly && (
+                          <Button size="mini" type="text" onClick={() => handleApiUnref('ds')}>
+                            取消引用
+                          </Button>
+                        )}
                       </div>
                     )}
                   </Col>
@@ -1651,6 +1660,7 @@ export default function ElementManage() {
                           <Button
                             type="text"
                             size="mini"
+                            disabled={drawerReadOnly}
                             onClick={() => handleFormatParams('data_source.params')}
                           >
                             格式化
@@ -1696,7 +1706,9 @@ export default function ElementManage() {
                   {(fields, { add, remove }) => (
                     <>
                       {fields.length === 0 && (
-                        <div className="mb-2 text-xs text-gray-400">暂无规则，点击下方按钮添加</div>
+                        <div className="mb-2 text-xs text-gray-400">
+                          {drawerReadOnly ? '暂无规则' : '暂无规则，点击下方按钮添加'}
+                        </div>
                       )}
                       {fields.map((item, index) => {
                         // 从 watch 结果获取当前规则的 action_type，联动显示对应配置字段
@@ -1710,7 +1722,12 @@ export default function ElementManage() {
                               <span className="text-xs font-medium text-gray-500">
                                 规则 {index + 1}
                               </span>
-                              <Button size="mini" status="danger" onClick={() => remove(index)}>
+                              <Button
+                                size="mini"
+                                status="danger"
+                                disabled={drawerReadOnly}
+                                onClick={() => remove(index)}
+                              >
                                 删除
                               </Button>
                             </div>
@@ -1734,6 +1751,7 @@ export default function ElementManage() {
                                     size="small"
                                     type="outline"
                                     className="mt-1"
+                                    disabled={drawerReadOnly}
                                     onClick={() =>
                                       setApiPicker({
                                         target: 'action',
@@ -1794,19 +1812,22 @@ export default function ElementManage() {
                                           </FormItem>
                                           <Button
                                             status="danger"
+                                            disabled={drawerReadOnly}
                                             onClick={() => removeValue(vfIndex)}
                                           >
                                             删除
                                           </Button>
                                         </div>
                                       ))}
-                                      <Button
-                                        size="small"
-                                        type="outline"
-                                        onClick={() => addValue({ source: '', target: '' })}
-                                      >
-                                        + 添加赋值映射
-                                      </Button>
+                                      {!drawerReadOnly && (
+                                        <Button
+                                          size="small"
+                                          type="outline"
+                                          onClick={() => addValue({ source: '', target: '' })}
+                                        >
+                                          + 添加赋值映射
+                                        </Button>
+                                      )}
                                     </>
                                   )}
                                 </Form.List>
@@ -1830,13 +1851,15 @@ export default function ElementManage() {
                                       </b>
                                       ，接口地址与请求方法由接口管理维护，不可手动修改
                                     </span>
-                                    <Button
-                                      size="mini"
-                                      type="text"
-                                      onClick={() => handleApiUnref('action', trigger.key, index)}
-                                    >
-                                      取消引用
-                                    </Button>
+                                    {!drawerReadOnly && (
+                                      <Button
+                                        size="mini"
+                                        type="text"
+                                        onClick={() => handleApiUnref('action', trigger.key, index)}
+                                      >
+                                        取消引用
+                                      </Button>
+                                    )}
                                   </div>
                                 )}
                                 <Row gutter={16}>
@@ -1880,6 +1903,7 @@ export default function ElementManage() {
                                           <Button
                                             type="text"
                                             size="mini"
+                                            disabled={drawerReadOnly}
                                             onClick={() =>
                                               handleFormatParams(item.field + '.params')
                                             }
@@ -1937,18 +1961,24 @@ export default function ElementManage() {
                                               }
                                             />
                                           </FormItem>
-                                          <Button status="danger" onClick={() => removeTm(tmIndex)}>
+                                          <Button
+                                            status="danger"
+                                            disabled={drawerReadOnly}
+                                            onClick={() => removeTm(tmIndex)}
+                                          >
                                             删除
                                           </Button>
                                         </div>
                                       ))}
-                                      <Button
-                                        size="small"
-                                        type="outline"
-                                        onClick={() => addTm({ source: '', target: '' })}
-                                      >
-                                        + 添加目标字段
-                                      </Button>
+                                      {!drawerReadOnly && (
+                                        <Button
+                                          size="small"
+                                          type="outline"
+                                          onClick={() => addTm({ source: '', target: '' })}
+                                        >
+                                          + 添加目标字段
+                                        </Button>
+                                      )}
                                     </>
                                   )}
                                 </Form.List>
@@ -1983,14 +2013,16 @@ export default function ElementManage() {
                           </div>
                         )
                       })}
-                      <Button
-                        size="small"
-                        type="outline"
-                        icon={<IconPlus />}
-                        onClick={() => add({ action_type: undefined })}
-                      >
-                        添加规则
-                      </Button>
+                      {!drawerReadOnly && (
+                        <Button
+                          size="small"
+                          type="outline"
+                          icon={<IconPlus />}
+                          onClick={() => add({ action_type: undefined })}
+                        >
+                          添加规则
+                        </Button>
+                      )}
                     </>
                   )}
                 </Form.List>
