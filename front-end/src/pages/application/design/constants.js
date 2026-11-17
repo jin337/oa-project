@@ -75,8 +75,9 @@ export const STRATEGY_OPTIONS = [
   { value: 3, label: '或签：其中任意一名审批人同意，流程即向下流转' },
 ]
 
-/** 审批人为空处理（2-自动拒绝 / 3-转交流程管理员 / 4-指定人员）；空审批人不再允许自动通过 */
+/** 审批人为空处理（1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员） */
 export const EMPTY_HANDLER_OPTIONS = [
+  { value: 1, label: '自动通过' },
   { value: 2, label: '自动拒绝' },
   { value: 3, label: '转交流程管理员' },
   { value: 4, label: '指定人员' },

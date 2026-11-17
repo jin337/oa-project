@@ -416,8 +416,9 @@ export default function ApprovalTimeline({
                     <span className="font-medium">
                       {node.label || '审批'}：
                       {/* 人数恒定按流程配置展开后的实际人数，不随已派发的任务条数变化 */}
-                      {nodePeople.length}人（
-                      {node.strategy === 2 ? '会签' : node.strategy === 3 ? '或签' : '依次审批'}）
+                      {nodePeople.length > 0
+                        ? `${nodePeople.length}人（${node.strategy === 2 ? '会签' : node.strategy === 3 ? '或签' : '依次审批'}）`
+                        : '审批人为空'}
                     </span>
                   </div>
                   {nodeCards.length === 0 && nodeTags.length === 0 ? (
@@ -427,7 +428,9 @@ export default function ApprovalTimeline({
                     nodeCards.map((entry) => {
                       const { task } = entry
                       const userName = task
-                        ? entry.name || userNameMap[task.assignee_id] || `用户#${task.assignee_id}`
+                        ? task.assignee_id === 0
+                          ? '系统'
+                          : entry.name || userNameMap[task.assignee_id] || `用户#${task.assignee_id}`
                         : entry.name
                       // 该人还没轮到自己：没有任务记录，按「未流转」展示
                       if (!task) {
@@ -444,7 +447,7 @@ export default function ApprovalTimeline({
                           </div>
                         )
                       }
-                      // 自动通过记录（前置「已前置审批…」/ 后置「已后置审批…」/ 退回不重复审批）：
+                      // 自动通过记录（前置/后置审批、退回不重复审批、审批人为空自动通过）：
                       // status 虽为已通过但不是本人真实操作，标签显示为「自动通过」（灰色）
                       // 以区别于真实审批，comment 保留可追溯说明。
                       const meta =

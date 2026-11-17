@@ -188,19 +188,24 @@ const buildNodeSummary = (node, directory) => {
     const peopleCount = resolveNodePeople(node, directory).length
     if (node.approverType === 3) {
       // 3-发起人自选：未选择提示「请选择审批人」；仅 1 人显示「1人审批」，多人（多选）显示「N人 + 审批方式」（如「2人依次审批」）
-      if (!peopleCount) return '请选择审批人'
+      if (!peopleCount) {
+        return node.emptyHandler === 1 ? '审批人为空时自动通过' : '请选择审批人'
+      }
       if (peopleCount === 1) return '1人审批'
       return `${peopleCount}人${STRATEGY_MAP[node.strategy] || '审批'}`
     }
     const parts = [
       peopleCount
         ? `${peopleCount}人审批`
-        : node.approverType === 4
-          ? '请选择审核人员组'
-          : '请选择审批人',
+        : node.emptyHandler === 1
+          ? '未配置审批人'
+          : node.approverType === 4
+            ? '请选择审核人员组'
+            : '请选择审批人',
     ]
-    // 审批人为空处理：3-转交流程管理员 / 4-指定人员（附兜底成员）
-    if (node.emptyHandler === 3) parts.push('找不到主管，将自动转交给管理员')
+    // 审批人为空处理：1-自动通过 / 3-转交流程管理员 / 4-指定人员（附兜底成员）
+    if (node.emptyHandler === 1) parts.push('审批人为空时自动通过')
+    else if (node.emptyHandler === 3) parts.push('找不到主管，将自动转交给管理员')
     else if (node.emptyHandler === 4) {
       const t = getMembersText(node.emptyMembers)
       if (t) parts.push(`找不到主管，将自动转交给${t}`)

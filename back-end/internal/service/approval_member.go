@@ -93,8 +93,8 @@ func resolveMembersUserIDs(members []flowMember) ([]uint, error) {
 }
 
 // resolveEmptyHandler 审批人为空时的兜底处理：
-//   - case 1（历史自动通过，已废止）/ case 2（自动拒绝）/ case 3（转交流程管理员）：无兜底审批人，返回 nil，
-//     由 generateTasksForCurrentNode 按 node.EmptyHandler 分支决定实例走向（空审批人不再自动通过）
+//   - case 1（自动通过）/ case 2（自动拒绝）/ case 3（转交流程管理员）：无兜底审批人，返回 nil，
+//     由 generateTasksForCurrentNode 按 node.EmptyHandler 分支决定实例走向；
 //   - case 4（指定人员）：返回 emptyMembers 解析出的用户 ID（未配置人员时返回空）
 func resolveEmptyHandler(node flowNode) ([]uint, error) {
 	switch node.EmptyHandler {

@@ -168,12 +168,16 @@ func buildSnapshotFlow(injected []flowNode, endNode any) []any {
 }
 
 // validateSelfSelectApprovers 校验执行路径上的发起人自选（approverType=3）节点已选择审批人。
-// 关键修复：发起人自选节点若未选审批人，提交应被拦截并给出明确提示，
-// 而不是走 emptyHandler=1（历史自动通过）递归跳过所有节点、流程瞬间"已通过"。
+// 显式配置「审批人为空 → 自动通过」的审批节点允许不选人，由运行时自动跳过；
+// 其余发起人自选节点仍必须选人，避免提交后无审批人却进入流程。
 func validateSelfSelectApprovers(ctx *approvalContext) error {
 	for _, nodeID := range ctx.execPath {
 		node := findNodeByID(ctx.injectedNodes, nodeID)
 		if node == nil {
+			continue
+		}
+		// 审批人节点显式配置自动通过时，允许发起人留空
+		if node.Type == 2 && node.EmptyHandler == 1 {
 			continue
 		}
 		// 发起人自选节点必须选人：
@@ -326,11 +330,12 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		return nil, err
 	}
 
-	// 3. 发起人自选节点必须已选择审批人
+	// 3. 发起人自选节点必须已选择审批人（显式自动通过的审批节点除外）
 	if err := validateSelfSelectApprovers(ctx); err != nil {
 		return nil, err
 	}
-	// 3.5 当前执行路径上的审批节点必须有实际审批人；空审批人不再自动通过
+	// 3.5 当前执行路径上的审批节点必须有实际审批人；
+	//     显式配置“审批人为空 → 自动通过”的节点除外，由运行时跳过。
 	if err := validateExecutionPathApprovers(ctx.injectedNodes, ctx.execPath); err != nil {
 		return nil, err
 	}
@@ -566,11 +571,12 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 		return nil, err
 	}
 
-	// 4. 发起人自选节点必须已选择审批人
+	// 4. 发起人自选节点必须已选择审批人（显式自动通过的审批节点除外）
 	if err := validateSelfSelectApprovers(ctx); err != nil {
 		return nil, err
 	}
-	// 4.5 当前执行路径上的审批节点必须有实际审批人；空审批人不再自动通过
+	// 4.5 当前执行路径上的审批节点必须有实际审批人；
+	//     显式配置“审批人为空 → 自动通过”的节点除外，由运行时跳过。
 	if err := validateExecutionPathApprovers(ctx.injectedNodes, ctx.execPath); err != nil {
 		return nil, err
 	}

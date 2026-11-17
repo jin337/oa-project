@@ -47,9 +47,9 @@ export function ApproverEditDrawer({
   const [selfSelect, setSelfSelect] = useState(node.selfSelect || 1)
   // 审批方式：1-依次审批 / 2-会签 / 3-或签
   const [strategy, setStrategy] = useState(node.strategy || 1)
-  // 审批人为空处理：2-自动拒绝 / 3-转交流程管理员 / 4-指定人员（1-自动通过已废止）
+  // 审批人为空处理：1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员
   const [emptyHandler, setEmptyHandler] = useState(
-    [2, 3, 4].includes(node.emptyHandler) ? node.emptyHandler : 2,
+    [1, 2, 3, 4].includes(node.emptyHandler) ? node.emptyHandler : 2,
   )
   const [emptyMembers, setEmptyMembers] = useState(normalizeMembers(node.emptyMembers))
   // 审批人操作权限数组元素：1-不同意/退回 / 2-转交 / 3-加签
@@ -120,8 +120,9 @@ export function ApproverEditDrawer({
           <Button
             type="primary"
             onClick={() => {
-              // 空审批人不允许保存：发起人自选在提交时选人，其余类型必须在配置时选足
-              if (approverType !== 3 && members.length === 0) {
+              // 空审批人保存规则：显式选择“自动通过”时允许为空；
+              // 其余策略必须选足审批对象（发起人自选在提交时选人，由后端提交校验兜底）
+              if (emptyHandler !== 1 && approverType !== 3 && members.length === 0) {
                 Message.error('审批对象不能为空，请选择审批人')
                 return
               }
@@ -230,6 +231,11 @@ export function ApproverEditDrawer({
               </Radio>
             ))}
           </Radio.Group>
+          {emptyHandler === 1 && (
+            <div className="mt-1 text-xs text-gray-500">
+              审批人为空时跳过该节点并继续流程，详情时间线保留“自动通过”记录。
+            </div>
+          )}
           {emptyHandler === 4 && ( // 4-指定人员：展示指定人员选择器
             <div className="mt-3">
               <PersonPicker

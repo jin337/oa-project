@@ -3,10 +3,10 @@ package service
 // ============================================================
 // 审批流审批人完整性校验
 // ============================================================
-// 空审批人不再允许自动通过：
-//   - 发布版本时：审批节点（type=2）必须配置审批人（发起人自选除外，提交时选择）
-//   - 提交实例时：当前执行路径上的审批节点必须能解析出至少一个审批人
-//   - 运行时兜底：审批人在流转中变为空时按自动拒绝处理，不再静默推进
+// 审批人完整性校验：
+//   - 发布版本时：审批节点（type=2）必须配置审批人；显式选择 emptyHandler=1（自动通过）的节点允许为空
+//   - 提交实例时：当前执行路径上的审批节点必须能解析出至少一个审批人；配置为自动通过的节点允许为空
+//   - 运行时兜底：审批人为空时按节点 emptyHandler 处理（自动通过 / 自动拒绝 / 转管理员 / 指定人员）
 // ============================================================
 
 import (
@@ -55,6 +55,11 @@ func validateFlowNodesApprovers(nodes []flowNode) error {
 			continue
 		}
 		if len(node.Members) == 0 {
+			// 显式配置「审批人为空 → 自动通过」时允许不选审批人，运行时跳过该节点；
+			// 未配置自动通过则仍视为流程缺陷，发布前拦截。
+			if node.EmptyHandler == 1 {
+				continue
+			}
 			return fmt.Errorf("审批节点「%s」未配置审批人，不允许发布", approvalNodeLabel(node))
 		}
 		for _, m := range node.Members {
@@ -75,12 +80,16 @@ func validateExecutionPathApprovers(nodes []flowNode, execPath []string) error {
 			continue
 		}
 		if node.ApproverType == 3 {
-			// 发起人自选：快照 members 必须是提交时已选定的审批人
+			// 发起人自选：快照 members 必须是提交时已选定的审批人；
+			// 只有显式配置「审批人为空 → 自动通过」才允许留空，由运行时跳过该节点。
 			ids, err := resolveMembersUserIDs(node.Members)
 			if err != nil {
 				return fmt.Errorf("审批节点「%s」审批人解析失败: %w", approvalNodeLabel(node), err)
 			}
 			if len(ids) == 0 {
+				if node.EmptyHandler == 1 {
+					continue
+				}
 				return fmt.Errorf("审批节点「%s」未选择审批人，不允许提交", approvalNodeLabel(node))
 			}
 			continue
@@ -90,6 +99,10 @@ func validateExecutionPathApprovers(nodes []flowNode, execPath []string) error {
 			return fmt.Errorf("审批节点「%s」审批人解析失败: %w", approvalNodeLabel(node), err)
 		}
 		if len(ids) == 0 {
+			// 显式配置自动通过时允许解析不到人，由 generateTasksForCurrentNode 跳过。
+			if node.EmptyHandler == 1 {
+				continue
+			}
 			return fmt.Errorf("审批节点「%s」未解析到审批人，不允许提交", approvalNodeLabel(node))
 		}
 	}

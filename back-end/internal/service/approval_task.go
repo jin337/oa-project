@@ -3,14 +3,15 @@ package service
 // ============================================================
 // 审批任务流转引擎
 // ============================================================
-// 覆盖：首个节点任务生成（generateTasksForCurrentNode）、空审批人拒绝
-// （handleAutoPassNode 已废止）、节点间推进（advanceToNextNode）、流程终结
-// （finishInstance）、审批操作（ApprovalTaskApprove / ApprovalTaskDelegate）。
+// 覆盖：首个节点任务生成（generateTasksForCurrentNode）、空审批人处理
+// （emptyHandler=1 自动通过 / 2 自动拒绝 / 3 转管理员 / 4 指定人员）、
+// 节点间推进（advanceToNextNode）、流程终结（finishInstance）、审批操作
+// （ApprovalTaskApprove / ApprovalTaskDelegate）。
 //
 // 节点语义：
 //   - type=2（审批人）：生成审批待办任务，审批方式由 strategy 决定
 //   - type=3（抄送人）：不生成待办任务，直接推进到下一节点
-//   - 审批人为空：不再自动通过；运行时按自动拒绝处理（提交前已做完整性校验）
+//   - 审批人为空：按节点 emptyHandler 配置处理；自动通过会写入一条系统记录后继续流转
 //
 // 所有操作必须在调用方提供的事务内执行，保证实例状态与任务数据一致。
 // ============================================================
@@ -94,10 +95,11 @@ func preApprovedAssigneeIDs(tx *gorm.DB, instanceID uint) (map[uint]bool, error)
 	return set, nil
 }
 
-// createAutoApprovedTask 创建一条「已前置审批，自动通过」任务记录：
+// createAutoApprovedTask 创建一条自动通过任务记录：
 //   - status=已通过，但 operated_at 为空 → 不是真实操作：
 //     不可被审核撤回、不进入「经我处理」列表（列表查询要求 operated_at 非空）、不推送待办通知；
-//   - comment 携带标记，审批详情时间线据此展示「自动通过」并保留可追溯说明。
+//   - comment 携带标记，审批详情时间线据此展示「自动通过」并保留可追溯说明；
+//   - assigneeID=0 表示「审批人为空」的系统节点，时间线显示为「系统」。
 func createAutoApprovedTask(tx *gorm.DB, instance *model.ApprovalInstance, nodeID, nodeName string, sort int, assigneeID, curUserID uint, comment string) error {
 	task := model.ApprovalInstanceTask{
 		InstanceID: instance.ID,
@@ -195,10 +197,15 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 	}
 
 	// 审批人为空：按 emptyHandler 配置分支处理
-	//   1-自动通过（默认） / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员未解析到人视为配置缺陷拒绝放行
+	//   1-自动通过 / 2-自动拒绝 / 3-转交流程管理员 / 4-指定人员未解析到人视为配置缺陷拒绝放行
 	emptyAdminFallback := false
 	if len(userIDs) == 0 {
 		switch node.EmptyHandler {
+		case 1: // 自动通过：留一条无 operated_at 的系统审批记录，再推进到下一节点
+			if err := createAutoApprovedTask(tx, instance, nodeID, node.Label, idx, 0, curUserID, "审批人为空，自动通过"); err != nil {
+				return err
+			}
+			return advanceToNextNode(tx, instance, allNodes, curUserID, "自动通过")
 		case 2: // 自动拒绝
 			return finishInstance(tx, instance, model.InstanceStatusRejected, "审批人为空，自动拒绝", curUserID)
 		case 3: // 转交流程管理员
@@ -213,7 +220,7 @@ func generateTasksForCurrentNode(tx *gorm.DB, instance *model.ApprovalInstance, 
 			emptyAdminFallback = true
 		case 4: // 指定人员但未解析到任何人：视为配置缺陷，拒绝放行
 			return finishInstance(tx, instance, model.InstanceStatusRejected, "指定审批人未配置，自动拒绝", curUserID)
-		default: // 1-自动通过（历史配置）已废止：空审批人不允许静默推进
+		default: // 未配置或历史非法值：保持安全的自动拒绝，不静默推进
 			return finishInstance(tx, instance, model.InstanceStatusRejected, "审批人为空，自动拒绝", curUserID)
 		}
 	}
