@@ -125,7 +125,7 @@ export default function MenuManage() {
   // 加载流程配置列表，供「关联流程」下拉选择
   useEffect(() => {
     listApplications({ page: 1, size: 1000, status: 1 })
-      // 通过接口参数只取启用的流程配置，停用的不可被关联
+      // 通过接口参数只取上线的流程配置，下架的应用不可被关联
       .then((res) => setAppOptions(res?.data?.list || []))
       .catch(() => setAppOptions([]))
   }, [])

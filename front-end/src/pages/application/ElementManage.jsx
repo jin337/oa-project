@@ -566,6 +566,7 @@ export default function ElementManage() {
 
   // 抽屉
   const [drawerVisible, setDrawerVisible] = useState(false)
+  const [drawerReadOnly, setDrawerReadOnly] = useState(false)
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
@@ -623,12 +624,17 @@ export default function ElementManage() {
   const allFieldGroupsLoadedRef = useRef(null)
   const allFieldGroupsInflightRef = useRef(null)
 
+  // 应用生命周期：1=上线，0=下架。上线时表单元素锁定，只能查看。
+  const [appStatus, setAppStatus] = useState(null)
+  const structureLocked = appStatus === 1
+
   // 加载分类（表名）选项：主表 + 子表。页面级数据：仅当前页面 id 复用，
   // 切换页签（id 变化）重新加载，避免多个表单元素管理页签串用其它应用的表结构
   const tableOptionsLoadedRef = useRef(null)
   const tableOptionsInflightRef = useRef(null)
   const loadTableOptions = useCallback(async () => {
     if (tableOptionsLoadedRef.current?.id === id) {
+      setAppStatus(tableOptionsLoadedRef.current?.app?.status ?? 0)
       return tableOptionsLoadedRef.current
     }
     if (tableOptionsInflightRef.current) return tableOptionsInflightRef.current
@@ -651,6 +657,7 @@ export default function ElementManage() {
     try {
       const cached = await tableOptionsInflightRef.current
       setTableOptions(cached.options)
+      setAppStatus(cached.app?.status ?? 0)
       setSubTables((cached.app?.sub_table_name || '')
         .split(',')
         .map((s) => s.trim())
@@ -861,6 +868,11 @@ export default function ElementManage() {
   }
 
   const openCreate = async () => {
+    if (structureLocked) {
+      Message.warning('应用上线中，请先下架后再新增表单元素')
+      return
+    }
+    setDrawerReadOnly(false)
     setEditing(null)
     setCurrentElementType(undefined)
     form.setFieldsValue(EMPTY_FORM)
@@ -879,7 +891,12 @@ export default function ElementManage() {
     setDrawerVisible(true)
   }
 
-  const openEdit = async (record) => {
+  const openEdit = async (record, readOnly = false) => {
+    if (structureLocked && !readOnly) {
+      Message.warning('应用上线中，请先下架后再修改表单元素')
+      return
+    }
+    setDrawerReadOnly(readOnly)
     setEditing(record)
     setCurrentElementType(record.element_type)
     setFieldOptions([])
@@ -909,6 +926,9 @@ export default function ElementManage() {
     }
     setDrawerVisible(true)
   }
+
+  // 上线状态只读查看：复用编辑回填，禁用表单并隐藏抽屉底部操作
+  const openView = (record) => openEdit(record, true)
 
   const handleSave = async () => {
     const values = await form.validate()
@@ -982,6 +1002,10 @@ export default function ElementManage() {
   }
 
   const handleDelete = async (record) => {
+    if (structureLocked) {
+      Message.warning('应用上线中，请先下架后再删除表单元素')
+      return
+    }
     try {
       await applicationApi.deleteApplicationElement(id, record.id)
       Message.success('删除成功')
@@ -1080,23 +1104,32 @@ export default function ElementManage() {
       key: 'action',
       title: '操作',
       width: 140,
-      render: (_, record) => (
-        <Space>
-          <Button size="mini" onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm
-            position="lb"
-            focusLock
-            title="确认删除该表单元素？"
-            onOk={() => handleDelete(record)}
-          >
-            <Button size="mini" status="danger">
-              删除
+      render: (_, record) => {
+        if (structureLocked) {
+          return (
+            <Button size="mini" onClick={() => openView(record)}>
+              查看
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
+          )
+        }
+        return (
+          <Space>
+            <Button size="mini" onClick={() => openEdit(record)}>
+              编辑
+            </Button>
+            <Popconfirm
+              position="lb"
+              focusLock
+              title="确认删除该表单元素？"
+              onOk={() => handleDelete(record)}
+            >
+              <Button size="mini" status="danger">
+                删除
+              </Button>
+            </Popconfirm>
+          </Space>
+        )
+      },
     },
   ]
 
@@ -1148,9 +1181,14 @@ export default function ElementManage() {
 
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
-        <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
-          新增元素
-        </Button>
+        <Space>
+          <Button type="primary" icon={<IconPlus />} onClick={openCreate} disabled={structureLocked}>
+            新增元素
+          </Button>
+          {structureLocked && (
+            <span className="text-xs text-gray-500">应用上线中，表单元素已锁定，请先下架</span>
+          )}
+        </Space>
         <Space>
           <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
             刷新
@@ -1191,7 +1229,7 @@ export default function ElementManage() {
       <Drawer
         title={
           <Space size={6} align="center">
-            <span>{editing ? `${editing.field_key || ''}-编辑表单元素` : '新增表单元素'}</span>
+            <span>{editing ? `${editing.field_key || ''}-${drawerReadOnly ? '查看' : '编辑'}表单元素` : '新增表单元素'}</span>
             {/* Arco Popover 默认写死 style.maxWidth=350，会压窄内容，这里覆盖 */}
             <Popover
               content={CONFIG_HELP_CONTENT}
@@ -1208,12 +1246,14 @@ export default function ElementManage() {
         onOk={handleSave}
         confirmLoading={saving}
         onCancel={() => setDrawerVisible(false)}
+        footer={drawerReadOnly ? null : undefined}
         unmountOnExit
       >
         <Form
           form={form}
           layout="vertical"
           autoComplete="off"
+          disabled={drawerReadOnly}
           onValuesChange={(changedValues) => {
             if ('element_type' in changedValues) {
               const val = changedValues.element_type

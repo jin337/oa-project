@@ -172,6 +172,11 @@ func canUserStartApproval(appCode string, userID uint, userRoleIDs, userDeptIDs 
 		return false, err
 	}
 
+	// 下架应用不再出现在普通申请项列表；管理端仍可见但标记为不可发起。
+	if app.Status != model.ApplicationStatusOnline {
+		return false, nil
+	}
+
 	// 发起页按当前生效版本判断发起人权限；未发布生效版本时保持历史兼容（默认可见）
 	nodes, err := loadActiveApprovalNodes(app.ID)
 	if err != nil {
@@ -293,10 +298,10 @@ func ensureUserCanStartByAppID(curUserID, appID uint) error {
 	if err := database.DB.First(&app, appID).Error; err != nil {
 		return err
 	}
-	// 停用的应用不允许再发起或保存草稿：申请页由 category item 直接跳转，
-	// 前端不拦时接口必须拦住，否则停用应用仍能持续产生新单据
-	if app.Status != 1 {
-		return errors.New("该应用已停用，无法发起审批")
+	// 下架应用不允许再发起或保存草稿：申请页由 category item 直接跳转，
+	// 前端不拦时接口必须拦住，否则下架应用仍能持续产生新单据
+	if app.Status != model.ApplicationStatusOnline {
+		return errors.New("该应用已下架，无法发起审批")
 	}
 	return ensureUserCanStart(curUserID, app.Code)
 }
@@ -317,17 +322,17 @@ func loadActiveApprovalNodes(appID uint) ([]flowNode, error) {
 	return parseFlowNodes(ver.ApprovalFlowJSON)
 }
 
-// ensureApplicationCodeExists 申请项绑定的页面编码必须对应一个启用中的应用。
+// ensureApplicationCodeExists 申请项绑定的页面编码必须对应一个上线中的应用。
 // 原实现只校验分类与重名，无效编码也能保存成功，直到用户点击申请项时才报
 // 「页面编码格式无效/未关联页面编码」，属于保存阶段就该拦下的配置缺陷。
 func ensureApplicationCodeExists(code string) error {
 	var count int64
 	if err := database.DB.Model(&model.Application{}).
-		Where("code = ? AND status = 1", code).Count(&count).Error; err != nil {
+		Where("code = ? AND status = ?", code, model.ApplicationStatusOnline).Count(&count).Error; err != nil {
 		return err
 	}
 	if count == 0 {
-		return errors.New("页面编码无效：未找到启用中的同名应用")
+		return errors.New("页面编码无效：未找到上线中的同名应用")
 	}
 	return nil
 }
@@ -339,7 +344,7 @@ func ApprovalCategoryItemCreate(curUserID uint, req *model.ApprovalCategoryItemC
 	if err := database.DB.First(&cat, req.CategoryID).Error; err != nil {
 		return nil, errors.New("所属分类不存在")
 	}
-	// 校验绑定的页面编码是否对应启用中的应用
+	// 校验绑定的页面编码是否对应上线中的应用
 	if err := ensureApplicationCodeExists(req.Code); err != nil {
 		return nil, err
 	}
@@ -379,7 +384,7 @@ func ApprovalCategoryItemUpdate(curUserID, id uint, req *model.ApprovalCategoryI
 		}
 		catID = req.CategoryID
 	}
-	// 若修改了页面编码，同样校验其对应启用中的应用
+	// 若修改了页面编码，同样校验其对应上线中的应用
 	if req.Code != "" && req.Code != item.Code {
 		if err := ensureApplicationCodeExists(req.Code); err != nil {
 			return nil, err

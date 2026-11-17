@@ -117,7 +117,10 @@ export default function TableManage() {
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
+  // 应用生命周期：1=上线，0=下架。上线时字段结构锁定，只能查看。
+  const [appStatus, setAppStatus] = useState(null)
   const [form] = Form.useForm()
+  const structureLocked = appStatus === 1
 
   // 挂载时：确保页签存在、获取流程详情（解析表名 + 更新页签标题）
   useEffect(() => {
@@ -133,6 +136,7 @@ export default function TableManage() {
         }
         const parsed = parseTables(app)
         setTables(parsed)
+        setAppStatus(app?.status ?? 0)
         if (parsed.length) setCurrentTable(parsed[0])
       })
       .catch(() => {})
@@ -191,12 +195,20 @@ export default function TableManage() {
   }
 
   const openCreate = () => {
+    if (structureLocked) {
+      Message.warning('应用上线中，请先下架后再新增字段')
+      return
+    }
     setEditing(null)
     form.setFieldsValue(EMPTY_FORM)
     setModalVisible(true)
   }
 
   const openEdit = (record) => {
+    if (structureLocked) {
+      Message.warning('应用上线中，请先下架后再修改字段')
+      return
+    }
     setEditing(record)
     form.setFieldsValue({
       name: record.name,
@@ -240,6 +252,10 @@ export default function TableManage() {
   }
 
   const handleDelete = async (record) => {
+    if (structureLocked) {
+      Message.warning('应用上线中，请先下架后再删除字段')
+      return
+    }
     try {
       await applicationApi.deleteTableField(id, record.id, currentTable)
       Message.success('删除成功')
@@ -300,6 +316,21 @@ export default function TableManage() {
       width: 140,
       render: (_, record) => {
         const reserved = isReservedField(record.name)
+        // 上线状态字段结构锁定：保留字段原因之外统一提示先下架
+        if (structureLocked) {
+          return (
+            <Tooltip content="应用上线中，请先下架后再修改字段">
+              <Space>
+                <Button size="mini" disabled>
+                  编辑
+                </Button>
+                <Button size="mini" status="danger" disabled>
+                  删除
+                </Button>
+              </Space>
+            </Tooltip>
+          )
+        }
         return (
           <Space>
             {reserved ? (
@@ -394,9 +425,14 @@ export default function TableManage() {
 
           {/* 表格工具栏 */}
           <div className="mb-3 flex items-center justify-between">
-            <Button type="primary" icon={<IconPlus />} onClick={openCreate}>
-              新增字段
-            </Button>
+            <Space>
+              <Button type="primary" icon={<IconPlus />} onClick={openCreate} disabled={structureLocked}>
+                新增字段
+              </Button>
+              {structureLocked && (
+                <span className="text-xs text-gray-500">应用上线中，字段结构已锁定，请先下架</span>
+              )}
+            </Space>
             <Space>
               <Button size="small" icon={<IconRefresh />} onClick={() => fetchList()}>
                 刷新

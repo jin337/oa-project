@@ -14,6 +14,7 @@ import {
   Select,
   Space,
   Spin,
+  Tag,
 } from '@arco-design/web-react'
 import {
   IconDelete,
@@ -119,7 +120,7 @@ export default function Apply() {
   // 加载流程配置列表（申请项名称的可选项）
   const fetchApplications = useCallback(async () => {
     try {
-      // 通过接口参数只取启用的流程配置，停用的不可申请
+      // 通过接口参数只取上线的流程配置，下架的应用不可申请
       const res = await fetchAll(applicationApi.listApplications, { status: 1 })
       setAppOptions(res.data?.list || [])
     } catch (e) {
@@ -236,6 +237,10 @@ export default function Apply() {
 
   // 点击申请项卡片：预请求关联的流程配置，完成后在 Drawer 中注入动态表单组件
   const handleItemClick = async (record) => {
+    if (record.can_start === false) {
+      Message.warning('该应用已下架，暂不可发起审批')
+      return
+    }
     const raw = (record.code || '').trim()
     if (!raw) {
       Message.warning('该申请项未关联页面编码，请先编辑配置')
@@ -461,8 +466,17 @@ export default function Apply() {
                               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-lg text-blue-600">
                                 <MenuIcon name={item.icon} />
                               </div>
-                              <div className="min-w-0 truncate font-medium" title={item.name}>
-                                {item.name}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1">
+                                  <div className="truncate font-medium" title={item.name}>
+                                    {item.name}
+                                  </div>
+                                  {item.can_start === false && (
+                                    <Tag size="small" color="gray">
+                                      已下架
+                                    </Tag>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             {isManaging && (

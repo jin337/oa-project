@@ -215,6 +215,9 @@ func TableFieldList(appID uint, tableName string, req *model.TableFieldListReq) 
 
 // TableFieldCreate 在指定物理业务表（主表或子表）中新增列（ALTER TABLE ... ADD COLUMN）
 func TableFieldCreate(appID uint, tableName string, req *model.TableFieldCreateReq) (*model.TableColumn, error) {
+	if err := requireApplicationOffline(appID, "新增表字段"); err != nil {
+		return nil, err
+	}
 	real, err := getApplicationBizTableBy(appID, tableName)
 	if err != nil {
 		return nil, err
@@ -246,6 +249,9 @@ func TableFieldCreate(appID uint, tableName string, req *model.TableFieldCreateR
 
 // TableFieldUpdate 修改指定物理业务表（主表或子表）列定义（ALTER TABLE ... CHANGE/MODIFY COLUMN）
 func TableFieldUpdate(appID uint, tableName, oldName string, req *model.TableFieldUpdateReq) (*model.TableColumn, error) {
+	if err := requireApplicationOffline(appID, "修改表字段"); err != nil {
+		return nil, err
+	}
 	real, err := getApplicationBizTableBy(appID, tableName)
 	if err != nil {
 		return nil, err
@@ -311,6 +317,9 @@ type FieldReference struct {
 // TableFieldDelete 删除指定物理业务表（主表或子表）列（ALTER TABLE ... DROP COLUMN，不可逆）。
 // 删除前检查表单元素引用：默认阻止并要求先处理引用；cascade=true 时先软删引用元素并清理布局，再删列。
 func TableFieldDelete(appID uint, tableName, fieldName string, cascade bool) ([]FieldReference, error) {
+	if err := requireApplicationOffline(appID, "删除表字段"); err != nil {
+		return nil, err
+	}
 	real, err := getApplicationBizTableBy(appID, tableName)
 	if err != nil {
 		return nil, err

@@ -871,6 +871,9 @@ func isBlankSubRow(row map[string]interface{}) bool {
 //  4. 主表 INSERT 成功后获取自增主键 ID
 //  5. 遍历子表数据，为每行填充 parent_id（= 主表 ID）及审计字段，校验列合法性后逐行 INSERT
 func ApplicationDataCreate(appID uint, curUserID uint, data map[string]interface{}) (uint, error) {
+	if err := requireApplicationOnline(appID, "新增业务数据"); err != nil {
+		return 0, err
+	}
 	var id uint
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		var e error
@@ -1054,6 +1057,9 @@ func applicationDataCreateWithDB(db *gorm.DB, appID uint, curUserID uint, data m
 //  3. 级联处理子表数据（parent_id = dataId），删除策略与主表一致，避免产生孤儿数据
 //  4. 删除完成后回收这批数据里已无人引用的附件文件（判定口径见 attachment.go）
 func ApplicationDataDelete(appID, dataID uint) error {
+	if err := requireApplicationOnline(appID, "删除业务数据"); err != nil {
+		return err
+	}
 	orphans, err := deleteBusinessData(database.DB, appID, dataID)
 	if err != nil {
 		return err
@@ -1128,6 +1134,9 @@ func deleteBusinessData(db *gorm.DB, appID, dataID uint) ([]string, error) {
 //  4. 子表数据：先清理旧数据（parent_id = dataId，有 deleted_at 软删、否则物理删），
 //     再遍历新数据逐行校验列合法性后重新 INSERT（自动填充 parent_id 及审计字段）
 func ApplicationDataUpdate(appID, dataID uint, curUserID uint, data map[string]interface{}) error {
+	if err := requireApplicationOnline(appID, "修改业务数据"); err != nil {
+		return err
+	}
 	// 主表 UPDATE 与子表「清旧 + 插新」必须原子完成：任一子表行失败时回滚，
 	// 否则会留下「主表已改、子表被清空/半写」的不一致状态。
 	return database.DB.Transaction(func(tx *gorm.DB) error {
@@ -1413,8 +1422,8 @@ func ApplicationCreate(curUserID uint, req *model.ApplicationCreateReq) (*model.
 		return nil, err
 	}
 	status := req.Status
-	if status != 0 && status != 1 {
-		status = 1
+	if status != model.ApplicationStatusOffline && status != model.ApplicationStatusOnline {
+		status = model.ApplicationStatusOffline
 	}
 	app := model.Application{
 		Name:             req.Name,
@@ -1516,10 +1525,21 @@ func ApplicationUpdate(curUserID, id uint, req *model.ApplicationUpdateReq) (*mo
 		return nil, errors.New("页面配置不存在")
 	}
 
+	// 状态只允许 0/1；先校验再执行 DDL/草稿写入，避免非法状态造成部分副作用
+	if req.Status != nil && *req.Status != model.ApplicationStatusOffline && *req.Status != model.ApplicationStatusOnline {
+		return nil, errors.New("应用状态非法，只允许 1=上线 / 0=下架")
+	}
+
 	// 计算字段变化（空串视为未变更，不触发 DDL）
 	nameChanged := req.Name != nil && *req.Name != "" && *req.Name != app.Name
 	tableChanged := req.TableName != nil && *req.TableName != "" && *req.TableName != app.TableName
 	subChanged := req.SubTableName != nil && *req.SubTableName != app.SubTableName
+
+	// 上线状态只锁结构：主表/子表名变更属于物理结构变更，必须先下架。
+	// 布局、审批流与其他设置仍允许保存/发布（设计态与运行态解耦）。
+	if applicationStructureLocked(app.Status) && (tableChanged || subChanged) {
+		return nil, errors.New("应用上线中，请先下架后再修改主表或子表")
+	}
 
 	// 变更后生效的页面名称（用于表注释）
 	effectiveName := app.Name
@@ -1805,7 +1825,7 @@ func (e *ApplicationDeleteBlockedError) Error() string {
 
 // ApplicationDelete 删除页面配置（软删除），并级联物理删除关联的业务数据表：
 //  1. 先按 id 查询配置记录，获取主表 TableName 与子表 SubTableName（逗号分隔多个）
-//  2. 校验应用必须处于停用状态，且没有关联审批实例、关联菜单页面、被其他配置共用的表
+//  2. 校验应用必须处于下架状态，且没有关联审批实例、关联菜单页面、被其他配置共用的表
 //  3. 提取主表与拆分后的所有子表，经 bizTableName 拼接前缀，并经 isValidTableName 校验合法性（防 SQL 注入）
 //  4. 遍历所有合法表名执行 DROP TABLE IF EXISTS 物理删除
 //  5. 所有关联物理表删除成功后再软删除配置记录
@@ -1816,9 +1836,9 @@ func ApplicationDelete(id uint) error {
 		return ErrApplicationDeleteNotFound
 	}
 
-	// 强校验：只有停用状态允许删除。前端隐藏按钮只是交互约束，不能作为安全边界。
-	if app.Status != 0 {
-		return &ApplicationDeleteBlockedError{Msg: "应用当前未停用，请先停用该应用后再删除"}
+	// 强校验：只有下架状态允许删除。前端隐藏按钮只是交互约束，不能作为安全边界。
+	if app.Status != model.ApplicationStatusOffline {
+		return &ApplicationDeleteBlockedError{Msg: "应用当前未下架，请先下架该应用后再删除"}
 	}
 
 	// 强校验：存在任何审批实例都拒绝删除。删除会 DROP 业务表并软删应用，

@@ -132,6 +132,9 @@ func buildApplicationElementTableOrder(tableName, subTableName string) string {
 
 // ApplicationElementCreate 新增表单元素
 func ApplicationElementCreate(curUserID, appID uint, req *model.ApplicationElementCreateReq) (*model.ApplicationElement, error) {
+	if err := requireApplicationOffline(appID, "新增表单元素"); err != nil {
+		return nil, err
+	}
 	if err := checkApplicationElementTableKey(appID, req.TableKey); err != nil {
 		return nil, err
 	}
@@ -165,6 +168,9 @@ func ApplicationElementCreate(curUserID, appID uint, req *model.ApplicationEleme
 
 // ApplicationElementUpdate 修改表单元素
 func ApplicationElementUpdate(curUserID, appID, id uint, req *model.ApplicationElementUpdateReq) (*model.ApplicationElement, error) {
+	if err := requireApplicationOffline(appID, "修改表单元素"); err != nil {
+		return nil, err
+	}
 	var el model.ApplicationElement
 	if err := database.DB.Where("id = ? AND app_id = ?", id, appID).First(&el).Error; err != nil {
 		return nil, errors.New("表单元素不存在")
@@ -227,6 +233,9 @@ func ApplicationElementUpdate(curUserID, appID, id uint, req *model.ApplicationE
 // ApplicationElementDelete 删除表单元素（软删除），并清理各版本布局中的引用与子表列，
 // 避免删除后布局仍保留悬空元素、再保存时把脏数据写回草稿。
 func ApplicationElementDelete(appID, id uint) error {
+	if err := requireApplicationOffline(appID, "删除表单元素"); err != nil {
+		return err
+	}
 	var el model.ApplicationElement
 	if err := database.DB.Where("id = ? AND app_id = ?", id, appID).First(&el).Error; err != nil {
 		return errors.New("表单元素不存在")

@@ -397,6 +397,13 @@ type DeptListReq struct {
 	Name string `json:"name" form:"name" validate:"omitempty" label:"部门名称"`
 }
 
+// 应用生命周期状态：上线=运行态，下架=设计/维护态。
+// 数据库仍存 1/0，避免历史数据迁移；所有新代码使用常量，不再散落魔法数字。
+const (
+	ApplicationStatusOffline = 0 // 下架：允许改表字段/表单元素，申请项隐藏，页面只读
+	ApplicationStatusOnline  = 1 // 上线：锁定表字段/表单元素，申请项可见，业务数据可新增/编辑
+)
+
 // Application 页面配置：对应表，供低代码/表单引擎使用
 type Application struct {
 	BaseModel
@@ -405,7 +412,7 @@ type Application struct {
 	TableName        string `gorm:"size:128;not null;comment:对应表" json:"table_name"`
 	BillPrefix       string `gorm:"size:32;comment:单号前缀" json:"bill_prefix"`
 	SubTableName     string `gorm:"size:255;comment:子表(多个用逗号分隔)" json:"sub_table_name"`
-	Status           int    `gorm:"default:1;comment:状态 1启用 0停用" json:"status"`
+	Status           int    `gorm:"default:0;comment:状态 1上线 0下架" json:"status"`
 	CurrentVersionID uint   `gorm:"default:0;index;comment:当前生效版本ID" json:"current_version_id"`
 	CurrentVersionNo string `gorm:"size:32;comment:当前生效版本号" json:"current_version_no"`
 	// 以下字段不映射数据库列（草稿已迁入 oa_application_versions 设计中行），

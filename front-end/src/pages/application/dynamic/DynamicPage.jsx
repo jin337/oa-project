@@ -110,14 +110,19 @@ export default function DynamicPage() {
   }
 
   // 按 state 分发渲染（code 传给列表页，供分页/详情跳转使用）
+  // 下架应用：列表页降级为只读，表单页不提供新增/编辑入口；详情页仍允许查看历史数据
+  const appOnline = app?.status === 1
   switch (state) {
     case 'list':
       // 只读列表页：无新增入口，操作列仅「查看」
       return <DynamicList app={app} code={code} />
     case 'list-edit':
       // 可编辑列表页：工具栏提供「新增」，操作列提供「查看/编辑/删除」（不自动打开抽屉）
-      return <DynamicList app={app} code={code} editable />
+      return appOnline ? <DynamicList app={app} code={code} editable /> : <DynamicList app={app} code={code} />
     case 'form':
+      if (!appOnline) {
+        return <Empty description="应用已下架，暂不可新增或编辑数据" />
+      }
       return <DynamicForm app={app} form={form} pageType="form" />
     case 'detail':
       return (

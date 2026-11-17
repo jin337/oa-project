@@ -52,7 +52,7 @@ const ALL_COL_KEYS = [
 const EMPTY_FORM = {
   name: '',
   code: '',
-  status: 1,
+  status: 0,
   table_name: '',
   bill_prefix: '',
   sub_table_name: '',
@@ -145,7 +145,7 @@ export default function ApplicationManage() {
     form.setFieldsValue({
       name: record.name,
       code: record.code,
-      status: record.status ?? 1,
+      status: record.status ?? 0,
       table_name: record.table_name,
       bill_prefix: record.bill_prefix || '',
       sub_table_name: record.sub_table_name || '',
@@ -187,14 +187,14 @@ export default function ApplicationManage() {
     }
   }
 
-  // 列表 Switch 切换启用状态：后端 Update 为指针式部分更新，只传 status 不动其它字段
-  // 状态语义：1=启用，0=停用
+  // 列表 Switch 切换生命周期状态：后端 Update 为指针式部分更新，只传 status 不动其它字段
+  // 状态语义：1=上线，0=下架
   const [togglingId, setTogglingId] = useState(null)
   const handleToggleStatus = async (record, checked) => {
     setTogglingId(record.id)
     try {
       await applicationApi.updateApplication(record.id, { status: checked ? 1 : 0 })
-      Message.success(checked ? '已启用' : '已停用')
+      Message.success(checked ? '已上线' : '已下架')
       fetchList()
     } catch (e) {
       // 错误已在请求层提示
@@ -410,9 +410,9 @@ export default function ApplicationManage() {
             onChange={(checked) => handleToggleStatus(record, checked)}
           />
         ) : status === 1 ? (
-          <Tag color="green">启用</Tag>
+          <Tag color="green">上线</Tag>
         ) : (
-          <Tag color="red">停用</Tag>
+          <Tag color="red">下架</Tag>
         ),
     },
     (canEdit || canList || canTables || canElements || canDesign) && {
@@ -582,8 +582,8 @@ export default function ApplicationManage() {
             <Col span={10}>
               <FormItem label="状态" field="status" triggerPropName="value">
                 <Select>
-                  <Select.Option value={1}>启用</Select.Option>
-                  <Select.Option value={0}>停用</Select.Option>
+                  <Select.Option value={1}>上线</Select.Option>
+                  <Select.Option value={0}>下架</Select.Option>
                 </Select>
               </FormItem>
             </Col>
@@ -591,6 +591,7 @@ export default function ApplicationManage() {
               <FormItem
                 label="对应表"
                 field="table_name"
+                extra={editing?.status === 1 ? '应用上线中，主表结构已锁定；请先下架后再修改' : undefined}
                 rules={[
                   { required: true, message: '请输入对应表' },
                   {
@@ -599,7 +600,7 @@ export default function ApplicationManage() {
                   },
                 ]}
               >
-                <Input placeholder="如：order" />
+                <Input placeholder="如：order" disabled={editing?.status === 1} />
               </FormItem>
             </Col>
             <Col span={10}>
@@ -621,6 +622,7 @@ export default function ApplicationManage() {
               <FormItem
                 label="子表"
                 field="sub_table_name"
+                extra={editing?.status === 1 ? '应用上线中，子表结构已锁定；请先下架后再修改' : undefined}
                 rules={[
                   {
                     match: /^$|^[a-zA-Z][a-zA-Z0-9_]*([,，][a-zA-Z][a-zA-Z0-9_]*)*$/,
@@ -628,7 +630,10 @@ export default function ApplicationManage() {
                   },
                 ]}
               >
-                <Input placeholder="多个子表用逗号隔开，如：order_item,order_detail" />
+                <Input
+                  placeholder="多个子表用逗号隔开，如：order_item,order_detail"
+                  disabled={editing?.status === 1}
+                />
               </FormItem>
             </Col>
           </Row>
