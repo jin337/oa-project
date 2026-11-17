@@ -1,9 +1,10 @@
-package service
+package test
 
 import (
 	"testing"
 
 	"back-end/internal/model"
+	"back-end/internal/service"
 )
 
 // 非默认条件分支仅依赖被删字段时，规则清空后必须删掉整条分支，避免 evaluateBranch 将其视为恒真。
@@ -32,7 +33,7 @@ func TestPruneApprovalFlowRemovesEmptyNonDefaultBranch(t *testing.T) {
 			},
 		},
 	}
-	next, removed := pruneApprovalFlowValue(root, "cswd", "amount", "cswd")
+	next, removed := service.PruneApprovalFlowValue(root, "cswd", "amount", "cswd")
 	if removed != 2 {
 		t.Fatalf("removed=%d, want 2", removed)
 	}
@@ -54,7 +55,7 @@ func TestPruneApprovalFlowRespectsTableKey(t *testing.T) {
 			map[string]interface{}{"field": "amount", "table_key": "cswd_detail"},
 		},
 	}
-	next, removed := pruneApprovalFlowValue(node, "cswd", "amount", "cswd")
+	next, removed := service.PruneApprovalFlowValue(node, "cswd", "amount", "cswd")
 	if removed != 1 {
 		t.Fatalf("removed=%d, want 1", removed)
 	}
@@ -84,7 +85,7 @@ func TestRenameFieldInJSON(t *testing.T) {
 			map[string]interface{}{"field_key": "amount", "table_key": "cswd_detail"},
 		},
 	}
-	next, changed := renameFieldInJSON(layout, "cswd", "amount", "total_amount", "cswd")
+	next, changed := service.RenameFieldInJSON(layout, "cswd", "amount", "total_amount", "cswd")
 	if changed < 4 {
 		t.Fatalf("changed=%d, want at least 4", changed)
 	}
@@ -118,7 +119,7 @@ func TestRenameFlowField(t *testing.T) {
 			},
 		},
 	}
-	next, changed := renameFieldInJSON(flow, "cswd", "amount", "total_amount", "cswd")
+	next, changed := service.RenameFieldInJSON(flow, "cswd", "amount", "total_amount", "cswd")
 	if changed != 1 {
 		t.Fatalf("changed=%d, want 1", changed)
 	}
@@ -147,7 +148,7 @@ func TestColumnDataExpr(t *testing.T) {
 		{"blob", model.TableColumn{Name: "attachment", Type: "blob"}, "(`attachment` IS NOT NULL AND OCTET_LENGTH(`attachment`) > 0)"},
 	}
 	for _, tc := range cases {
-		if got := columnDataExpr(tc.col); got != tc.want {
+		if got := service.ColumnDataExpr(tc.col); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
 		}
 	}

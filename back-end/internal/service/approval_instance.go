@@ -303,7 +303,8 @@ func ApprovalInstanceCreate(curUserID uint, req *model.ApprovalInstanceCreateReq
 		return nil, err
 	}
 
-	// 0.5 写库前先校验候选表单数据：直接调接口提交时，不完整数据不应先落业务表再失败。
+	// 0.5 写库前先校验候选表单数据和发起人自选审批人：
+	// 直接调接口提交时，不完整数据或未选审批人不应先落业务表再失败。
 	if err := validateSubmitPayloadBeforeWrite(req); err != nil {
 		return nil, err
 	}
@@ -545,7 +546,7 @@ func ApprovalInstanceSubmitDraft(curUserID uint, instanceID uint, req *model.App
 
 	// 2.5 同步编辑抽屉中修改的表单数据（一步提交，不再先调 /draft 落库）
 	// 写库前先校验候选值，避免不完整数据先更新业务表再失败。
-	if err := validateSubmitCandidate(instance.AppID, instance.BusinessDataID, req.BusinessData); err != nil {
+	if err := validateSubmitCandidate(instance.AppID, instance.BusinessDataID, req.BusinessData, selfSelectMembers); err != nil {
 		return nil, err
 	}
 	if len(req.BusinessData) > 0 {

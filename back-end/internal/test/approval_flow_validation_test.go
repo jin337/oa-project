@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"back-end/internal/model"
 	"back-end/internal/service"
 )
 
@@ -65,6 +66,46 @@ func TestValidateFlowNodesApprovers(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := service.ValidateFlowNodesApprovers(tc.nodes)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expect nil error, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expect error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateSelfSelectBeforeWrite(t *testing.T) {
+	baseFlow := []service.FlowNode{{
+		ID: "n1", Type: 2, Label: "审批人", ApproverType: 3, EmptyHandler: 1,
+	}}
+	cases := []struct {
+		name              string
+		flow              []service.FlowNode
+		selfSelectMembers map[string][]uint
+		wantErr           string
+	}{
+		{
+			name:    "未选择自选审批人时写库前拒绝",
+			flow:    baseFlow,
+			wantErr: "请为「审批人」节点选择审批人后再提交",
+		},
+		{
+			name: "已选择自选审批人时放行",
+			flow: []service.FlowNode{{
+				ID: "n1", Type: 2, Label: "审批人", ApproverType: 3,
+				Members: []service.FlowMember{{Type: 1, Key: "user_1", Label: "超级管理员"}},
+			}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := &model.Application{ApprovalFlowJSON: tc.flow}
+			err := service.ValidateSelfSelectBeforeWrite(app, map[string]interface{}{}, tc.selfSelectMembers)
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("expect nil error, got %v", err)

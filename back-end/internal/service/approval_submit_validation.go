@@ -212,12 +212,13 @@ func validateSubmitPayloadBeforeWrite(req *model.ApprovalInstanceCreateReq) erro
 	if req.BusinessDataID == 0 && len(req.BusinessData) == 0 {
 		return nil // 交由 resolveBusinessDataID 报「必须提供其一」
 	}
-	return validateSubmitCandidate(req.AppID, req.BusinessDataID, req.BusinessData)
+	return validateSubmitCandidate(req.AppID, req.BusinessDataID, req.BusinessData, req.ApprovalDraftMembers)
 }
 
 // validateSubmitCandidate 校验「已有数据 + 本次提交补丁」合并后的表单值。
 // businessDataID=0 时只校验提交体本身；已有数据时先读库内现值再覆盖本次字段。
-func validateSubmitCandidate(appID, businessDataID uint, payload map[string]interface{}) error {
+// 同时在写库前校验发起人自选审批人，避免业务数据先落库、后续审批人校验失败留下孤儿数据。
+func validateSubmitCandidate(appID, businessDataID uint, payload map[string]interface{}, selfSelectMembers map[string][]uint) error {
 	app, _, err := ApplicationDetail(appID)
 	if err != nil {
 		return err
@@ -235,7 +236,32 @@ func validateSubmitCandidate(appID, businessDataID uint, payload map[string]inte
 		}
 		candidate = existing
 	}
-	return validateSubmitFormData(app, candidate)
+	if err := validateSubmitFormData(app, candidate); err != nil {
+		return err
+	}
+	return validateSelfSelectBeforeWrite(app, candidate, selfSelectMembers)
+}
+
+// validateSelfSelectBeforeWrite 在业务数据落库前，按请求中的候选表单值和自选成员评估执行路径，
+// 校验路径上的发起人自选节点已选择审批人。这样校验失败时不会产生任何业务数据。
+func validateSelfSelectBeforeWrite(app *model.Application, formData map[string]interface{}, selfSelectMembers map[string][]uint) error {
+	if app == nil || app.ApprovalFlowJSON == nil {
+		return nil
+	}
+	nodes, err := parseFlowNodes(app.ApprovalFlowJSON)
+	if err != nil {
+		return fmt.Errorf("解析审批流配置失败: %w", err)
+	}
+	if len(nodes) == 0 {
+		return nil
+	}
+	injected := injectSelfSelectIntoNodes(nodes, selfSelectMembers)
+	execPath := flattenExecutionPath(nodes, formData)
+	return validateSelfSelectApprovers(&approvalContext{
+		nodes:         nodes,
+		injectedNodes: injected,
+		execPath:      execPath,
+	})
 }
 
 // isSubmitSystemField 后端自动维护的审计字段。

@@ -43,8 +43,13 @@ var (
 	DelegatedChainStatus             = delegatedChainStatus
 	ParseWithdrawWindowDuration      = parseWithdrawWindowDuration
 	BuildDeptTree                    = buildDeptTree
+	ApplicationStructureLocked       = applicationStructureLocked
+	PruneApprovalFlowValue           = pruneApprovalFlowValue
+	RenameFieldInJSON                = renameFieldInJSON
+	ColumnDataExpr                   = columnDataExpr
 	ValidateFlowNodesApprovers       = validateFlowNodesApprovers
 	ValidateExecutionPathApprovers   = validateExecutionPathApprovers
+	ValidateSelfSelectBeforeWrite    = validateSelfSelectBeforeWrite
 	BuildDataPermissionCondsForScope = buildDataPermissionCondsForScope
 	StripAuditFields                 = stripAuditFields
 	SystemCols                       = systemCols
