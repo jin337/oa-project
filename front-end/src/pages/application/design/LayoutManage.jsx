@@ -16,6 +16,7 @@ import DynamicForm, {
     parseLayoutJson,
     renderElementSettings,
 } from 'src/pages/application/dynamic/DynamicForm'
+import ElementDetailDrawer from 'src/pages/application/design/ElementDetailDrawer.jsx'
 
 const TabPane = Tabs.TabPane
 
@@ -94,6 +95,10 @@ const LayoutManage = forwardRef(function LayoutManage(
   // 选中与面板
   const [selectedId, setSelectedId] = useState(null)
   const [activePanel, setActivePanel] = useState('form')
+
+  // 字段详情抽屉：仅前端只读展示，数据来自父级已加载的表单元素
+  const [detailVisible, setDetailVisible] = useState(false)
+  const [detailElement, setDetailElement] = useState(null)
 
   // 左右侧栏折叠状态由父级 DesignManage 持有，保证切换版本 / 保存到草稿重挂载时不被重置
 
@@ -340,6 +345,38 @@ const LayoutManage = forwardRef(function LayoutManage(
     [layouts],
   )
 
+  // 解析布局元素对应的源表单元素：优先 element_id，旧布局回退 field_key + table_key
+  const resolveElementDetail = (record) => {
+    if (!record) return null
+    const byId =
+      record.element_id != null
+        ? (elements || []).find((item) => String(item.id) === String(record.element_id))
+        : null
+    if (byId) return byId
+    if (record.field_key) return (elements || []).find(
+      (item) =>
+        item.field_key === record.field_key &&
+        (!record.table_key || item.table_key === record.table_key),
+    ) || null
+    return null
+  }
+
+  const openElementDetail = (record) => {
+    const source = resolveElementDetail(record)
+    if (!source) {
+      Message.warning('未找到该字段的源配置，请刷新组件库后重试')
+      return
+    }
+    setDetailElement(source)
+    setDetailVisible(true)
+  }
+
+  const openColumnDetail = (columnField) => {
+    if (!columnField) return
+    setDetailElement(columnField)
+    setDetailVisible(true)
+  }
+
   // 注入基础组件属性面板的上下文（组件级状态 + 回调，由配置中心的 renderSettings 按需取用）
   const settingsCtx = {
     selectedElement,
@@ -349,6 +386,8 @@ const LayoutManage = forwardRef(function LayoutManage(
     handleTableKeyChange,
     handleColumnFieldChange,
     updateSelectedElementColumns,
+    openElementDetail,
+    openColumnDetail,
   }
 
   return (
@@ -585,6 +624,12 @@ const LayoutManage = forwardRef(function LayoutManage(
           )}
         </Tabs>
       </div>
+
+      <ElementDetailDrawer
+        visible={detailVisible}
+        element={detailElement}
+        onClose={() => setDetailVisible(false)}
+      />
     </div>
   )
 })

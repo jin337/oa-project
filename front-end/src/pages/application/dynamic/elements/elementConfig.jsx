@@ -1,4 +1,5 @@
 import {
+  Button,
   DatePicker,
   Input,
   InputNumber,
@@ -84,7 +85,11 @@ export const isSelfRenderElement = (element_type) => SELF_RENDER_TYPES.includes(
  * 常规表单元素的通用属性面板（元素类型 / 字段名称 / 宽度占比）
  * 由常规控件的 renderSettings 或 renderElementSettings 分发调用。
  */
-export const renderCommonSettings = ({ selectedElement, updateSelectedElement }) => (
+export const renderCommonSettings = ({
+  selectedElement,
+  updateSelectedElement,
+  openElementDetail,
+}) => (
   <>
     <div>
       <div className="mb-2 text-sm text-gray-600">元素类型</div>
@@ -92,6 +97,14 @@ export const renderCommonSettings = ({ selectedElement, updateSelectedElement })
         {getTypeLabel(selectedElement.element_type)}
       </Tag>
     </div>
+    {selectedElement.field_key && typeof openElementDetail === 'function' && (
+      <div className="flex flex-col items-start gap-2">
+        <div className="text-sm text-gray-600">元素详情</div>
+        <Button size="small" onClick={() => openElementDetail(selectedElement)}>
+          查看详情
+        </Button>
+      </div>
+    )}
     <div>
       <div className="mb-2 text-sm text-gray-600">字段名称</div>
       <Input

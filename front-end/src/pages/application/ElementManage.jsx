@@ -44,14 +44,22 @@ const Col = Grid.Col
 const MenuItem = Menu.Item
 const CollapseItem = Collapse.Item
 
-// 字段下拉搜索：同时匹配字段名（name）与字段注释（comment）
+// 字段下拉选项：字段名（注释-数据类型），如 created_at（创建时间-datetime）
+function fieldOptionLabel(field) {
+  const name = field?.name || ''
+  const detail = [field?.comment, field?.type].filter(Boolean).join('-')
+  return detail ? `${name}（${detail}）` : name
+}
+
+// 字段下拉搜索：同时匹配字段名（name）、字段注释（comment）与数据类型（type）
 function matchFieldKeyword(inputValue, option) {
   const q = String(inputValue || '').trim().toLowerCase()
   if (!q) return true
   const props = option?.props ?? option ?? {}
   const name = String(props.value ?? '').toLowerCase()
   const comment = String(props.extra?.comment ?? '').toLowerCase()
-  return name.includes(q) || comment.includes(q)
+  const type = String(props.extra?.type ?? '').toLowerCase()
+  return name.includes(q) || comment.includes(q) || type.includes(q)
 }
 
 // 赋值目标字段下拉（set_value 映射目标 / fetch_and_fill 目标字段）：
@@ -63,7 +71,13 @@ function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading, tab
   const flat = []
   ;(groups || []).forEach((g) => {
     ;(g.fields || []).forEach((f) => {
-      flat.push({ key: `${g.tableKey}::${f.name}`, tableKey: g.tableKey, name: f.name, comment: f.comment || '' })
+      flat.push({
+        key: `${g.tableKey}::${f.name}`,
+        tableKey: g.tableKey,
+        name: f.name,
+        comment: f.comment || '',
+        type: f.type || '',
+      })
     })
   })
   // 回显：优先按 table_name 精确定位分组（主/子表重名列不串）；无 table_name 的旧数据按字段名兜底
@@ -80,7 +94,8 @@ function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading, tab
         const props = option?.props ?? option ?? {}
         const name = String(props.extra?.name ?? '').toLowerCase()
         const comment = String(props.extra?.comment ?? '').toLowerCase()
-        return name.includes(q) || comment.includes(q)
+        const type = String(props.extra?.type ?? '').toLowerCase()
+        return name.includes(q) || comment.includes(q) || type.includes(q)
       }}
       placeholder="请选择字段"
       loading={loading}
@@ -105,10 +120,9 @@ function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading, tab
             <Select.Option
               key={`${g.tableKey}::${f.name}`}
               value={`${g.tableKey}::${f.name}`}
-              extra={{ name: f.name, comment: f.comment || '' }}
+              extra={{ name: f.name, comment: f.comment || '', type: f.type || '' }}
             >
-              {f.name}
-              {f.comment ? `（${f.comment}）` : ''}
+              {fieldOptionLabel(f)}
             </Select.Option>
           ))}
         </Select.OptGroup>
@@ -1050,7 +1064,16 @@ export default function ElementManage() {
       dataIndex: 'table_key',
       render: (v) => (v ? <Tag color="arcoblue">{v}</Tag> : '-'),
     },
-    { key: 'element_type', title: '元素类型', dataIndex: 'element_type' },
+    {
+      key: 'element_type',
+      title: '元素类型',
+      dataIndex: 'element_type',
+      render: (v) => {
+        if (!v) return '-'
+        const label = ELEMENT_TYPE_OPTIONS.find((o) => o.value === v)?.label
+        return label ? `${label}（${v}）` : v
+      },
+    },
     {
       key: 'default_value',
       title: '默认值',
@@ -1305,9 +1328,12 @@ export default function ElementManage() {
                   onChange={handleFieldChange}
                 >
                   {fieldOptions.map((f) => (
-                    <Select.Option key={f.name} value={f.name} extra={{ comment: f.comment || '' }}>
-                      {f.name}
-                      {f.comment ? `（${f.comment}）` : ''}
+                    <Select.Option
+                      key={f.name}
+                      value={f.name}
+                      extra={{ comment: f.comment || '', type: f.type || '' }}
+                    >
+                      {fieldOptionLabel(f)}
                     </Select.Option>
                   ))}
                 </Select>
@@ -1898,9 +1924,12 @@ function SumTableActionFields({ field, appId, mainTableKey }) {
     >
       <Select showSearch filterOption={matchFieldKeyword} placeholder="请选择主表字段" loading={loading}>
         {fields.map((f) => (
-          <Select.Option key={f.name} value={f.name} extra={{ comment: f.comment || '' }}>
-            {f.name}
-            {f.comment ? `（${f.comment}）` : ''}
+          <Select.Option
+            key={f.name}
+            value={f.name}
+            extra={{ comment: f.comment || '', type: f.type || '' }}
+          >
+            {fieldOptionLabel(f)}
           </Select.Option>
         ))}
       </Select>

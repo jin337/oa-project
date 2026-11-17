@@ -439,7 +439,7 @@ export const TableElementField = ({
                                 textAlign: summaryBodyStyle.textAlign,
                               }}
                             >
-                              {summaryMasked ? '*****' : values[summaryColKey] ?? ''}
+                              {summaryMasked ? '*****' : (values[summaryColKey] ?? '')}
                             </SummaryCell>
                           )
                         }),
@@ -483,6 +483,7 @@ export const renderTableSettings = ({
   handleColumnFieldChange,
   updateSelectedElement,
   updateSelectedElementColumns,
+  openColumnDetail,
 }) => (
   <>
     <div>
@@ -500,78 +501,90 @@ export const renderTableSettings = ({
     />
     <div className="text-sm text-gray-600">列配置</div>
     <div>
-      {(selectedElement.columns || []).map((col, idx) => (
-        <div key={col.id || `col_${idx}`} className="mb-2 rounded border border-gray-200 p-2">
-          <div className="mb-1 flex items-center justify-between">
-            <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
-            <Button
-              size="mini"
-              status="danger"
-              icon={<IconDelete />}
-              onClick={() => removeColumn(updateSelectedElementColumns, col.id)}
-            />
+      {(selectedElement.columns || []).map((col, idx) => {
+        const columnField = (tableFieldsMap[selectedElement.table_key] || []).find(
+          (field) => (field.field_key || field.name || String(field.id)) === col.dataIndex,
+        )
+        return (
+          <div key={col.id || `col_${idx}`} className="mb-2 rounded border border-gray-200 p-2">
+            <div className="mb-1 flex items-center justify-between">
+              <div className="whitespace-nowrap text-gray-500">列 {idx + 1}</div>
+              <Button
+                size="mini"
+                status="danger"
+                icon={<IconDelete />}
+                onClick={() => removeColumn(updateSelectedElementColumns, col.id)}
+              />
+            </div>
+            <div className="mb-1 flex items-center gap-2">
+              <Select
+                className="flex-1"
+                placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
+                value={col.dataIndex || undefined}
+                disabled={!selectedElement.table_key}
+                options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => {
+                  const fk = f.field_key || f.name || String(f.id)
+                  return {
+                    label: `${f.label || f.name || f.field_key}（${fk}）`,
+                    value: fk,
+                  }
+                })}
+                onChange={(v) => handleColumnFieldChange(col.id, selectedElement.table_key, v)}
+              />
+              {col.dataIndex && columnField && (
+                <Button size="small" onClick={() => openColumnDetail?.(columnField)}>
+                  详情
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Select
+                className="flex-1"
+                size="mini"
+                value={getColumnBodyCellStyle(col).textAlign || undefined}
+                placeholder="内容对齐方式"
+                options={[
+                  { label: '左对齐', value: 'left' },
+                  { label: '居中', value: 'center' },
+                  { label: '右对齐', value: 'right' },
+                ]}
+                onChange={(v) =>
+                  updateSelectedElementColumns((cols) =>
+                    cols.map((c, i) => {
+                      if (i !== idx) return c
+                      const next = {
+                        ...c,
+                        bodyCellStyle: {
+                          ...(typeof c.bodyCellStyle === 'object' && c.bodyCellStyle
+                            ? c.bodyCellStyle
+                            : {}),
+                          textAlign: v || undefined,
+                        },
+                      }
+                      // 新配置统一保存在 bodyCellStyle.textAlign；移除旧的独立 align 字段
+                      delete next.align
+                      return next
+                    }),
+                  )
+                }
+              />
+              <InputNumber
+                className="flex-1"
+                size="mini"
+                min={40}
+                max={600}
+                placeholder="列宽"
+                value={col.width || undefined}
+                onChange={(v) =>
+                  updateSelectedElementColumns((cols) =>
+                    cols.map((c, i) => (i === idx ? { ...c, width: v || undefined } : c)),
+                  )
+                }
+              />
+            </div>
           </div>
-          <Select
-            className="mb-1 w-full"
-            placeholder={selectedElement.table_key ? '选择字段' : '请先选择关联子表'}
-            value={col.dataIndex || undefined}
-            disabled={!selectedElement.table_key}
-            options={(tableFieldsMap[selectedElement.table_key] || []).map((f) => {
-              const fk = f.field_key || f.name || String(f.id)
-              return {
-                label: `${f.label || f.name || f.field_key}（${fk}）`,
-                value: fk,
-              }
-            })}
-            onChange={(v) => handleColumnFieldChange(col.id, selectedElement.table_key, v)}
-          />
-          <div className="flex items-center gap-2">
-            <Select
-              className="flex-1"
-              size="mini"
-              value={getColumnBodyCellStyle(col).textAlign || undefined}
-              placeholder="内容对齐方式"
-              options={[
-                { label: '左对齐', value: 'left' },
-                { label: '居中', value: 'center' },
-                { label: '右对齐', value: 'right' },
-              ]}
-              onChange={(v) =>
-                updateSelectedElementColumns((cols) =>
-                  cols.map((c, i) => {
-                    if (i !== idx) return c
-                    const next = {
-                      ...c,
-                      bodyCellStyle: {
-                        ...(typeof c.bodyCellStyle === 'object' && c.bodyCellStyle
-                          ? c.bodyCellStyle
-                          : {}),
-                        textAlign: v || undefined,
-                      },
-                    }
-                    // 新配置统一保存在 bodyCellStyle.textAlign；移除旧的独立 align 字段
-                    delete next.align
-                    return next
-                  }),
-                )
-              }
-            />
-            <InputNumber
-              className="flex-1"
-              size="mini"
-              min={40}
-              max={600}
-              placeholder="列宽"
-              value={col.width || undefined}
-              onChange={(v) =>
-                updateSelectedElementColumns((cols) =>
-                  cols.map((c, i) => (i === idx ? { ...c, width: v || undefined } : c)),
-                )
-              }
-            />
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
     <Button
       icon={<IconPlus />}
