@@ -31,11 +31,11 @@ import { useLocation, useParams } from 'react-router-dom'
 import * as apiDefinitionApi from 'src/api/apiDefinition'
 import * as applicationApi from 'src/api/application'
 import { fetchAll } from 'src/api/fetchAll'
+import JsEditor from 'src/components/JsEditor'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 import { useTabs } from 'src/store/tab-context'
 import { formatJsonQuotes } from 'src/utils/json'
-import JsEditor from 'src/components/JsEditor'
 import { ELEMENT_RENDER_CONFIG } from './dynamic/DynamicForm'
 
 const FormItem = Form.Item
@@ -51,9 +51,75 @@ function fieldOptionLabel(field) {
   return detail ? `${name}（${detail}）` : name
 }
 
+// 常用校验规则：选择后注入 validation_rule 输入框，仍可继续手动修改
+const VALIDATION_RULE_PRESETS = [
+  {
+    key: 'mobile',
+    label: '手机号',
+    description: '中国大陆 11 位手机号',
+    rule: '/^1[3-9]\\d{9}$/',
+  },
+  {
+    key: 'email',
+    label: '邮箱',
+    description: '常见邮箱地址格式',
+    rule: '/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/',
+  },
+  {
+    key: 'uppercase',
+    label: '大写字母',
+    description: '仅允许 A-Z 大写字母',
+    rule: '/^[A-Z]+$/',
+  },
+  {
+    key: 'lowercase',
+    label: '小写字母',
+    description: '仅允许 a-z 小写字母',
+    rule: '/^[a-z]+$/',
+  },
+  {
+    key: 'chinese',
+    label: '中文',
+    description: '仅允许汉字',
+    rule: '/^[\\u4e00-\\u9fa5]+$/',
+  },
+  {
+    key: 'english',
+    label: '英文',
+    description: '仅允许英文字母',
+    rule: '/^[A-Za-z]+$/',
+  },
+  {
+    key: 'number',
+    label: '数字',
+    description: '仅允许 0-9 数字，不含小数点',
+    rule: '/^\\d+$/',
+  },
+  {
+    key: 'chinese-english',
+    label: '中英文',
+    description: '仅允许汉字和英文字母',
+    rule: '/^[\\u4e00-\\u9fa5A-Za-z]+$/',
+  },
+  {
+    key: 'alphanumeric',
+    label: '数字英文',
+    description: '仅允许数字和英文字母',
+    rule: '/^[A-Za-z0-9]+$/',
+  },
+  {
+    key: 'max-length-100',
+    label: '长度限制',
+    description: '最多输入100个字符',
+    rule: '/^.{0,100}$/',
+  },
+]
+
 // 字段下拉搜索：同时匹配字段名（name）、字段注释（comment）与数据类型（type）
 function matchFieldKeyword(inputValue, option) {
-  const q = String(inputValue || '').trim().toLowerCase()
+  const q = String(inputValue || '')
+    .trim()
+    .toLowerCase()
   if (!q) return true
   const props = option?.props ?? option ?? {}
   const name = String(props.value ?? '').toLowerCase()
@@ -89,7 +155,9 @@ function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading, tab
     <Select
       showSearch
       filterOption={(input, option) => {
-        const q = String(input || '').trim().toLowerCase()
+        const q = String(input || '')
+          .trim()
+          .toLowerCase()
         if (!q) return true
         const props = option?.props ?? option ?? {}
         const name = String(props.extra?.name ?? '').toLowerCase()
@@ -422,10 +490,10 @@ const CONFIG_HELP_CONTENT = (
       </li>
       <li>
         <b className="text-gray-700">JS事件</b>
-        ：使用 JavaScript 脚本直接读写表单字段，适合复杂计算 / 批量赋值等「直接赋值」难以表达的场景；
+        ：使用 JavaScript 脚本直接读写表单字段，适合复杂计算 /
+        批量赋值等「直接赋值」难以表达的场景；
         <div className="mt-1">
-          脚本在「脚本内容」中编写（如{' '}
-          {'form.total = Number(form.price) * Number(form.quantity)'}
+          脚本在「脚本内容」中编写（如 {'form.total = Number(form.price) * Number(form.quantity)'}
           ），运行时「数字元素」字段已是数值类型（{'100'} → 100），可直接参与数学运算；
           脚本异常仅记录、不影响表单；
         </div>
@@ -451,9 +519,9 @@ const CONFIG_HELP_CONTENT = (
           </li>
           <li>
             <b className="text-gray-700">{'CalculateExpression'}</b>
-            ：数学表达式求值 / 日期(时间)差值，如{' '}
-            {'CalculateExpression("(1+2)*3")'} → 9、{'CalculateExpression("2026-10-13-2026-10-12")'} → 1
-            （含时间按真实时长折算为天，如 30 小时 = 1.25）；
+            ：数学表达式求值 / 日期(时间)差值，如 {'CalculateExpression("(1+2)*3")'} → 9、
+            {'CalculateExpression("2026-10-13-2026-10-12")'} → 1 （含时间按真实时长折算为天，如 30
+            小时 = 1.25）；
           </li>
         </ul>
         <div className="mt-1">
@@ -620,6 +688,9 @@ export default function ElementManage() {
 
   // 接口引用选择弹窗：null=关闭；{ target:'ds' }=数据源；{ target:'action', trigger, index }=联动动作
   const [apiPicker, setApiPicker] = useState(null)
+  // 常用校验规则选择弹窗
+  const [validationRulePickerVisible, setValidationRulePickerVisible] = useState(false)
+  const [selectedValidationRuleKey, setSelectedValidationRuleKey] = useState('')
 
   // 事件面板默认展开：有规则的分区展开，无规则时全部展开
   const defaultActiveKey = (() => {
@@ -672,10 +743,12 @@ export default function ElementManage() {
       const cached = await tableOptionsInflightRef.current
       setTableOptions(cached.options)
       setAppStatus(cached.app?.status ?? 0)
-      setSubTables((cached.app?.sub_table_name || '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean))
+      setSubTables(
+        (cached.app?.sub_table_name || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      )
       setMainTableKey(cached.app?.table_name || '')
       return cached
     } catch (e) {
@@ -814,6 +887,22 @@ export default function ElementManage() {
     }
   }
 
+  // 打开常用校验规则弹窗：已有规则与预设完全一致时回显选中项
+  const openValidationRulePicker = () => {
+    const current = String(form.getFieldValue('validation_rule') || '').trim()
+    const matched = VALIDATION_RULE_PRESETS.find((preset) => preset.rule === current)
+    setSelectedValidationRuleKey(matched?.key || '')
+    setValidationRulePickerVisible(true)
+  }
+
+  // 将选中的预设规则注入校验规则输入框，注入后可继续手动修改
+  const applyValidationRulePreset = () => {
+    const preset = VALIDATION_RULE_PRESETS.find((item) => item.key === selectedValidationRuleKey)
+    if (!preset) return
+    form.setFieldValue('validation_rule', preset.rule)
+    setValidationRulePickerVisible(false)
+  }
+
   // 数据源类型切换：清理另一类型的冗余字段，避免提交无效数据
   const handleDataSourceTypeChange = (type) => {
     if (type === 'json') {
@@ -912,6 +1001,8 @@ export default function ElementManage() {
     }
     setDrawerReadOnly(readOnly)
     setEditing(record)
+    setValidationRulePickerVisible(false)
+    setSelectedValidationRuleKey('')
     setCurrentElementType(record.element_type)
     setFieldOptions([])
     await loadTableOptions()
@@ -1070,8 +1161,7 @@ export default function ElementManage() {
       dataIndex: 'element_type',
       render: (v) => {
         if (!v) return '-'
-        const label = ELEMENT_TYPE_OPTIONS.find((o) => o.value === v)?.label
-        return label ? `${label}（${v}）` : v
+        return ELEMENT_TYPE_OPTIONS.find((o) => o.value === v)?.label
       },
     },
     {
@@ -1205,7 +1295,12 @@ export default function ElementManage() {
       {/* 表格工具栏 */}
       <div className="mb-3 flex items-center justify-between">
         <Space>
-          <Button type="primary" icon={<IconPlus />} onClick={openCreate} disabled={structureLocked}>
+          <Button
+            type="primary"
+            icon={<IconPlus />}
+            onClick={openCreate}
+            disabled={structureLocked}
+          >
             新增元素
           </Button>
           {structureLocked && (
@@ -1252,7 +1347,11 @@ export default function ElementManage() {
       <Drawer
         title={
           <Space size={6} align="center">
-            <span>{editing ? `${editing.field_key || ''}-${drawerReadOnly ? '查看' : '编辑'}表单元素` : '新增表单元素'}</span>
+            <span>
+              {editing
+                ? `${editing.field_key || ''}-${drawerReadOnly ? '查看' : '编辑'}表单元素`
+                : '新增表单元素'}
+            </span>
             {/* Arco Popover 默认写死 style.maxWidth=350，会压窄内容，这里覆盖 */}
             <Popover
               content={CONFIG_HELP_CONTENT}
@@ -1268,7 +1367,10 @@ export default function ElementManage() {
         width="60%"
         onOk={handleSave}
         confirmLoading={saving}
-        onCancel={() => setDrawerVisible(false)}
+        onCancel={() => {
+          setDrawerVisible(false)
+          setValidationRulePickerVisible(false)
+        }}
         footer={drawerReadOnly ? null : undefined}
         unmountOnExit
       >
@@ -1375,8 +1477,23 @@ export default function ElementManage() {
               </FormItem>
             </Col>
             <Col span={24}>
-              <FormItem label="校验规则" field="validation_rule">
-                <Input placeholder="支持表达式，如 /^1[3-9]\d{9}$/ 或 ${form.end_date} > ${form.start_date}" />
+              <FormItem label="校验规则">
+                <div className="flex items-center gap-2">
+                  <FormItem field="validation_rule" noStyle>
+                    <Input
+                      placeholder="支持表达式，如 /^1[3-9]\d{9}$/ 或 ${form.end_date} > ${form.start_date}"
+                      style={{ flex: 1, minWidth: 0 }}
+                    />
+                  </FormItem>
+                  <Button
+                    type="outline"
+                    htmlType="button"
+                    disabled={drawerReadOnly}
+                    onClick={openValidationRulePicker}
+                  >
+                    选择
+                  </Button>
+                </div>
               </FormItem>
               <FormItem label="错误提示" field="validation_message">
                 <Input placeholder="留空时使用默认提示（如：手机号格式不正确 / 手机号校验不通过）" />
@@ -1664,12 +1781,14 @@ export default function ElementManage() {
                                               mainTableKey={mainTableKey}
                                               loading={loadingAllFields}
                                               tableName={
-                                                actionsWatch?.[trigger.key]?.[index]?.value_mapping?.[
-                                                  vfIndex
-                                                ]?.table_name
+                                                actionsWatch?.[trigger.key]?.[index]
+                                                  ?.value_mapping?.[vfIndex]?.table_name
                                               }
                                               onTable={(tn) =>
-                                                form.setFieldValue(`${vf.field}.table_name`, tn || '')
+                                                form.setFieldValue(
+                                                  `${vf.field}.table_name`,
+                                                  tn || '',
+                                                )
                                               }
                                             />
                                           </FormItem>
@@ -1807,12 +1926,14 @@ export default function ElementManage() {
                                               mainTableKey={mainTableKey}
                                               loading={loadingAllFields}
                                               tableName={
-                                                actionsWatch?.[trigger.key]?.[index]?.target_mapping?.[
-                                                  tmIndex
-                                                ]?.table_name
+                                                actionsWatch?.[trigger.key]?.[index]
+                                                  ?.target_mapping?.[tmIndex]?.table_name
                                               }
                                               onTable={(tn) =>
-                                                form.setFieldValue(`${tm.field}.table_name`, tn || '')
+                                                form.setFieldValue(
+                                                  `${tm.field}.table_name`,
+                                                  tn || '',
+                                                )
                                               }
                                             />
                                           </FormItem>
@@ -1836,7 +1957,11 @@ export default function ElementManage() {
 
                             {/* sum_table：子表汇总（配置在子表的数字输入元素上，目标为主表字段） */}
                             {actionType === 'sum_table' && (
-                              <SumTableActionFields field={item.field} appId={id} mainTableKey={mainTableKey} />
+                              <SumTableActionFields
+                                field={item.field}
+                                appId={id}
+                                mainTableKey={mainTableKey}
+                              />
                             )}
 
                             {/* js_event：JS事件（使用 JsEditor 组件编辑脚本） */}
@@ -1847,7 +1972,9 @@ export default function ElementManage() {
                                 rules={[{ required: true, message: '请输入脚本内容' }]}
                               >
                                 <JsEditor
-                                  placeholder={'// 输入脚本，如：\n// form.amount = Number(form.price) * Number(form.quantity)'}
+                                  placeholder={
+                                    '// 输入脚本，如：\n// form.amount = Number(form.price) * Number(form.quantity)'
+                                  }
                                   minRows={6}
                                   maxRows={12}
                                 />
@@ -1879,6 +2006,44 @@ export default function ElementManage() {
         onCancel={() => setApiPicker(null)}
         onSelect={handleApiPick}
       />
+
+      {/* 常用校验规则选择弹窗：选中后注入校验规则输入框 */}
+      <Modal
+        title="选择常用校验规则"
+        visible={validationRulePickerVisible}
+        onCancel={() => setValidationRulePickerVisible(false)}
+        onOk={applyValidationRulePreset}
+        okText="使用该规则"
+        cancelText="取消"
+        okButtonProps={{ disabled: !selectedValidationRuleKey }}
+        style={{ width: 560 }}
+        unmountOnExit
+      >
+        <div className="mb-3 text-sm text-gray-500">
+          选择后会覆盖当前校验规则，仍可继续手动修改。
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {VALIDATION_RULE_PRESETS.map((preset) => {
+            const selected = preset.key === selectedValidationRuleKey
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                className={`h-21 rounded border p-3 text-left transition-colors ${
+                  selected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-400'
+                }`}
+                onClick={() => setSelectedValidationRuleKey(preset.key)}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-gray-800">{preset.label}</span>
+                  <span className="mt-1 text-xs text-gray-500">{preset.description}</span>
+                </div>
+                <div className="mt-2 font-mono text-xs break-all text-gray-500">{preset.rule}</div>
+              </button>
+            )
+          })}
+        </div>
+      </Modal>
     </Card>
   )
 }
@@ -1922,7 +2087,12 @@ function SumTableActionFields({ field, appId, mainTableKey }) {
       rules={[{ required: true, message: '请选择目标字段' }]}
       extra="该子表数据变化时，把本列各行的合计写入所选主表字段"
     >
-      <Select showSearch filterOption={matchFieldKeyword} placeholder="请选择主表字段" loading={loading}>
+      <Select
+        showSearch
+        filterOption={matchFieldKeyword}
+        placeholder="请选择主表字段"
+        loading={loading}
+      >
         {fields.map((f) => (
           <Select.Option
             key={f.name}
