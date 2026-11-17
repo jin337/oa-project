@@ -61,6 +61,39 @@ func TestStripAuditFieldsNilSafe(t *testing.T) {
 	service.StripAuditFields(nil)
 }
 
+// TestStripAuditFieldsExceptCreatedAt 详情响应保留 created_at（“申请日期”等业务字段），
+// 其余审计字段仍需剥离。
+func TestStripAuditFieldsExceptCreatedAt(t *testing.T) {
+	row := map[string]interface{}{
+		"id":         1,
+		"name":       "测试",
+		"deleted_at": nil,
+		"created_at": "2026-11-17 16:23:24",
+		"created_by": 1,
+		"updated_at": "2026-11-17 16:23:24",
+		"updated_by": 1,
+	}
+	service.StripAuditFieldsExcept(row, "created_at")
+
+	for _, f := range service.AuditFields {
+		_, ok := row[f]
+		if f == "created_at" {
+			if !ok {
+				t.Fatal("created_at 应作为业务字段保留")
+			}
+			continue
+		}
+		if ok {
+			t.Errorf("审计字段 %q 未被剥离", f)
+		}
+	}
+	for _, keep := range []string{"id", "name"} {
+		if _, ok := row[keep]; !ok {
+			t.Errorf("业务字段 %q 不应被剥离", keep)
+		}
+	}
+}
+
 // TestSystemCols 系统列集合 = 审计字段 + 额外列，且只有一份定义来源。
 func TestSystemCols(t *testing.T) {
 	set := service.SystemCols("id", "parent_id")

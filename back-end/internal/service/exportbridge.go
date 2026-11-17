@@ -52,6 +52,7 @@ var (
 	ValidateSelfSelectBeforeWrite    = validateSelfSelectBeforeWrite
 	BuildDataPermissionCondsForScope = buildDataPermissionCondsForScope
 	StripAuditFields                 = stripAuditFields
+	StripAuditFieldsExcept           = stripAuditFieldsExcept
 	SystemCols                       = systemCols
 )
 

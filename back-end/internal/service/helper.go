@@ -14,6 +14,25 @@ func stripAuditFields(row map[string]interface{}) {
 	}
 }
 
+// stripAuditFieldsExcept 剥离审计字段，但保留 keep 中列出的字段。
+// 详情场景使用：created_at 可能被配置为业务字段（如“申请日期”），需要回显给前端；
+// created_by / updated_at / updated_by / deleted_at 等其余内部字段仍统一剥离。
+func stripAuditFieldsExcept(row map[string]interface{}, keep ...string) {
+	if len(keep) == 0 {
+		stripAuditFields(row)
+		return
+	}
+	keepSet := make(map[string]bool, len(keep))
+	for _, f := range keep {
+		keepSet[f] = true
+	}
+	for _, f := range auditFields {
+		if !keepSet[f] {
+			delete(row, f)
+		}
+	}
+}
+
 // systemCols 构造「系统列」集合：审计字段 + extra（如 id / parent_id）。
 // 各处的系统列名单统一由此派生，保证字段集合只有一份定义。
 func systemCols(extra ...string) map[string]bool {
