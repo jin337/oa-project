@@ -28,7 +28,8 @@ func approvalNodeLabel(node *flowNode) string {
 }
 
 // validateApprovalFlowApprovers 校验整棵审批流配置：审批节点不能没有审批人。
-// 发起人自选（approverType=3）允许配置时为空，实际选人在提交阶段校验。
+// 发起人自选（approverType=3）允许配置时为空，实际选人在提交阶段校验；
+// 显式配置 emptyHandler=1（自动通过）的审批节点允许为空，运行时跳过。
 func validateApprovalFlowApprovers(raw any) error {
 	nodes, err := parseFlowNodes(raw)
 	if err != nil {
