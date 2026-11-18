@@ -19,13 +19,15 @@ func Setup() *gin.Engine {
 	// SecurityHeaders：防点击劫持/嗅探/能力授权收敛（后端响应侧；前端 index.html 需在静态服务器同步配置）
 	r.Use(middleware.Recovery(), middleware.Cors(), middleware.Timeout(), middleware.RateLimit(), middleware.SecurityHeaders(), gin.Logger())
 
-	// 可信代理：限流按 ClientIP 计数，Gin 默认信任所有代理，客户端可伪造 X-Forwarded-For
-	// 绕开额度。反代部署须在 config server.security.trusted_proxies 填代理网段（CIDR）；
-	// 留空保持 Gin 默认（本机直连部署无需配置）。
-	if proxies := config.Cfg.Server.Security.TrustedProxies; len(proxies) > 0 {
-		if err := r.SetTrustedProxies(proxies); err != nil {
-			panic("trusted_proxies 配置非法: " + err.Error())
-		}
+	// 可信代理：限流按 ClientIP 计数。Gin 默认信任所有代理，客户端可伪造
+	// X-Forwarded-For 绕过额度。未配置时显式关闭代理信任（取 RemoteAddr），
+	// 反代部署须在 config server.security.trusted_proxies 或 OA_TRUSTED_PROXIES 填代理网段（CIDR）。
+	proxies := config.Cfg.Server.Security.TrustedProxies
+	if len(proxies) == 0 {
+		proxies = nil // nil 表示不信任任何代理，ClientIP 直接使用 RemoteAddr
+	}
+	if err := r.SetTrustedProxies(proxies); err != nil {
+		panic("trusted_proxies 配置非法: " + err.Error())
 	}
 
 	// 根路径健康检查：无需鉴权，用于验证服务与数据库是否正常

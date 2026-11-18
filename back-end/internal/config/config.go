@@ -1,13 +1,36 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
+)
+
+// 安全相关环境变量名：敏感值不写入 YAML，由部署环境注入。
+const (
+	EnvJWTSecret        = "OA_JWT_SECRET"
+	EnvMySQLHost        = "OA_MYSQL_HOST"
+	EnvMySQLPort        = "OA_MYSQL_PORT"
+	EnvMySQLUsername    = "OA_MYSQL_USERNAME"
+	EnvMySQLPassword    = "OA_MYSQL_PASSWORD"
+	EnvMySQLDBName      = "OA_MYSQL_DBNAME"
+	EnvCORSEnable       = "OA_CORS_ENABLE"
+	EnvCORSAllowOrigins = "OA_CORS_ALLOW_ORIGINS"
+	EnvTrustedProxies   = "OA_TRUSTED_PROXIES"
+	EnvMigrateEnable    = "OA_MIGRATE_ENABLE"
+	EnvMigrateMode      = "OA_MIGRATE_MODE"
+	EnvAdminUsername    = "OA_ADMIN_USERNAME"
+	EnvAdminPassword    = "OA_ADMIN_PASSWORD"
+	EnvAdminEmail       = "OA_ADMIN_EMAIL"
 )
 
 // UploadDir 上传文件根目录（相对后端运行目录）。
@@ -120,11 +143,11 @@ func defaultConfig() *Config {
 			Mode:           "release",
 			APIPrefix:      "/v1/api",
 			RequestTimeout: 10,
-			JWT:            JWTConfig{Secret: "default-secret-change-me", Expire: 2, Issuer: "back-end"},
+			JWT:            JWTConfig{Secret: "", Expire: 2, Issuer: "back-end"},
 			Log:            LogConfig{Level: "info", Path: ""},
 			Cors: CorsConfig{
 				Enable:       false,
-				AllowOrigins: []string{"*"},
+				AllowOrigins: nil,
 				AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 				AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
 			},
@@ -157,9 +180,19 @@ func defaultConfig() *Config {
 // APP_ENV=test      -> configs/config-test.yaml
 // APP_ENV=prod      -> configs/config-prod.yaml
 // 配置文件读取/解析失败时不退出，打印告警并使用默认安全配置。
+// 敏感项（数据库密码、JWT 密钥、CORS 来源、管理员口令等）由 OA_* 环境变量覆盖，
+// YAML 中只保留非敏感默认值和占位说明，避免仓库内出现明文凭据。
 var DefaultEnv = "dev"
 
 func Load() *Config {
+	// .env 仅供本地 dev/test 使用；生产必须由部署系统注入，避免本地开发凭据被带入 prod。
+	envBeforeDotEnv := os.Getenv("APP_ENV")
+	if envBeforeDotEnv == "" {
+		envBeforeDotEnv = DefaultEnv
+	}
+	if envBeforeDotEnv != "prod" {
+		loadDotEnv()
+	}
 	Env = os.Getenv("APP_ENV")
 	if Env == "" {
 		Env = DefaultEnv
@@ -175,6 +208,8 @@ func Load() *Config {
 	} else {
 		log.Printf("[config] 已加载环境配置: %s", path)
 	}
+
+	applyEnvOverrides(cfg)
 
 	// 兜底校验：关键参数非法时回退默认值，保证服务可用
 	if cfg.Server.Port <= 0 || cfg.Server.Port > 65535 {
@@ -197,9 +232,246 @@ func Load() *Config {
 	if cfg.Server.OperationLog.CleanupIntervalHours <= 0 {
 		cfg.Server.OperationLog.CleanupIntervalHours = 24
 	}
+	normalizeSecurity(cfg)
 
 	Cfg = cfg
 	return cfg
+}
+
+// loadDotEnv 读取当前目录下可选的 .env（本地开发用，已被 .gitignore 忽略）。
+// 仅填充进程环境中尚不存在的变量，部署系统注入的同名变量优先。
+func loadDotEnv() {
+	data, err := os.ReadFile(".env")
+	if err != nil {
+		return
+	}
+	for _, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(strings.TrimSuffix(raw, "\r"))
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		line = strings.TrimPrefix(line, "export ")
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
+			value = value[1 : len(value)-1]
+		}
+		if key == "" {
+			continue
+		}
+		// 环境切换只由启动命令的 APP_ENV 决定；.env 只允许注入 OA_* 配置项，避免改写 PATH 等进程环境。
+		if key == "APP_ENV" || !strings.HasPrefix(key, "OA_") {
+			continue
+		}
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		_ = os.Setenv(key, value)
+	}
+}
+
+// applyEnvOverrides 用部署环境变量覆盖 YAML 中的敏感项。
+// 空值不覆盖，避免本地未设置变量时把 YAML 的默认值清空。
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv(EnvJWTSecret); v != "" {
+		cfg.Server.JWT.Secret = v
+	}
+	if v := os.Getenv(EnvMySQLHost); v != "" {
+		cfg.MySQL.Host = v
+	}
+	if v := os.Getenv(EnvMySQLPort); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.MySQL.Port = p
+		}
+	}
+	if v := os.Getenv(EnvMySQLUsername); v != "" {
+		cfg.MySQL.Username = v
+	}
+	if v := os.Getenv(EnvMySQLPassword); v != "" {
+		cfg.MySQL.Password = v
+	}
+	if v := os.Getenv(EnvMySQLDBName); v != "" {
+		cfg.MySQL.DBName = v
+	}
+	if v := os.Getenv(EnvCORSEnable); v != "" {
+		if enabled, err := strconv.ParseBool(v); err == nil {
+			cfg.Server.Cors.Enable = enabled
+		}
+	}
+	if v := os.Getenv(EnvCORSAllowOrigins); v != "" {
+		cfg.Server.Cors.AllowOrigins = splitList(v)
+	}
+	if v := os.Getenv(EnvTrustedProxies); v != "" {
+		cfg.Server.Security.TrustedProxies = splitList(v)
+	}
+	if v := os.Getenv(EnvMigrateEnable); v != "" {
+		if enabled, err := strconv.ParseBool(v); err == nil {
+			cfg.MySQL.Migrate.Enable = enabled
+		}
+	}
+	if v := os.Getenv(EnvMigrateMode); v != "" {
+		cfg.MySQL.Migrate.Mode = strings.TrimSpace(v)
+	}
+}
+
+func splitList(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if v := strings.TrimSpace(p); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// normalizeSecurity 补全非敏感默认值；开发/测试环境缺少 JWT 密钥时生成进程级临时密钥。
+// 生产环境不生成临时密钥，由 ValidateSecurity 强制要求显式注入。
+func normalizeSecurity(cfg *Config) {
+	if cfg.Server.JWT.Expire <= 0 {
+		cfg.Server.JWT.Expire = 24
+	}
+	if strings.TrimSpace(cfg.Server.JWT.Issuer) == "" {
+		cfg.Server.JWT.Issuer = "back-end"
+	}
+	if strings.TrimSpace(cfg.Server.JWT.Secret) == "" && Env != "prod" {
+		secret, err := randomToken(32)
+		if err != nil {
+			log.Fatalf("[config] 生成临时 JWT 密钥失败: %v", err)
+		}
+		cfg.Server.JWT.Secret = secret
+		log.Printf("[config] %s 环境未设置 %s，已生成本次进程临时密钥（重启后登录态失效）", Env, EnvJWTSecret)
+	}
+}
+
+// ValidateSecurity 生产环境安全校验：不合格时拒绝启动，避免静默使用不安全默认值。
+// 开发/测试环境保留宽松策略，便于本地调试。
+func (c *Config) ValidateSecurity() error {
+	if Env != "prod" {
+		return nil
+	}
+	var problems []string
+	secret := c.Server.JWT.Secret
+	if strings.TrimSpace(secret) == "" {
+		problems = append(problems, "server.jwt.secret 为空，必须通过 "+EnvJWTSecret+" 注入")
+	} else {
+		if len(secret) < 32 {
+			problems = append(problems, "server.jwt.secret 长度不足 32 字节")
+		}
+		if strings.Contains(strings.ToLower(secret), "change-me") {
+			problems = append(problems, "server.jwt.secret 仍为示例占位值")
+		}
+	}
+	if strings.TrimSpace(c.MySQL.Username) == "" {
+		problems = append(problems, "mysql.username 为空")
+	}
+	if strings.TrimSpace(c.MySQL.Password) == "" {
+		problems = append(problems, "mysql.password 为空，必须通过 "+EnvMySQLPassword+" 注入")
+	}
+	if c.Server.Cors.Enable {
+		if len(c.Server.Cors.AllowOrigins) == 0 {
+			problems = append(problems, "server.cors.allow_origins 为空；同域部署请设置 "+EnvCORSEnable+"=false，跨域部署请显式列出来源")
+		}
+		for i, origin := range c.Server.Cors.AllowOrigins {
+			if origin == "*" {
+				problems = append(problems, fmt.Sprintf("server.cors.allow_origins[%d] 不能为 *", i))
+				continue
+			}
+			if err := validateOrigin(origin); err != nil {
+				problems = append(problems, fmt.Sprintf("server.cors.allow_origins[%d] 非法: %v", i, err))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("安全配置校验失败: %s", strings.Join(problems, "；"))
+	}
+	return nil
+}
+
+// validateOrigin 校验 CORS 来源必须是纯 scheme+host+port，不允许路径、查询、通配符。
+func validateOrigin(origin string) error {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return err
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("仅支持 http/https")
+	}
+	if u.Host == "" {
+		return fmt.Errorf("缺少主机名")
+	}
+	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("不允许用户信息、查询参数或片段")
+	}
+	if u.Path != "" && u.Path != "/" {
+		return fmt.Errorf("不允许路径")
+	}
+	return nil
+}
+
+// randomToken 生成 n 字节随机值的 URL-safe 字符串（用于临时 JWT 密钥和开发环境管理员口令）。
+func randomToken(n int) (string, error) {
+	buf := make([]byte, n)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// AdminUsername 管理员引导用户名（默认 admin，可通过 OA_ADMIN_USERNAME 指定）。
+func AdminUsername() string {
+	if v := strings.TrimSpace(os.Getenv(EnvAdminUsername)); v != "" {
+		return v
+	}
+	return "admin"
+}
+
+// AdminEmail 管理员引导邮箱。
+func AdminEmail() string {
+	if v := strings.TrimSpace(os.Getenv(EnvAdminEmail)); v != "" {
+		return v
+	}
+	return "admin@local"
+}
+
+// AdminPasswordFromEnv 读取生产/测试环境显式配置的管理员口令；未设置返回空。
+func AdminPasswordFromEnv() string {
+	return os.Getenv(EnvAdminPassword)
+}
+
+// BootstrapAdminPassword 返回初始化管理员使用的口令。
+// - OA_ADMIN_PASSWORD 已设置：校验强度后使用；
+// - 生产环境未设置：返回错误，禁止使用默认口令；
+// - 开发/测试环境未设置：生成随机口令并标记 generated=true，由调用方打印一次。
+func BootstrapAdminPassword() (password string, generated bool, err error) {
+	if p := AdminPasswordFromEnv(); p != "" {
+		if err := validateAdminPassword(p); err != nil {
+			return "", false, err
+		}
+		return p, false, nil
+	}
+	if Env == "prod" {
+		return "", false, fmt.Errorf("生产环境必须设置 %s 作为初始管理员口令", EnvAdminPassword)
+	}
+	p, err := randomToken(18)
+	if err != nil {
+		return "", false, err
+	}
+	return p, true, nil
+}
+
+func validateAdminPassword(p string) error {
+	if len(p) < 12 {
+		return fmt.Errorf("%s 长度至少 12 个字符", EnvAdminPassword)
+	}
+	if p == "admin123" || strings.Contains(strings.ToLower(p), "change-me") {
+		return fmt.Errorf("%s 不能使用默认或示例口令", EnvAdminPassword)
+	}
+	return nil
 }
 
 // DSN 生成 gorm MySQL DSN（不含库名，用于建库）

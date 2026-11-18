@@ -9,7 +9,7 @@ server:
   request_timeout: 15
 
   jwt:
-    secret: "9f2c4a7e1b8d3f6a0c5e2b7d9f1a3c5e7b9d2f4a6c8e0b1d3f5a7c9e2b4d6f8a0c"  # 本地部署随机密钥
+    secret: ""                                # 必须由 OA_JWT_SECRET 注入（≥32 字节随机值），缺失将拒绝启动
     expire: 24
     issuer: "oa_main"                     # token 签发者
 
@@ -19,8 +19,7 @@ server:
 
   cors:
     enable: true
-    allow_origins:
-      - "*"
+    allow_origins: []         # 禁止 "*"；通过 OA_CORS_ALLOW_ORIGINS 注入实际前端来源；同域部署可设 OA_CORS_ENABLE=false
     allow_methods:
       - GET
       - POST
@@ -45,12 +44,12 @@ server:
     login_max_fails: 5        # 窗口内失败次数达到即锁定账号
     login_fail_ttl: 15        # 失败计数窗口（分钟）
     login_lock_ttl: 15        # 锁定时长（分钟）
-    trusted_proxies: []       # 反代部署必填 Nginx 所在网段（CIDR），如 [127.0.0.1/32]；留空=信任所有代理，客户端可伪造 XFF 绕过 IP 限流
+    trusted_proxies: []       # 留空=不信任任何代理；Nginx 反代时填其网段，如 [127.0.0.1/32]
 mysql:
   host: 127.0.0.1
   port: 3306
-  username: root
-  password: "Kzi493399hst"
+  username: root              # 建议通过 OA_MYSQL_USERNAME 注入最小权限账号
+  password: ""                # 必须由 OA_MYSQL_PASSWORD 注入，禁止提交明文密码
   dbname: oa_main
   table_prefix: oa_
   charset: utf8mb4
@@ -63,7 +62,7 @@ mysql:
   connect_timeout: 3
 
   migrate:
-    enable: true             # oa_main 全新库：启动时自动建表 + 初始化数据
-    mode: full               # 全新环境全量建表 + 种子数据（admin 账号/菜单/角色等）
+    enable: false            # 生产默认关闭自动迁移；首次部署临时设 OA_MIGRATE_ENABLE=true
+    mode: incremental        # 日常升级用 incremental；首次建库临时设 OA_MIGRATE_MODE=full
     log_enable: true
     log_path: "./logs/migrate-prod.log"

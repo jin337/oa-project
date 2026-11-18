@@ -94,6 +94,11 @@ var migrations = []migration{
 			return db.Migrator().AlterColumn(&model.OperationLog{}, "Body")
 		},
 	},
+	{
+		Version: 4,
+		Name:    "admin_default_password_guard",
+		Up:      HardenDefaultAdminPassword,
+	},
 }
 
 // seedAuditLogMenu 操作审计菜单：系统管理目录下「操作审计」页面（perm=system:audit）
@@ -326,13 +331,21 @@ func seedInitData(db *gorm.DB) error {
 		return err
 	}
 
-	// admin 用户（密码 admin123）
-	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	// admin 用户：口令由 OA_ADMIN_PASSWORD 注入；开发/测试未设置时生成随机口令，
+	// 生产未设置时直接返回错误，禁止回退到 admin123 之类的默认凭据。
+	password, generated, err := config.BootstrapAdminPassword()
+	if err != nil {
+		return fmt.Errorf("初始化管理员失败: %w", err)
+	}
+	if generated {
+		bootstrapLogf("未设置 %s，已生成临时管理员口令（仅本次初始化有效）：%s", config.EnvAdminPassword, password)
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 	admin := model.User{
-		Username: "admin", Email: "admin@example.com",
+		Username: config.AdminUsername(), Email: config.AdminEmail(),
 		Password: string(hash), Status: 1, DeptID: rootDept.ID,
 	}
 	if err := db.Create(&admin).Error; err != nil {
@@ -342,6 +355,55 @@ func seedInitData(db *gorm.DB) error {
 		return err
 	}
 	return db.Model(&admin).Association("Roles").Append(&adminRole)
+}
+
+// HardenDefaultAdminPassword 清除历史默认管理员口令：
+// 检测 admin 账号是否仍使用 admin123，若是则用 OA_ADMIN_PASSWORD 覆盖并吊销旧 token；
+// 生产环境未提供新口令时返回错误，让本次迁移失败、阻止服务带着默认凭据启动。
+// 开发/测试环境未提供时生成随机口令并打印一次，避免继续保留已知密码。
+func HardenDefaultAdminPassword(db *gorm.DB) error {
+	usernames := []string{"admin"}
+	if u := config.AdminUsername(); u != "admin" {
+		usernames = append(usernames, u)
+	}
+	var users []model.User
+	if err := db.Where("username IN ?", usernames).Find(&users).Error; err != nil {
+		return err
+	}
+	for _, user := range users {
+		if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte("admin123")) != nil {
+			continue
+		}
+		password, generated, err := config.BootstrapAdminPassword()
+		if err != nil {
+			return fmt.Errorf("检测到账号 %s 仍使用默认口令 admin123，但无法安全替换: %w", user.Username, err)
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		if err := db.Model(&model.User{}).Where("id = ?", user.ID).
+			Updates(map[string]any{
+				"password":      string(hash),
+				"token_version": gorm.Expr("token_version + 1"),
+			}).Error; err != nil {
+			return err
+		}
+		if generated {
+			bootstrapLogf("账号 %s 仍使用默认口令，已生成临时新口令（仅本次启动有效）：%s", user.Username, password)
+		} else {
+			bootstrapLogf("账号 %s 仍使用默认口令，已替换为 %s 注入的新口令并吊销旧登录态", user.Username, config.EnvAdminPassword)
+		}
+	}
+	return nil
+}
+
+func bootstrapLogf(format string, args ...any) {
+	if migrateLogger != nil {
+		migrateLogger.Printf(format, args...)
+		return
+	}
+	log.Printf("[bootstrap] "+format, args...)
 }
 
 func menuPtrs(db *gorm.DB, ids []uint) []*model.Menu {

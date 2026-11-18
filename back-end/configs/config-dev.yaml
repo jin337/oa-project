@@ -10,7 +10,7 @@ server:
   request_timeout: 10         # 接口统一请求超时时间（秒）
 
   jwt:
-    secret: "9f2c4a7e1b8d3f6a0c5e2b7d9f1a3c5e7b9d2f4a6c8e0b1d3f5a7c9e2b4d6f6b1d"   # JWT 签名密钥，生产务必修改
+    secret: ""                                # 空值由 OA_JWT_SECRET 注入；未设置时启动生成进程级临时密钥
     expire: 24                              # token 有效期（小时）
     issuer: "back-end"                      # token 签发者
 
@@ -20,8 +20,9 @@ server:
 
   cors:
     enable: true              # 跨域功能开关
-    allow_origins:            # 自定义放行来源，"*" 表示全部
-      - "*"
+    allow_origins:            # 仅放行本地前端；生产禁止使用 "*"
+      - "http://localhost:8181"
+      - "http://127.0.0.1:8181"
     allow_methods:
       - GET
       - POST
@@ -46,12 +47,12 @@ server:
     login_max_fails: 5        # 窗口内失败次数达到即锁定账号
     login_fail_ttl: 15        # 失败计数窗口（分钟）
     login_lock_ttl: 15        # 锁定时长（分钟）
-    trusted_proxies: []       # 反代部署必填 Nginx 所在网段（CIDR），如 [127.0.0.1/32]；留空=信任所有代理，客户端可伪造 XFF 绕过 IP 限流
+    trusted_proxies: []       # 留空=不信任任何代理；Nginx 反代时填其网段，如 [127.0.0.1/32]
 mysql:
   host: 127.0.0.1             # 数据库 IP
   port: 3306                  # 数据库端口
-  username: root              # 数据库账号
-  password: "Kzi493399hst"    # 数据库密码
+  username: root              # 数据库账号（生产建议改用最小权限账号）
+  password: ""                # 空值由 OA_MYSQL_PASSWORD 注入，禁止提交明文密码
   dbname: oa_test             # 库名（不存在时自动创建）
   table_prefix: oa_           # 表前缀
   charset: utf8mb4            # 字符集

@@ -27,6 +27,13 @@ func main() {
 	logger.Setup(cfg.Server.Log.Level, cfg.Server.Log.Path)
 	logger.Infof("环境=%s 配置加载完成", config.Env)
 
+	// 2.0 生产安全校验：缺少 JWT 密钥、数据库口令或 CORS 来源时拒绝启动，
+	// 不静默回退到不安全默认值。
+	if err := cfg.ValidateSecurity(); err != nil {
+		logger.Errorf("%v", err)
+		os.Exit(1)
+	}
+
 	// 2.1 安全策略初始化：按 config.security 应用限流参数并启动过期 key 清理
 	middleware.InitSecurity()
 
@@ -39,9 +46,20 @@ func main() {
 	logger.Infof("数据库 %s 连接成功", cfg.MySQL.DBName)
 
 	// 4. 自动迁移：可开关、full/incremental 双模式、带版本管理与迁移日志
-	//    迁移失败只记录错误，不让服务启动失败（高稳定要求）
+	//    生产环境迁移失败必须停止启动，避免带着未完成的 schema/默认凭据继续服务；
+	//    开发/测试环境保留原有“记录错误但继续启动”的高稳定行为。
 	if err := database.Migrate(db, cfg.MySQL.Migrate); err != nil {
-		logger.Errorf("自动迁移失败，服务继续启动: %v", err)
+		logger.Errorf("自动迁移失败: %v", err)
+		if config.Env == "prod" {
+			os.Exit(1)
+		}
+	}
+	// 4.0 即使关闭自动迁移，也要检查并清除历史默认管理员口令 admin123。
+	if err := database.HardenDefaultAdminPassword(db); err != nil {
+		logger.Errorf("默认管理员口令加固失败: %v", err)
+		if config.Env == "prod" {
+			os.Exit(1)
+		}
 	}
 
 	// 4.1 跨实例权限失效：轮询权限版本，变化时清空本实例缓存并通过 SSE 通知前端刷新。

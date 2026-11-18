@@ -210,6 +210,25 @@ go test ./internal/test -run TestApprovalWithdraw -v   # 单个用例
 - 通过环境变量 `APP_ENV` 选择环境，取值 `dev` / `test` / `prod`，默认 `dev`。
 - 对应读取 `configs/config-{env}.yaml`；编译打包时可用 `-X 'back-end/internal/config.DefaultEnv=prod'` 改写默认环境。
 - 配置结构体定义在 `internal/config/config.go`，未填写项使用内置默认值。
+- 敏感值不写进 YAML：优先读取进程环境变量；本地开发可复制 `.env.example` 为 `.env`（已加入 `.gitignore`），启动时自动加载且不覆盖已有进程变量。
+- `.env` 仅在 `APP_ENV` 为 `dev` / `test` 时加载，且不会覆盖 `APP_ENV`；生产必须由部署系统注入变量。
+- `prod` 启动前执行安全校验：JWT 密钥、数据库口令缺失或 CORS 配置为 `*` 时拒绝启动；迁移失败也会停止启动。
+
+### 安全相关环境变量
+
+| 变量 | 说明 |
+| --- | --- |
+| `OA_JWT_SECRET` | JWT 签名密钥，生产要求 ≥ 32 字节随机值 |
+| `OA_MYSQL_HOST` / `OA_MYSQL_PORT` | 数据库地址；覆盖 YAML |
+| `OA_MYSQL_USERNAME` / `OA_MYSQL_PASSWORD` | 数据库账号与口令；生产必须注入，建议最小权限账号 |
+| `OA_MYSQL_DBNAME` | 数据库名；覆盖 YAML |
+| `OA_CORS_ENABLE` | 跨域开关，`true` / `false` |
+| `OA_CORS_ALLOW_ORIGINS` | 逗号分隔的具体来源，如 `https://oa.example.com`；生产禁止 `*` |
+| `OA_TRUSTED_PROXIES` | 逗号分隔的反代 CIDR；留空=不信任任何代理 |
+| `OA_MIGRATE_ENABLE` / `OA_MIGRATE_MODE` | 覆盖自动迁移开关与 `full` / `incremental` 模式 |
+| `OA_ADMIN_USERNAME` / `OA_ADMIN_PASSWORD` / `OA_ADMIN_EMAIL` | 初始化管理员账号；生产未设置口令时迁移失败并拒绝启动 |
+
+> 已存在的 `admin/admin123` 会由迁移 v4 或启动加固逻辑清除：提供 `OA_ADMIN_PASSWORD` 时替换为该口令并吊销旧 token；生产未提供时拒绝启动，开发/测试生成随机口令并打印一次。
 
 ### server
 
@@ -219,13 +238,13 @@ go test ./internal/test -run TestApprovalWithdraw -v   # 单个用例
 | `server.mode` | Gin 模式：`debug` / `release` / `test` |
 | `server.api_prefix` | API 统一前缀，默认 `/v1/api`，需与前端 `.env`、Nginx 对齐 |
 | `server.request_timeout` | 请求超时（秒），由 Timeout 中间件执行 |
-| `server.jwt.secret` | JWT 签名密钥，**生产必须更换**，长度建议 ≥ 32 字节随机值 |
+| `server.jwt.secret` | JWT 签名密钥，**必须通过 `OA_JWT_SECRET` 注入**；生产要求 ≥ 32 字节随机值，开发/测试未设置时生成进程级临时密钥 |
 | `server.jwt.expire` | Token 有效期（小时），默认 24 |
 | `server.jwt.issuer` | Token 签发者标识 |
 | `server.log.level` | 日志级别：`debug` / `info` / `warn` / `error` |
 | `server.log.path` | 业务日志文件路径，留空仅输出控制台 |
 | `server.cors.enable` | 跨域开关；同域反代部署可关闭 |
-| `server.cors.allow_origins` | 放行来源，`*` 表示全部；生产建议写具体域名 |
+| `server.cors.allow_origins` | 放行来源，必须写具体来源；生产禁止 `*`，空列表表示不放行跨域 |
 | `server.cors.allow_methods` | 允许的方法 |
 | `server.cors.allow_headers` | 允许的请求头（含 `Authorization`） |
 | `server.operation_log.retain_days` | 审计日志保留天数，`0` 表示永久保留且不启动清理 |
@@ -238,14 +257,14 @@ go test ./internal/test -run TestApprovalWithdraw -v   # 单个用例
 | `server.security.login_max_fails` | 窗口内登录失败次数上限，达到即锁定 |
 | `server.security.login_fail_ttl` | 失败计数窗口（分钟） |
 | `server.security.login_lock_ttl` | 锁定时长（分钟） |
-| `server.security.trusted_proxies` | 可信代理网段（CIDR）。**反代部署必填**，留空会信任所有代理，客户端可伪造 `X-Forwarded-For` 绕过 IP 限流 |
+| `server.security.trusted_proxies` | 可信代理网段（CIDR）。留空表示**不信任任何代理**；Nginx 反代时必须填其网段，否则 `ClientIP` 会取到反代地址 |
 
 ### mysql
 
 | 字段 | 说明 |
 | --- | --- |
 | `mysql.host` / `port` | 数据库地址 |
-| `mysql.username` / `password` | 认证信息（生产不要提交明文密码到仓库） |
+| `mysql.username` / `password` | 认证信息，生产通过 `OA_MYSQL_USERNAME` / `OA_MYSQL_PASSWORD` 注入，禁止提交明文密码 |
 | `mysql.dbname` | 库名，不存在时自动创建 |
 | `mysql.table_prefix` | 表前缀，默认 `oa_` |
 | `mysql.charset` / `collation` | 字符集与排序规则，默认 `utf8mb4` / `utf8mb4_general_ci` |
@@ -265,7 +284,7 @@ go test ./internal/test -run TestApprovalWithdraw -v   # 单个用例
 | `log_enable` | 是否记录迁移日志 |
 | `log_path` | 迁移日志路径 |
 
-> 生产建议：`enable: false`，先把 `full`/`incremental` 迁移在测试库验证通过，再按发布流程执行；`jwt.secret`、数据库密码、`trusted_proxies` 通过独立 `config-prod.yaml` 或部署系统注入。
+> 生产建议：`enable: false`（仓库默认已关闭），先把 `full`/`incremental` 迁移在测试库验证通过；首次部署临时设置 `OA_MIGRATE_ENABLE=true`，按需设置 `OA_MIGRATE_MODE=full` 初始化，随后关闭。`jwt.secret`、数据库密码、CORS 来源、`trusted_proxies`、初始管理员口令均通过环境变量注入。
 
 ---
 
