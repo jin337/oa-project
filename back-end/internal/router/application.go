@@ -14,6 +14,7 @@ func registerApplicationRoutes(api *gin.RouterGroup) {
 	{
 		applications.GET("", handler.ApplicationList)                                                     // 流程列表
 		applications.POST("", middleware.RequirePermission("application:add"), handler.ApplicationCreate) // 新建流程
+		applications.GET("/flow-list", handler.ApplicationFlowList)                                       // 根据code查询流程列表数据
 		applications.GET("/by-code/:code", handler.ApplicationByCode)                                     // 按编码查询流程（申请/审批人读取）
 		// 数据列表导出：与列表页同一功能权限口径（application:list），后端按 code+筛选取数渲染
 		applications.GET("/export", middleware.RequirePermission("application:list"), handler.ApplicationDataExport)                // 数据列表全量导出 xlsx

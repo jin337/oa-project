@@ -80,6 +80,26 @@ func ApplicationByCode(c *gin.Context) {
 	response.OK(c, result)
 }
 
+// ApplicationFlowList GET /{APIPrefix}/application/flow-list?code=xxx
+// 按页面编码直接返回业务表数据：主表全部字段 + 子表按子表名嵌套；不返回应用配置包装字段。
+func ApplicationFlowList(c *gin.Context) {
+	code := strings.TrimSpace(c.Query("code"))
+	if code == "" {
+		response.Fail(c, response.CodeParamError, "页面编码不能为空")
+		return
+	}
+	data, err := service.ApplicationFlowList(code)
+	if err != nil {
+		if strings.Contains(err.Error(), "页面配置不存在") {
+			response.Fail(c, response.CodeNotFound, err.Error())
+			return
+		}
+		response.Fail(c, response.CodeServerError, "查询流程数据失败: "+err.Error())
+		return
+	}
+	response.OK(c, data)
+}
+
 // ApplicationDataDetail GET /{APIPrefix}/application/:id/data/:dataId 动态数据详情（含子表数据）
 func ApplicationDataDetail(c *gin.Context) {
 	id, ok := parseID(c)

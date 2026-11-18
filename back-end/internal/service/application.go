@@ -844,6 +844,128 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 	return main, nil
 }
 
+// ApplicationFlowList 按页面编码返回业务表数据：
+//  1. 用 code 查应用配置，取主表 table_name 与子表 sub_table_name
+//  2. 主表 SELECT *，返回全部字段，仅过滤软删除行
+//  3. 子表按 parent_id 关联主表主键，以子表名（如 clfbx_detail）为 key 嵌套到每行
+//  4. 不返回应用配置、表头、搜索项等包装字段
+func ApplicationFlowList(code string) ([]map[string]interface{}, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, errors.New("页面编码不能为空")
+	}
+
+	var app model.Application
+	if err := database.DB.Where("code = ?", code).First(&app).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("页面配置不存在")
+		}
+		return nil, err
+	}
+	if !isValidTableName(app.TableName) {
+		return nil, errors.New("非法的表名")
+	}
+
+	mainReal := bizTableName(app.TableName)
+	mainCols, err := queryColumnSet(mainReal)
+	if err != nil {
+		return nil, err
+	}
+
+	mainSQL := "SELECT * FROM `" + mainReal + "`"
+	if mainCols["deleted_at"] {
+		mainSQL += " WHERE `deleted_at` IS NULL"
+	}
+	if mainCols["id"] {
+		mainSQL += " ORDER BY `id` DESC"
+	}
+	rows := make([]map[string]interface{}, 0)
+	if err := database.DB.Raw(mainSQL).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return rows, nil
+	}
+
+	subNames := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, sub := range strings.Split(app.SubTableName, ",") {
+		sub = strings.TrimSpace(sub)
+		if sub == "" || seen[sub] {
+			continue
+		}
+		if !isValidTableName(sub) {
+			return nil, fmt.Errorf("非法的子表名: %q", sub)
+		}
+		seen[sub] = true
+		subNames = append(subNames, sub)
+	}
+	if len(subNames) == 0 {
+		return rows, nil
+	}
+	if !mainCols["id"] {
+		return nil, errors.New("主表缺少 id，无法关联子表")
+	}
+
+	// 一次查出所有子表行，按 parent_id 分组后回填，避免逐行查询造成 N+1
+	ids := make([]interface{}, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row["id"])
+	}
+	for _, sub := range subNames {
+		subReal := bizTableName(sub)
+		subCols, err := queryColumnSet(subReal)
+		if err != nil {
+			return nil, err
+		}
+		if !subCols["parent_id"] {
+			return nil, fmt.Errorf("子表 %s 缺少 parent_id", sub)
+		}
+
+		subSQL := "SELECT * FROM `" + subReal + "` WHERE `parent_id` IN (?)"
+		if subCols["deleted_at"] {
+			subSQL += " AND `deleted_at` IS NULL"
+		}
+		if subCols["id"] {
+			subSQL += " ORDER BY `id` ASC"
+		}
+		subRows := make([]map[string]interface{}, 0)
+		if err := database.DB.Raw(subSQL, ids).Scan(&subRows).Error; err != nil {
+			return nil, err
+		}
+
+		grouped := make(map[string][]map[string]interface{}, len(rows))
+		for _, subRow := range subRows {
+			key := flowRefKey(subRow["parent_id"])
+			if key == "" {
+				continue
+			}
+			grouped[key] = append(grouped[key], subRow)
+		}
+		for _, row := range rows {
+			key := flowRefKey(row["id"])
+			list := grouped[key]
+			if list == nil {
+				list = []map[string]interface{}{}
+			}
+			row[sub] = list
+		}
+	}
+	return rows, nil
+}
+
+// flowRefKey 统一主表 id 与子表 parent_id 的分组键，兼容驱动返回的整数和 []byte。
+func flowRefKey(v interface{}) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case []byte:
+		return string(t)
+	default:
+		return fmt.Sprint(t)
+	}
+}
+
 // appSystemCols 动态业务数据系统字段：由后端自动管理，不接受前端写入（Create/Update 共用）
 // 字段集合由 systemCols 派生（审计字段 + 主键），定义见 helper.go
 var appSystemCols = systemCols("id")
