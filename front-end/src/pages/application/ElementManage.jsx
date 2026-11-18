@@ -503,6 +503,10 @@ const CONFIG_HELP_CONTENT = (
             <b className="text-gray-700">{'form'}</b>
             ：表单值快照，可读写——写 {'form.xxx'} 即写回对应字段，并继续触发目标字段的「值改变触发」
             （写回触发元素自身除外），链路最多 5 跳；
+            <div className="mt-1">
+              子表列事件：{'form.<子表名>'} 代表当前行，如 {'form.clfbx_detail.price'} /
+              {'form.clfbx_detail.fymoney'}；访问指定行仍可用 {'form.clfbx_detail[0].price'}。
+            </div>
           </li>
           <li>
             <b className="text-gray-700">{'item'}</b>

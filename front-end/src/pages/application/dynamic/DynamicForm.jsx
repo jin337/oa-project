@@ -9,6 +9,11 @@ import { evalDynamicExpr } from './utils/evalExpression'
 import { TransNumberToUpper } from './utils/amountToUpper'
 import { CalculateExpression } from './utils/calculateExpression'
 import {
+  attachSubTableRowContext,
+  collectChangedPaths,
+  diffFormValues,
+} from './utils/jsEventContext'
+import {
   DEFAULT_FORM_CONFIG,
   OPTION_ELEMENT_TYPES,
   buildValidationRules,
@@ -655,13 +660,17 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
               })
               normalizeFormNumbers(formSnap, numberKeys, tableNumberCols)
               const beforeSnap = JSON.parse(JSON.stringify(formSnap))
-              runJsEventScript(script, formSnap, currentObj)
-              const patch = {}
-              Object.keys(formSnap).forEach((k) => {
-                if (JSON.stringify(formSnap[k]) !== JSON.stringify(beforeSnap[k])) {
-                  patch[k] = formSnap[k]
-                }
-              })
+              // 子表列事件：给 form.<tableKey> 挂当前行代理，脚本里的
+              // form.clfbx_detail.fymoney / form.clfbx_detail.price 都落到当前行；
+              // form.clfbx_detail[0].price 仍可访问指定行。
+              const rowItem = colCtx
+                ? formSnap[colCtx.tableKey]?.[colCtx.index] || currentObj
+                : currentObj
+              if (colCtx) attachSubTableRowContext(formSnap, colCtx.tableKey, colCtx.index)
+              runJsEventScript(script, formSnap, rowItem)
+              // 精确到字段路径的差异：子表只回写当前行变化的单元格，
+              // 避免整表 setFieldsValue 让所有列都收到一次 onValuesChange。
+              const patch = diffFormValues(beforeSnap, formSnap)
               if (Object.keys(patch).length) {
                 const fromKey = colCtx
                   ? `${colCtx.tableKey}[${colCtx.index}].${colCtx.fieldKey}`
@@ -722,7 +731,9 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
       // 且 Arco setFieldsValue 回填也会触发 onValuesChange——若此处执行 on_change，
       // 无选中项上下文时 set_value 会把目标字段清空（如 user_id 联动清空 phone/email）
       if (!isRuntime) return
-      const changedKeys = Object.keys(changed || {})
+      // Arco 的 changed 是嵌套对象（子表单元格为 { clfbx_detail: [{ price: 100 }] }），
+      // 必须展开成 clfbx_detail[0].price 这类字段路径，否则子表列 on_change 不会触发。
+      const changedKeys = collectChangedPaths(changed)
       elementsRef.current.forEach((el) => {
         const actions = el.actions?.on_change
         // on_change 语义：仅当该元素自身字段值发生变化时触发。
@@ -765,11 +776,19 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
               const idx = Number(idxMatch ? idxMatch[1] || idxMatch[2] : 0)
               const colActions = col.actions?.on_change
               if (Array.isArray(colActions) && colActions.length) {
-                runActionsRef.current?.('on_change', col, allValues, {
-                  tableKey,
-                  index: idx,
-                  fieldKey: colKey,
-                })
+                // 子表联动写入标记：与主表链路一致，写回触发字段自身时跳过，
+                // 其它字段则继续触发并按 MAX_LINK_DEPTH 限制，避免 JS 事件自写自触发。
+                const linkEntry = linkWrittenRef.current?.[rowHit]
+                if (linkEntry) delete linkWrittenRef.current[rowHit]
+                const selfWrite = linkEntry?.from === rowHit
+                const linkDepth = linkEntry?.depth || 0
+                if (!selfWrite && linkDepth <= MAX_LINK_DEPTH) {
+                  runActionsRef.current?.('on_change', col, allValues, {
+                    tableKey,
+                    index: idx,
+                    fieldKey: colKey,
+                  }, linkDepth)
+                }
               }
             }
             // 列 api 选项刷新：依赖字段变化（顶层字段或同行字段）时重新加载
