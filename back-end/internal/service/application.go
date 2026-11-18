@@ -846,10 +846,13 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 
 // ApplicationFlowList 按页面编码返回业务表数据：
 //  1. 用 code 查应用配置，取主表 table_name 与子表 sub_table_name
-//  2. 主表 SELECT *，返回全部字段，仅过滤软删除行
+//  2. 主表 SELECT *，返回全部字段，仅过滤软删除行；filters 中每个键按主表真实列做等值过滤
 //  3. 子表按 parent_id 关联主表主键，以子表名（如 clfbx_detail）为 key 嵌套到每行
 //  4. 不返回应用配置、表头、搜索项等包装字段
-func ApplicationFlowList(code string) ([]map[string]interface{}, error) {
+//
+// filters 的键必须是主表实际存在的列名（如 deptname / id / status），否则返回参数错误；
+// 值统一通过占位符写入 SQL，不拼接查询值。同名参数由 handler 取第一个值。
+func ApplicationFlowList(code string, filters map[string]string) ([]map[string]interface{}, error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return nil, errors.New("页面编码不能为空")
@@ -872,15 +875,12 @@ func ApplicationFlowList(code string) ([]map[string]interface{}, error) {
 		return nil, err
 	}
 
-	mainSQL := "SELECT * FROM `" + mainReal + "`"
-	if mainCols["deleted_at"] {
-		mainSQL += " WHERE `deleted_at` IS NULL"
-	}
-	if mainCols["id"] {
-		mainSQL += " ORDER BY `id` DESC"
+	mainSQL, mainArgs, err := buildFlowListQuery(mainReal, mainCols, filters)
+	if err != nil {
+		return nil, err
 	}
 	rows := make([]map[string]interface{}, 0)
-	if err := database.DB.Raw(mainSQL).Scan(&rows).Error; err != nil {
+	if err := database.DB.Raw(mainSQL, mainArgs...).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	if len(rows) == 0 {
@@ -952,6 +952,50 @@ func ApplicationFlowList(code string) ([]map[string]interface{}, error) {
 		}
 	}
 	return rows, nil
+}
+
+// buildFlowListQuery 构造 flow-list 的主表查询：
+// table / cols 已来自应用配置与实际表结构；filters 的每个键先做列存在性校验，
+// 字段名使用反引号包裹，查询值全部走占位符，禁止把请求值拼进 SQL。
+func buildFlowListQuery(table string, cols map[string]bool, filters map[string]string) (string, []interface{}, error) {
+	if !isValidTableName(table) {
+		return "", nil, errors.New("非法的表名")
+	}
+
+	conds := make([]string, 0, len(filters)+1)
+	args := make([]interface{}, 0, len(filters))
+	if cols["deleted_at"] {
+		conds = append(conds, "`deleted_at` IS NULL")
+	}
+
+	keys := make([]string, 0, len(filters))
+	for key := range filters {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, rawKey := range keys {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			return "", nil, errors.New("查询字段不能为空")
+		}
+		if !isValidTableName(key) {
+			return "", nil, fmt.Errorf("非法的查询字段: %s", key)
+		}
+		if !cols[key] {
+			return "", nil, fmt.Errorf("非法的查询字段: %s", key)
+		}
+		conds = append(conds, "`"+key+"` = ?")
+		args = append(args, filters[rawKey])
+	}
+
+	query := "SELECT * FROM `" + table + "`"
+	if len(conds) > 0 {
+		query += " WHERE " + strings.Join(conds, " AND ")
+	}
+	if cols["id"] {
+		query += " ORDER BY `id` DESC"
+	}
+	return query, args, nil
 }
 
 // flowRefKey 统一主表 id 与子表 parent_id 的分组键，兼容驱动返回的整数和 []byte。
