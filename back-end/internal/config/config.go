@@ -69,9 +69,8 @@ type SecurityConfig struct {
 	SensitiveBurst      int `yaml:"sensitive_burst"`        // <=0 用默认桶（10）
 
 	// 可信代理网段（CIDR），如 ["127.0.0.1/32","10.0.0.12/32"]。
-	// 限流与登录锁定按客户端 IP 计数：Gin 默认信任所有代理，客户端可自行伪造
-	// X-Forwarded-For 绕过 IP 限流。反代部署必须在此填 Nginx 所在网段，
-	// 只有来自可信代理的 XFF 才会被采信。留空则沿用 Gin 默认（信任所有代理）。
+	// 限流与登录锁定按客户端 IP 计数；留空表示不信任任何代理，ClientIP 直接取 RemoteAddr。
+	// 反代部署必须填 Nginx 所在网段，只有来自可信代理的 XFF 才会被采信。
 	TrustedProxies []string `yaml:"trusted_proxies"`
 
 	// 登录失败锁定（按用户名维度，防对单账号撞库）
@@ -143,7 +142,7 @@ func defaultConfig() *Config {
 			Mode:           "release",
 			APIPrefix:      "/v1/api",
 			RequestTimeout: 10,
-			JWT:            JWTConfig{Secret: "", Expire: 2, Issuer: "back-end"},
+			JWT:            JWTConfig{Secret: "", Expire: 24, Issuer: "back-end"},
 			Log:            LogConfig{Level: "info", Path: ""},
 			Cors: CorsConfig{
 				Enable:       false,
@@ -165,7 +164,7 @@ func defaultConfig() *Config {
 		},
 		MySQL: MySQLConfig{
 			Host: "127.0.0.1", Port: 3306,
-			Username: "root", Password: "", DBName: "test", TablePrefix: "oa_",
+			Username: "", Password: "", DBName: "", TablePrefix: "oa_",
 			Charset: "utf8mb4", Collation: "utf8mb4_general_ci",
 			ParseTime: true, Loc: "Local",
 			MaxOpenConns: 100, MaxIdleConns: 10,
