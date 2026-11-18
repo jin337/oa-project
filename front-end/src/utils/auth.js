@@ -87,10 +87,6 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
-export function isLoggedIn() {
-  return Boolean(getToken())
-}
-
 // —— 记住密码：缓存 / 读取 / 清除用户名与转译密码 ——
 export async function saveCredentials(username, password) {
   const pwd = password ? await obfuscatePassword(password) : ''

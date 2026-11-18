@@ -22,19 +22,19 @@ import * as deptApi from 'src/api/dept'
 import { listExamineGroups } from 'src/api/examineGroup'
 import { fetchAll } from 'src/api/fetchAll'
 import * as roleApi from 'src/api/role'
+import { useApplicationVersions } from 'src/hooks/useApplicationVersions'
 import ExamineManage from 'src/pages/application/design/ExamineManage'
 import LayoutManage from 'src/pages/application/design/LayoutManage.jsx'
 import OtherManage from 'src/pages/application/design/OtherManage'
 import { transformDeptTree, transformRoleList } from 'src/pages/application/examine/flowModel'
+import {
+  disablePastDate,
+  disablePastTime,
+  formatTime,
+  VERSION_STATUS,
+} from 'src/utils/version'
 
 const TabPane = Tabs.TabPane
-
-const VERSION_STATUS = {
-  0: { label: '待生效', color: 'orange' },
-  1: { label: '已生效', color: 'green' },
-  2: { label: '已失效', color: 'gray' },
-  3: { label: '设计中', color: 'blue' },
-}
 
 const parseJson = (v) => {
   if (v == null || v === '') return null
@@ -43,50 +43,6 @@ const parseJson = (v) => {
     return JSON.parse(v)
   } catch {
     return null
-  }
-}
-
-const formatTime = (v) => {
-  if (!v) return '-'
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return v
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-const toJsDate = (v) => {
-  if (!v) return null
-  if (v instanceof Date) return v
-  if (typeof v.toDate === 'function') return v.toDate()
-  return new Date(v)
-}
-
-const disablePastDate = (current) => {
-  const d = toJsDate(current)
-  if (!d) return false
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return d < today
-}
-
-const disablePastTime = (current) => {
-  const empty = { disabledHours: () => [], disabledMinutes: () => [], disabledSeconds: () => [] }
-  const d = toJsDate(current)
-  if (!d) return empty
-  const now = new Date()
-  const isToday =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  if (!isToday) return empty
-  return {
-    disabledHours: () => Array.from({ length: now.getHours() }, (_, i) => i),
-    disabledMinutes: (h) =>
-      h === now.getHours() ? Array.from({ length: now.getMinutes() }, (_, i) => i) : [],
-    disabledSeconds: (h, m) =>
-      h === now.getHours() && m === now.getMinutes()
-        ? Array.from({ length: now.getSeconds() }, (_, i) => i)
-        : [],
   }
 }
 
@@ -107,12 +63,22 @@ export default function DesignManage() {
   const [publishVisible, setPublishVisible] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishForm, setPublishForm] = useState({ remark: '', mode: 'now', effectiveAt: null })
-  const [versionVisible, setVersionVisible] = useState(false)
-  const [versionLoading, setVersionLoading] = useState(false)
-  const [versionList, setVersionList] = useState([])
-  const [editingVersion, setEditingVersion] = useState(null)
-  const [editingEffectiveAt, setEditingEffectiveAt] = useState(null)
-  const [editingRemark, setEditingRemark] = useState('')
+  const {
+    versionVisible,
+    versionLoading,
+    versionList,
+    editingVersion,
+    editingEffectiveAt,
+    editingRemark,
+    setEditingEffectiveAt,
+    setEditingRemark,
+    openVersions,
+    closeVersions,
+    startEditVersion,
+    cancelEditVersion,
+    saveEditVersion,
+    deleteVersion,
+  } = useApplicationVersions(id)
   const [previewVersion, setPreviewVersion] = useState(null)
   // 草稿态重挂载计数：保存到草稿等动作后递增，强制设计组件用最新草稿数据重新初始化
   const [draftTick, setDraftTick] = useState(0)
@@ -232,17 +198,10 @@ export default function DesignManage() {
     }
   }
 
-  const openPublish = async () => {
+  const openPublish = () => {
     setPublishVisible(true)
     // 默认立即生效、版本说明为空，不沿用当前 active 版本的生效方式与说明
     setPublishForm({ remark: '', mode: 'now', effectiveAt: null })
-    try {
-      const res = await applicationApi.listApplicationVersions(id)
-      const list = (res.data || []).filter((v) => v.status !== 3)
-      setVersionList(list)
-    } catch (e) {
-      // 用默认空
-    }
   }
 
   const handlePublishOk = async () => {
@@ -266,59 +225,9 @@ export default function DesignManage() {
     }
   }
 
-  const loadVersions = useCallback(async () => {
-    setVersionLoading(true)
-    try {
-      const res = await applicationApi.listApplicationVersions(id)
-      // 不展示当前「设计中」行
-      setVersionList((res.data || []).filter((v) => v.status !== 3))
-    } catch (e) {
-      setVersionList([])
-    } finally {
-      setVersionLoading(false)
-    }
-  }, [id])
-
-  const openVersions = () => {
-    setVersionVisible(true)
-    loadVersions().catch(() => {})
-  }
-
-  const startEditVersion = (record) => {
-    setEditingVersion(record)
-    setEditingEffectiveAt(record.effective_at)
-    setEditingRemark(record.remark || '')
-  }
-
-  const saveEditVersion = async () => {
-    if (!editingVersion || !editingEffectiveAt) return
-    try {
-      await applicationApi.updateApplicationVersionEffectiveAt(id, editingVersion.id, {
-        effective_at: new Date(editingEffectiveAt).toISOString(),
-        remark: editingRemark,
-      })
-      Message.success('已更新')
-      setEditingVersion(null)
-      await loadVersions()
-    } catch (e) {
-      // 错误已在请求层提示
-    }
-  }
-
-  const deleteVersion = async (record) => {
-    try {
-      await applicationApi.deleteApplicationVersion(id, record.id)
-      Message.success('已删除')
-      await loadVersions()
-    } catch (e) {
-      // 错误已在请求层提示
-    }
-  }
-
   const switchPreview = (record) => {
     setPreviewVersion(record)
-    setVersionVisible(false)
-    setEditingVersion(null)
+    closeVersions()
   }
 
   const effectiveApp = useMemo(
@@ -343,7 +252,7 @@ export default function DesignManage() {
         <Space>
           <span>{app?.name ? `表单设计 - ${app.name}` : '表单设计'}</span>
           {app?.current_version_no && (
-            <Button shape="round" size="mini" type="primary" onClick={openVersions}>
+            <Button shape="round" size="mini" type="primary" onClick={() => openVersions()}>
               生效版本：{app.current_version_no}
               <IconSwap />
             </Button>
@@ -463,10 +372,7 @@ export default function DesignManage() {
         visible={versionVisible}
         footer={null}
         autoFocus={false}
-        onCancel={() => {
-          setVersionVisible(false)
-          setEditingVersion(null)
-        }}
+        onCancel={closeVersions}
         unmountOnExit
         className="w-240! max-w-[90vw] [&_.arco-modal-content]:max-h-[60vh] [&_.arco-modal-content]:overflow-y-auto"
       >
@@ -534,7 +440,7 @@ export default function DesignManage() {
                       <Button size="mini" type="primary" onClick={saveEditVersion}>
                         保存
                       </Button>
-                      <Button size="mini" onClick={() => setEditingVersion(null)}>
+                      <Button size="mini" onClick={cancelEditVersion}>
                         取消
                       </Button>
                     </Space>

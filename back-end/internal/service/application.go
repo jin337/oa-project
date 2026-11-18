@@ -126,18 +126,6 @@ func ApplicationDetail(id uint) (*model.Application, *model.ApplicationVersion, 
 	return &app, draft, nil
 }
 
-func isEmptyLayout(v interface{}) bool {
-	if v == nil {
-		return true
-	}
-	m, ok := v.(map[string]interface{})
-	if !ok {
-		return false
-	}
-	elements, _ := m["elements"].([]interface{})
-	return len(elements) == 0
-}
-
 // ApplyActiveVersionSnapshot 运行时把 app 上的四个 json 替换成当前 active 版本快照；
 // 若没有 active 版本则保持原样。编辑页（ApplicationDetail）不调用本函数。
 func ApplyActiveVersionSnapshot(app *model.Application) {

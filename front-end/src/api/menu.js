@@ -5,11 +5,6 @@ export function getMenuTree() {
   return request.get('/menus')
 }
 
-// GET /menus/:id 详情
-export function getMenu(id) {
-  return request.get(`/menus/${id}`)
-}
-
 // POST /menus 新增
 export function createMenu(data) {
   return request.post('/menus', data)

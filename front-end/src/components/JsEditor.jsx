@@ -1,38 +1,11 @@
-import { Button, Modal, Space } from '@arco-design/web-react'
+import { Button, Modal } from '@arco-design/web-react'
 import {
   IconFullscreen,
   IconFullscreenExit,
-  IconMinus,
-  IconPlus,
 } from '@arco-design/web-react/icon'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-
-// ──────────────────────────────── 字号（模块级，localStorage 持久化） ────────────────────────────────
-const FONT_SIZE_KEY = 'js-editor:font-size'
-const FONT_SIZE_DEFAULT = 14
-const FONT_SIZE_MIN = 11
-const FONT_SIZE_MAX = 22
-const FONT_SIZE_EVENT = 'js-editor:font-size-change'
-
-function readFontSize() {
-  try {
-    const v = parseInt(localStorage.getItem(FONT_SIZE_KEY), 10)
-    if (Number.isFinite(v) && v >= FONT_SIZE_MIN && v <= FONT_SIZE_MAX) return v
-  } catch {
-    // 隐私模式等场景读取失败时回退默认值
-  }
-  return FONT_SIZE_DEFAULT
-}
-
-function changeFontSize(delta) {
-  const next = Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, readFontSize() + delta))
-  try {
-    localStorage.setItem(FONT_SIZE_KEY, String(next))
-  } catch {
-    // 写失败不影响本会话使用
-  }
-  window.dispatchEvent(new CustomEvent(FONT_SIZE_EVENT))
-}
+import { useLayoutEffect, useRef, useState } from 'react'
+import { EditorToolbar } from './codeEditor/EditorToolbar'
+import { useEditorFontSize } from './codeEditor/fontSize'
 
 // ──────────────────────────────── JS 美化 / 简化 ────────────────────────────────
 // 美化：使用项目已安装的 prettier（babel parser）格式化，K&R 风格、2 空格缩进。
@@ -464,13 +437,10 @@ export default function JsEditor(props) {
     maxRows = 12,
   } = props
   const [fullscreen, setFullscreen] = useState(false)
-  const [fontSize, setFontSize] = useState(readFontSize)
-
-  useEffect(() => {
-    const handler = () => setFontSize(readFontSize())
-    window.addEventListener(FONT_SIZE_EVENT, handler)
-    return () => window.removeEventListener(FONT_SIZE_EVENT, handler)
-  }, [])
+  const { fontSize, changeFontSize, min, max } = useEditorFontSize(
+    'js-editor:font-size',
+    'js-editor:font-size-change',
+  )
 
   const handleBeautify = async () => {
     try {
@@ -482,33 +452,15 @@ export default function JsEditor(props) {
 
   const renderEditor = (toolbarAction, textareaProps) => (
     <>
-      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-2 py-1">
-        <Space size={0}>
-          <Button type="text" size="mini" onClick={handleBeautify}>
-            美化
-          </Button>
-          <Button type="text" size="mini" onClick={() => onChange?.(compactJs(value))}>
-            简化
-          </Button>
-          <span className="mx-1 inline-block h-3 w-px bg-gray-300" />
-          <Button
-            type="text"
-            size="mini"
-            icon={<IconMinus />}
-            disabled={fontSize <= FONT_SIZE_MIN}
-            onClick={() => changeFontSize(-1)}
-          />
-          <span className="min-w-7 text-center text-xs text-gray-500">{fontSize}</span>
-          <Button
-            type="text"
-            size="mini"
-            icon={<IconPlus />}
-            disabled={fontSize >= FONT_SIZE_MAX}
-            onClick={() => changeFontSize(1)}
-          />
-        </Space>
-        {toolbarAction}
-      </div>
+      <EditorToolbar
+        onBeautify={handleBeautify}
+        onCompact={() => onChange?.(compactJs(value))}
+        fontSize={fontSize}
+        min={min}
+        max={max}
+        onChangeFontSize={changeFontSize}
+        action={toolbarAction}
+      />
       <LineTextarea {...textareaProps} fontSize={fontSize} />
     </>
   )

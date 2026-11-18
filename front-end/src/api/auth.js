@@ -14,8 +14,3 @@ export function getProfile() {
 export function logout() {
   return request.post('/auth/logout')
 }
-
-// GET /auth/menus 当前用户菜单树
-export function getUserMenus() {
-  return request.get('/auth/menus')
-}

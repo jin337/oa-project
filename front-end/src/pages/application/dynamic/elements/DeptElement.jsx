@@ -1,8 +1,8 @@
 import { Input, Modal, Tree } from '@arco-design/web-react'
-import { useEffect, useMemo, useState } from 'react'
-import { findOptionByValue, getStaticOptions } from '../utils/formUtils'
-import { loadDataSourceOptions } from '../utils/optionLoader'
+import { useMemo, useState } from 'react'
+import { findOptionByValue } from '../utils/formUtils'
 import { applyScroll, markScroll } from '../utils/scrollGuard'
+import { useOptionOptions } from './OptionPicker'
 
 /**
  * 部门选择元素（deptselect）
@@ -61,41 +61,6 @@ const filterTree = (nodes, keyword) => {
       })
       .filter(Boolean)
   return walk(nodes)
-}
-
-/**
- * 部门选项 Hook：
- * 1. 运行时 rt 已加载选项（form 模式，DynamicForm loadOptions 提供）→ 优先使用；
- * 2. rt.managesOptions 为真时（form 运行时）由 DynamicForm 统一加载，此处不再自请求，
- *    避免同一字段被两条路径各加载一次；
- * 3. 否则 data_source.type='api' 且配置了 url → 自加载（detail 等 rt 不可用场景）；
- * 4. 最后回退静态 json 选项。
- */
-const useDeptOptions = (el, rt, pageType) => {
-  const rtOptions = rt?.getOptions?.(el)
-  const hasRt = Array.isArray(rtOptions) && rtOptions.length > 0
-  const [selfOptions, setSelfOptions] = useState([])
-  const ds = el?.data_source
-
-  // 画布预览（move-form / move-detail）一律走静态默认数据，不请求接口
-  const isPreview = pageType === 'move-form' || pageType === 'move-detail'
-
-  useEffect(() => {
-    if (isPreview || hasRt || rt?.managesOptions || ds?.type !== 'api' || !ds?.url) return
-    let alive = true
-    // 走共享加载器：同一时刻相同请求（method+url+params）会合并为一次网络往返，
-    // 避免子表多行 / 多个字段引用同一接口时重复请求。失败返回 null，保留空选项。
-    loadDataSourceOptions(ds).then((data) => {
-      if (alive && data != null) setSelfOptions(toTreeOptions(data))
-    })
-    return () => {
-      alive = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [el?.id, ds?.type, ds?.url, hasRt, isPreview])
-
-  const options = hasRt ? rtOptions : selfOptions.length ? selfOptions : getStaticOptions(el)
-  return options
 }
 
 // ==================== 选择控件 ====================
@@ -204,7 +169,7 @@ function DeptPicker({ value, onChange, options, placeholder, label, disabled }) 
 
 /** 详情只读：显示已选部门名（数据源自加载反查），空值显示 '-' */
 export function DeptReadOnly({ value, el, rt, pageType }) {
-  const options = useDeptOptions(el, rt, pageType)
+  const options = useOptionOptions(el, rt, pageType, toTreeOptions)
   if (value == null || value === '') {
     return <span className="break-all whitespace-pre-wrap">-</span>
   }
@@ -219,7 +184,7 @@ export function DeptReadOnly({ value, el, rt, pageType }) {
  * 作为 renderPreview 渲染时接收 el/pageType/rt；作为 FormItem 子元素时额外接收 value/onChange/disabled。
  */
 export function DeptSelect({ el, pageType, rt, value, onChange, disabled }) {
-  const options = useDeptOptions(el, rt, pageType)
+  const options = useOptionOptions(el, rt, pageType, toTreeOptions)
 
   // 画布表单占位（move-form）：只读输入框 + 禁用的「选择」按钮
   if (pageType === 'move-form') {

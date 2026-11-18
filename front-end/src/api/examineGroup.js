@@ -5,11 +5,6 @@ export function listExamineGroups(params) {
   return request.get('/examine-groups', { params })
 }
 
-// GET /examine-groups/:id 详情
-export function getExamineGroup(id) {
-  return request.get(`/examine-groups/${id}`)
-}
-
 // POST /examine-groups 新增
 export function createExamineGroup(data) {
   return request.post('/examine-groups', data)

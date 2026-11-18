@@ -28,6 +28,7 @@ import IconSelect, { MenuIcon } from 'src/components/icon-select'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
 import { useAuth } from 'src/store/auth-context'
+import { toTreeData } from 'src/utils/tree'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -57,15 +58,6 @@ const LINK_STATE_OPTIONS = [
   { label: '表单', value: 'form' },
 ]
 const DEFAULT_LINK_STATE = 'list'
-
-function toTreeData(menus) {
-  return (menus || []).map((m) => ({
-    key: String(m.id),
-    title: m.name,
-    value: m.id,
-    children: m.children ? toTreeData(m.children) : undefined,
-  }))
-}
 
 const EMPTY_FORM = {
   name: '',

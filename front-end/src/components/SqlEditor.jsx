@@ -1,14 +1,8 @@
-import { Button, Modal, Space } from '@arco-design/web-react'
-import { IconCode, IconExclamationCircleFill, IconFullscreen, IconFullscreenExit, IconMinus, IconPlus } from '@arco-design/web-react/icon'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-
-// ──────────────────────────────── 字号（模块级，localStorage 持久化） ────────────────────────────────
-// 多个 SqlEditor 实例共享同一份字号：改一处，其它实例下次挂载 / 运行时事件同步。
-const FONT_SIZE_KEY = 'sql-editor:font-size'
-const FONT_SIZE_DEFAULT = 14
-const FONT_SIZE_MIN = 11
-const FONT_SIZE_MAX = 22
-const FONT_SIZE_EVENT = 'sql-editor:font-size-change'
+import { Button, Modal } from '@arco-design/web-react'
+import { IconCode, IconExclamationCircleFill, IconFullscreen, IconFullscreenExit } from '@arco-design/web-react/icon'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { EditorToolbar } from './codeEditor/EditorToolbar'
+import { FONT_SIZE_DEFAULT, useEditorFontSize } from './codeEditor/fontSize'
 
 // ──────────────────────────────── 禁用语句黑名单 ────────────────────────────────
 // 严格禁止 DDL（除可放行的 CREATE/ALTER）/ 权限 / 存储过程 / 事务控制 / 文件读写。
@@ -36,26 +30,6 @@ export function scanForbidden(sql, { allowDDL = false } = {}) {
     if (p.re.test(sql)) hits.push(p.label)
   }
   return hits
-}
-
-function readFontSize() {
-  try {
-    const v = parseInt(localStorage.getItem(FONT_SIZE_KEY), 10)
-    if (Number.isFinite(v) && v >= FONT_SIZE_MIN && v <= FONT_SIZE_MAX) return v
-  } catch {
-    // 隐私模式等场景读取失败时回退默认值
-  }
-  return FONT_SIZE_DEFAULT
-}
-
-function changeFontSize(delta) {
-  const next = Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, readFontSize() + delta))
-  try {
-    localStorage.setItem(FONT_SIZE_KEY, String(next))
-  } catch {
-    // 写失败不影响本会话使用
-  }
-  window.dispatchEvent(new CustomEvent(FONT_SIZE_EVENT))
 }
 
 // ──────────────────────────────── SQL 工具 ────────────────────────────────
@@ -738,12 +712,10 @@ export default function SqlEditor(props) {
   const { value = '', onChange, id, placeholder, maxLength = 8000, extraSuggestions, allowDDL = false } = props
   const [fullscreen, setFullscreen] = useState(false)
   // 字号：初始读 localStorage；其它实例改动时通过自定义事件同步刷新
-  const [fontSize, setFontSize] = useState(readFontSize)
-  useEffect(() => {
-    const handler = () => setFontSize(readFontSize())
-    window.addEventListener(FONT_SIZE_EVENT, handler)
-    return () => window.removeEventListener(FONT_SIZE_EVENT, handler)
-  }, [])
+  const { fontSize, changeFontSize, min, max } = useEditorFontSize(
+    'sql-editor:font-size',
+    'sql-editor:font-size-change',
+  )
 
   const handleChange = (v) => {
     onChange?.(v)
@@ -766,33 +738,15 @@ export default function SqlEditor(props) {
   // 主区与全屏 Modal 显示完全一致，唯一差异是传入的右侧按钮（全屏 / 退出全屏）。
   const renderEditor = (toolbarAction, textareaProps) => (
     <>
-      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-2 py-1">
-        <Space size={0}>
-          <Button type="text" size="mini" onClick={handleFormat}>
-            美化
-          </Button>
-          <Button type="text" size="mini" onClick={handleCompact}>
-            简化
-          </Button>
-          <span className="mx-1 inline-block h-3 w-px bg-gray-300" />
-          <Button
-            type="text"
-            size="mini"
-            icon={<IconMinus />}
-            disabled={fontSize <= FONT_SIZE_MIN}
-            onClick={() => changeFontSize(-1)}
-          />
-          <span className="min-w-7 text-center text-xs text-gray-500">{fontSize}</span>
-          <Button
-            type="text"
-            size="mini"
-            icon={<IconPlus />}
-            disabled={fontSize >= FONT_SIZE_MAX}
-            onClick={() => changeFontSize(1)}
-          />
-        </Space>
-        {toolbarAction}
-      </div>
+      <EditorToolbar
+        onBeautify={handleFormat}
+        onCompact={handleCompact}
+        fontSize={fontSize}
+        min={min}
+        max={max}
+        onChangeFontSize={changeFontSize}
+        action={toolbarAction}
+      />
       <LineTextarea {...textareaProps} fontSize={fontSize} />
     </>
   )

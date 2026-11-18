@@ -140,16 +140,6 @@ export function updateApplicationVersionEffectiveAt(id, versionId, payload) {
   return request.put(`/application/${id}/versions/${versionId}/edit`, payload)
 }
 
-// PUT /application/:id/versions/:versionId 保存版本的四个 json 快照
-export function updateApplicationVersion(id, versionId, data) {
-  return request.put(`/application/${id}/versions/${versionId}`, data)
-}
-
-// PUT /application/:id/versions/:versionId/publish 基于已有版本再次发布
-export function republishApplicationVersion(id, versionId, data) {
-  return request.put(`/application/${id}/versions/${versionId}/publish`, data)
-}
-
 // DELETE /application/:id/versions/:versionId 删除待生效版本
 export function deleteApplicationVersion(id, versionId) {
   return request.delete(`/application/${id}/versions/${versionId}`)

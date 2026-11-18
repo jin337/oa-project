@@ -84,10 +84,6 @@ func collectSubmitElementRefs(layout map[string]interface{}) []submitElementRef 
 	return refs
 }
 
-func submitRefKey(tableKey, fieldKey string) string {
-	return tableKey + "\x00" + fieldKey
-}
-
 // isSubmitRefPlaced 判断元素元数据是否被布局引用。
 func isSubmitRefPlaced(refs []submitElementRef, el *model.ApplicationElement) bool {
 	for _, ref := range refs {

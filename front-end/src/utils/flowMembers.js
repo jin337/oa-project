@@ -33,9 +33,6 @@ export const MEMBER_TYPE = {
   GROUP: 4, // 审核人员组
 }
 
-/** 平铺展示的人数上限：超过则折叠为「等N人」，避免部门/角色展开后撑爆节点高度 */
-export const MAX_FLAT_PEOPLE = 5
-
 /** key 前缀 → 成员类型 */
 const KEY_PREFIX_TYPE = {
   user: MEMBER_TYPE.USER,
@@ -176,20 +173,4 @@ export function hasExpandableMember(nodes) {
       return false
     })
   return check(nodes)
-}
-
-/**
- * 超限折叠：前 MAX_FLAT_PEOPLE 个平铺，其余折叠为「等 N 人」（N 为总人数）。
- * @returns {{head: object[], restCount: number, total: number}}
- */
-export function splitFlatPeople(people) {
-  const list = people || []
-  if (list.length <= MAX_FLAT_PEOPLE) {
-    return { head: list, restCount: 0, total: list.length }
-  }
-  return {
-    head: list.slice(0, MAX_FLAT_PEOPLE),
-    restCount: list.length - MAX_FLAT_PEOPLE,
-    total: list.length,
-  }
 }

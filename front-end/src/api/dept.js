@@ -11,11 +11,6 @@ export function getDeptUsersTree(params) {
   return request.get('/depts/users', { params })
 }
 
-// GET /depts/:id 详情
-export function getDept(id) {
-  return request.get(`/depts/${id}`)
-}
-
 // POST /depts 新增
 export function createDept(data) {
   return request.post('/depts', data)

@@ -27,6 +27,7 @@ import { fetchAll } from 'src/api/fetchAll'
 import * as userApi from 'src/api/user'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
+import { toTreeData } from 'src/utils/tree'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -35,14 +36,6 @@ const MenuItem = Menu.Item
 
 // 可配置列 key（操作列固定显示，不参与列设置）
 const ALL_COL_KEYS = ['name', 'leader', 'sort', 'status', 'created_at']
-function toTreeData(depts) {
-  return (depts || []).map((d) => ({
-    key: String(d.id),
-    title: d.name,
-    value: d.id,
-    children: d.children ? toTreeData(d.children) : undefined,
-  }))
-}
 
 const EMPTY_FORM = {
   name: '',

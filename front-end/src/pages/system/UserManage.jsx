@@ -32,6 +32,7 @@ import * as roleApi from 'src/api/role'
 import * as userApi from 'src/api/user'
 import { SIZE_OPTIONS } from 'src/config/app'
 import { usePermission } from 'src/hooks/usePermission'
+import { toTreeData } from 'src/utils/tree'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -71,16 +72,6 @@ function getRoleColor(role) {
   const id = Number(role?.id)
   const idx = Number.isFinite(id) ? id % ROLE_COLORS.length : 0
   return ROLE_COLORS[idx]
-}
-
-// 部门树 -> Arco TreeSelect 数据
-function toTreeData(depts) {
-  return (depts || []).map((d) => ({
-    key: String(d.id),
-    title: d.name,
-    value: d.id,
-    children: d.children ? toTreeData(d.children) : undefined,
-  }))
 }
 
 const EMPTY_FORM = {
