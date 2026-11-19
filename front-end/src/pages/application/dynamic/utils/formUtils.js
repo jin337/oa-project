@@ -140,6 +140,97 @@ export const extractFormDeps = (str) => {
   return deps
 }
 
+/**
+ * 规范化 data_source.load_when 配置：
+ * { mode: 'all' | 'any', fields: [{ table_name, field_key }] }
+ * 未配置或 fields 为空时视为不设前置条件（等价于始终加载）。
+ */
+export const normalizeLoadWhen = (loadWhen) => {
+  const rawFields = Array.isArray(loadWhen?.fields) ? loadWhen.fields : []
+  const fields = rawFields
+    .map((f) => {
+      if (typeof f === 'string') return { table_name: '', field_key: f.trim() }
+      return {
+        table_name: String(f?.table_name || '').trim(),
+        field_key: String(f?.field_key || f?.field || '').trim(),
+      }
+    })
+    .filter((f) => f.field_key)
+  return {
+    mode: loadWhen?.mode === 'any' ? 'any' : 'all',
+    fields,
+  }
+}
+
+/** load_when 的空值语义：null / undefined / 空白字符串 / 空数组视为空；0 与 false 有值 */
+export const isLoadWhenValueEmpty = (value) => {
+  if (value == null) return true
+  if (typeof value === 'string') return value.trim() === ''
+  if (Array.isArray(value)) return value.length === 0
+  return false
+}
+
+/**
+ * 判断动态接口选项是否满足加载前置条件。
+ * - fields 为空：始终加载。
+ * - mode='all'：每个字段都有值；mode='any'：任一字段有值。
+ * - 字段带 table_name 且该值是数组（子表）：任意一行该字段有值即视为该字段有值。
+ */
+export const isLoadWhenSatisfied = (loadWhen, values) => {
+  const { mode, fields } = normalizeLoadWhen(loadWhen)
+  if (!fields.length) return true
+  const formValues = values || {}
+  const hasFieldValue = (item) => {
+    const tableValue = item.table_name ? getByPath(formValues, item.table_name) : undefined
+    if (Array.isArray(tableValue)) {
+      return tableValue.some((row) => !isLoadWhenValueEmpty(getByPath(row, item.field_key)))
+    }
+    return !isLoadWhenValueEmpty(getByPath(formValues, item.field_key))
+  }
+  return mode === 'any' ? fields.some(hasFieldValue) : fields.every(hasFieldValue)
+}
+
+/**
+ * 提取 load_when 依赖的表单字段（用于值变化后刷新选项）。
+ * 同时加入裸字段名与“表名.字段名”，兼容主表顶层字段和子表路径 clfbx_detail[0].amount。
+ */
+export const extractLoadWhenDeps = (loadWhen) => {
+  const deps = new Set()
+  normalizeLoadWhen(loadWhen).fields.forEach((item) => {
+    deps.add(item.field_key)
+    if (item.table_name) deps.add(`${item.table_name}.${item.field_key}`)
+  })
+  return deps
+}
+
+/**
+ * 提取 API 数据源（data_source）依赖的表单字段。
+ * params 既可能是 JSON 字符串，也可能是接口返回的对象；对象必须先序列化，
+ * 否则 [object Object] 会把 ${form.xxx} 表达式整体丢掉，导致值变化后不刷新选项。
+ */
+export const extractApiSourceDeps = (source) => {
+  if (!source) return new Set()
+  const parts = []
+  const push = (value) => {
+    if (value == null || value === '') return
+    if (typeof value === 'string') {
+      parts.push(value)
+      return
+    }
+    try {
+      parts.push(JSON.stringify(value))
+    } catch {
+      parts.push(String(value))
+    }
+  }
+  push(source.url)
+  push(source.params)
+  push(source.label)
+  const deps = extractFormDeps(parts.join(' '))
+  extractLoadWhenDeps(source.load_when).forEach((dep) => deps.add(dep))
+  return deps
+}
+
 // ==================== 动态状态与校验 ====================
 
 /**

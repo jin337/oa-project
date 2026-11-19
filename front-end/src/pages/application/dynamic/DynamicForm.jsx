@@ -17,8 +17,10 @@ import {
   DEFAULT_FORM_CONFIG,
   OPTION_ELEMENT_TYPES,
   buildValidationRules,
+  extractApiSourceDeps,
   extractFormDeps,
   findOptionByValue,
+  isLoadWhenSatisfied,
   parseDefaultValue,
   parseLayoutJson,
   resolveExpr,
@@ -76,11 +78,37 @@ const FormItem = Form.Item
 const Col = Grid.Col
 // ==================== 动态表单运行时：数据源(api) + 事件联动(actions) ====================
 
-/** 提取选项型元素的 api 数据源依赖字段（params/label 中的 ${form.xxx}）；非 api 数据源返回 null */
+/** 提取选项型元素的 api 数据源依赖字段（params/label/url 中的 ${form.xxx}）；非 api 数据源返回 null */
 const apiOptionDeps = (el) => {
   if (!OPTION_ELEMENT_TYPES.has(el?.element_type) || el?.data_source?.type !== 'api') return null
-  const ds = el.data_source
-  return extractFormDeps([ds.params, ds.label].filter(Boolean).join(' '))
+  return extractApiSourceDeps(el.data_source)
+}
+
+/** 依赖字段名与 Arco 变化路径匹配：兼容主表 payer、子表 clfbx_detail[0].amount 与表名限定依赖 */
+const depMatchesChangedKey = (dep, key) => {
+  if (!dep || !key) return false
+  if (key === dep) return true
+  if (dep.includes('.')) {
+    const sep = dep.indexOf('.')
+    const table = dep.slice(0, sep)
+    const field = dep.slice(sep + 1)
+    return (
+      (key.startsWith(`${table}[`) || key.startsWith(`${table}.`)) && key.endsWith(`.${field}`)
+    )
+  }
+  // 裸字段依赖同时命中主表与子表同名列，宁可多刷新一次，不漏刷新
+  return key.endsWith(`.${dep}`)
+}
+
+/** 依赖集合中是否有任一字段发生变化 */
+const anyDepChanged = (deps, changedKeys) => {
+  if (!deps || deps.size === 0) return false
+  return changedKeys.some((key) => {
+    for (const dep of deps) {
+      if (depMatchesChangedKey(dep, key)) return true
+    }
+    return false
+  })
 }
 
 /** 审批详情字段权限：perm=1 脱敏展示（字段保留、值显示 *****），perm=2 可编辑 */
@@ -441,6 +469,8 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
   // 最新动态选项（联动 set_value 需按选中项 raw 取值）
   const apiOptionsRef = useRef({})
   apiOptionsRef.current = apiOptions
+  // 每个元素的选项请求序号：条件不满足 / 新请求发出后，旧请求迟到也不能覆盖当前选项
+  const optionRequestSeqRef = useRef({})
   const elementsRef = useRef([])
   elementsRef.current = elements
 
@@ -448,6 +478,17 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
   const loadOptions = useCallback(async (el, allValues) => {
     const ds = el.data_source
     if (!ds?.url) return
+    // 每次调用都推进序号，保证后续 skip 或新请求能让在途响应失效
+    const seq = (optionRequestSeqRef.current[el.id] || 0) + 1
+    optionRequestSeqRef.current[el.id] = seq
+    // 加载前置条件不满足：不再请求接口，并清空旧选项，避免展示上一次条件的过期结果
+    if (!isLoadWhenSatisfied(ds.load_when, allValues)) {
+      if ((apiOptionsRef.current[el.id] || []).length) {
+        apiOptionsRef.current = { ...apiOptionsRef.current, [el.id]: [] }
+        setApiOptions((prev) => ({ ...prev, [el.id]: [] }))
+      }
+      return
+    }
     const vars = { form: allValues || {} }
     // 先解析 URL 中的 ${form.xxx} / ${item.xxx} 路径模板，避免 ${} 被请求层整体编码
     try {
@@ -457,6 +498,8 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
       const res = paramsText.includes('${')
         ? await requestDynamicApi(ds, vars)
         : await dedupRequest(dataSourceRequestKey(ds), () => requestDynamicApi(ds, vars))
+      // 已被更新的请求或条件跳过取代：丢弃本次结果
+      if (optionRequestSeqRef.current[el.id] !== seq) return
       // 请求失败（去重层返回 null）→ 保留空选项，不打断表单
       if (res == null) return
       const options = extractOptions(res?.data ?? res, ds, vars)
@@ -757,7 +800,7 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
           }
         }
         const deps = apiOptionDeps(el)
-        if (deps && changedKeys.some((k) => deps.has(k))) {
+        if (deps && anyDepChanged(deps, changedKeys)) {
           loadOptionsRef.current?.(el, allValues)
         }
         // 子表列：与元素同结构解析——on_change（同行联动）与 api 选项刷新
@@ -793,12 +836,7 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
             }
             // 列 api 选项刷新：依赖字段变化（顶层字段或同行字段）时重新加载
             const colDeps = apiOptionDeps(col)
-            if (
-              colDeps &&
-              [...colDeps].some(
-                (d) => changedKeys.includes(d) || changedKeys.some((k) => k.endsWith(`.${d}`)),
-              )
-            ) {
+            if (colDeps && anyDepChanged(colDeps, changedKeys)) {
               loadOptionsRef.current?.(col, allValues)
             }
           })

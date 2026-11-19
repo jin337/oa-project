@@ -36,6 +36,7 @@ import { SIZE_OPTIONS } from 'src/config/app'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 import { useTabs } from 'src/store/tab-context'
 import { formatJsonQuotes } from 'src/utils/json'
+import { normalizeLoadWhen } from './dynamic/utils/formUtils'
 import { ELEMENT_RENDER_CONFIG } from './dynamic/DynamicForm'
 
 const FormItem = Form.Item
@@ -133,7 +134,16 @@ function matchFieldKeyword(inputValue, option) {
 // 故 Option value 用「表名::字段名」唯一化以完整展示各表字段；表单存储拆成两项：
 // target 存纯字段名（运行时即表单字段路径），table_name 存所属物理表名（经 onTable 回调写入）。
 // 运行时据此区分赋值对象是主表字段还是子表行字段；table_name 为空的旧数据保持原语义。
-function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading, tableName, onTable }) {
+function TargetFieldSelect({
+  value,
+  onChange,
+  groups,
+  mainTableKey,
+  loading,
+  tableName,
+  onTable,
+  disabled = false,
+}) {
   const flat = []
   ;(groups || []).forEach((g) => {
     ;(g.fields || []).forEach((f) => {
@@ -154,6 +164,7 @@ function TargetFieldSelect({ value, onChange, groups, mainTableKey, loading, tab
   return (
     <Select
       showSearch
+      disabled={disabled}
       filterOption={(input, option) => {
         const q = String(input || '')
           .trim()
@@ -221,6 +232,7 @@ const ALL_COL_KEYS = [
 // 这里改为逐个子字段路径写入，保证每个字段都被显式覆盖。
 function dataSourceFormFields(ds) {
   const src = ds || {}
+  const loadWhen = normalizeLoadWhen(src.load_when)
   return {
     'data_source.type': src.type || undefined,
     'data_source.options': Array.isArray(src.options) ? src.options : [],
@@ -230,6 +242,8 @@ function dataSourceFormFields(ds) {
     'data_source.value_field': src.value_field || '',
     'data_source.api_ref': src.api_ref === 1 ? 1 : 0,
     'data_source.params': safeStringify(src.params),
+    'data_source.load_when.mode': loadWhen.mode,
+    'data_source.load_when.fields': loadWhen.fields,
   }
 }
 
@@ -437,6 +451,28 @@ const CONFIG_HELP_CONTENT = (
           显示标签：接口返回的单条数据用 {'${item.xxx}'} 取，如 {'${item.id}-${item.name}'}
         </div>
         <div>对应值：写入表单 / 存库的值，如 {'${item.id}'}；</div>
+        <div className="mt-1">
+          <b className="text-gray-700">加载前置条件</b>
+          ：可选，决定「什么时候才请求接口」，与请求参数分开配置；
+        </div>
+        <div>
+          满足方式：选「且（全部满足）」时，下面每个条件字段都必须有值；选「或（任一满足）」时，任一条件字段有值即可；
+        </div>
+        <div>
+          条件字段：从主表 / 子表字段中选择，支持添加多条；子表字段按「任意一行有值」判断；
+        </div>
+        <div>
+          空值判定：未填、空字符串、空数组视为空；数字 {'0'}、布尔 {'false'} 视为有值；
+        </div>
+        <div>
+          未配置条件或条件字段为空时始终加载；条件不满足时跳过请求并清空已有选项，但不会自动清空已选中的字段值；
+        </div>
+        <div>
+          未配置时，即使请求参数里的 {'${form.xxx}'} 为空也会照常请求（只是参数为空）；跳过请求只由加载前置条件控制；
+        </div>
+        <div>
+          条件字段变化会自动重新请求；示例（付款账号依赖付款单位）：{'{"mode":"all","fields":[{"table_name":"clfbx","field_key":"payer"}]}'}；
+        </div>
       </li>
       <li>参数或标签里引用了 {'${form.xxx}'} 时，该字段变化会自动重新请求刷新选项；</li>
       <li>
@@ -678,6 +714,8 @@ export default function ElementManage() {
 
   // 事件驱动 actions：监听整个对象以联动渲染每条规则的 action_type 分支
   const actionsWatch = Form.useWatch('actions', form)
+  // 数据源加载前置条件：监听整个 load_when 对象，联动回显每个条件的 table_name
+  const loadWhenWatch = Form.useWatch('data_source.load_when', form)
 
   // 当前编辑元素的物理表 / 元素类型：仅「子表元素 + 数字输入」时提供「子表汇总」
   const drawerTableKey = Form.useWatch('table_key', form)
@@ -1078,6 +1116,7 @@ export default function ElementManage() {
               // params 为 JSON 字符串输入，校验失败时保持空对象
             }
           }
+          const loadWhen = normalizeLoadWhen(ds.load_when)
           return {
             type: 'api',
             url: ds.url || '',
@@ -1086,6 +1125,7 @@ export default function ElementManage() {
             value_field: ds.value_field || '',
             api_ref: ds.api_ref === 1 ? 1 : 0,
             params,
+            ...(loadWhen.fields.length ? { load_when: loadWhen } : {}),
           }
         }
         return {}
@@ -1680,6 +1720,80 @@ export default function ElementManage() {
                       />
                     </FormItem>
                   </Col>
+                  <Col span={24}>
+                    <div className="mb-2 mt-1 flex items-center justify-between">
+                      <span className="text-gray-500">加载前置条件（可选）</span>
+                      <span className="text-xs text-gray-400">
+                        条件满足时才请求接口；字段为空视为不满足
+                      </span>
+                    </div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <FormItem
+                        field="data_source.load_when.mode"
+                        noStyle
+                        className="mb-0!"
+                      >
+                        <Select style={{ width: 160 }}>
+                          <Select.Option value="all">且（全部满足）</Select.Option>
+                          <Select.Option value="any">或（任一满足）</Select.Option>
+                        </Select>
+                      </FormItem>
+                      <span className="text-xs text-gray-400">
+                        子表字段按“任意一行有值”判断
+                      </span>
+                    </div>
+                    <Form.List field="data_source.load_when.fields">
+                      {(loadFields, { add, remove }) => (
+                        <>
+                          {loadFields.map((lf, lfIndex) => (
+                            <div key={lf.key} className="mb-2 flex items-center gap-2">
+                              {/* 注册条件字段所属表（主/子表区分），仅入表单 store 不占界面 */}
+                              <FormItem field={`${lf.field}.table_name`} hidden>
+                                <Input />
+                              </FormItem>
+                              <FormItem
+                                field={`${lf.field}.field_key`}
+                                noStyle
+                                className="mb-0! flex-1"
+                              >
+                                <TargetFieldSelect
+                                  groups={allFieldGroups}
+                                  mainTableKey={mainTableKey}
+                                  loading={loadingAllFields}
+                                  disabled={drawerReadOnly}
+                                  tableName={
+                                    loadWhenWatch?.fields?.[lfIndex]?.table_name
+                                  }
+                                  onTable={(tn) =>
+                                    form.setFieldValue(
+                                      `${lf.field}.table_name`,
+                                      tn || '',
+                                    )
+                                  }
+                                />
+                              </FormItem>
+                              <Button
+                                status="danger"
+                                disabled={drawerReadOnly}
+                                onClick={() => remove(lfIndex)}
+                              >
+                                删除
+                              </Button>
+                            </div>
+                          ))}
+                          {!drawerReadOnly && (
+                            <Button
+                              size="small"
+                              type="outline"
+                              onClick={() => add({ table_name: '', field_key: '' })}
+                            >
+                              + 添加条件字段
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </Form.List>
+                  </Col>
                   <Col span={12}>
                     <FormItem label="显示标签" field="data_source.label">
                       <Input placeholder="支持表达式，如 ${item.id}-${item.name}" />
@@ -1802,6 +1916,7 @@ export default function ElementManage() {
                                               groups={allFieldGroups}
                                               mainTableKey={mainTableKey}
                                               loading={loadingAllFields}
+                                              disabled={drawerReadOnly}
                                               tableName={
                                                 actionsWatch?.[trigger.key]?.[index]
                                                   ?.value_mapping?.[vfIndex]?.table_name
@@ -1953,6 +2068,7 @@ export default function ElementManage() {
                                               groups={allFieldGroups}
                                               mainTableKey={mainTableKey}
                                               loading={loadingAllFields}
+                                              disabled={drawerReadOnly}
                                               tableName={
                                                 actionsWatch?.[trigger.key]?.[index]
                                                   ?.target_mapping?.[tmIndex]?.table_name
