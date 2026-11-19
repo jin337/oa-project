@@ -575,8 +575,8 @@ const CONFIG_HELP_CONTENT = (
           <li>
             <b className="text-gray-700">{'CalculateExpression'}</b>
             ：数学表达式求值 / 日期(时间)差值，如 {'CalculateExpression("(1+2)*3")'} → 9、
-            {'CalculateExpression("2026-10-13-2026-10-12")'} → 1 （含时间按真实时长折算为天，如 30
-            小时 = 1.25）；
+            {'CalculateExpression("2026-10-13-2026-10-12")'} → 2（纯日期首尾都算一天，同一天为 1；含时间按真实时长折算，如 30
+            小时 = 1.25）；日期字段可直接相减，如 {'form.days=CalculateExpression(form.enddt-form.begindt)'}；
           </li>
         </ul>
         <div className="mt-1">

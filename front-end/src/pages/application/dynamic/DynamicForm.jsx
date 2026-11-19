@@ -7,7 +7,11 @@ import { API_PREFIX } from 'src/utils/constants'
 
 import { evalDynamicExpr } from './utils/evalExpression'
 import { TransNumberToUpper } from './utils/amountToUpper'
-import { CalculateExpression } from './utils/calculateExpression'
+import {
+  CalculateExpression,
+  resetDateDiffContext,
+  wrapDateFields,
+} from './utils/calculateExpression'
 import {
   attachSubTableRowContext,
   collectChangedPaths,
@@ -25,6 +29,7 @@ import {
   parseLayoutJson,
   resolveExpr,
   resolvePath,
+  serializeTimeFields,
 } from './utils/formUtils'
 import { dataSourceRequestKey, dedupRequest } from './utils/optionLoader'
 import { applyDataSourceAfterLoad } from './utils/dataSourceAfterLoad'
@@ -259,6 +264,8 @@ const JS_EVENT_GLOBALS = [
 const runJsEventScript = (script, form, item) => {
   const out = {}
   if (!script || typeof script !== 'string' || !script.trim()) return out
+  // 清空上一次脚本留下的日期相减上下文，避免数字结果误匹配
+  resetDateDiffContext()
   const paramNames = [
     'form',
     'item',
@@ -684,7 +691,11 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
           if (script.trim()) {
             let formSnap
             try {
-              formSnap = JSON.parse(JSON.stringify(allValues || {}))
+              // 先按元素类型把日期/时间字段格式化为本地标准字符串，再 JSON 深拷贝：
+              // 直接序列化 dayjs 会走 UTC ISO，东八区日期可能回退一天。
+              formSnap = JSON.parse(
+                JSON.stringify(serializeTimeFields(allValues || {}, elementsRef.current || [])),
+              )
             } catch {
               formSnap = null
             }
@@ -705,7 +716,11 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
                 }
               })
               normalizeFormNumbers(formSnap, numberKeys, tableNumberCols)
+              // 脚本执行前快照用纯字符串（与入库格式一致），用于执行后精确 diff。
               const beforeSnap = JSON.parse(JSON.stringify(formSnap))
+              // 日期字段包装成 FormDateValue：toString 仍是日期字符串，valueOf 是距 1970 的天数，
+              // 这样用户脚本 form.enddt-form.begindt 直接相减就得到天数，而不是字符串相减的 NaN。
+              wrapDateFields(formSnap, elementsRef.current || [])
               // 子表列事件：给 form.<tableKey> 挂当前行代理，脚本里的
               // form.clfbx_detail.fymoney / form.clfbx_detail.price 都落到当前行；
               // form.clfbx_detail[0].price 仍可访问指定行。
@@ -714,9 +729,11 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
                 : currentObj
               if (colCtx) attachSubTableRowContext(formSnap, colCtx.tableKey, colCtx.index)
               runJsEventScript(script, formSnap, rowItem)
+              // 转回纯字符串快照再 diff，避免日期包装对象被当成"变化"。
+              const afterSnap = JSON.parse(JSON.stringify(formSnap))
               // 精确到字段路径的差异：子表只回写当前行变化的单元格，
               // 避免整表 setFieldsValue 让所有列都收到一次 onValuesChange。
-              const patch = diffFormValues(beforeSnap, formSnap)
+              const patch = diffFormValues(beforeSnap, afterSnap)
               if (Object.keys(patch).length) {
                 const fromKey = colCtx
                   ? `${colCtx.tableKey}[${colCtx.index}].${colCtx.fieldKey}`
