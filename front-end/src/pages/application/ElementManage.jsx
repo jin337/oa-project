@@ -36,8 +36,8 @@ import { SIZE_OPTIONS } from 'src/config/app'
 import { ELEMENT_TYPE_OPTIONS } from 'src/config/app.js'
 import { useTabs } from 'src/store/tab-context'
 import { formatJsonQuotes } from 'src/utils/json'
-import { normalizeLoadWhen } from './dynamic/utils/formUtils'
 import { ELEMENT_RENDER_CONFIG } from './dynamic/DynamicForm'
+import { normalizeLoadWhen } from './dynamic/utils/formUtils'
 
 const FormItem = Form.Item
 const Row = Grid.Row
@@ -458,9 +458,7 @@ const CONFIG_HELP_CONTENT = (
         <div>
           满足方式：选「且（全部满足）」时，下面每个条件字段都必须有值；选「或（任一满足）」时，任一条件字段有值即可；
         </div>
-        <div>
-          条件字段：从主表 / 子表字段中选择，支持添加多条；子表字段按「任意一行有值」判断；
-        </div>
+        <div>条件字段：从主表 / 子表字段中选择，支持添加多条；子表字段按「任意一行有值」判断；</div>
         <div>
           空值判定：未填、空字符串、空数组视为空；数字 {'0'}、布尔 {'false'} 视为有值；
         </div>
@@ -468,10 +466,12 @@ const CONFIG_HELP_CONTENT = (
           未配置条件或条件字段为空时始终加载；条件不满足时跳过请求并清空已有选项，但不会自动清空已选中的字段值；
         </div>
         <div>
-          未配置时，即使请求参数里的 {'${form.xxx}'} 为空也会照常请求（只是参数为空）；跳过请求只由加载前置条件控制；
+          未配置时，即使请求参数里的 {'${form.xxx}'}{' '}
+          为空也会照常请求（只是参数为空）；跳过请求只由加载前置条件控制；
         </div>
         <div>
-          条件字段变化会自动重新请求；示例（付款账号依赖付款单位）：{'{"mode":"all","fields":[{"table_name":"clfbx","field_key":"payer"}]}'}；
+          条件字段变化会自动重新请求；示例（付款账号依赖付款单位）：
+          {'{"mode":"all","fields":[{"table_name":"clfbx","field_key":"payer"}]}'}；
         </div>
       </li>
       <li>参数或标签里引用了 {'${form.xxx}'} 时，该字段变化会自动重新请求刷新选项；</li>
@@ -1720,80 +1720,6 @@ export default function ElementManage() {
                       />
                     </FormItem>
                   </Col>
-                  <Col span={24}>
-                    <div className="mb-2 mt-1 flex items-center justify-between">
-                      <span className="text-gray-500">加载前置条件（可选）</span>
-                      <span className="text-xs text-gray-400">
-                        条件满足时才请求接口；字段为空视为不满足
-                      </span>
-                    </div>
-                    <div className="mb-2 flex items-center gap-2">
-                      <FormItem
-                        field="data_source.load_when.mode"
-                        noStyle
-                        className="mb-0!"
-                      >
-                        <Select style={{ width: 160 }}>
-                          <Select.Option value="all">且（全部满足）</Select.Option>
-                          <Select.Option value="any">或（任一满足）</Select.Option>
-                        </Select>
-                      </FormItem>
-                      <span className="text-xs text-gray-400">
-                        子表字段按“任意一行有值”判断
-                      </span>
-                    </div>
-                    <Form.List field="data_source.load_when.fields">
-                      {(loadFields, { add, remove }) => (
-                        <>
-                          {loadFields.map((lf, lfIndex) => (
-                            <div key={lf.key} className="mb-2 flex items-center gap-2">
-                              {/* 注册条件字段所属表（主/子表区分），仅入表单 store 不占界面 */}
-                              <FormItem field={`${lf.field}.table_name`} hidden>
-                                <Input />
-                              </FormItem>
-                              <FormItem
-                                field={`${lf.field}.field_key`}
-                                noStyle
-                                className="mb-0! flex-1"
-                              >
-                                <TargetFieldSelect
-                                  groups={allFieldGroups}
-                                  mainTableKey={mainTableKey}
-                                  loading={loadingAllFields}
-                                  disabled={drawerReadOnly}
-                                  tableName={
-                                    loadWhenWatch?.fields?.[lfIndex]?.table_name
-                                  }
-                                  onTable={(tn) =>
-                                    form.setFieldValue(
-                                      `${lf.field}.table_name`,
-                                      tn || '',
-                                    )
-                                  }
-                                />
-                              </FormItem>
-                              <Button
-                                status="danger"
-                                disabled={drawerReadOnly}
-                                onClick={() => remove(lfIndex)}
-                              >
-                                删除
-                              </Button>
-                            </div>
-                          ))}
-                          {!drawerReadOnly && (
-                            <Button
-                              size="small"
-                              type="outline"
-                              onClick={() => add({ table_name: '', field_key: '' })}
-                            >
-                              + 添加条件字段
-                            </Button>
-                          )}
-                        </>
-                      )}
-                    </Form.List>
-                  </Col>
                   <Col span={12}>
                     <FormItem label="显示标签" field="data_source.label">
                       <Input placeholder="支持表达式，如 ${item.id}-${item.name}" />
@@ -1803,6 +1729,70 @@ export default function ElementManage() {
                     <FormItem label="对应值" field="data_source.value_field">
                       <Input placeholder="支持表达式，如 ${item.id}" />
                     </FormItem>
+                  </Col>
+                  <Col span={24}>
+                    <div className="mt-1 mb-2 flex items-center justify-between">
+                      <span className="text-gray-500">加载前置条件</span>
+                      <span className="text-xs text-gray-400">
+                        条件满足时才请求接口；字段为空视为不满足；子表字段按“任意一行有值”判断
+                      </span>
+                    </div>
+                    <div className="mb-2 flex items-start gap-2">
+                      <FormItem field="data_source.load_when.mode" noStyle className="mb-0!">
+                        <Select style={{ width: 160 }}>
+                          <Select.Option value="all">且（全部满足）</Select.Option>
+                          <Select.Option value="any">或（任一满足）</Select.Option>
+                        </Select>
+                      </FormItem>
+                      <div className="flex-1">
+                        <Form.List field="data_source.load_when.fields">
+                          {(loadFields, { add, remove }) => (
+                            <>
+                              {loadFields.map((lf, lfIndex) => (
+                                <div key={lf.key} className="mb-2 flex items-center gap-2">
+                                  {/* 注册条件字段所属表（主/子表区分），仅入表单 store 不占界面 */}
+                                  <FormItem field={`${lf.field}.table_name`} hidden>
+                                    <Input />
+                                  </FormItem>
+                                  <FormItem
+                                    field={`${lf.field}.field_key`}
+                                    noStyle
+                                    className="mb-0! flex-1"
+                                  >
+                                    <TargetFieldSelect
+                                      groups={allFieldGroups}
+                                      mainTableKey={mainTableKey}
+                                      loading={loadingAllFields}
+                                      disabled={drawerReadOnly}
+                                      tableName={loadWhenWatch?.fields?.[lfIndex]?.table_name}
+                                      onTable={(tn) =>
+                                        form.setFieldValue(`${lf.field}.table_name`, tn || '')
+                                      }
+                                    />
+                                  </FormItem>
+                                  <Button
+                                    status="danger"
+                                    disabled={drawerReadOnly}
+                                    onClick={() => remove(lfIndex)}
+                                  >
+                                    删除
+                                  </Button>
+                                </div>
+                              ))}
+                              {!drawerReadOnly && (
+                                <Button
+                                  size="small"
+                                  type="outline"
+                                  onClick={() => add({ table_name: '', field_key: '' })}
+                                >
+                                  + 添加条件字段
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </Form.List>
+                      </div>
+                    </div>
                   </Col>
                 </Row>
               )}
