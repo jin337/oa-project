@@ -51,6 +51,7 @@ var (
 	ValidateExecutionPathApprovers   = validateExecutionPathApprovers
 	ValidateSelfSelectBeforeWrite    = validateSelfSelectBeforeWrite
 	BuildDataPermissionCondsForScope = buildDataPermissionCondsForScope
+	BuildFlowListQuery               = buildFlowListQuery
 	StripAuditFields                 = stripAuditFields
 	StripAuditFieldsExcept           = stripAuditFieldsExcept
 	SystemCols                       = systemCols

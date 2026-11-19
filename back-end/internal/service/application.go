@@ -846,9 +846,13 @@ func ApplicationDataDetail(appID, dataID uint, req *model.ApplicationDataDetailR
 
 // ApplicationFlowList 按页面编码返回业务表数据：
 //  1. 用 code 查应用配置，取主表 table_name 与子表 sub_table_name
-//  2. 主表 SELECT *，返回全部字段，仅过滤软删除行；filters 中每个键按主表真实列做等值过滤
-//  3. 子表按 parent_id 关联主表主键，以子表名（如 clfbx_detail）为 key 嵌套到每行
-//  4. 不返回应用配置、表头、搜索项等包装字段
+//  2. 主表 SELECT *，返回全部字段，仅保留「审批已通过」的行并过滤软删除行：
+//     审批状态记录在 oa_approval_instances，业务表没有 approval_status 列；
+//     以 app_id + 业务表名 + business_data_id 关联实例，要求存在 status=1（已通过）的实例。
+//     未提交审批、审批中、驳回/拒绝/撤回/作废的数据都不会返回。
+//  3. filters 中每个键按主表真实列做等值过滤
+//  4. 子表按 parent_id 关联主表主键，以子表名（如 clfbx_detail）为 key 嵌套到每行
+//  5. 不返回应用配置、表头、搜索项等包装字段
 //
 // filters 的键必须是主表实际存在的列名（如 deptname / id / status），否则返回参数错误；
 // 值统一通过占位符写入 SQL，不拼接查询值。同名参数由 handler 取第一个值。
@@ -875,7 +879,7 @@ func ApplicationFlowList(code string, filters map[string]string) ([]map[string]i
 		return nil, err
 	}
 
-	mainSQL, mainArgs, err := buildFlowListQuery(mainReal, mainCols, filters)
+	mainSQL, mainArgs, err := buildFlowListQuery(mainReal, mainCols, filters, app.ID, app.TableName)
 	if err != nil {
 		return nil, err
 	}
@@ -957,16 +961,29 @@ func ApplicationFlowList(code string, filters map[string]string) ([]map[string]i
 // buildFlowListQuery 构造 flow-list 的主表查询：
 // table / cols 已来自应用配置与实际表结构；filters 的每个键先做列存在性校验，
 // 字段名使用反引号包裹，查询值全部走占位符，禁止把请求值拼进 SQL。
-func buildFlowListQuery(table string, cols map[string]bool, filters map[string]string) (string, []interface{}, error) {
+//
+// 通过 appID + businessTable 关联 oa_approval_instances，只保留存在「已通过」审批实例的数据：
+// 业务表本身没有 approval_status 列，审批结论以流程实例状态为权威来源。
+func buildFlowListQuery(table string, cols map[string]bool, filters map[string]string, appID uint, businessTable string) (string, []interface{}, error) {
 	if !isValidTableName(table) {
 		return "", nil, errors.New("非法的表名")
 	}
+	if !cols["id"] {
+		return "", nil, errors.New("主表缺少 id，无法判断审批状态")
+	}
 
-	conds := make([]string, 0, len(filters)+1)
-	args := make([]interface{}, 0, len(filters))
+	conds := make([]string, 0, len(filters)+2)
+	args := make([]interface{}, 0, len(filters)+3)
 	if cols["deleted_at"] {
 		conds = append(conds, "`deleted_at` IS NULL")
 	}
+	// 只返回审批已通过的数据。子查询走参数占位符；EXISTS 避免一对多实例造成重复行。
+	conds = append(conds,
+		"EXISTS (SELECT 1 FROM `oa_approval_instances` AS `ai` "+
+			"WHERE `ai`.`app_id` = ? AND `ai`.`business_table` = ? "+
+			"AND `ai`.`business_data_id` = `"+table+"`.`id` "+
+			"AND `ai`.`deleted_at` IS NULL AND `ai`.`status` = ?)")
+	args = append(args, appID, businessTable, model.InstanceStatusPassed)
 
 	keys := make([]string, 0, len(filters))
 	for key := range filters {
