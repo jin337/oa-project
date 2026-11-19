@@ -27,6 +27,7 @@ import {
   resolvePath,
 } from './utils/formUtils'
 import { dataSourceRequestKey, dedupRequest } from './utils/optionLoader'
+import { applyDataSourceAfterLoad } from './utils/dataSourceAfterLoad'
 
 // 元素渲染配置中心（基础/常规元素渲染 + 详情只读组件）独立维护于 ./elements/elementConfig.jsx
 import {
@@ -502,7 +503,9 @@ export const useRuntimeForm = ({ elements, form, pageType, app }) => {
       if (optionRequestSeqRef.current[el.id] !== seq) return
       // 请求失败（去重层返回 null）→ 保留空选项，不打断表单
       if (res == null) return
-      const options = extractOptions(res?.data ?? res, ds, vars)
+      // 加载后事件：先对接口原始数据做纯数据处理（去重/过滤/排序等），再转换为选项
+      const processed = applyDataSourceAfterLoad(ds, res?.data ?? res)
+      const options = extractOptions(processed, ds, vars)
       // 先同步更新 ref，保证紧随其后的补联动能取到刚加载的选项（state 提交是异步的）
       apiOptionsRef.current = { ...apiOptionsRef.current, [el.id]: options }
       setApiOptions((prev) => ({ ...prev, [el.id]: options }))

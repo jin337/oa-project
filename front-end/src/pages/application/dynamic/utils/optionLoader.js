@@ -4,6 +4,7 @@
  * 负责把元素的 data_source（type='api'）解析成真实请求并取回原始数据，
  * 同时提供「并发去重」：同一时刻针对同一份请求（method + url + params 完全相同）
  * 只发起一次网络往返，其余调用方共用同一个 Promise。
+ * 请求完成后按各自的 data_source.after_load 做一次纯数据处理，再交给调用方。
  *
  * 触发场景：详情（detail）等 rt 不可用的场景下，各元素组件自行加载选项；
  * 子表 N 行会实例化 N 个同列单元格、多个字段可能引用同一接口，
@@ -15,6 +16,7 @@
 
 import request from 'src/api/request'
 import { API_PREFIX } from 'src/utils/constants'
+import { applyDataSourceAfterLoad } from './dataSourceAfterLoad'
 
 // 进行中的请求：key -> Promise。请求 settle 后立即删除，仅用于同一时刻的合并。
 const inflight = new Map()
@@ -77,5 +79,5 @@ export const loadDataSourceOptions = (ds) => {
       params: method === 'GET' ? params : undefined,
       data: method === 'GET' ? undefined : params,
     }).then((res) => res?.data ?? res),
-  )
+  ).then((data) => applyDataSourceAfterLoad(ds, data))
 }

@@ -244,6 +244,7 @@ function dataSourceFormFields(ds) {
     'data_source.params': safeStringify(src.params),
     'data_source.load_when.mode': loadWhen.mode,
     'data_source.load_when.fields': loadWhen.fields,
+    'data_source.after_load': src.after_load || '',
   }
 }
 
@@ -472,6 +473,20 @@ const CONFIG_HELP_CONTENT = (
         <div>
           条件字段变化会自动重新请求；示例（付款账号依赖付款单位）：
           {'{"mode":"all","fields":[{"table_name":"clfbx","field_key":"payer"}]}'}；
+        </div>
+        <div className="mt-1">
+          <b className="text-gray-700">加载后事件</b>
+          ：可选，接口返回后、转换为选项前执行。脚本只接收原始数据 {'data'}
+          ，可做过滤、去重、排序、字段整理等纯数据处理；需 {'return'} 处理后的数据（未 {'return'}{' '}
+          时沿用对 {'data'}{' '}
+          的原地修改），不提供表单、请求、界面等其它上下文；执行异常时保留原始数据；
+        </div>
+        <div>
+          去重示例（按 {'deptname'} 去重）：
+          {
+            'const seen = new Set(); return data.filter((item) => { const key = item.deptname; if (seen.has(key)) return false; seen.add(key); return true; })'
+          }
+          ；
         </div>
       </li>
       <li>参数或标签里引用了 {'${form.xxx}'} 时，该字段变化会自动重新请求刷新选项；</li>
@@ -1117,6 +1132,8 @@ export default function ElementManage() {
             }
           }
           const loadWhen = normalizeLoadWhen(ds.load_when)
+          const afterLoad =
+            typeof ds.after_load === 'string' && ds.after_load.trim() ? ds.after_load : ''
           return {
             type: 'api',
             url: ds.url || '',
@@ -1126,6 +1143,7 @@ export default function ElementManage() {
             api_ref: ds.api_ref === 1 ? 1 : 0,
             params,
             ...(loadWhen.fields.length ? { load_when: loadWhen } : {}),
+            ...(afterLoad ? { after_load: afterLoad } : {}),
           }
         }
         return {}
@@ -1731,11 +1749,9 @@ export default function ElementManage() {
                     </FormItem>
                   </Col>
                   <Col span={24}>
-                    <div className="mt-1 mb-2 flex items-center justify-between">
-                      <span className="text-gray-500">加载前置条件</span>
-                      <span className="text-xs text-gray-400">
-                        条件满足时才请求接口；字段为空视为不满足；子表字段按“任意一行有值”判断
-                      </span>
+                    <div className="text-gray-500">加载前置条件</div>
+                    <div className="mb-2 text-xs text-gray-400">
+                      条件满足时才请求接口；字段为空视为不满足；子表字段按“任意一行有值”判断
                     </div>
                     <div className="mb-2 flex items-start gap-2">
                       <FormItem field="data_source.load_when.mode" noStyle className="mb-0!">
@@ -1793,6 +1809,21 @@ export default function ElementManage() {
                         </Form.List>
                       </div>
                     </div>
+                  </Col>
+                  <Col span={24}>
+                    <div className="text-gray-500">加载后事件</div>
+                    <div className="mb-2 text-xs text-gray-400">
+                      脚本只接收接口返回的 data，可做过滤、去重、排序、字段整理等纯数据处理；需
+                      return 处理后的数据（未 return 时沿用对 data
+                      的原地修改），不提供表单、请求、界面等其它上下文。
+                    </div>
+                    <FormItem field="data_source.after_load" className="mb-0!">
+                      <JsEditor
+                        placeholder={`// data 为接口原始数据，示例：按 name 去重\nconst seen = new Set()\nreturn data.filter((item) => {\n  const key = item.name\n  if (seen.has(key)) return false\n  seen.add(key)\n  return true\n})`}
+                        minRows={5}
+                        maxRows={12}
+                      />
+                    </FormItem>
                   </Col>
                 </Row>
               )}
